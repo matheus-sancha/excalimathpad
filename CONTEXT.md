@@ -9,7 +9,8 @@ server. v1 target: one sheet, for Matheus's own use.
 
 - `index.html` → `src/main.tsx` — the only runtime entry; mounts `App`.
 - `npm run dev | build | preview | test | lint | check` — see `package.json`.
-- `.github/workflows/ci.yml` — runs `npm run check` on pushes and PRs.
+- `.github/workflows/ci.yml` — runs `npm run check` on pushes to `main`
+  and on pull requests.
 
 ## Modules
 
@@ -17,12 +18,13 @@ server. v1 target: one sheet, for Matheus's own use.
   slot. No logic of its own. Depends on: shell, canvas.
 - **shell** (`src/shell/`) — full-viewport layout with three slots: `canvas`,
   `overlay` (stacked exactly over the canvas, pointer-transparent by default)
-  and `sidePanel` (docked right, rendered only when given). Interface: the
+  and `sidePanel` (docked right). Empty (falsy) slots render nothing. Interface: the
   `AppShell` props. Depends on: nothing.
 - **canvas** (`src/canvas/`) — the drawing surface: the official, unforked
   `@excalidraw/excalidraw` component. Interface: `SheetCanvas`, whose
   `onApiReady` hands out Excalidraw's imperative API (scene, app state,
-  scroll/zoom subscriptions). The only module allowed to import Excalidraw.
+  scroll/zoom subscriptions). The only module allowed to import Excalidraw:
+  an engineering rule that enforces ADR 0001, not part of that decision.
   Depends on: `@excalidraw/excalidraw`.
 - **test setup** (`src/test/`) — jsdom stubs for browser APIs Excalidraw
   touches on mount (canvas, fonts, matchMedia, ResizeObserver). Not app code.
@@ -56,8 +58,10 @@ client-side. Terms get pinned when #2 introduces them.
 - Excalidraw loads its canvas fonts (Excalifont etc.) from the esm.sh CDN by
   default; UI fonts are bundled. Fine online; self-host them if offline use
   matters (`window.EXCALIDRAW_ASSET_PATH`).
-- The production bundle is large (~1.8 MB main chunk), almost all Excalidraw;
-  Vite's chunk-size warning is expected.
+- The production bundle is large, almost all Excalidraw: the entry chunk
+  (`index-*.js`) is ~1.31 MB (414 kB gzip), and a separate ~1.8 MB chunk is
+  loaded only by Excalidraw's font-subset worker. Vite's chunk-size warning is
+  expected.
 - `npm audit` reports advisories in Excalidraw's transitive deps (mermaid,
   katex, nanoid, lodash-es); the only "fix" downgrades Excalidraw to 0.17.
 - `test.server.deps.inline` for Excalidraw in `vite.config.ts` exists because

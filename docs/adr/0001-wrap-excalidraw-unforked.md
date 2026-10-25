@@ -15,11 +15,22 @@ Decided by Matheus in the project interview on 2026-10-25.
 
 ## Decision
 
-We use the official `@excalidraw/excalidraw` npm package as an unmodified
-React component. Math is a separate overlay layer stacked over the canvas,
-kept in sync through Excalidraw's public imperative API (app state, scroll
-and zoom subscriptions), plus a side panel. Only `src/canvas/` imports
-Excalidraw.
+Decided by Matheus: we use the official `@excalidraw/excalidraw` npm package
+as an unmodified React component. Math is a separate overlay layer stacked
+over the canvas plus a side panel, around Excalidraw rather than inside it.
+
+Engineering rules that enforce it (Engineer's, not part of his decision):
+the overlay stays in sync through Excalidraw's public imperative API only
+(app state, scroll and zoom subscriptions), and only `src/canvas/` imports
+Excalidraw, so the dependency has one seam.
+
+Not decided here: how math is **persisted** with a sheet. It is open, with
+two candidates on the table:
+
+- scene `customData` (per-element metadata that Excalidraw stores and
+  round-trips with the scene), or
+- marker text elements (ordinary text elements tagged as math, re-rendered
+  by the overlay).
 
 ## Alternatives considered
 
@@ -30,10 +41,10 @@ Excalidraw.
 - **Patch the package (`patch-package`) for a few hooks.** Smaller than a
   fork, but patches break silently on upgrade and still couple us to
   internals.
-- **Store math inside existing elements (e.g. text elements with a marker)
-  and re-render them.** Keeps everything in one scene, but fights
-  Excalidraw's text editing and rendering; kept open as a way to *persist*
-  math later, not to render it.
+- **Render math as existing elements (e.g. text elements with a marker).**
+  Keeps everything in one scene, but fights Excalidraw's text editing and
+  rendering for typeset output. Rejected for *rendering* only; whether
+  marker elements are used to *persist* math is the open question above.
 
 ## Consequences
 
