@@ -9,7 +9,9 @@ are not built yet.
 
 ## Requirements
 
-- Node.js 20.19+ or 22.12+ (required by Vite 8), npm 10+
+- Node.js `^22.22.2 || ^24.15.0 || >=26` (the floor is set by jsdom, used in
+  tests; Vite 8 alone would accept less), npm 10+. Also declared in
+  `package.json` `engines`.
 
 ## Run
 
