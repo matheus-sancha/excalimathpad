@@ -11,6 +11,20 @@ describe('AppShell', () => {
     expect(screen.queryByRole('complementary')).not.toBeInTheDocument()
   })
 
+  it('renders no empty slot when a conditional slot is false', () => {
+    const ready = false
+    render(
+      <AppShell
+        canvas={<div>canvas</div>}
+        overlay={ready && <div>overlay</div>}
+        sidePanel={ready && <div>panel</div>}
+      />,
+    )
+
+    expect(screen.queryByTestId('app-shell-overlay')).not.toBeInTheDocument()
+    expect(screen.queryByRole('complementary')).not.toBeInTheDocument()
+  })
+
   it('stacks the overlay over the canvas, in the same stage', () => {
     render(<AppShell canvas={<div>canvas</div>} overlay={<div>overlay</div>} />)
 
