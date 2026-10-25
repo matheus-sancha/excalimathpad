@@ -1,0 +1,12 @@
+/* The app is a single full-viewport sheet: every ancestor of the canvas must
+   have a definite height, because Excalidraw fills 100% of its container. */
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  overflow: hidden;
+}

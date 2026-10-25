@@ -1,0 +1,32 @@
+.app-shell {
+  display: flex;
+  width: 100%;
+  height: 100%;
+}
+
+/* Positioning context shared by the canvas and the overlay. */
+.app-shell__stage {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 100%;
+}
+
+.app-shell__canvas,
+.app-shell__overlay {
+  position: absolute;
+  inset: 0;
+}
+
+.app-shell__overlay {
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.app-shell__side-panel {
+  flex: 0 0 auto;
+  width: 320px;
+  height: 100%;
+  overflow: auto;
+  border-left: 1px solid #ddd;
+}
