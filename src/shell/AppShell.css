@@ -4,9 +4,11 @@
   height: 100%;
 }
 
-/* Positioning context shared by the canvas and the overlay. */
+/* Positioning context and stacking context shared by the canvas and the
+   overlay: z-indexes inside the stage only compete with each other. */
 .app-shell__stage {
   position: relative;
+  isolation: isolate;
   flex: 1 1 auto;
   min-width: 0;
   height: 100%;
@@ -18,9 +20,11 @@
   inset: 0;
 }
 
-/* No z-index on either slot, on purpose: the stage is one stacking context,
-   so overlay content can set a z-index that slots it *between* the canvas's
-   own layers (e.g. above Excalidraw's drawing, below its toolbar). */
+/* No z-index (and no stacking context) on either slot, on purpose: the
+   canvas's own layers and the overlay's content then all stack in the
+   stage's context, so overlay content can set a z-index that slots it
+   *between* the canvas's layers (above Excalidraw's drawing, below its
+   toolbar). On a z-index tie, the overlay wins by coming later in the DOM. */
 .app-shell__overlay {
   pointer-events: none;
   overflow: hidden;
