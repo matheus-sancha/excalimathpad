@@ -15,29 +15,54 @@ server. v1 target: one sheet, for Matheus's own use.
 ## Modules
 
 - **App** (`src/App.tsx`) — composition root. Decides what fills each shell
-  slot. No logic of its own. Depends on: shell, canvas.
+  slot and seeds the sheet (one math element for the #2 spike). Depends on:
+  shell, canvas, overlay.
 - **shell** (`src/shell/`) — full-viewport layout with three slots: `canvas`,
   `overlay` (stacked exactly over the canvas, pointer-transparent by default)
-  and `sidePanel` (docked right). Empty (falsy) slots render nothing. Interface: the
-  `AppShell` props. Depends on: nothing.
-- **canvas** (`src/canvas/`) — the drawing surface: the official, unforked
-  `@excalidraw/excalidraw` component. Interface: `SheetCanvas`, whose
-  `onApiReady` hands out Excalidraw's imperative API (scene, app state,
-  scroll/zoom subscriptions). The only module allowed to import Excalidraw:
-  an engineering rule that enforces ADR 0001, not part of that decision.
-  Depends on: `@excalidraw/excalidraw`.
+  and `sidePanel` (docked right). Empty (falsy) slots render nothing. Neither
+  slot sets a z-index (see Load-bearing). Interface: the `AppShell` props.
+  Depends on: nothing.
+- **canvas** (`src/canvas/`) — everything that knows Excalidraw. `SheetCanvas`
+  is the official, unforked component; its `onReady` hands out a
+  `SheetCanvasHandle`: Excalidraw's imperative API plus `forwardWheel`.
+  `mathAnchor.ts` defines a math element's anchor (a rectangle with
+  `customData.kind === "math"`, ADR 0002). `layers.ts` records where overlay
+  content sits among Excalidraw's DOM layers. The only module that imports
+  Excalidraw at runtime (tests excepted; other modules may import its types):
+  an engineering rule that enforces ADR 0001. Depends on:
+  `@excalidraw/excalidraw`.
+- **math** (`src/math/`) — the engine. Interface: `evaluateBlock(source)` →
+  one `LineResult` (value | error | empty) per line; never throws; the scope
+  is per block for now (#3 makes it sheet-wide). The only module that imports
+  `mathjs`. Depends on: `mathjs`.
+- **overlay** (`src/overlay/`) — renders math elements over the canvas.
+  `MathOverlay` subscribes to the scene (`onChange`, `onScrollChange`) and
+  places each element from its anchor's scene position via `viewport.ts`
+  (`sceneToStage`, pure). Source text is held here, in memory, keyed by
+  anchor id (persistence is open). Depends on: canvas (anchor and layer
+  contracts, API types), math.
 - **test setup** (`src/test/`) — jsdom stubs for browser APIs Excalidraw
   touches on mount (canvas, fonts, matchMedia, ResizeObserver). Not app code.
 
-Planned (not built): the **math overlay** fills the `overlay` slot and reads
-viewport state through `onApiReady` (#2); recalculation (#3) and a side panel
-follow.
+Planned (not built): recalculation across elements (#3), persistence, a side
+panel, an "add math" tool.
 
 ## Domain
 
-Not modelled yet. The core loop is: define variables with units, see results
-inline, edit an input and everything downstream recalculates. Engine: math.js,
-client-side. Terms get pinned when #2 introduces them.
+The core loop: define variables with units, see results inline, edit an input
+and everything downstream recalculates (#3). Engine: math.js, client-side.
+
+- **Math element** — a block of math.js source, one statement per line
+  (assignment is plain `=`), anchored at a scene position, plus one
+  **result** per line: a value with unit (`20 V`), an error (message), or
+  empty.
+- **Anchor** — the Excalidraw rectangle that carries a math element's
+  position, size and rotation. Excalidraw owns it (move, select, delete,
+  undo); the overlay only reads it.
+- **Viewport** — `scrollX`, `scrollY`, `zoom` from Excalidraw's app state.
+- Invariants: scene coordinates are the only stored position, and the screen
+  position is always derived as `(scene + scroll) * zoom`. Evaluation never
+  throws, and a failed line does not stop the lines after it.
 
 ## Load-bearing
 
@@ -48,8 +73,18 @@ client-side. Terms get pinned when #2 introduces them.
   `AppShell.css`). Excalidraw fills 100% of its container; a zero-height
   ancestor renders nothing, silently.
 - **Overlay and canvas share one positioned box** (`.app-shell__stage`). The
-  overlay maps canvas coordinates to screen coordinates relative to that box;
-  moving either out of it breaks the mapping.
+  overlay maps scene coordinates to coordinates relative to that box; moving
+  either out of it breaks the mapping.
+- **Overlay z-order sits between Excalidraw's layers** (`src/canvas/layers.ts`):
+  above its drawing canvases (z-index 1 and 2), below its toolbar and panels
+  (z-index 4). This works only because neither AppShell slot sets a z-index
+  or creates a stacking context. Isolating the canvas slot makes math cover
+  Excalidraw's toolbar and take its clicks. Excalidraw's z-indexes are CSS
+  internals, so re-check them in the browser on every upgrade.
+- **Wheel over math is forwarded** to Excalidraw's canvas
+  (`SheetCanvasHandle.forwardWheel`): Excalidraw listens for `wheel` on its
+  own container, which the overlay is not inside. Without it, scrolling over
+  a math element does nothing and ctrl+wheel zooms the browser page.
 - **Static-only build** with relative `base` (`vite.config.ts`). Adding a
   server dependency breaks the deploy model.
 
@@ -58,16 +93,22 @@ client-side. Terms get pinned when #2 introduces them.
 - Excalidraw loads its canvas fonts (Excalifont etc.) from the esm.sh CDN by
   default; UI fonts are bundled. Fine online; self-host them if offline use
   matters (`window.EXCALIDRAW_ASSET_PATH`).
-- The production bundle is large, almost all Excalidraw: the entry chunk
-  (`index-*.js`) is ~1.31 MB (414 kB gzip), and a separate ~1.8 MB chunk is
-  loaded only by Excalidraw's font-subset worker. Vite's chunk-size warning is
-  expected.
+- The production bundle is large. The entry chunk (`index-*.js`) is about
+  1.96 MB (597 kB gzip): math.js `create(all)` is about 180 kB gzip of that
+  (accepted for v1; trimming to fewer factories is a later follow-up) and
+  nearly all the rest is Excalidraw. A separate ~1.8 MB chunk is loaded only
+  by Excalidraw's font-subset worker. Vite's chunk-size warning is expected.
 - `npm audit` reports advisories in Excalidraw's transitive deps (mermaid,
   katex, nanoid, lodash-es); the only "fix" downgrades Excalidraw to 0.17.
 - `test.server.deps.inline` for Excalidraw in `vite.config.ts` exists because
   its ESM build imports JSON without import attributes, which Node rejects.
+- The seeded anchor has a fixed size; source longer than three lines
+  overflows its border (spike limitation).
 
 ## Decisions
 
 - [ADR 0001](docs/adr/0001-wrap-excalidraw-unforked.md) — wrap the npm
   Excalidraw component unforked; math is an overlay + side panel around it.
+- [ADR 0002](docs/adr/0002-math-elements-anchor-to-excalidraw-rectangles.md) —
+  math elements anchor to a marked Excalidraw rectangle; the overlay renders
+  them; persistence stays open.

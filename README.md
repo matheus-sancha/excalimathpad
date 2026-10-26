@@ -4,8 +4,11 @@ A Mathcad-style live-calculation canvas built on [Excalidraw](https://github.com
 sketch freely, and (soon) drop unit-aware math onto the sheet that recalculates as
 you edit. Runs entirely in the browser and builds to a static site.
 
-Status: app shell only (issue #1). The math element (#2) and recalculation (#3)
-are not built yet.
+Status: spike of one math element (#2). The sheet opens with one math element
+(`R = 10 kohm`, `I = 2 mA`, `I * R` gives `20 V`). Edit it in place, and move it
+by dragging its dashed border. Recalculation across elements (#3) and saving
+are not built yet. Assignment is plain math.js `=`; Mathcad's `:=` is not
+accepted yet.
 
 ## Requirements
 
