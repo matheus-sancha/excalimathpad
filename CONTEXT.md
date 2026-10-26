@@ -33,10 +33,15 @@ server. v1 target: one sheet, for Matheus's own use.
   on: `@excalidraw/excalidraw`.
 - **math** (`src/math/`) — the engine. Interface: `evaluateBlock(source)` →
   one `LineResult` (value | error | empty) per line; never throws; the scope
-  is per block for now (#3 makes it sheet-wide). Expressions cannot change
-  the shared math.js instance (`createUnit`, `config`, `import` and the
-  parser functions are disabled), so the same source always gives the same
-  results. The only module that imports `mathjs`. Depends on: `mathjs`.
+  is per block for now (#3 makes it sheet-wide). Every known route for an
+  expression to change the shared math.js instance is closed, each with a
+  test: `createUnit`, `config`, `import` and the parser functions are
+  disabled in the namespace (scope-only stubs are bypassed via `parser()`),
+  and `typed` is shadowed in each block's scope (it cannot be overridden in
+  the namespace without breaking math.js). App code must evaluate only
+  through `evaluateBlock`: math.js functions that depend on the disabled
+  names (`help`, `rationalize`, a `parser()`'s methods) no longer work. The
+  only module that imports `mathjs`. Depends on: `mathjs`.
 - **overlay** (`src/overlay/`) — renders math elements over the canvas.
   `MathOverlay` subscribes to the scene (`onChange`, `onScrollChange`) and
   places each element from its anchor's scene position via `viewport.ts`
@@ -64,8 +69,10 @@ and everything downstream recalculates (#3). Engine: math.js, client-side.
 - **Viewport** — `scrollX`, `scrollY`, `zoom` from Excalidraw's app state.
 - Invariants: scene coordinates are the only stored position, and the screen
   position is always derived as `(scene + scroll) * zoom`. Evaluation never
-  throws, a failed line does not stop the lines after it, and evaluating the
-  same source twice gives the same results (no line can change the engine).
+  throws, a failed line does not stop the lines after it, and the same source
+  gives the same results however often it is evaluated and whatever other
+  blocks contain (every known route for a line to change the engine is
+  closed; see **math**).
 
 ## Load-bearing
 
@@ -82,7 +89,9 @@ and everything downstream recalculates (#3). Engine: math.js, client-side.
   Math is at z-index 2: it ties with Excalidraw's interactive canvas and wins
   only by coming later in the DOM, so it paints above the drawing (1) and
   selection handles, and below Excalidraw's text editor, SVG/laser layer and
-  link buttons (all 3) and its toolbar and panels (4). This works only
+  link buttons (all 3) and its toolbar and panels (4). Excalidraw's embed
+  container is also at 2 (a CSS literal the contract test cannot read), so
+  math paints over embeds; accepted while sheets have none. This works only
   because the stage (`isolation: isolate`) is the one stacking context and
   neither slot sets a z-index or creates one; isolating the canvas slot makes
   math cover Excalidraw's toolbar and take its clicks. Excalidraw's z-indexes

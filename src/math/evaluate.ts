@@ -7,16 +7,30 @@ import { all, create } from 'mathjs'
 const math = create(all)
 
 // Keep our own reference before hardening: the `evaluate` that expressions
-// can see is disabled below; this one stays usable.
+// can see is disabled below; this one stays usable. App code must only ever
+// evaluate through this captured function: after the override below, math.js
+// functions built later that depend on the disabled names (`help`,
+// `rationalize`, `symbolicEqual`, a `parser()`'s methods) fail with
+// "... is not supported" messages.
 const evaluate = math.evaluate
 
+const disabled = (name: string) => () => {
+  throw new Error(`${name} is not supported in a math element`)
+}
+
 /**
- * Functions disabled inside expressions, following math.js's documented
- * hardening ("Security" > "Less vulnerable expression parser"). They would
- * let one line change the shared engine (`createUnit`, `config`, `import`),
- * which leaks into every other block and breaks re-evaluation on each
- * keystroke, or reach the parser from inside an expression. Defining units,
- * if wanted, belongs with the sheet scope (#3).
+ * Functions disabled in the shared math.js namespace, following math.js's
+ * documented hardening ("Security" > "Less vulnerable expression parser").
+ * They would let one line change the shared engine (`createUnit`, `config`,
+ * `import`), which leaks into every other block and breaks re-evaluation on
+ * each keystroke, or reach the parser from inside an expression. Defining
+ * units, if wanted, belongs with the sheet scope (#3).
+ *
+ * They are overridden in the namespace, not just shadowed per block like
+ * `typed` below: a scope-only stub is bypassed by `parser()`, whose own
+ * `evaluate` resolves names in the namespace (probed: a scope-only
+ * `createUnit` stub let `p = parser()`, `p.evaluate("createUnit(...)")`
+ * define a unit visible to every block).
  */
 const DISABLED_IN_EXPRESSIONS = [
   'import',
@@ -31,16 +45,23 @@ const DISABLED_IN_EXPRESSIONS = [
 ] as const
 
 math.import(
-  Object.fromEntries(
-    DISABLED_IN_EXPRESSIONS.map((name) => [
-      name,
-      () => {
-        throw new Error(`${name} is not supported in a math element`)
-      },
-    ]),
-  ),
+  Object.fromEntries(DISABLED_IN_EXPRESSIONS.map((name) => [name, disabled(name)])),
   { override: true },
 )
+
+/**
+ * `typed` is math.js's type registry, and expressions can call its methods:
+ * `typed.clear()` breaks every function not yet built (in all blocks, until
+ * reload) and `typed.addConversion()` leaks conversions into other blocks.
+ * It cannot be overridden in the namespace (math.js's own lazily built
+ * functions resolve it there, so `sqrt` and unit conversion would break), so
+ * each block's scope starts with a stub that shadows it. Calling a method on
+ * the stub fails with math.js's own 'No access to method "..."'. A user's own
+ * `typed = ...` only replaces the stub in that block.
+ */
+function newBlockScope(): Map<string, unknown> {
+  return new Map<string, unknown>([['typed', disabled('typed')]])
+}
 
 /** The outcome of evaluating one line of a math element. */
 export type LineResult =
@@ -51,15 +72,20 @@ export type LineResult =
 /**
  * Evaluates a math element's source: one math.js statement per line, top to
  * bottom. Variables live in a scope shared by the lines of this block only (a
- * sheet-wide scope is issue #3), and no line can change the engine itself, so
- * the same source always gives the same results. Assignment is plain `=`.
+ * sheet-wide scope is issue #3). Assignment is plain `=`.
+ *
+ * Every route we know of for a line to change the shared engine is closed:
+ * `createUnit`, `config`, `import` and the parser functions are disabled in
+ * the namespace, and `typed` is shadowed in each block's scope (math.js 15.2,
+ * probed by review; each route has a test). So the same source gives the
+ * same results however often it is evaluated, whatever other blocks contain.
  *
  * Never throws: a line that fails becomes an `error` result, and later lines
  * still evaluate (without whatever the failed line would have assigned).
  * Always returns exactly one result per line of `source`.
  */
 export function evaluateBlock(source: string): LineResult[] {
-  const scope = new Map<string, unknown>()
+  const scope = newBlockScope()
   return source.split(/\r?\n/).map((line): LineResult => {
     if (line.trim() === '') return { kind: 'empty' }
     try {
