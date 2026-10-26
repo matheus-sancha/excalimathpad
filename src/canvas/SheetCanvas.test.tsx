@@ -1,19 +1,57 @@
 import { render, waitFor } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
-import type { ExcalidrawImperativeAPI } from '@excalidraw/excalidraw/types'
-import { SheetCanvas } from './SheetCanvas.tsx'
+import { SheetCanvas, type SheetCanvasHandle } from './SheetCanvas.tsx'
+import { createMathAnchorElements, isMathAnchor } from './mathAnchor.ts'
+
+async function mount(props: Parameters<typeof SheetCanvas>[0] = {}) {
+  const onReady = vi.fn<(handle: SheetCanvasHandle) => void>()
+  const view = render(<SheetCanvas {...props} onReady={onReady} />)
+  await waitFor(() => expect(onReady).toHaveBeenCalled())
+  return { ...view, handle: onReady.mock.calls[0][0] }
+}
 
 describe('SheetCanvas', () => {
   it('hands its imperative API to the caller once mounted', async () => {
-    const onApiReady = vi.fn<(api: ExcalidrawImperativeAPI) => void>()
+    const { handle } = await mount()
 
-    render(<SheetCanvas onApiReady={onApiReady} />)
+    // What the overlay relies on: scene + viewport state + subscriptions.
+    expect(handle.api.getSceneElements()).toEqual([])
+    expect(handle.api.getAppState().zoom.value).toBe(1)
+    expect(typeof handle.api.onScrollChange).toBe('function')
+    expect(typeof handle.api.onChange).toBe('function')
+  })
 
-    await waitFor(() => expect(onApiReady).toHaveBeenCalled())
-    const api = onApiReady.mock.calls[0][0]
-    // What the overlay (issue #2) relies on: scene + viewport state.
-    expect(api.getSceneElements()).toEqual([])
-    expect(api.getAppState().zoom.value).toBe(1)
-    expect(typeof api.onScrollChange).toBe('function')
+  it('starts with the given elements, math anchors recognisable', async () => {
+    const initialElements = createMathAnchorElements([
+      { id: 'm1', x: 10, y: 20, width: 300, height: 100 },
+    ])
+    const { handle } = await mount({ initialElements })
+
+    const elements = handle.api.getSceneElements()
+    expect(elements.map((e) => e.id)).toEqual(['m1'])
+    expect(isMathAnchor(elements[0])).toBe(true)
+    expect(elements[0]).toMatchObject({ x: 10, y: 20, width: 300, height: 100 })
+  })
+
+  it('forwards a wheel event onto the canvas, so Excalidraw scrolls', async () => {
+    const { handle, container } = await mount()
+    const canvas = container.querySelector('canvas')!
+    const seen = vi.fn()
+    canvas.addEventListener('wheel', seen)
+    const before = handle.api.getAppState().scrollY
+
+    const original = new WheelEvent('wheel', {
+      deltaY: 100,
+      bubbles: true,
+      cancelable: true,
+    })
+    handle.forwardWheel(original)
+
+    expect(original.defaultPrevented).toBe(true)
+    expect(seen).toHaveBeenCalledOnce()
+    expect(seen.mock.calls[0][0].deltaY).toBe(100)
+    await waitFor(() =>
+      expect(handle.api.getAppState().scrollY).not.toBe(before),
+    )
   })
 })
