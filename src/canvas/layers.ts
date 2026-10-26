@@ -13,6 +13,11 @@
  * canvas slot). So math paints above the drawing and selection handles, and
  * below Excalidraw's text editor, laser/SVG layer, link buttons and UI.
  *
+ * Also at 2, as a literal rather than a `--zIndex-*` variable (so the
+ * contract test cannot see it): `.excalidraw__embeddable-container`. Math
+ * wins that tie too, so it paints over embeds and takes clicks where they
+ * overlap. Accepted while the sheet has no embeds (M1).
+ *
  * These are CSS internals, not public API. `layers.test.ts` reads them from
  * the installed package, so an Excalidraw upgrade that moves them fails CI.
  */
