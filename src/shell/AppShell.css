@@ -18,6 +18,9 @@
   inset: 0;
 }
 
+/* No z-index on either slot, on purpose: the stage is one stacking context,
+   so overlay content can set a z-index that slots it *between* the canvas's
+   own layers (e.g. above Excalidraw's drawing, below its toolbar). */
 .app-shell__overlay {
   pointer-events: none;
   overflow: hidden;

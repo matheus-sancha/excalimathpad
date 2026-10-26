@@ -6,7 +6,8 @@ export interface AppShellProps {
   canvas: ReactNode
   /**
    * Layer stacked exactly over the canvas (same box), for elements that must
-   * stay glued to canvas coordinates. It does not take pointer events itself,
+   * stay glued to canvas coordinates. Neither slot sets a z-index, so overlay
+   * content decides where it sits among the canvas's own layers. It does not take pointer events itself,
    * so the canvas stays interactive; children opt back in with
    * `pointer-events: auto`. Rendered only when truthy, so
    * `overlay={ready && <X />}` leaves no empty layer behind.
