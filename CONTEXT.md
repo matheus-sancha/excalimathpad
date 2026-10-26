@@ -28,13 +28,15 @@ server. v1 target: one sheet, for Matheus's own use.
   `mathAnchor.ts` defines a math element's anchor (a rectangle with
   `customData.kind === "math"`, ADR 0002). `layers.ts` records where overlay
   content sits among Excalidraw's DOM layers. The only module that imports
-  Excalidraw at runtime (tests excepted; other modules may import its types):
-  an engineering rule that enforces ADR 0001. Depends on:
-  `@excalidraw/excalidraw`.
+  Excalidraw at runtime; tests may too, and other modules may import its
+  types. This is ADR 0001's engineering rule as amended in ADR 0002. Depends
+  on: `@excalidraw/excalidraw`.
 - **math** (`src/math/`) — the engine. Interface: `evaluateBlock(source)` →
   one `LineResult` (value | error | empty) per line; never throws; the scope
-  is per block for now (#3 makes it sheet-wide). The only module that imports
-  `mathjs`. Depends on: `mathjs`.
+  is per block for now (#3 makes it sheet-wide). Expressions cannot change
+  the shared math.js instance (`createUnit`, `config`, `import` and the
+  parser functions are disabled), so the same source always gives the same
+  results. The only module that imports `mathjs`. Depends on: `mathjs`.
 - **overlay** (`src/overlay/`) — renders math elements over the canvas.
   `MathOverlay` subscribes to the scene (`onChange`, `onScrollChange`) and
   places each element from its anchor's scene position via `viewport.ts`
@@ -62,7 +64,8 @@ and everything downstream recalculates (#3). Engine: math.js, client-side.
 - **Viewport** — `scrollX`, `scrollY`, `zoom` from Excalidraw's app state.
 - Invariants: scene coordinates are the only stored position, and the screen
   position is always derived as `(scene + scroll) * zoom`. Evaluation never
-  throws, and a failed line does not stop the lines after it.
+  throws, a failed line does not stop the lines after it, and evaluating the
+  same source twice gives the same results (no line can change the engine).
 
 ## Load-bearing
 
@@ -75,12 +78,16 @@ and everything downstream recalculates (#3). Engine: math.js, client-side.
 - **Overlay and canvas share one positioned box** (`.app-shell__stage`). The
   overlay maps scene coordinates to coordinates relative to that box; moving
   either out of it breaks the mapping.
-- **Overlay z-order sits between Excalidraw's layers** (`src/canvas/layers.ts`):
-  above its drawing canvases (z-index 1 and 2), below its toolbar and panels
-  (z-index 4). This works only because neither AppShell slot sets a z-index
-  or creates a stacking context. Isolating the canvas slot makes math cover
-  Excalidraw's toolbar and take its clicks. Excalidraw's z-indexes are CSS
-  internals, so re-check them in the browser on every upgrade.
+- **Overlay z-order sits between Excalidraw's layers** (`src/canvas/layers.ts`).
+  Math is at z-index 2: it ties with Excalidraw's interactive canvas and wins
+  only by coming later in the DOM, so it paints above the drawing (1) and
+  selection handles, and below Excalidraw's text editor, SVG/laser layer and
+  link buttons (all 3) and its toolbar and panels (4). This works only
+  because the stage (`isolation: isolate`) is the one stacking context and
+  neither slot sets a z-index or creates one; isolating the canvas slot makes
+  math cover Excalidraw's toolbar and take its clicks. Excalidraw's z-indexes
+  are CSS internals; `layers.test.ts` reads them from the installed package,
+  so an upgrade that moves them fails CI.
 - **Wheel over math is forwarded** to Excalidraw's canvas
   (`SheetCanvasHandle.forwardWheel`): Excalidraw listens for `wheel` on its
   own container, which the overlay is not inside. Without it, scrolling over
@@ -103,7 +110,8 @@ and everything downstream recalculates (#3). Engine: math.js, client-side.
 - `test.server.deps.inline` for Excalidraw in `vite.config.ts` exists because
   its ESM build imports JSON without import attributes, which Node rejects.
 - The seeded anchor has a fixed size; source longer than three lines
-  overflows its border (spike limitation).
+  overflows its border (spike limitation). The textarea has one row per line
+  so it never scrolls, which keeps each result beside its line.
 
 ## Decisions
 

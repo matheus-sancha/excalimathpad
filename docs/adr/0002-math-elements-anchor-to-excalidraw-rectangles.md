@@ -26,13 +26,21 @@ its anchor, at `(scene + scroll) * zoom`.
 
 Engineering rules that make it work (Engineer's, found in the #2 spike):
 
-- The overlay sits between Excalidraw's DOM layers: above its drawing, below
-  its toolbar and panels (`src/canvas/layers.ts`). With the overlay above
-  everything, math covered the toolbar and took its clicks.
+- The overlay sits between Excalidraw's DOM layers (`src/canvas/layers.ts`):
+  at z-index 2, tied with Excalidraw's interactive canvas and winning by DOM
+  order, so it is above the drawing and below Excalidraw's text editor, SVG
+  layer, link buttons (3) and its toolbar and panels (4). With the overlay
+  above everything, math covered the toolbar and took its clicks.
 - Wheel events over a math element are re-dispatched onto Excalidraw's canvas
   (`forwardWheel`), because Excalidraw only listens on its own container.
 - The anchor has a transparent background and the math text is inset from its
   border, so the border stays grabbable while the text area takes typing.
+- **Amends ADR 0001's engineering rule** "only `src/canvas/` imports
+  Excalidraw" to: only `src/canvas/` imports Excalidraw *at runtime*. Tests
+  may import it (e.g. the contract test against its own
+  `sceneCoordsToViewportCoords`), and other modules may import its *types*
+  (the overlay reads `ExcalidrawImperativeAPI`). ADR 0001 itself is left
+  unedited; this is the current rule.
 
 Not decided here: how math source is persisted. It is still open (ADR 0001):
 scene `customData` on the anchor, or marker text elements. During the spike
@@ -57,10 +65,13 @@ the source lives in memory, keyed by anchor id.
   source is keyed by the anchor id.
 - The overlay depends on two Excalidraw details that are not public API: its
   layer z-indexes (CSS), and that its wheel handler acts on any canvas
-  target. Both are localised in `src/canvas/` and must be re-checked in the
-  browser on every Excalidraw upgrade.
+  target. Both are localised in `src/canvas/`, and both have contract tests
+  against the installed package (`layers.test.ts` reads its CSS;
+  `SheetCanvas.test.tsx` checks a forwarded wheel really scrolls), so an
+  upgrade that breaks them fails CI.
 - Copying or duplicating an anchor in Excalidraw copies the marker but not
   the source: the copy shows an empty math element until the source moves
   into the scene (the persistence decision).
 - Excalidraw's export (PNG/SVG) shows the dashed anchor but not the math.
-- The anchor does not grow with its text; longer source overflows its border.
+- The anchor does not grow with its text; longer source overflows its border
+  (results stay beside their lines: the textarea never scrolls).
