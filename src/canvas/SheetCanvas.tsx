@@ -4,17 +4,19 @@ import type { ExcalidrawElement } from '@excalidraw/excalidraw/element/types'
 import type { ExcalidrawImperativeAPI } from '@excalidraw/excalidraw/types'
 import '@excalidraw/excalidraw/index.css'
 
+/**
+ * Re-dispatches a wheel event that landed on something outside Excalidraw
+ * (an overlay control) onto Excalidraw's canvas, so scroll/pinch over math
+ * still pans and zooms. Excalidraw listens for `wheel` on its own container
+ * and only acts on canvas/textarea targets inside it.
+ */
+export type ForwardWheel = (event: WheelEvent) => void
+
 /** What modules outside the canvas (the math overlay) get to work with. */
 export interface SheetCanvasHandle {
   /** Excalidraw's public imperative API: scene, app state, subscriptions. */
   api: ExcalidrawImperativeAPI
-  /**
-   * Re-dispatches a wheel event that landed on something outside Excalidraw
-   * (an overlay control) onto Excalidraw's canvas, so scroll/pinch over math
-   * still pans and zooms. Excalidraw listens for `wheel` on its own container
-   * and only acts on canvas/textarea targets inside it.
-   */
-  forwardWheel: (event: WheelEvent) => void
+  forwardWheel: ForwardWheel
 }
 
 export interface SheetCanvasProps {

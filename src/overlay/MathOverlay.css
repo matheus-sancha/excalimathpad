@@ -21,6 +21,9 @@
   padding: 12px 14px;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
+  /* Rows size to content, so the textarea keeps its `rows` height even when
+     that is taller than the anchor (it overflows rather than scrolls). */
+  align-items: start;
   column-gap: 16px;
   transform-origin: center;
   font: 16px/24px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -35,6 +38,9 @@
   color: #1e1e1e;
   font: inherit;
   resize: none;
+  /* Height comes from `rows` (one per line), so there is never anything to
+     scroll vertically; see MathElementView. */
+  height: auto;
   overflow: hidden;
   white-space: pre;
   outline: none;

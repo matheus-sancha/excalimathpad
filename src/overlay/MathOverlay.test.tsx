@@ -34,6 +34,7 @@ function fakeScene(elements: ExcalidrawElement[]) {
   }
   return {
     api,
+    listenerCount: () => changeListeners.size + scrollListeners.size,
     updateElements(next: ExcalidrawElement[]) {
       scene = next
       act(() => changeListeners.forEach((cb) => cb()))
@@ -58,10 +59,10 @@ const elementOf = (id: string) =>
 function renderOverlay(elements: ExcalidrawElement[], sources = {}) {
   const scene = fakeScene(elements)
   const forwardWheel = vi.fn()
-  render(
+  const view = render(
     <MathOverlay api={scene.api} forwardWheel={forwardWheel} initialSources={sources} />,
   )
-  return { scene, forwardWheel }
+  return { scene, forwardWheel, unmount: view.unmount }
 }
 
 describe('MathOverlay', () => {
@@ -92,6 +93,19 @@ describe('MathOverlay', () => {
     expect(elementOf('m1')!.style.transform).toBe('translate(120px, 150px) scale(2)')
   })
 
+  it('rotates the body about its centre with the anchor', () => {
+    const { scene } = renderOverlay([anchor])
+
+    scene.updateElements([{ ...anchor, angle: Math.PI / 2 } as ExcalidrawElement])
+
+    const el = elementOf('m1')!
+    // Position stays the unrotated top-left; the body turns about its centre,
+    // which is Excalidraw's rotation rule.
+    expect(el.style.transform).toBe('translate(100px, 50px) scale(1)')
+    const body = el.querySelector<HTMLElement>('.math-element__body')!
+    expect(body.style.transform).toBe(`rotate(${Math.PI / 2}rad)`)
+  })
+
   it('removes the element when its anchor is deleted', () => {
     const { scene } = renderOverlay([anchor])
 
@@ -110,6 +124,31 @@ describe('MathOverlay', () => {
     })
 
     expect(results).toHaveTextContent('Units do not match')
+  })
+
+  // Regression (PR #5 review): a textarea shorter than its source scrolled to
+  // the caret, so results sat next to the wrong lines. One row per line means
+  // it never needs to scroll.
+  it('sizes the source to one row per line, matching the results', () => {
+    renderOverlay([anchor], { m1: 'a = 1\nb = 2\nc = 3\nd = 4\ne = 5' })
+    const source = screen.getByRole('textbox', { name: 'Math source' })
+    const rows = () => screen.getAllByRole('listitem')
+
+    expect(source).toHaveAttribute('rows', '5')
+    expect(rows()).toHaveLength(5)
+
+    fireEvent.change(source, { target: { value: 'a = 1\nb = 2' } })
+    expect(source).toHaveAttribute('rows', '2')
+    expect(rows()).toHaveLength(2)
+  })
+
+  it('unsubscribes from Excalidraw when unmounted', () => {
+    const { scene, unmount } = renderOverlay([anchor])
+    expect(scene.listenerCount()).toBe(2)
+
+    unmount()
+
+    expect(scene.listenerCount()).toBe(0)
   })
 
   it('forwards wheel events over a math element to the canvas', () => {

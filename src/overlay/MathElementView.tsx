@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef } from 'react'
 import type { MathAnchor } from '../canvas/mathAnchor.ts'
+import type { ForwardWheel } from '../canvas/SheetCanvas.tsx'
 import { evaluateBlock, type LineResult } from '../math/evaluate.ts'
 import { sceneToStage, type Viewport } from './viewport.ts'
 
@@ -8,13 +9,18 @@ export interface MathElementViewProps {
   viewport: Viewport
   source: string
   onSourceChange: (source: string) => void
-  forwardWheel: (event: WheelEvent) => void
+  forwardWheel: ForwardWheel
 }
 
 /**
  * One math element: source on the left, one result per line on the right.
  * Laid out in scene units and scaled by the zoom, so it moves and scales
  * exactly like the anchor Excalidraw draws underneath.
+ *
+ * The textarea always has exactly one row per source line, so it never
+ * needs to scroll vertically: if it did (e.g. to keep the caret visible when
+ * the source is taller than the anchor), its lines would drift away from the
+ * results beside them. Long source overflows the anchor's border instead.
  */
 export function MathElementView({
   anchor,
@@ -58,12 +64,13 @@ export function MathElementView({
           autoCapitalize="off"
           autoComplete="off"
           wrap="off"
+          rows={results.length}
           onChange={(event) => onSourceChange(event.target.value)}
         />
         <ol className="math-element__results" aria-label="Results">
           {results.map((result, i) => (
             <li key={i} className={`math-element__result is-${result.kind}`}>
-              {describe(result)}
+              {formatResult(result)}
             </li>
           ))}
         </ol>
@@ -72,7 +79,7 @@ export function MathElementView({
   )
 }
 
-function describe(result: LineResult): string {
+function formatResult(result: LineResult): string {
   switch (result.kind) {
     case 'value':
       return `= ${result.text}`

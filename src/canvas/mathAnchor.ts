@@ -32,6 +32,18 @@ export function toMathAnchor(element: ExcalidrawElement): MathAnchor {
   return { id, x, y, width, height, angle }
 }
 
+/** True when two anchors would be drawn identically. */
+export function sameAnchor(a: MathAnchor, b: MathAnchor): boolean {
+  return (
+    a.id === b.id &&
+    a.x === b.x &&
+    a.y === b.y &&
+    a.width === b.width &&
+    a.height === b.height &&
+    a.angle === b.angle
+  )
+}
+
 /** Builds the scene elements for new anchors (e.g. for `initialData`). */
 export function createMathAnchorElements(
   anchors: ReadonlyArray<Omit<MathAnchor, 'angle'>>,

@@ -1,7 +1,13 @@
 import { useMemo, useState, useSyncExternalStore } from 'react'
 import type { ExcalidrawImperativeAPI } from '@excalidraw/excalidraw/types'
 import { ABOVE_DRAWING_BELOW_UI_Z_INDEX } from '../canvas/layers.ts'
-import { isMathAnchor, toMathAnchor, type MathAnchor } from '../canvas/mathAnchor.ts'
+import {
+  isMathAnchor,
+  sameAnchor,
+  toMathAnchor,
+  type MathAnchor,
+} from '../canvas/mathAnchor.ts'
+import type { ForwardWheel } from '../canvas/SheetCanvas.tsx'
 import { MathElementView } from './MathElementView.tsx'
 import type { Viewport } from './viewport.ts'
 import './MathOverlay.css'
@@ -14,8 +20,7 @@ export type SceneApi = Pick<
 
 export interface MathOverlayProps {
   api: SceneApi
-  /** See `SheetCanvasHandle.forwardWheel`. */
-  forwardWheel: (event: WheelEvent) => void
+  forwardWheel: ForwardWheel
   /** Source text per anchor id, for anchors that exist at mount. */
   initialSources?: Readonly<Record<string, string>>
 }
@@ -96,15 +101,5 @@ function sameSnapshot(a: SceneSnapshot, b: SceneSnapshot): boolean {
     return false
   }
   if (a.anchors.length !== b.anchors.length) return false
-  return a.anchors.every((anchor, i) => {
-    const other = b.anchors[i]
-    return (
-      anchor.id === other.id &&
-      anchor.x === other.x &&
-      anchor.y === other.y &&
-      anchor.width === other.width &&
-      anchor.height === other.height &&
-      anchor.angle === other.angle
-    )
-  })
+  return a.anchors.every((anchor, i) => sameAnchor(anchor, b.anchors[i]))
 }
