@@ -50,6 +50,27 @@ math.import(
 )
 
 /**
+ * The registry mutators on the real `math.typed`, disabled in place. The
+ * per-block stub below does not cover them: `simplifyCore`,
+ * `simplifyConstant` and `leafCount` parse with the real parser, and the
+ * Node they return evaluates against the shared namespace, where `typed` is
+ * the real registry (`simplifyCore("typed.clear()").evaluate()`). math.js
+ * itself only reads the registry after setup, so this changes no results.
+ */
+const TYPED_MUTATORS = [
+  'clear',
+  'clearConversions',
+  'addType',
+  'addTypes',
+  'addConversion',
+  'addConversions',
+  'removeConversion',
+] as const
+for (const name of TYPED_MUTATORS) {
+  Object.assign(math.typed, { [name]: disabled(`typed.${name}`) })
+}
+
+/**
  * `typed` is math.js's type registry, and expressions can call its methods:
  * `typed.clear()` breaks every function not yet built (in all blocks, until
  * reload) and `typed.addConversion()` leaks conversions into other blocks.
@@ -74,11 +95,16 @@ export type LineResult =
  * bottom. Variables live in a scope shared by the lines of this block only (a
  * sheet-wide scope is issue #3). Assignment is plain `=`.
  *
- * Every route we know of for a line to change the shared engine is closed:
- * `createUnit`, `config`, `import` and the parser functions are disabled in
- * the namespace, and `typed` is shadowed in each block's scope (math.js 15.2,
- * probed by review; each route has a test). So the same source gives the
- * same results however often it is evaluated, whatever other blocks contain.
+ * Every route we know of for a line to change the shared engine is closed
+ * (math.js 15.2, probed by review; each route has a test):
+ * - `createUnit`, `config`, `import` and the parser functions are disabled
+ *   in the namespace;
+ * - `typed` is shadowed in each block's scope;
+ * - parsed Nodes (`simplifyCore` / `simplifyConstant`) evaluate against the
+ *   namespace, not the block scope, so the real `typed`'s mutators are
+ *   disabled too.
+ * So the same source gives the same results however often it is evaluated,
+ * whatever other blocks contain.
  *
  * Never throws: a line that fails becomes an `error` result, and later lines
  * still evaluate (without whatever the failed line would have assigned).

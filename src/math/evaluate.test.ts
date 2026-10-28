@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { evaluateBlock } from './evaluate.ts'
 
 describe('evaluateBlock', () => {
@@ -107,6 +107,23 @@ describe('evaluateBlock', () => {
           message: expect.stringMatching(/is not supported in a math element$/),
         })
       }
+    })
+
+    // Regression (PR #5 review, round 3): simplifyCore parses with the real
+    // parser, and the returned Node evaluates against the shared namespace,
+    // where `typed` is the real registry, not the per-block stub.
+    it('typed cannot be reached through a parsed Node', async () => {
+      // A fresh engine, so sqrt/cos/to are first built after the attack.
+      vi.resetModules()
+      const fresh = await import('./evaluate.ts')
+
+      fresh.evaluateBlock('n = simplifyCore("typed.clear()")\nn.evaluate()')
+
+      expect(fresh.evaluateBlock('20 V to mV\nsqrt(16)\ncos(0)')).toEqual([
+        { kind: 'value', text: '20000 mV' },
+        { kind: 'value', text: '4' },
+        { kind: 'value', text: '1' },
+      ])
     })
 
     // Regression (PR #5 review, round 2): math.js exposes its `typed` registry

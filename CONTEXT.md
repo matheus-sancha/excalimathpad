@@ -38,7 +38,10 @@ server. v1 target: one sheet, for Matheus's own use.
   test: `createUnit`, `config`, `import` and the parser functions are
   disabled in the namespace (scope-only stubs are bypassed via `parser()`),
   and `typed` is shadowed in each block's scope (it cannot be overridden in
-  the namespace without breaking math.js). App code must evaluate only
+  the namespace without breaking math.js). Parsed Nodes from `simplifyCore`
+  / `simplifyConstant` evaluate against the namespace, where `typed` is the
+  real registry, so its mutators (`clear`, `addConversion`, ...) are also
+  disabled in place on `math.typed`. App code must evaluate only
   through `evaluateBlock`: math.js functions that depend on the disabled
   names (`help`, `rationalize`, a `parser()`'s methods) no longer work. The
   only module that imports `mathjs`. Depends on: `mathjs`.
@@ -72,7 +75,7 @@ and everything downstream recalculates (#3). Engine: math.js, client-side.
   throws, a failed line does not stop the lines after it, and the same source
   gives the same results however often it is evaluated and whatever other
   blocks contain (every known route for a line to change the engine is
-  closed; see **math**).
+  closed, including through parsed Nodes; see **math**).
 
 ## Load-bearing
 
