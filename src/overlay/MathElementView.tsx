@@ -71,7 +71,12 @@ export function MathElementView({
         />
         <ol className="math-element__results" aria-label="Results">
           {results.map((result, i) => (
-            <li key={i} className={`math-element__result is-${result.kind}`}>
+            <li
+              key={i}
+              className={`math-element__result is-${result.kind}`}
+              // Long results are cut to fit (MathOverlay.css); this keeps the whole text.
+              title={result.kind === 'empty' ? undefined : formatResult(result)}
+            >
               {formatResult(result)}
             </li>
           ))}

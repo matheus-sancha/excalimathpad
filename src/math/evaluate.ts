@@ -237,7 +237,7 @@ function explain(
   if (name === undefined) return message
   if (failed.has(name)) return `${name} has an error above`
   if (definedAt.get(name)?.some((at) => at > position)) {
-    return `${name} is defined below (move it above this line)`
+    return `${name} is defined below`
   }
   return message
 }

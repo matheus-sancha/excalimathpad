@@ -167,7 +167,9 @@ describe('MathOverlay', () => {
 
       scene.updateElements([inputs, { ...uses, y: 0 }])
 
-      expect(resultsOf('uses')).toBe('I is defined below (move it above this line)')
+      expect(resultsOf('uses')).toBe('I is defined below')
+      // Long results are cut to fit; the full text stays in the title.
+      expect(screen.getByTitle('I is defined below')).toHaveClass('is-error')
 
       scene.updateElements([inputs, uses])
       expect(resultsOf('uses')).toBe('= 20 V')

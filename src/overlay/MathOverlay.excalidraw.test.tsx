@@ -105,7 +105,7 @@ describe('MathOverlay on real Excalidraw', () => {
       })
     })
     await waitFor(() =>
-      expect(resultsOf('m2')).toBe('I is defined below (move it above this line)'),
+      expect(resultsOf('m2')).toBe('I is defined below'),
     )
   })
 })

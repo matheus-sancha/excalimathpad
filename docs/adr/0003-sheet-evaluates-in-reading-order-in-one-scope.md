@@ -45,7 +45,7 @@ Engineering rules (Engineer's):
 - The engine hardening from #2 is unchanged (it lives in the namespace). The
   `typed` stub is seeded per run instead of per block.
 - An undefined name used above its definition says
-  `x is defined below (move it above this line)`, and one whose assignment
+  `x is defined below`, and one whose assignment
   failed says `x has an error above`. Both rely on math.js's
   `Undefined symbol x` wording, which a test pins.
 

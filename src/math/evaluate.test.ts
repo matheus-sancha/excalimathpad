@@ -76,13 +76,13 @@ describe('evaluateSheet', () => {
     it('never lets a block see a name defined after it, and says where it is', () => {
       const [uses, defines] = sheet('V = I * R', 'R = 10 kohm\nI = 2 mA')
 
-      expect(uses).toEqual([error('I is defined below (move it above this line)')])
+      expect(uses).toEqual([error('I is defined below')])
       expect(defines).toEqual([value('10 kohm'), value('2 mA')])
     })
 
     it('says so within a block too', () => {
       expect(block('2 * x\nx = 3')[0]).toEqual(
-        error('x is defined below (move it above this line)'),
+        error('x is defined below'),
       )
     })
 
