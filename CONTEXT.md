@@ -15,7 +15,8 @@ server. v1 target: one sheet, for Matheus's own use.
 ## Modules
 
 - **App** (`src/App.tsx`) — composition root. Decides what fills each shell
-  slot and seeds the sheet (one math element for the #2 spike). Depends on:
+  slot and seeds the sheet (two math elements: inputs above, `V = I * R`
+  below). Depends on:
   shell, canvas, overlay.
 - **shell** (`src/shell/`) — full-viewport layout with three slots: `canvas`,
   `overlay` (stacked exactly over the canvas, pointer-transparent by default)
@@ -31,36 +32,41 @@ server. v1 target: one sheet, for Matheus's own use.
   Excalidraw at runtime; tests may too, and other modules may import its
   types. This is ADR 0001's engineering rule as amended in ADR 0002. Depends
   on: `@excalidraw/excalidraw`.
-- **math** (`src/math/`) — the engine. Interface: `evaluateBlock(source)` →
-  one `LineResult` (value | error | empty) per line; never throws; the scope
-  is per block for now (#3 makes it sheet-wide). Every known route for an
+- **math** (`src/math/`) — the engine. Interface: `evaluateSheet(blocks)`,
+  with blocks `{ id, source }` already in reading order → one `LineResult`
+  (value | error | empty) per line, keyed by block id; never throws. All lines
+  share one scope, fresh for every call (ADR 0003). Each line is parsed once
+  (captured `parse`) to know what it defines, which turns "Undefined symbol"
+  into "defined below" / "has an error above". Every known route for an
   expression to change the shared math.js instance is closed, each with a
   test: `createUnit`, `config`, `import` and the parser functions are
   disabled in the namespace (scope-only stubs are bypassed via `parser()`),
-  and `typed` is shadowed in each block's scope (it cannot be overridden in
+  and `typed` is shadowed in each run's scope (it cannot be overridden in
   the namespace without breaking math.js). Parsed Nodes from `simplifyCore`
   / `simplifyConstant` evaluate against the namespace, where `typed` is the
   real registry, so its mutators (`clear`, `addConversion`, ...) are also
   disabled in place on `math.typed`. App code must evaluate only
-  through `evaluateBlock`: math.js functions that depend on the disabled
+  through `evaluateSheet`: math.js functions that depend on the disabled
   names (`help`, `rationalize`, a `parser()`'s methods) no longer work. The
   only module that imports `mathjs`. Depends on: `mathjs`.
 - **overlay** (`src/overlay/`) — renders math elements over the canvas.
   `MathOverlay` subscribes to the scene (`onChange`, `onScrollChange`) and
   places each element from its anchor's scene position via `viewport.ts`
   (`sceneToStage`, pure). Source text is held here, in memory, keyed by
-  anchor id (persistence is open). Depends on: canvas (anchor and layer
-  contracts, API types), math.
+  anchor id (persistence is open). It owns the sheet's evaluation: it sorts
+  anchors with `readingOrder.ts` (pure) and runs `evaluateSheet` on every
+  edit and every change of order, then hands each `MathElementView` its
+  results. Depends on: canvas (anchor and layer contracts, API types), math.
 - **test setup** (`src/test/`) — jsdom stubs for browser APIs Excalidraw
   touches on mount (canvas, fonts, matchMedia, ResizeObserver). Not app code.
 
-Planned (not built): recalculation across elements (#3), persistence, a side
-panel, an "add math" tool.
+Planned (not built): persistence, a side panel, an "add math" tool (for now,
+duplicating an anchor makes a new, empty math element).
 
 ## Domain
 
 The core loop: define variables with units, see results inline, edit an input
-and everything downstream recalculates (#3). Engine: math.js, client-side.
+and everything downstream recalculates. Engine: math.js, client-side.
 
 - **Math element** — a block of math.js source, one statement per line
   (assignment is plain `=`), anchored at a scene position, plus one
@@ -70,12 +76,18 @@ and everything downstream recalculates (#3). Engine: math.js, client-side.
   position, size and rotation. Excalidraw owns it (move, select, delete,
   undo); the overlay only reads it.
 - **Viewport** — `scrollX`, `scrollY`, `zoom` from Excalidraw's app state.
+- **Sheet** — all live math elements, in **reading order**: by the top of each
+  anchor's visual bounds, then its left, then its id (ADR 0003). Derived from
+  positions every time, never stored. The sheet, not the element, is the unit
+  of evaluation: one scope, lines top to bottom.
 - Invariants: scene coordinates are the only stored position, and the screen
   position is always derived as `(scene + scroll) * zoom`. Evaluation never
-  throws, a failed line does not stop the lines after it, and the same source
-  gives the same results however often it is evaluated and whatever other
-  blocks contain (every known route for a line to change the engine is
-  closed, including through parsed Nodes; see **math**).
+  throws, and a failed line does not stop the lines after it. A line sees only
+  names assigned above it in reading order; a later assignment silently
+  redefines a name for the lines below. The same sheet (sources in reading
+  order) gives the same results however often it is evaluated: every run
+  starts from a fresh scope, and every known route for a line to change the
+  engine is closed, including through parsed Nodes (see **math**).
 
 ## Load-bearing
 
@@ -132,3 +144,6 @@ and everything downstream recalculates (#3). Engine: math.js, client-side.
 - [ADR 0002](docs/adr/0002-math-elements-anchor-to-excalidraw-rectangles.md) —
   math elements anchor to a marked Excalidraw rectangle; the overlay renders
   them; persistence stays open.
+- [ADR 0003](docs/adr/0003-sheet-evaluates-in-reading-order-in-one-scope.md) —
+  the sheet evaluates in reading order (top, then left), in one fresh scope
+  per run, re-run whole and synchronously on every change.
