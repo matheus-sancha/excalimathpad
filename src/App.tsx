@@ -15,7 +15,7 @@ const initialElements = createMathAnchorElements([
 ])
 const initialSources = {
   [INPUTS_ID]: 'R = 10 kohm\nI = 2 mA',
-  [RESULT_ID]: 'V = I * R',
+  [RESULT_ID]: 'U = I * R',
 }
 
 /**

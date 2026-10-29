@@ -15,7 +15,7 @@ server. v1 target: one sheet, for Matheus's own use.
 ## Modules
 
 - **App** (`src/App.tsx`) — composition root. Decides what fills each shell
-  slot and seeds the sheet (two math elements: inputs above, `V = I * R`
+  slot and seeds the sheet (two math elements: inputs above, `U = I * R`
   below). Depends on:
   shell, canvas, overlay.
 - **shell** (`src/shell/`) — full-viewport layout with three slots: `canvas`,
@@ -84,10 +84,15 @@ and everything downstream recalculates. Engine: math.js, client-side.
   position is always derived as `(scene + scroll) * zoom`. Evaluation never
   throws, and a failed line does not stop the lines after it. A line sees only
   names assigned above it in reading order; a later assignment silently
-  redefines a name for the lines below. The same sheet (sources in reading
+  redefines a name for the lines below, and a failed one removes it (no stale
+  values below an error). The same sheet (sources in reading
   order) gives the same results however often it is evaluated: every run
   starts from a fresh scope, and every known route for a line to change the
   engine is closed, including through parsed Nodes (see **math**).
+- Known limit: a variable named like a math.js unit or built-in (`V`, `m`,
+  `s`, `i`, ...) silently shadows the unit below its definition and falls
+  back to the unit above it or after it fails (ADR 0003). The seed uses `U`
+  for that reason; warnings are issue #7.
 
 ## Load-bearing
 

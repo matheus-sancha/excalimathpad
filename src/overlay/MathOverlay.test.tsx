@@ -147,7 +147,7 @@ describe('MathOverlay', () => {
       { id: 'inputs', x: 100, y: 50, width: 400, height: 72 },
       { id: 'uses', x: 100, y: 200, width: 400, height: 48 },
     ])
-    const sources = { inputs: 'R = 10 kohm\nI = 2 mA', uses: 'V = I * R' }
+    const sources = { inputs: 'R = 10 kohm\nI = 2 mA', uses: 'U = I * R' }
     const resultsOf = (id: string) =>
       elementOf(id)!.querySelector('.math-element__results')!.textContent
     const sourceOf = (id: string) =>
@@ -175,12 +175,15 @@ describe('MathOverlay', () => {
       expect(resultsOf('uses')).toBe('= 20 V')
     })
 
-    it('loses the inputs when their element is deleted', () => {
+    it('loses the inputs when their element is deleted, and gets them back on undo', () => {
       const { scene } = renderOverlay([inputs, uses], sources)
 
       scene.updateElements([{ ...inputs, isDeleted: true }, uses])
-
       expect(resultsOf('uses')).toBe('Undefined symbol I')
+
+      // Excalidraw's undo brings the anchor back; its source was kept by id.
+      scene.updateElements([inputs, uses])
+      expect(resultsOf('uses')).toBe('= 20 V')
     })
   })
 

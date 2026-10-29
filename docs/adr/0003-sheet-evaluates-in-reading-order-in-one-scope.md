@@ -24,12 +24,17 @@ Decided by Matheus:
 - **Reading order** is derived from positions every time, never stored:
   math elements sort by the top of their anchor's visual bounding box, then
   by its left, then by anchor id (Mathcad's rule). A rotated anchor is placed
-  by its rotated bounds.
+  by its rotated bounds. Equal tops must compare equal, so upright and
+  upside-down anchors use `x`/`y` as they are and other angles are rounded
+  to a millionth of a scene unit; otherwise float noise, not left, ordered
+  side-by-side elements (PR #6 review).
 - **One scope per run.** The sheet's lines run top to bottom in reading
   order, all in one scope. A line sees every name assigned above it, in its
   block or an earlier one, and nothing below. A later assignment silently
   redefines a name for the lines below it. Functions bind late: `f(x) = k * x`
-  uses `k`'s value at the call.
+  uses `k`'s value at the call. An assignment that fails (or does not parse)
+  removes the name from the scope, so nothing below silently keeps using its
+  earlier value.
 - **Re-run the whole sheet**, synchronously, on every source edit and every
   change of reading order (move, delete, undo, duplicate). No debounce.
 
@@ -72,8 +77,11 @@ Engineering rules (Engineer's):
 - Performance is linear in sheet size on every keystroke. If it ever lags,
   the first lever is a per-line compile cache (compiled expressions are
   reusable), not a debounce or a graph.
-- A name that is also a math.js unit (`V`, `A`, `m`, `s`, ...) is never
-  undefined: if its definition fails, or is below, lines read the unit (e.g.
-  `V * 2` gives `2 V`). A test records this; flagging it is a follow-up.
+- A name that is also a math.js unit or built-in (`V`, `A`, `m`, `s`, `g`,
+  `i`, `e`, ...) is ambiguous, silently, in both directions. Below its
+  definition it shadows the unit: after `V = I * R` (20 V), `U = 5 V` gives
+  `100 V`. Above it, or after it fails, lines read the unit: `V * 2` gives
+  `2 V`. Matheus kept redefinition silent and the seed uses `U`, which is not
+  a unit; warning on such names is issue #7. A test records the fallback.
 - Excalidraw does not know the order; nothing in the scene stores it, so
   persistence (still open, ADR 0001) does not need to either.

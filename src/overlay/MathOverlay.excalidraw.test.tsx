@@ -17,7 +17,7 @@ const initialElements = createMathAnchorElements([
   { id: 'm1', x: 100, y: 50, width: 400, height: 72 },
   { id: 'm2', x: 100, y: 200, width: 400, height: 48 },
 ])
-const initialSources = { m1: 'R = 10 kohm\nI = 2 mA', m2: 'V = I * R' }
+const initialSources = { m1: 'R = 10 kohm\nI = 2 mA', m2: 'U = I * R' }
 
 function Harness({ onReady }: { onReady: (handle: SheetCanvasHandle) => void }) {
   const [canvas, setCanvas] = useState<SheetCanvasHandle | null>(null)
@@ -85,7 +85,7 @@ describe('MathOverlay on real Excalidraw', () => {
     )
   })
 
-  // Milestone M2 (#3) on the real editor: edit I, V updates; drag the V
+  // Milestone M2 (#3) on the real editor: edit I, U updates; drag the U
   // element above the inputs, and it loses them.
   it('recalculates across elements on edit and when an anchor moves', async () => {
     let handle: SheetCanvasHandle | undefined
