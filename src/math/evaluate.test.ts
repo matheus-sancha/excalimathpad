@@ -45,8 +45,8 @@ describe('evaluateSheet', () => {
 
       expect(results[0]).toEqual(error('Unexpected end of expression (char 14)'))
       expect(results[1]).toEqual(value('2 mA'))
-      // A line that does not parse defines nothing we can name.
-      expect(results[2]).toEqual(error('Undefined symbol R'))
+      // The name is read from the raw text, so the use still points at it.
+      expect(results[2]).toEqual(error('R has an error above'))
     })
 
     it('rejects Mathcad-style := (plain math.js = only)', () => {
@@ -65,25 +65,23 @@ describe('evaluateSheet', () => {
   })
 
   describe('reading order (one scope across blocks)', () => {
-    it('evaluates V = I * R from inputs in an earlier block (milestone M2)', () => {
-      expect(sheet('R = 10 kohm\nI = 2 mA', 'V = I * R')[1]).toEqual([value('20 V')])
+    it('evaluates U = I * R from inputs in an earlier block (milestone M2)', () => {
+      expect(sheet('R = 10 kohm\nI = 2 mA', 'U = I * R')[1]).toEqual([value('20 V')])
     })
 
-    it('recalculates V when I is edited', () => {
-      expect(sheet('R = 10 kohm\nI = 4 mA', 'V = I * R')[1]).toEqual([value('40 V')])
+    it('recalculates U when I is edited', () => {
+      expect(sheet('R = 10 kohm\nI = 4 mA', 'U = I * R')[1]).toEqual([value('40 V')])
     })
 
     it('never lets a block see a name defined after it, and says where it is', () => {
-      const [uses, defines] = sheet('V = I * R', 'R = 10 kohm\nI = 2 mA')
+      const [uses, defines] = sheet('U = I * R', 'R = 10 kohm\nI = 2 mA')
 
       expect(uses).toEqual([error('I is defined below')])
       expect(defines).toEqual([value('10 kohm'), value('2 mA')])
     })
 
     it('says so within a block too', () => {
-      expect(block('2 * x\nx = 3')[0]).toEqual(
-        error('x is defined below'),
-      )
+      expect(block('2 * x\nx = 3')[0]).toEqual(error('x is defined below'))
     })
 
     it('points a cascade at the failed definition', () => {
@@ -99,8 +97,28 @@ describe('evaluateSheet', () => {
       expect(further).toEqual([error('U has an error above')])
     })
 
-    // Known limit (follow-up): a name that is also a unit (V, A, m, ...) is
-    // never undefined. If its definition fails, lines below silently read
+    // Regression (PR #6 review, B2): a failed redefinition kept the old I in
+    // scope, so U silently stayed 20 V.
+    it('drops the old value when a redefinition fails', () => {
+      const [, redefinition, uses] = sheet(
+        'R = 10 kohm\nI = 2 mA',
+        'I = 4 mA + 1 V',
+        'U = I * R',
+      )
+
+      expect(redefinition).toEqual([error('Units do not match')])
+      expect(uses).toEqual([error('I has an error above')])
+    })
+
+    it('drops the old value when a redefinition does not parse', () => {
+      const [, redefinition, uses] = sheet('R = 10 kohm\nI = 2 mA', 'I = 4 mA +', 'U = I * R')
+
+      expect(redefinition[0].kind).toBe('error')
+      expect(uses).toEqual([error('I has an error above')])
+    })
+
+    // Known limit, follow-up #7: a name that is also a unit (V, A, m, ...)
+    // is never undefined. If its definition fails, lines below silently read
     // the unit instead.
     it('falls back to the unit when a unit-named definition fails', () => {
       expect(sheet('V = 1 mA + 1 V', 'V * 2')[1]).toEqual([value('2 V')])
@@ -265,6 +283,15 @@ describe('evaluateSheet', () => {
       expect(viaParser[1]).toEqual(error('evaluate is not supported in a math element'))
       expect(check[0]).toEqual(error('Undefined symbol knot2'))
       expect(block('2 knot2')[0]).toEqual(error('Undefined symbol knot2'))
+    })
+
+    // Dropping a failed name must not delete `typed` from the scope: that
+    // would expose the real registry to the lines below.
+    it('restores the typed stub when an assignment to typed fails', () => {
+      expect(sheet('typed = 1\ntyped = nope', 'typed.clear()\nsqrt(9)')).toEqual([
+        [value('1'), error('Undefined symbol nope')],
+        [error('No access to method "clear"'), value('3')],
+      ])
     })
 
     it("lets a user's own `typed` shadow the stub below it, never the registry", () => {

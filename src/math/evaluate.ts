@@ -1,4 +1,11 @@
-import { all, create, type MathNode } from 'mathjs'
+import {
+  all,
+  create,
+  isAssignmentNode,
+  isBlockNode,
+  isFunctionAssignmentNode,
+  type MathNode,
+} from 'mathjs'
 
 /**
  * The math engine: math.js with units, fully client-side.
@@ -81,10 +88,23 @@ for (const name of TYPED_MUTATORS) {
  * each run's sheet scope starts with a stub that shadows it. Calling a method
  * on the stub fails with math.js's own 'No access to method "..."'. A user's
  * own `typed = ...` replaces the stub for the lines below it in that run,
- * which is harmless: it is a scope value, never the registry.
+ * which is harmless: it is a scope value, never the registry. If that
+ * assignment fails, the stub comes back (see `forget`), never the registry.
  */
+const TYPED_STUB = disabled('typed')
+
 function newSheetScope(): Map<string, unknown> {
-  return new Map<string, unknown>([['typed', disabled('typed')]])
+  return new Map<string, unknown>([['typed', TYPED_STUB]])
+}
+
+/**
+ * Drops a name whose assignment just failed, so the lines below do not
+ * silently use its previous value. `typed` falls back to the stub instead:
+ * deleting it would expose the real registry to the lines below.
+ */
+function forget(scope: Map<string, unknown>, name: string) {
+  if (name === 'typed') scope.set('typed', TYPED_STUB)
+  else scope.delete(name)
 }
 
 /** The outcome of evaluating one line of a math element. */
@@ -102,7 +122,8 @@ export interface SheetBlock {
 /** A line of the sheet, parsed once before anything is evaluated. */
 type ParsedLine =
   | { kind: 'blank' }
-  | { kind: 'syntax-error'; message: string }
+  /** `defines` is a best guess from the raw text: the line did not parse. */
+  | { kind: 'syntax-error'; message: string; defines: readonly string[] }
   | { kind: 'parsed'; node: MathNode; defines: readonly string[] }
 
 /**
@@ -126,7 +147,9 @@ type ParsedLine =
  *   disabled too.
  *
  * Never throws: a line that fails becomes an `error` result, and later lines
- * still evaluate (without whatever the failed line would have assigned).
+ * still evaluate without whatever the failed line would have assigned. A
+ * failed redefinition removes the name's earlier value too, so nothing below
+ * silently uses a stale one.
  * Using a name that is only assigned further down, or whose own assignment
  * failed, says so instead of math.js's bare "Undefined symbol".
  *
@@ -146,7 +169,7 @@ export function evaluateSheet(
   let position = 0
   for (const { lines } of sheet) {
     for (const line of lines) {
-      if (line.kind === 'parsed') {
+      if (line.kind !== 'blank') {
         for (const name of line.defines) {
           definedAt.set(name, [...(definedAt.get(name) ?? []), position])
         }
@@ -166,7 +189,14 @@ export function evaluateSheet(
       lines.map((line): LineResult => {
         const here = position++
         if (line.kind === 'blank') return { kind: 'empty' }
-        if (line.kind === 'syntax-error') return { kind: 'error', message: line.message }
+        const fail = (message: string): LineResult => {
+          for (const name of line.defines) {
+            failed.add(name)
+            forget(scope, name)
+          }
+          return { kind: 'error', message }
+        }
+        if (line.kind === 'syntax-error') return fail(line.message)
         try {
           const value: unknown = line.node.compile().evaluate(scope)
           line.defines.forEach((name) => failed.delete(name))
@@ -174,9 +204,8 @@ export function evaluateSheet(
           if (value === undefined) return { kind: 'empty' }
           return { kind: 'value', text: math.format(value, { precision: 14 }) }
         } catch (error) {
-          line.defines.forEach((name) => failed.add(name))
           const message = error instanceof Error ? error.message : String(error)
-          return { kind: 'error', message: explain(message, here, definedAt, failed) }
+          return fail(explain(message, here, definedAt, failed))
         }
       }),
     )
@@ -198,28 +227,24 @@ function parseLine(line: string): ParsedLine {
     const node = parse(line)
     return { kind: 'parsed', node, defines: definedNames(node) }
   } catch (error) {
+    const target = ASSIGNMENT_TARGET.exec(line)?.[1]
     return {
       kind: 'syntax-error',
       message: error instanceof Error ? error.message : String(error),
+      defines: target === undefined ? [] : [target],
     }
   }
 }
 
+// `name = ...` or `name(args) = ...` (not `==`), for lines that do not parse.
+const ASSIGNMENT_TARGET = /^\s*([A-Za-z_]\w*)\s*(?:\([^)]*\))?\s*=(?!=)/
+
 /** The names a statement assigns: `x = ...`, `f(x) = ...`, or several `;`-separated. */
 function definedNames(node: MathNode): string[] {
-  if (node.type === 'BlockNode') {
-    return (node as unknown as { blocks: { node: MathNode }[] }).blocks.flatMap((block) =>
-      definedNames(block.node),
-    )
-  }
-  if (node.type === 'FunctionAssignmentNode') {
-    return [(node as unknown as { name: string }).name]
-  }
-  if (node.type === 'AssignmentNode') {
-    // `A[1] = 5` and `a.b = 2` change an existing value; they define nothing.
-    const assignment = node as unknown as { name: string; index: unknown }
-    return assignment.index ? [] : [assignment.name]
-  }
+  if (isBlockNode(node)) return node.blocks.flatMap((block) => definedNames(block.node))
+  if (isFunctionAssignmentNode(node)) return [node.name]
+  // `A[1] = 5` and `a.b = 2` change an existing value; they define nothing.
+  if (isAssignmentNode(node)) return node.index ? [] : [node.name]
   return []
 }
 
