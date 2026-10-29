@@ -15,13 +15,30 @@ export function readingOrder(anchors: readonly MathAnchor[]): string[] {
     .map(({ id }) => id)
 }
 
-/** Top-left of the axis-aligned box around the anchor as rotated about its centre. */
+/**
+ * Top-left of the axis-aligned box around the anchor as rotated about its
+ * centre, quantised so floating-point noise never decides the order.
+ *
+ * Upright and upside-down anchors (the common case, and what Excalidraw's
+ * "align top" produces) use `x`/`y` as they are: computing
+ * `y + height / 2 - halfHeight` is not exactly `y` for many fractional sizes,
+ * which ordered equal tops by rounding noise instead of by left (PR #6
+ * review, B3). Other angles are rounded to a millionth of a scene unit.
+ */
 function visualTopLeft({ x, y, width, height, angle }: MathAnchor) {
-  const cos = Math.abs(Math.cos(angle))
   const sin = Math.abs(Math.sin(angle))
+  if (sin < 1e-9) return { top: quantise(y), left: quantise(x) }
+  const cos = Math.abs(Math.cos(angle))
   const halfWidth = (width * cos + height * sin) / 2
   const halfHeight = (width * sin + height * cos) / 2
-  return { top: y + height / 2 - halfHeight, left: x + width / 2 - halfWidth }
+  return {
+    top: quantise(y + height / 2 - halfHeight),
+    left: quantise(x + width / 2 - halfWidth),
+  }
+}
+
+function quantise(value: number): number {
+  return Math.round(value * 1e6) / 1e6
 }
 
 // Code-unit order, not locale order: the same on every machine.
