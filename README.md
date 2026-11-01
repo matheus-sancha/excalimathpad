@@ -1,14 +1,17 @@
 # Excalimathpad
 
 A Mathcad-style live-calculation canvas built on [Excalidraw](https://github.com/excalidraw/excalidraw):
-sketch freely, and (soon) drop unit-aware math onto the sheet that recalculates as
+sketch freely, and put unit-aware math on the sheet that recalculates as
 you edit. Runs entirely in the browser and builds to a static site.
 
-Status: spike of one math element (#2). The sheet opens with one math element
-(`R = 10 kohm`, `I = 2 mA`, `I * R` gives `20 V`). Edit it in place, and move it
-by dragging its dashed border. Recalculation across elements (#3) and saving
-are not built yet. Assignment is plain math.js `=`; Mathcad's `:=` is not
-accepted yet.
+Status: live recalculation across math elements (#3). The sheet opens with two
+math elements: `R = 10 kohm`, `I = 2 mA` above, and `U = I * R` (`20 V`) below.
+Edit `I` and `U` updates. Elements read top to bottom, then left to right, like
+Mathcad: each one sees only what is defined above it. Move an element by
+dragging its dashed border; duplicate one (Ctrl+D) for a new, empty element.
+Saving is not built yet. Assignment is plain math.js `=`; Mathcad's `:=` is
+not accepted. Avoid naming variables after units (`V`, `A`, `m`, `s`): the
+name silently shadows the unit for everything below it (#7).
 
 ## Requirements
 

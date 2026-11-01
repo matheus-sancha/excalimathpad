@@ -142,6 +142,51 @@ describe('MathOverlay', () => {
     expect(rows()).toHaveLength(2)
   })
 
+  describe('across elements (one sheet, reading order)', () => {
+    const [inputs, uses] = createMathAnchorElements([
+      { id: 'inputs', x: 100, y: 50, width: 400, height: 72 },
+      { id: 'uses', x: 100, y: 200, width: 400, height: 48 },
+    ])
+    const sources = { inputs: 'R = 10 kohm\nI = 2 mA', uses: 'U = I * R' }
+    const resultsOf = (id: string) =>
+      elementOf(id)!.querySelector('.math-element__results')!.textContent
+    const sourceOf = (id: string) =>
+      elementOf(id)!.querySelector<HTMLTextAreaElement>('.math-element__source')!
+
+    it('recalculates a later element when an earlier one is edited', () => {
+      renderOverlay([inputs, uses], sources)
+      expect(resultsOf('uses')).toBe('= 20 V')
+
+      fireEvent.change(sourceOf('inputs'), { target: { value: 'R = 10 kohm\nI = 4 mA' } })
+
+      expect(resultsOf('uses')).toBe('= 40 V')
+    })
+
+    it('re-evaluates in the new order when an anchor moves above another', () => {
+      const { scene } = renderOverlay([inputs, uses], sources)
+
+      scene.updateElements([inputs, { ...uses, y: 0 }])
+
+      expect(resultsOf('uses')).toBe('I is defined below')
+      // Long results are cut to fit; the full text stays in the title.
+      expect(screen.getByTitle('I is defined below')).toHaveClass('is-error')
+
+      scene.updateElements([inputs, uses])
+      expect(resultsOf('uses')).toBe('= 20 V')
+    })
+
+    it('loses the inputs when their element is deleted, and gets them back on undo', () => {
+      const { scene } = renderOverlay([inputs, uses], sources)
+
+      scene.updateElements([{ ...inputs, isDeleted: true }, uses])
+      expect(resultsOf('uses')).toBe('Undefined symbol I')
+
+      // Excalidraw's undo brings the anchor back; its source was kept by id.
+      scene.updateElements([inputs, uses])
+      expect(resultsOf('uses')).toBe('= 20 V')
+    })
+  })
+
   it('unsubscribes from Excalidraw when unmounted', () => {
     const { scene, unmount } = renderOverlay([anchor])
     expect(scene.listenerCount()).toBe(2)

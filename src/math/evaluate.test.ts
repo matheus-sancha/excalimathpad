@@ -1,97 +1,208 @@
 import { describe, expect, it, vi } from 'vitest'
-import { evaluateBlock } from './evaluate.ts'
+import { evaluateSheet, type LineResult } from './evaluate.ts'
 
-describe('evaluateBlock', () => {
-  it('evaluates I * R with units to 20 V (milestone M1)', () => {
-    expect(evaluateBlock('R = 10 kohm\nI = 2 mA\nI * R')).toEqual([
-      { kind: 'value', text: '10 kohm' },
-      { kind: 'value', text: '2 mA' },
-      { kind: 'value', text: '20 V' },
-    ])
-  })
+/** Evaluates blocks (in reading order) as one sheet; results per block, in order. */
+function sheet(...sources: string[]): LineResult[][] {
+  const results = evaluateSheet(sources.map((source, i) => ({ id: `b${i}`, source })))
+  return sources.map((_, i) => results.get(`b${i}`)!)
+}
 
-  it('reports incompatible units as an error on that line only', () => {
-    const results = evaluateBlock('R = 10 kohm\nI = 2 mA\nR + I\nI * R')
+/** A sheet of one block. */
+const block = (source: string) => sheet(source)[0]
 
-    expect(results[2]).toEqual({ kind: 'error', message: 'Units do not match' })
-    expect(results[3]).toEqual({ kind: 'value', text: '20 V' })
-  })
+const value = (text: string): LineResult => ({ kind: 'value', text })
+const error = (message: string): LineResult => ({ kind: 'error', message })
 
-  it('keeps evaluating after an undefined symbol on an early line', () => {
-    expect(evaluateBlock('foo + 1\n2 + 2')).toEqual([
-      { kind: 'error', message: 'Undefined symbol foo' },
-      { kind: 'value', text: '4' },
-    ])
-  })
-
-  it('keeps evaluating after a failed assignment, without its variable', () => {
-    const results = evaluateBlock('R = 10 kohm +\nI = 2 mA\nI * R')
-
-    expect(results[0]).toEqual({
-      kind: 'error',
-      message: 'Unexpected end of expression (char 14)',
+describe('evaluateSheet', () => {
+  describe('one block', () => {
+    it('evaluates I * R with units to 20 V (milestone M1)', () => {
+      expect(block('R = 10 kohm\nI = 2 mA\nI * R')).toEqual([
+        value('10 kohm'),
+        value('2 mA'),
+        value('20 V'),
+      ])
     })
-    expect(results[1]).toEqual({ kind: 'value', text: '2 mA' })
-    expect(results[2]).toEqual({ kind: 'error', message: 'Undefined symbol R' })
+
+    it('reports incompatible units as an error on that line only', () => {
+      const results = block('R = 10 kohm\nI = 2 mA\nR + I\nI * R')
+
+      expect(results[2]).toEqual(error('Units do not match'))
+      expect(results[3]).toEqual(value('20 V'))
+    })
+
+    // Also pins math.js's wording, which the "defined below" and "has an
+    // error above" messages rely on.
+    it('keeps evaluating after an undefined symbol or function', () => {
+      expect(block('foo + 1\ng(1)\n2 + 2')).toEqual([
+        error('Undefined symbol foo'),
+        error('Undefined function g'),
+        value('4'),
+      ])
+    })
+
+    it('keeps evaluating after a syntax error, without its variable', () => {
+      const results = block('R = 10 kohm +\nI = 2 mA\nI * R')
+
+      expect(results[0]).toEqual(error('Unexpected end of expression (char 14)'))
+      expect(results[1]).toEqual(value('2 mA'))
+      // The name is read from the raw text, so the use still points at it.
+      expect(results[2]).toEqual(error('R has an error above'))
+    })
+
+    it('rejects Mathcad-style := (plain math.js = only)', () => {
+      expect(block('R := 10 kohm')).toEqual([error('Value expected (char 4)')])
+    })
+
+    it('returns one result per line, blank and comment lines as empty', () => {
+      expect(block('\n  \n# note\nCRLF = 1\r\n2 * CRLF')).toEqual([
+        { kind: 'empty' },
+        { kind: 'empty' },
+        { kind: 'empty' },
+        value('1'),
+        value('2'),
+      ])
+    })
   })
 
-  it('rejects Mathcad-style := (plain math.js = only, for now)', () => {
-    expect(evaluateBlock('R := 10 kohm')).toEqual([
-      { kind: 'error', message: 'Value expected (char 4)' },
-    ])
-  })
+  describe('reading order (one scope across blocks)', () => {
+    it('evaluates U = I * R from inputs in an earlier block (milestone M2)', () => {
+      expect(sheet('R = 10 kohm\nI = 2 mA', 'U = I * R')[1]).toEqual([value('20 V')])
+    })
 
-  it('returns one result per line, blank and comment lines as empty', () => {
-    expect(evaluateBlock('\n  \n# note\nCRLF = 1\r\n2 * CRLF')).toEqual([
-      { kind: 'empty' },
-      { kind: 'empty' },
-      { kind: 'empty' },
-      { kind: 'value', text: '1' },
-      { kind: 'value', text: '2' },
-    ])
+    it('recalculates U when I is edited', () => {
+      expect(sheet('R = 10 kohm\nI = 4 mA', 'U = I * R')[1]).toEqual([value('40 V')])
+    })
+
+    it('never lets a block see a name defined after it, and says where it is', () => {
+      const [uses, defines] = sheet('U = I * R', 'R = 10 kohm\nI = 2 mA')
+
+      expect(uses).toEqual([error('I is defined below')])
+      expect(defines).toEqual([value('10 kohm'), value('2 mA')])
+    })
+
+    it('says so within a block too', () => {
+      expect(block('2 * x\nx = 3')[0]).toEqual(error('x is defined below'))
+    })
+
+    it('points a cascade at the failed definition', () => {
+      const [inputs, uses, further] = sheet(
+        'R = 10 kohm\nI = 2 mA + 1 V',
+        'U = I * R',
+        'P = U * 2',
+      )
+
+      expect(inputs[1]).toEqual(error('Units do not match'))
+      expect(uses).toEqual([error('I has an error above')])
+      // U failed because of I, so P points at U, the next link in the chain.
+      expect(further).toEqual([error('U has an error above')])
+    })
+
+    // Regression (PR #6 review, B2): a failed redefinition kept the old I in
+    // scope, so U silently stayed 20 V.
+    it('drops the old value when a redefinition fails', () => {
+      const [, redefinition, uses] = sheet(
+        'R = 10 kohm\nI = 2 mA',
+        'I = 4 mA + 1 V',
+        'U = I * R',
+      )
+
+      expect(redefinition).toEqual([error('Units do not match')])
+      expect(uses).toEqual([error('I has an error above')])
+    })
+
+    it('drops the old value when a redefinition does not parse', () => {
+      const [, redefinition, uses] = sheet('R = 10 kohm\nI = 2 mA', 'I = 4 mA +', 'U = I * R')
+
+      expect(redefinition[0].kind).toBe('error')
+      expect(uses).toEqual([error('I has an error above')])
+    })
+
+    // Known limit, follow-up #7: a name that is also a unit (V, A, m, ...)
+    // is never undefined. If its definition fails, lines below silently read
+    // the unit instead.
+    it('falls back to the unit when a unit-named definition fails', () => {
+      expect(sheet('V = 1 mA + 1 V', 'V * 2')[1]).toEqual([value('2 V')])
+    })
+
+    it('clears the error once the name is defined again', () => {
+      expect(sheet('I = 2 mA + 1 V', 'I = 3 mA', 'I')[2]).toEqual([value('3 mA')])
+    })
+
+    // Approved on #3: redefinition is silent and affects only the lines below.
+    it('lets a later line redefine a name, for the lines below it only', () => {
+      expect(sheet('I = 2 mA\nI * 1 kohm', 'I = 4 mA', 'I * 1 kohm')).toEqual([
+        [value('2 mA'), value('2 V')],
+        [value('4 mA')],
+        [value('4 V')],
+      ])
+    })
+
+    // Approved on #3: math.js functions bind late, so f uses k's value at
+    // the call, not at the definition.
+    it('binds function bodies late', () => {
+      expect(sheet('k = 2\nf(x) = k * x\nf(1)', 'k = 3', 'f(1)')).toEqual([
+        [value('2'), value('f(x)'), value('2')],
+        [value('3')],
+        [value('3')],
+      ])
+    })
+
+    it('treats an index assignment as a change, not a definition', () => {
+      // So using xs above it keeps math.js's own message.
+      expect(block('xs\nxs[1] = 5')[0]).toEqual(error('Undefined symbol xs'))
+    })
+
+    it('returns results for every block, including empty ones', () => {
+      expect(sheet('', 'x = 1')).toEqual([[{ kind: 'empty' }], [value('1')]])
+    })
   })
 
   describe('isolation', () => {
-    it('does not share variables between blocks', () => {
-      evaluateBlock('x = 5')
-      expect(evaluateBlock('x')[0]).toEqual({
-        kind: 'error',
-        message: 'Undefined symbol x',
-      })
+    it('starts every run from a fresh scope', () => {
+      sheet('x = 5')
+      expect(block('x')[0]).toEqual(error('Undefined symbol x'))
+    })
+
+    // Index assignment mutates a matrix in place (probed on #3): it must not
+    // reach the next run, or a re-run on the next keystroke would differ.
+    it('gives the same results on every run, even after in-place changes', () => {
+      const source = ['A = [1, 2]', 'A[1] = 5\nA']
+      const first = sheet(...source)
+
+      expect(sheet(...source)).toEqual(first)
+      expect(first[0]).toEqual([value('[1, 2]')])
+      expect(first[1][1]).toEqual(value('[5, 2]'))
     })
 
     // Regression (PR #5 review): createUnit mutated the shared instance, so
     // re-evaluating the same block (every keystroke) failed the second time,
     // and the unit leaked into other blocks.
-    it('gives the same results when the same block is evaluated again', () => {
-      const source = 'createUnit("knot", "0.514444 m/s")\nI = 2 mA\nI * 10 kohm'
-      const first = evaluateBlock(source)
+    it('gives the same results when the same sheet is evaluated again', () => {
+      const source = ['createUnit("knot", "0.514444 m/s")\nI = 2 mA', 'I * 10 kohm']
+      const first = sheet(...source)
 
-      expect(evaluateBlock(source)).toEqual(first)
-      expect(first[0]).toEqual({
-        kind: 'error',
-        message: 'createUnit is not supported in a math element',
-      })
-      expect(first[2]).toEqual({ kind: 'value', text: '20 V' })
+      expect(sheet(...source)).toEqual(first)
+      expect(first[0][0]).toEqual(error('createUnit is not supported in a math element'))
+      expect(first[1][0]).toEqual(value('20 V'))
     })
 
-    it('cannot change the engine for other blocks', () => {
-      evaluateBlock('createUnit("knot", "0.514444 m/s")')
-      evaluateBlock('config({number: "BigNumber"})')
-      evaluateBlock('import({ pi: 3 }, { override: true })')
+    it('cannot change the engine for later blocks or later runs', () => {
+      const attack = [
+        'createUnit("knot", "0.514444 m/s")',
+        'config({number: "BigNumber"})',
+        'import({ pi: 3 }, { override: true })',
+      ].join('\n')
+      const check = '2 knot\ntypeOf(0.1)\npi'
+      const expected = [
+        error('Undefined symbol knot'),
+        value('"number"'),
+        value('3.1415926535898'),
+      ]
 
-      expect(evaluateBlock('2 knot')[0]).toEqual({
-        kind: 'error',
-        message: 'Undefined symbol knot',
-      })
-      expect(evaluateBlock('typeOf(0.1)')[0]).toEqual({
-        kind: 'value',
-        text: '"number"',
-      })
-      expect(evaluateBlock('pi')[0]).toEqual({
-        kind: 'value',
-        text: '3.1415926535898',
-      })
+      // In the same run, below the attack...
+      expect(sheet(attack, check)[1]).toEqual(expected)
+      // ...and in the next run.
+      expect(block(check)).toEqual(expected)
     })
 
     it('reports each disabled function as unsupported', () => {
@@ -102,7 +213,7 @@ describe('evaluateBlock', () => {
         'compile("1 + 1")',
         'simplify("x + x")',
       ]) {
-        expect(evaluateBlock(call)[0]).toMatchObject({
+        expect(block(call)[0]).toMatchObject({
           kind: 'error',
           message: expect.stringMatching(/is not supported in a math element$/),
         })
@@ -111,79 +222,89 @@ describe('evaluateBlock', () => {
 
     // Regression (PR #5 review, round 3): simplifyCore parses with the real
     // parser, and the returned Node evaluates against the shared namespace,
-    // where `typed` is the real registry, not the per-block stub.
+    // where `typed` is the real registry, not the scope's stub.
     it('typed cannot be reached through a parsed Node', async () => {
       // A fresh engine, so sqrt/cos/to are first built after the attack.
       vi.resetModules()
       const fresh = await import('./evaluate.ts')
+      const run = (...sources: string[]) => {
+        const results = fresh.evaluateSheet(sources.map((source, i) => ({ id: `${i}`, source })))
+        return sources.map((_, i) => results.get(`${i}`)!)
+      }
 
-      fresh.evaluateBlock('n = simplifyCore("typed.clear()")\nn.evaluate()')
+      const [, afterwards] = run('n = simplifyCore("typed.clear()")\nn.evaluate()', '20 V to mV\nsqrt(16)\ncos(0)')
 
-      expect(fresh.evaluateBlock('20 V to mV\nsqrt(16)\ncos(0)')).toEqual([
-        { kind: 'value', text: '20000 mV' },
-        { kind: 'value', text: '4' },
-        { kind: 'value', text: '1' },
-      ])
+      const expected = [value('20000 mV'), value('4'), value('1')]
+      expect(afterwards).toEqual(expected)
+      expect(run('20 V to mV\nsqrt(16)\ncos(0)')[0]).toEqual(expected)
     })
 
     // Regression (PR #5 review, round 2): math.js exposes its `typed` registry
     // to expressions. typed.clear() broke every function not yet built (in
     // all blocks, until reload); typed.addConversion() leaked into other
     // blocks and failed on re-evaluation.
-    it('typed cannot break or extend the engine for other blocks', () => {
-      const addConversion =
-        'g(x) = 0\ntyped.addConversion({from: "boolean", to: "Unit", convert: g})'
-      evaluateBlock('typed.clear()')
-      evaluateBlock(addConversion)
-
+    it('typed cannot break or extend the engine, across blocks or runs', () => {
+      const attack = [
+        'typed.clear()',
+        'g(x) = 0\ntyped.addConversion({from: "boolean", to: "Unit", convert: g})',
+      ]
       // Functions this file has not used yet, so they are built after clear().
-      expect(evaluateBlock('20 V to mV\nsqrt(16)\ncos(0)\nmean(1, 2, 3)')).toEqual([
-        { kind: 'value', text: '20000 mV' },
-        { kind: 'value', text: '4' },
-        { kind: 'value', text: '1' },
-        { kind: 'value', text: '2' },
-      ])
+      const check = '20 V to mV\nsqrt(16)\ncos(0)\nmean(1, 2, 3)'
+      const expected = [value('20000 mV'), value('4'), value('1'), value('2')]
+
+      expect(sheet(...attack, check)[2]).toEqual(expected)
+      expect(block(check)).toEqual(expected)
       // No boolean -> Unit conversion leaked in.
-      expect(evaluateBlock('true + 1 V')[0].kind).toBe('error')
+      expect(sheet(...attack, 'true + 1 V')[2][0].kind).toBe('error')
+      expect(block('true + 1 V')[0].kind).toBe('error')
     })
 
     it('reports typed methods as errors, the same on every evaluation', () => {
-      const source =
-        'typed.clear()\ng(x) = 0\ntyped.addConversion({from: "boolean", to: "Unit", convert: g})'
-      const first = evaluateBlock(source)
+      const source = [
+        'typed.clear()',
+        'g(x) = 0\ntyped.addConversion({from: "boolean", to: "Unit", convert: g})',
+      ]
+      const first = sheet(...source)
 
-      expect(evaluateBlock(source)).toEqual(first)
-      expect(first[0]).toEqual({ kind: 'error', message: 'No access to method "clear"' })
-      expect(first[2]).toEqual({
-        kind: 'error',
-        message: 'No access to method "addConversion"',
-      })
+      expect(sheet(...source)).toEqual(first)
+      expect(first[0][0]).toEqual(error('No access to method "clear"'))
+      expect(first[1][1]).toEqual(error('No access to method "addConversion"'))
     })
 
-    // Why the other stubs live in the namespace, not the block scope: a
-    // scope-only stub is bypassed through parser(), which resolves names in
-    // the namespace.
+    // Why the other stubs live in the namespace, not the scope: a scope-only
+    // stub is bypassed through parser(), which resolves names in the
+    // namespace.
     it('cannot reach the disabled functions through parser()', () => {
-      const viaParser = evaluateBlock(
+      const [viaParser, check] = sheet(
         'p = parser()\np.evaluate("createUnit(\\"knot2\\", \\"1 m/s\\")")',
+        '2 knot2',
       )
 
-      expect(viaParser[1]).toEqual({
-        kind: 'error',
-        message: 'evaluate is not supported in a math element',
-      })
-      expect(evaluateBlock('2 knot2')[0]).toEqual({
-        kind: 'error',
-        message: 'Undefined symbol knot2',
-      })
+      expect(viaParser[1]).toEqual(error('evaluate is not supported in a math element'))
+      expect(check[0]).toEqual(error('Undefined symbol knot2'))
+      expect(block('2 knot2')[0]).toEqual(error('Undefined symbol knot2'))
     })
 
-    it("keeps a user's own `typed` variable local to its block", () => {
-      expect(evaluateBlock('typed = 1\ntyped + 1')[1]).toEqual({
-        kind: 'value',
-        text: '2',
-      })
-      expect(evaluateBlock('typed.clear()')[0].kind).toBe('error')
+    // Dropping a failed name must not delete `typed` from the scope: that
+    // would expose the real registry to the lines below.
+    it('restores the typed stub when an assignment to typed fails', () => {
+      expect(sheet('typed = 1\ntyped = nope', 'typed.clear()\nsqrt(9)')).toEqual([
+        [value('1'), error('Undefined symbol nope')],
+        [error('No access to method "clear"'), value('3')],
+      ])
+    })
+
+    it("lets a user's own `typed` shadow the stub below it, never the registry", () => {
+      const [own, below] = sheet('typed = 1\ntyped + 1', 'typed + 2\ntyped.clear()')
+
+      expect(own[1]).toEqual(value('2'))
+      expect(below[0]).toEqual(value('3'))
+      expect(below[1].kind).toBe('error')
+      // The next run starts with the stub again, and the engine is intact.
+      expect(block('typed.clear()\nsqrt(9)')).toEqual([
+        error('No access to method "clear"'),
+        value('3'),
+      ])
     })
   })
 })

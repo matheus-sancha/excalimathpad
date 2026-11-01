@@ -20,7 +20,10 @@
   height: 100%;
   padding: 12px 14px;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  /* The source keeps at least half the width: a long result (an error
+     message) is cut with an ellipsis rather than squeezing the source to
+     nothing. The full text is in the result's title. */
+  grid-template-columns: minmax(50%, 1fr) minmax(0, auto);
   /* Rows size to content, so the textarea keeps its `rows` height even when
      that is taller than the anchor (it overflows rather than scrolls). */
   align-items: start;
@@ -52,6 +55,11 @@
   list-style: none;
   white-space: pre;
   color: #1971c2;
+}
+
+.math-element__result {
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .math-element__result.is-error {

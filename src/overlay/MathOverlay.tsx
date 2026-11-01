@@ -8,7 +8,9 @@ import {
   type MathAnchor,
 } from '../canvas/mathAnchor.ts'
 import type { ForwardWheel } from '../canvas/SheetCanvas.tsx'
+import { evaluateSheet } from '../math/evaluate.ts'
 import { MathElementView } from './MathElementView.tsx'
+import { readingOrder } from './readingOrder.ts'
 import type { Viewport } from './viewport.ts'
 import './MathOverlay.css'
 
@@ -35,6 +37,10 @@ interface SceneSnapshot {
  * position. Re-reads the scene whenever Excalidraw reports a change (element
  * moved, resized, deleted, undone) or a scroll/zoom.
  *
+ * Owns the sheet's evaluation (ADR 0003): every element's source runs in
+ * reading order, in one scope, synchronously on every edit and whenever the
+ * order changes. A drag that does not change the order does not re-evaluate.
+ *
  * Source text lives here, in memory, keyed by anchor id; how it is persisted
  * with the sheet is still open (ADR 0001, ADR 0002).
  */
@@ -44,6 +50,15 @@ export function MathOverlay({ api, forwardWheel, initialSources }: MathOverlayPr
   const [sources, setSources] = useState<Record<string, string>>(() => ({
     ...initialSources,
   }))
+  // A string, so moves that keep the order keep the memo below.
+  const orderKey = JSON.stringify(readingOrder(anchors))
+  const results = useMemo(
+    () =>
+      evaluateSheet(
+        (JSON.parse(orderKey) as string[]).map((id) => ({ id, source: sources[id] ?? '' })),
+      ),
+    [orderKey, sources],
+  )
 
   return (
     // Above the drawing, below Excalidraw's toolbar and panels, so math never
@@ -55,6 +70,7 @@ export function MathOverlay({ api, forwardWheel, initialSources }: MathOverlayPr
           anchor={anchor}
           viewport={viewport}
           source={sources[anchor.id] ?? ''}
+          results={results.get(anchor.id) ?? []}
           onSourceChange={(source) =>
             setSources((prev) => ({ ...prev, [anchor.id]: source }))
           }

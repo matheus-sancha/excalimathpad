@@ -13,13 +13,15 @@ describe('App', () => {
     expect(await screen.findAllByRole('radio')).not.toHaveLength(0)
   })
 
-  it('shows the seeded math element evaluating I * R to 20 V', async () => {
+  it('seeds inputs above and U = I * R below, evaluating to 20 V', async () => {
     render(<App />)
 
-    const source = await screen.findByRole('textbox', { name: 'Math source' })
-    expect(source).toHaveValue('R = 10 kohm\nI = 2 mA\nI * R')
-    expect(screen.getByRole('list', { name: 'Results' })).toHaveTextContent(
-      '= 20 V',
-    )
+    const sources = await screen.findAllByRole('textbox', { name: 'Math source' })
+    expect(sources.map((source) => (source as HTMLTextAreaElement).value)).toEqual([
+      'R = 10 kohm\nI = 2 mA',
+      'U = I * R',
+    ])
+    const [, results] = screen.getAllByRole('list', { name: 'Results' })
+    expect(results).toHaveTextContent('= 20 V')
   })
 })

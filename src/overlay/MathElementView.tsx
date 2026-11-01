@@ -1,13 +1,15 @@
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useRef } from 'react'
 import type { MathAnchor } from '../canvas/mathAnchor.ts'
 import type { ForwardWheel } from '../canvas/SheetCanvas.tsx'
-import { evaluateBlock, type LineResult } from '../math/evaluate.ts'
+import { splitLines, type LineResult } from '../math/evaluate.ts'
 import { sceneToStage, type Viewport } from './viewport.ts'
 
 export interface MathElementViewProps {
   anchor: MathAnchor
   viewport: Viewport
   source: string
+  /** One per line of `source`, from the sheet's evaluation (MathOverlay). */
+  results: readonly LineResult[]
   onSourceChange: (source: string) => void
   forwardWheel: ForwardWheel
 }
@@ -26,10 +28,10 @@ export function MathElementView({
   anchor,
   viewport,
   source,
+  results,
   onSourceChange,
   forwardWheel,
 }: MathElementViewProps) {
-  const results = useMemo(() => evaluateBlock(source), [source])
   const rootRef = useRef<HTMLDivElement>(null)
   const { x, y } = sceneToStage(anchor, viewport)
 
@@ -64,12 +66,17 @@ export function MathElementView({
           autoCapitalize="off"
           autoComplete="off"
           wrap="off"
-          rows={results.length}
+          rows={splitLines(source).length}
           onChange={(event) => onSourceChange(event.target.value)}
         />
         <ol className="math-element__results" aria-label="Results">
           {results.map((result, i) => (
-            <li key={i} className={`math-element__result is-${result.kind}`}>
+            <li
+              key={i}
+              className={`math-element__result is-${result.kind}`}
+              // Long results are cut to fit (MathOverlay.css); this keeps the whole text.
+              title={result.kind === 'empty' ? undefined : formatResult(result)}
+            >
               {formatResult(result)}
             </li>
           ))}
