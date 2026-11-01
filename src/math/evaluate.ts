@@ -13,6 +13,19 @@ import {
  */
 const math = create(all)
 
+/**
+ * Results format in one fixed unit system, SI (#25). math.js's default,
+ * `auto`, is global state on the instance: every unit an expression reads
+ * becomes the unit its dimension formats in, for every later line and run
+ * (after `1 psi`, `(2 kg) / (3 m * s^2)` showed `9.67e-5 psi` instead of
+ * `0.667 Pa`; after `h`, speeds showed `m / h`). With `si`, a result's unit
+ * depends only on its value. Units read still update `auto`, which is no
+ * longer used. Expressions cannot switch it back: `Unit` is not a symbol in
+ * expressions (a test pins this). The sheet-level unit system of the v1 spec
+ * will build on this.
+ */
+math.Unit.setUnitSystem('si')
+
 // Keep our own reference before hardening: the `parse` that expressions can
 // see is disabled below; this one stays usable. The sheet parses each line
 // once with it (to learn which names the line defines) and evaluates the
@@ -144,7 +157,9 @@ type ParsedLine =
  * - `typed` is shadowed in each run's scope;
  * - parsed Nodes (`simplifyCore` / `simplifyConstant`) evaluate against the
  *   namespace, not the sheet scope, so the real `typed`'s mutators are
- *   disabled too.
+ *   disabled too;
+ * - the unit system results format in is fixed to SI, so units a line reads
+ *   do not change how other results are shown (#25).
  *
  * Never throws: a line that fails becomes an `error` result, and later lines
  * still evaluate without whatever the failed line would have assigned. A

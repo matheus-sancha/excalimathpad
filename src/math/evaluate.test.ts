@@ -205,6 +205,80 @@ describe('evaluateSheet', () => {
       expect(block(check)).toEqual(expected)
     })
 
+    // Regression (#25): a result showed in whichever unit of its dimension
+    // an earlier line or run had read last: after `1 psi`, pressure showed
+    // as `9.6691825159135e-5 psi`; after `h`, speed as `m / h`.
+    describe('formats results in SI, whatever units were read before', () => {
+      // Each line reads units that, under `auto`, took over a dimension.
+      const otherUnits = [
+        'p = 1 psi',
+        'unit("2 bar")',
+        't = 2 h\nl = 3 ft',
+        'w = 4 lbm\nx = 5 mmHg to psi',
+      ].join('\n')
+      const check = 'F = (2 kg) / (3 m * s^2)\nQ = 10 m^3 / h\nA = 2 m^2\nQ / A'
+      const expected = [
+        value('0.66666666666667 Pa'),
+        value('10 m^3 / h'),
+        value('2 m^2'),
+        value('0.0013888888888889 m / s'),
+      ]
+
+      it('in a run that reads only these units', () => {
+        expect(block(check)).toEqual(expected)
+      })
+
+      it('in a later block of the same run', () => {
+        const [read, checked] = sheet(otherUnits, check)
+
+        expect(read.every((line) => line.kind === 'value')).toBe(true)
+        expect(checked).toEqual(expected)
+      })
+
+      it('in a later line of the same block', () => {
+        expect(block(`${otherUnits}\n${check}`).slice(-check.split('\n').length)).toEqual(expected)
+      })
+
+      it('in a later run', () => {
+        sheet(otherUnits)
+        expect(block(check)).toEqual(expected)
+      })
+
+      // The display trade-off of a fixed system (ADR 0003): a result math.js
+      // simplifies shows in SI with an SI prefix, even from SI-prefixed or
+      // non-SI inputs (`auto` showed `10 ft^2`, `6 cm^2`, `4 cm^2`). A
+      // result whose units it keeps shows as written. `to` converts.
+      it('simplifies to SI with a prefix, keeps units it does not simplify', () => {
+        const lines = [
+          '5 ft * 2 ft',
+          '2 cm * 3 cm',
+          'x = 2 cm\nx * x',
+          '1 psi',
+          '60 mi / h',
+          '5 ft * 2 ft to ft^2',
+        ]
+
+        expect(block(lines.join('\n'))).toEqual([
+          value('0.9290304 m^2'),
+          value('600 mm^2'),
+          value('2 cm'),
+          value('400 mm^2'),
+          value('1 psi'),
+          value('60 mi / h'),
+          value('10 ft^2'),
+        ])
+      })
+
+      // `Unit` (and its static `setUnitSystem`) is not a symbol in
+      // expressions, so no line can switch the system back.
+      it('cannot be switched by a line', () => {
+        const [attempt, checked] = sheet('Unit.setUnitSystem("us")', check)
+
+        expect(attempt).toEqual([error('Undefined symbol Unit')])
+        expect(checked).toEqual(expected)
+      })
+    })
+
     it('reports each disabled function as unsupported', () => {
       for (const call of [
         'config({number: "BigNumber"})',
