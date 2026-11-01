@@ -46,11 +46,11 @@ server. v1 target: one sheet, for Matheus's own use.
   / `simplifyConstant` evaluate against the namespace, where `typed` is the
   real registry, so its mutators (`clear`, `addConversion`, ...) are also
   disabled in place on `math.typed`. Results format in a fixed unit
-  system, SI (#25): math.js's default (`auto`) makes each dimension format
-  in the unit read last, by any line in any run, so `1 psi` anywhere turned
-  `(2 kg) / (3 m * s^2)` from `0.667 Pa` into `9.67e-5 psi`. A product of
-  non-SI units formats in SI too (`5 ft * 2 ft` is `0.9290304 m^2`); `to`
-  converts. App code must evaluate only
+  system, SI, so units read elsewhere never change how a result shows
+  (#25, ADR 0003). A result math.js simplifies shows in SI units with an
+  SI prefix (`5 ft * 2 ft` is `0.9290304 m^2`, `2 cm * 3 cm` is
+  `600 mm^2`); one whose units it keeps shows as written (`1 psi`,
+  `60 mi / h`); `to` converts. App code must evaluate only
   through `evaluateSheet`: math.js functions that depend on the disabled
   names (`help`, `rationalize`, a `parser()`'s methods) no longer work. The
   only module that imports `mathjs`. Depends on: `mathjs`.

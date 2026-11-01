@@ -205,10 +205,9 @@ describe('evaluateSheet', () => {
       expect(block(check)).toEqual(expected)
     })
 
-    // Regression (#25): math.js's default unit system, `auto`, is global
-    // state on the instance. Every unit a line read became the unit its
-    // dimension formatted in, in every later line and run: after `1 psi`,
-    // pressure showed as `9.6691825159135e-5 psi`; after `h`, speed as `m / h`.
+    // Regression (#25): a result showed in whichever unit of its dimension
+    // an earlier line or run had read last: after `1 psi`, pressure showed
+    // as `9.6691825159135e-5 psi`; after `h`, speed as `m / h`.
     describe('formats results in SI, whatever units were read before', () => {
       // Each line reads units that, under `auto`, took over a dimension.
       const otherUnits = [
@@ -225,7 +224,7 @@ describe('evaluateSheet', () => {
         value('0.0013888888888889 m / s'),
       ]
 
-      it('in a fresh run', () => {
+      it('in a run that reads only these units', () => {
         expect(block(check)).toEqual(expected)
       })
 
@@ -245,11 +244,27 @@ describe('evaluateSheet', () => {
         expect(block(check)).toEqual(expected)
       })
 
-      // Products of non-SI lengths format in SI too: the trade-off of a
-      // fixed system (`auto` used to answer `10 ft^2`). `to` still converts.
-      it('including products of non-SI units, which `to` converts back', () => {
-        expect(block('5 ft * 2 ft\n5 ft * 2 ft to ft^2')).toEqual([
+      // The display trade-off of a fixed system (ADR 0003): a result math.js
+      // simplifies shows in SI with an SI prefix, even from SI-prefixed or
+      // non-SI inputs (`auto` showed `10 ft^2`, `6 cm^2`, `4 cm^2`). A
+      // result whose units it keeps shows as written. `to` converts.
+      it('simplifies to SI with a prefix, keeps units it does not simplify', () => {
+        const lines = [
+          '5 ft * 2 ft',
+          '2 cm * 3 cm',
+          'x = 2 cm\nx * x',
+          '1 psi',
+          '60 mi / h',
+          '5 ft * 2 ft to ft^2',
+        ]
+
+        expect(block(lines.join('\n'))).toEqual([
           value('0.9290304 m^2'),
+          value('600 mm^2'),
+          value('2 cm'),
+          value('400 mm^2'),
+          value('1 psi'),
+          value('60 mi / h'),
           value('10 ft^2'),
         ])
       })
