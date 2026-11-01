@@ -45,7 +45,12 @@ server. v1 target: one sheet, for Matheus's own use.
   the namespace without breaking math.js). Parsed Nodes from `simplifyCore`
   / `simplifyConstant` evaluate against the namespace, where `typed` is the
   real registry, so its mutators (`clear`, `addConversion`, ...) are also
-  disabled in place on `math.typed`. App code must evaluate only
+  disabled in place on `math.typed`. Results format in a fixed unit
+  system, SI (#25): math.js's default (`auto`) makes each dimension format
+  in the unit read last, by any line in any run, so `1 psi` anywhere turned
+  `(2 kg) / (3 m * s^2)` from `0.667 Pa` into `9.67e-5 psi`. A product of
+  non-SI units formats in SI too (`5 ft * 2 ft` is `0.9290304 m^2`); `to`
+  converts. App code must evaluate only
   through `evaluateSheet`: math.js functions that depend on the disabled
   names (`help`, `rationalize`, a `parser()`'s methods) no longer work. The
   only module that imports `mathjs`. Depends on: `mathjs`.
@@ -88,7 +93,8 @@ and everything downstream recalculates. Engine: math.js, client-side.
   values below an error). The same sheet (sources in reading
   order) gives the same results however often it is evaluated: every run
   starts from a fresh scope, and every known route for a line to change the
-  engine is closed, including through parsed Nodes (see **math**).
+  engine is closed, including through parsed Nodes and the unit system
+  results format in (see **math**).
 - Known limit: a variable named like a math.js unit or built-in (`V`, `m`,
   `s`, `i`, ...) silently shadows the unit below its definition and falls
   back to the unit above it or after it fails (ADR 0003). The seed uses `U`

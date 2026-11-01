@@ -49,6 +49,13 @@ Engineering rules (Engineer's):
   a cached scope would carry one run's changes into the next.
 - The engine hardening from #2 is unchanged (it lives in the namespace). The
   `typed` stub is seeded per run instead of per block.
+- The unit system is fixed to SI at engine setup (amended for #25).
+  math.js's default, `auto`, is global state on the instance that every
+  unit read updates, so a result's unit depended on what any earlier line
+  or run had read: a route for a line to change the engine that the
+  hardening above did not close. Expressions cannot reach `Unit` to switch
+  it back. A per-run reset of `auto` would not do: within a run a line would
+  still change the lines below it, and math.js exposes no way to reset it.
 - An undefined name used above its definition says
   `x is defined below`, and one whose assignment
   failed says `x has an error above`. Both rely on math.js's
@@ -83,5 +90,9 @@ Engineering rules (Engineer's):
   `100 V`. Above it, or after it fails, lines read the unit: `V * 2` gives
   `2 V`. Matheus kept redefinition silent and the seed uses `U`, which is not
   a unit; warning on such names is issue #7. A test records the fallback.
+- Results format in SI whatever units the sheet uses (#25): `1 psi` stays
+  `1 psi`, but a computed pressure shows in `Pa` and `5 ft * 2 ft` in `m^2`.
+  `to` converts a result. A sheet-level choice of unit system is for the v1
+  spec, on top of this.
 - Excalidraw does not know the order; nothing in the scene stores it, so
   persistence (still open, ADR 0001) does not need to either.

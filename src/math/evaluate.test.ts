@@ -205,6 +205,65 @@ describe('evaluateSheet', () => {
       expect(block(check)).toEqual(expected)
     })
 
+    // Regression (#25): math.js's default unit system, `auto`, is global
+    // state on the instance. Every unit a line read became the unit its
+    // dimension formatted in, in every later line and run: after `1 psi`,
+    // pressure showed as `9.6691825159135e-5 psi`; after `h`, speed as `m / h`.
+    describe('formats results in SI, whatever units were read before', () => {
+      // Each line reads units that, under `auto`, took over a dimension.
+      const otherUnits = [
+        'p = 1 psi',
+        'unit("2 bar")',
+        't = 2 h\nl = 3 ft',
+        'w = 4 lbm\nx = 5 mmHg to psi',
+      ].join('\n')
+      const check = 'F = (2 kg) / (3 m * s^2)\nQ = 10 m^3 / h\nA = 2 m^2\nQ / A'
+      const expected = [
+        value('0.66666666666667 Pa'),
+        value('10 m^3 / h'),
+        value('2 m^2'),
+        value('0.0013888888888889 m / s'),
+      ]
+
+      it('in a fresh run', () => {
+        expect(block(check)).toEqual(expected)
+      })
+
+      it('in a later block of the same run', () => {
+        const [read, checked] = sheet(otherUnits, check)
+
+        expect(read.every((line) => line.kind === 'value')).toBe(true)
+        expect(checked).toEqual(expected)
+      })
+
+      it('in a later line of the same block', () => {
+        expect(block(`${otherUnits}\n${check}`).slice(-check.split('\n').length)).toEqual(expected)
+      })
+
+      it('in a later run', () => {
+        sheet(otherUnits)
+        expect(block(check)).toEqual(expected)
+      })
+
+      // Products of non-SI lengths format in SI too: the trade-off of a
+      // fixed system (`auto` used to answer `10 ft^2`). `to` still converts.
+      it('including products of non-SI units, which `to` converts back', () => {
+        expect(block('5 ft * 2 ft\n5 ft * 2 ft to ft^2')).toEqual([
+          value('0.9290304 m^2'),
+          value('10 ft^2'),
+        ])
+      })
+
+      // `Unit` (and its static `setUnitSystem`) is not a symbol in
+      // expressions, so no line can switch the system back.
+      it('cannot be switched by a line', () => {
+        const [attempt, checked] = sheet('Unit.setUnitSystem("us")', check)
+
+        expect(attempt).toEqual([error('Undefined symbol Unit')])
+        expect(checked).toEqual(expected)
+      })
+    })
+
     it('reports each disabled function as unsupported', () => {
       for (const call of [
         'config({number: "BigNumber"})',
