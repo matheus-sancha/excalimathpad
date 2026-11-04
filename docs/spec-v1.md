@@ -564,8 +564,8 @@ Excalidraw's own selection steps.
 - **Redo** (Ctrl+Y, Ctrl+Shift+Z) is Excalidraw's own and mirrors undo.
 - **Undoing a line shows nothing extra:** no selection, scroll or highlight. An undo off
   screen shows only as changed results.
-- **Selecting and deselecting are Excalidraw's own steps,** on the same stack, and no public
-  API keeps them off it. An undo that lands on one changes only the selection. Leaving a line
+- **Selecting and deselecting are Excalidraw's own steps,** on the same stack; #41 found no
+  public API that keeps them off it. An undo that lands on one changes only the selection. Leaving a line
   with a click outside also deselects, so the first Ctrl+Z after it only re-selects the
   element, and the second takes back the line. Leaving with Esc adds no such step.
 - **Not undo steps:** keystrokes, size writes, style restores, settings changes and
