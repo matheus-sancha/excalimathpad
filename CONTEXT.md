@@ -150,11 +150,21 @@ and everything downstream recalculates. Engine: math.js, client-side.
 
 ## Decisions
 
+[`docs/spec-v1.md`](docs/spec-v1.md) says what v1 will be. This file says what the
+code is today, so each PR moves in the terms and rules it makes true. ADR items
+marked with a milestone aren't built yet.
+
 - [ADR 0001](docs/adr/0001-wrap-excalidraw-unforked.md) — wrap the npm
-  Excalidraw component unforked; math is an overlay + side panel around it.
+  Excalidraw component unforked; math is an overlay around it, and the app's
+  chrome uses Excalidraw's public slots.
 - [ADR 0002](docs/adr/0002-math-elements-anchor-to-excalidraw-rectangles.md) —
   math elements anchor to a marked Excalidraw rectangle; the overlay renders
-  them; persistence stays open.
+  them; the source lives in the anchor.
 - [ADR 0003](docs/adr/0003-sheet-evaluates-in-reading-order-in-one-scope.md) —
   the sheet evaluates in reading order (top, then left), in one fresh scope
   per run, re-run whole and synchronously on every change.
+- [ADR 0004](docs/adr/0004-sheet-file-is-excalidraw-json-plus-a-block.md) —
+  the sheet file is Excalidraw JSON plus one block, saved as `.excalimathpad`.
+- [ADR 0005](docs/adr/0005-app-reads-line-forms-before-mathjs.md) — the app
+  reads its line forms (comment, display unit, solve, range, table, plot)
+  before math.js sees a line.
