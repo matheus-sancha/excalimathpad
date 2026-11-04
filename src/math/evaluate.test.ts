@@ -12,13 +12,14 @@ const block = (source: string) => sheet(source)[0]
 
 const value = (text: string): LineResult => ({ kind: 'value', text })
 const error = (message: string): LineResult => ({ kind: 'error', message })
+const empty: LineResult = { kind: 'empty' }
 
 describe('evaluateSheet', () => {
   describe('one block', () => {
     it('evaluates I * R with units to 20 V (milestone M1)', () => {
       expect(block('R = 10 kohm\nI = 2 mA\nI * R')).toEqual([
-        value('10 kohm'),
-        value('2 mA'),
+        empty,
+        empty,
         value('20 V'),
       ])
     })
@@ -44,7 +45,7 @@ describe('evaluateSheet', () => {
       const results = block('R = 10 kohm +\nI = 2 mA\nI * R')
 
       expect(results[0]).toEqual(error('Unexpected end of expression (char 14)'))
-      expect(results[1]).toEqual(value('2 mA'))
+      expect(results[1]).toEqual(empty)
       // The name is read from the raw text, so the use still points at it.
       expect(results[2]).toEqual(error('R has an error above'))
     })
@@ -55,12 +56,61 @@ describe('evaluateSheet', () => {
 
     it('returns one result per line, blank and comment lines as empty', () => {
       expect(block('\n  \n# note\nCRLF = 1\r\n2 * CRLF')).toEqual([
-        { kind: 'empty' },
-        { kind: 'empty' },
-        { kind: 'empty' },
-        value('1'),
+        empty,
+        empty,
+        empty,
+        empty,
         value('2'),
       ])
+    })
+  })
+
+  // docs/spec-v1.md section 3, the forms built by M1 (comments arrive with #44).
+  describe('line forms', () => {
+    it.each([
+      ['a bare number', 'eta = 0.70'],
+      ['a number and unit', 'D = 102.3 mm'],
+      ['a compound unit', 'rho = 998.2 kg/m^3'],
+      ['a unit in brackets', 'mu = 1.002 kg/(m s)'],
+      ['a negative exponent', 'a = 2 m s^-2'],
+      ['a sign', 'x = -5 m'],
+      ['a number over a unit', 'f = 5 / s'],
+      ['a trailing note', 'D = 102.3 mm # 4" Sch 40'],
+    ])('leaves the result cell of a plain input empty: %s', (_, line) => {
+      expect(block(line)).toEqual([empty])
+    })
+
+    it('still passes a plain input to the lines below', () => {
+      expect(block('D = 102.3 mm\nD * 2')).toEqual([empty, value('204.6 mm')])
+    })
+
+    it.each([
+      ['arithmetic', 'x = 2 * 3', '6'],
+      ['a constant', 'x = 2 pi', '6.2831853071796'],
+      ['another name', 'x = pi', '3.1415926535898'],
+    ])('shows a value when the right side is not a literal: %s', (_, line, shown) => {
+      expect(block(line)).toEqual([value(shown)])
+    })
+
+    // After K = 2, `5 K` is a calculation, not five kelvin.
+    it('shows a value when a unit name is a variable above', () => {
+      expect(block('K = 2\ny = 5 K')).toEqual([empty, value('10')])
+    })
+
+    it('still shows the error of a plain input that fails', () => {
+      expect(block('mu = 1.002 notaunit')).toEqual([error('Undefined symbol notaunit')])
+    })
+
+    it('shows the value of a bare expression', () => {
+      expect(block('2 * 4')).toEqual([value('8')])
+    })
+
+    it('leaves the result cell empty for any line whose value is a function', () => {
+      expect(block('q(x) = x^2\nr = q\nr(3)')).toEqual([empty, empty, value('9')])
+    })
+
+    it('reads a blank line and a bare # as empty', () => {
+      expect(block('\n#')).toEqual([empty, empty])
     })
   })
 
@@ -77,7 +127,7 @@ describe('evaluateSheet', () => {
       const [uses, defines] = sheet('U = I * R', 'R = 10 kohm\nI = 2 mA')
 
       expect(uses).toEqual([error('I is defined below')])
-      expect(defines).toEqual([value('10 kohm'), value('2 mA')])
+      expect(defines).toEqual([empty, empty])
     })
 
     it('says so within a block too', () => {
@@ -131,8 +181,8 @@ describe('evaluateSheet', () => {
     // Approved on #3: redefinition is silent and affects only the lines below.
     it('lets a later line redefine a name, for the lines below it only', () => {
       expect(sheet('I = 2 mA\nI * 1 kohm', 'I = 4 mA', 'I * 1 kohm')).toEqual([
-        [value('2 mA'), value('2 V')],
-        [value('4 mA')],
+        [empty, value('2 V')],
+        [empty],
         [value('4 V')],
       ])
     })
@@ -141,8 +191,8 @@ describe('evaluateSheet', () => {
     // the call, not at the definition.
     it('binds function bodies late', () => {
       expect(sheet('k = 2\nf(x) = k * x\nf(1)', 'k = 3', 'f(1)')).toEqual([
-        [value('2'), value('f(x)'), value('2')],
-        [value('3')],
+        [empty, empty, value('2')],
+        [empty],
         [value('3')],
       ])
     })
@@ -153,7 +203,7 @@ describe('evaluateSheet', () => {
     })
 
     it('returns results for every block, including empty ones', () => {
-      expect(sheet('', 'x = 1')).toEqual([[{ kind: 'empty' }], [value('1')]])
+      expect(sheet('', 'x = 1 + 1')).toEqual([[empty], [value('2')]])
     })
   })
 
@@ -216,9 +266,11 @@ describe('evaluateSheet', () => {
         't = 2 h\nl = 3 ft',
         'w = 4 lbm\nx = 5 mmHg to psi',
       ].join('\n')
-      const check = 'F = (2 kg) / (3 m * s^2)\nQ = 10 m^3 / h\nA = 2 m^2\nQ / A'
+      const check = 'F = (2 kg) / (3 m * s^2)\nQ = 10 m^3 / h\nA = 2 m^2\nQ\nA\nQ / A'
       const expected = [
         value('0.66666666666667 Pa'),
+        empty,
+        empty,
         value('10 m^3 / h'),
         value('2 m^2'),
         value('0.0013888888888889 m / s'),
@@ -231,7 +283,7 @@ describe('evaluateSheet', () => {
       it('in a later block of the same run', () => {
         const [read, checked] = sheet(otherUnits, check)
 
-        expect(read.every((line) => line.kind === 'value')).toBe(true)
+        expect(read.some((line) => line.kind === 'error')).toBe(false)
         expect(checked).toEqual(expected)
       })
 
@@ -261,7 +313,7 @@ describe('evaluateSheet', () => {
         expect(block(lines.join('\n'))).toEqual([
           value('0.9290304 m^2'),
           value('600 mm^2'),
-          value('2 cm'),
+          empty,
           value('400 mm^2'),
           value('1 psi'),
           value('60 mi / h'),
@@ -363,7 +415,7 @@ describe('evaluateSheet', () => {
     // would expose the real registry to the lines below.
     it('restores the typed stub when an assignment to typed fails', () => {
       expect(sheet('typed = 1\ntyped = nope', 'typed.clear()\nsqrt(9)')).toEqual([
-        [value('1'), error('Undefined symbol nope')],
+        [empty, error('Undefined symbol nope')],
         [error('No access to method "clear"'), value('3')],
       ])
     })
