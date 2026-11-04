@@ -33,6 +33,14 @@ describe('SheetCanvas', () => {
     expect(elements[0]).toMatchObject({ x: 10, y: 20, width: 300, height: 100 })
   })
 
+  it('gives the keyboard to Excalidraw on request', async () => {
+    const { handle, container } = await mount()
+
+    handle.focusCanvas()
+
+    expect(document.activeElement).toBe(container.querySelector('.excalidraw'))
+  })
+
   it('forwards a wheel event onto the canvas, so Excalidraw scrolls', async () => {
     const { handle, container } = await mount()
     const canvas = container.querySelector('canvas')!

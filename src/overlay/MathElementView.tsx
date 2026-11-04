@@ -1,35 +1,48 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useLayoutEffect, useRef, type KeyboardEvent } from 'react'
 import type { MathAnchor } from '../canvas/mathAnchor.ts'
 import type { ForwardWheel } from '../canvas/SheetCanvas.tsx'
 import { splitLines, type LineResult } from '../math/evaluate.ts'
+import type { LineEdit, LineMove } from './lineEdit.ts'
 import { sceneToStage, type Viewport } from './viewport.ts'
 
 export interface MathElementViewProps {
   anchor: MathAnchor
   viewport: Viewport
+  /** The element's lines, with any typed text in place. */
   source: string
   /** One per line of `source`, from the sheet's evaluation (MathOverlay). */
   results: readonly LineResult[]
-  onSourceChange: (source: string) => void
+  /** The sheet's line edit, when it is in this element. */
+  edit: LineEdit | null
+  onOpenLine: (lineIndex: number) => void
+  onType: (text: string) => void
+  onMove: (move: LineMove) => void
+  onEscape: () => void
+  onBlurLine: (lineIndex: number) => void
   forwardWheel: ForwardWheel
 }
 
 /**
- * One math element: source on the left, one result per line on the right.
- * Laid out in scene units and scaled by the zoom, so it moves and scales
- * exactly like the anchor Excalidraw draws underneath.
+ * One math element: one row per source line on the left, one result per line on
+ * the right. Laid out in scene units and scaled by the zoom, so it moves and
+ * scales exactly like the anchor Excalidraw draws underneath.
  *
- * The textarea always has exactly one row per source line, so it never
- * needs to scroll vertically: if it did (e.g. to keep the caret visible when
- * the source is taller than the anchor), its lines would drift away from the
- * results beside them. Long source overflows the anchor's border instead.
+ * Clicking a row opens it in a one-line field. That click is a stand-in until
+ * the gestures arrive (#43), and rows stay plain text until the typeset grid
+ * does (#44). Rows and results keep one line height each, so they stay beside
+ * each other.
  */
 export function MathElementView({
   anchor,
   viewport,
   source,
   results,
-  onSourceChange,
+  edit,
+  onOpenLine,
+  onType,
+  onMove,
+  onEscape,
+  onBlurLine,
   forwardWheel,
 }: MathElementViewProps) {
   const rootRef = useRef<HTMLDivElement>(null)
@@ -58,17 +71,30 @@ export function MathElementView({
         className="math-element__body"
         style={anchor.angle ? { transform: `rotate(${anchor.angle}rad)` } : undefined}
       >
-        <textarea
-          className="math-element__source"
-          aria-label="Math source"
-          value={source}
-          spellCheck={false}
-          autoCapitalize="off"
-          autoComplete="off"
-          wrap="off"
-          rows={splitLines(source).length}
-          onChange={(event) => onSourceChange(event.target.value)}
-        />
+        <ol className="math-element__lines" aria-label="Lines">
+          {splitLines(source).map((line, i) => (
+            <li key={i}>
+              {edit?.lineIndex === i ? (
+                <LineField
+                  edit={edit}
+                  onType={onType}
+                  onMove={onMove}
+                  onEscape={onEscape}
+                  onBlur={() => onBlurLine(i)}
+                />
+              ) : (
+                <button
+                  type="button"
+                  className="math-element__line"
+                  aria-label={`Edit line ${i + 1}`}
+                  onClick={() => onOpenLine(i)}
+                >
+                  {line}
+                </button>
+              )}
+            </li>
+          ))}
+        </ol>
         <ol className="math-element__results" aria-label="Results">
           {results.map((result, i) => (
             <li
@@ -86,6 +112,75 @@ export function MathElementView({
   )
 }
 
+interface LineFieldProps {
+  edit: LineEdit
+  onType: (text: string) => void
+  onMove: (move: LineMove) => void
+  onEscape: () => void
+  onBlur: () => void
+}
+
+/**
+ * The line being edited. It takes only what the user types: setting the value
+ * from code clears the browser's text undo, so it is uncontrolled. Each line
+ * gets its own field, which is why that text undo starts fresh on each line. Its
+ * Ctrl+Z never reaches the sheet's undo, because Excalidraw only hears keys
+ * inside its own container.
+ */
+function LineField({ edit, onType, onMove, onEscape, onBlur }: LineFieldProps) {
+  const fieldRef = useRef<HTMLInputElement>(null)
+  // Only when the field opens: from then on the caret is the user's.
+  const openingCaret = useRef(edit.caret)
+
+  useLayoutEffect(() => {
+    fieldRef.current?.focus()
+    fieldRef.current?.setSelectionRange(openingCaret.current, openingCaret.current)
+  }, [])
+
+  const onKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.nativeEvent.isComposing) return
+    const field = event.currentTarget
+    const from = field.selectionStart ?? 0
+    const to = field.selectionEnd ?? from
+    const take = (run: () => void) => {
+      event.preventDefault()
+      run()
+    }
+    switch (event.key) {
+      case 'ArrowUp':
+        return take(() => onMove({ kind: 'up' }))
+      case 'ArrowDown':
+        return take(() => onMove({ kind: 'down' }))
+      case 'Enter':
+        return take(() => onMove({ kind: 'split', from, to }))
+      case 'Escape':
+        return take(onEscape)
+      case 'Backspace':
+        if (from === 0 && to === 0 && edit.lineIndex > 0) {
+          return take(() => onMove({ kind: 'join' }))
+        }
+    }
+  }
+
+  return (
+    <input
+      ref={fieldRef}
+      className="math-element__field"
+      aria-label="Line source"
+      defaultValue={edit.text}
+      spellCheck={false}
+      autoCapitalize="off"
+      autoComplete="off"
+      onInput={(event) => onType(event.currentTarget.value)}
+      onKeyDown={onKeyDown}
+      onBlur={(event) => {
+        // The window lost focus, not the field: the edit hasn't left its line.
+        if (document.activeElement !== event.currentTarget) onBlur()
+      }}
+    />
+  )
+}
+
 function formatResult(result: LineResult): string {
   switch (result.kind) {
     case 'value':
@@ -93,6 +188,6 @@ function formatResult(result: LineResult): string {
     case 'error':
       return result.message
     case 'empty':
-      return ' '
+      return ' '
   }
 }
