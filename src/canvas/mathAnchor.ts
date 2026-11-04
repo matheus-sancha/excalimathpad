@@ -123,16 +123,22 @@ export function writeAnchorSource(
 
 /**
  * Records, as its own undo step, any change Excalidraw made to the anchor
- * without capturing it: its arrow-key nudge and its Link editor do this. Does
- * nothing if there is none. Returns the anchor as the scene now holds it.
+ * without capturing it: its arrow-key nudge and its Link editor do this. Adds no
+ * step if there is none, though `version` still goes up. Returns the anchor as
+ * the scene now holds it.
  *
  * While the anchor's `version` is ahead of Excalidraw's last captured copy,
  * `updateScene` swaps it for that copy before capturing, so a write lands in the
  * scene but records nothing, and undo can't reach it. No public call flushes
  * this, and `updateScene` compares against the scene's current version. So the
  * first update parks the version at 0 without capturing, and the second captures
- * with the real version back. That comparison isn't public API:
- * `mathAnchor.excalidraw.test.tsx` fails if an upgrade changes it (ADR 0002).
+ * with the version one above where it was. Only this anchor is recorded, so a
+ * nudge of several elements can split (docs/spec-v1.md section 6).
+ *
+ * That comparison isn't public API, and upstream has already dropped it, so this
+ * has to change at the next Excalidraw upgrade: `mathAnchor.excalidraw.test.tsx`
+ * fails then. Removing this likely means a nudge and the next line share one undo
+ * step, unless upstream's new store offers something better (spec section 14).
  */
 function recordPendingChange(api: SourceWriteApi, anchor: ExcalidrawElement) {
   api.updateScene({ elements: withElement(api, { ...anchor, version: 0 }) })

@@ -97,7 +97,9 @@ and everything downstream recalculates. Engine: math.js, client-side.
   anchor's visual bounds, then its left, then its id (ADR 0003). Derived from
   positions every time, never stored. The sheet, not the element, is the unit
   of evaluation: one scope, lines top to bottom.
-- Invariants: one undo step per line commit and none for keystrokes; sheet undo
+- Invariants: a line commit's source change is one undo step, and keystrokes are
+  none (a commit can also record a nudge or Link edit before it as its own step,
+  spec section 6); sheet undo
   never runs during a line edit, because the field is outside Excalidraw's
   container; results are never in a step. Selecting and deselecting are
   Excalidraw's own steps on the same stack (spec section 6). Scene coordinates
@@ -149,7 +151,8 @@ and everything downstream recalculates. Engine: math.js, client-side.
   same state, so the write first records their change as its own step (spec
   section 14). That relies on how `updateScene` compares versions, which isn't
   public; `mathAnchor.excalidraw.test.tsx` holds the contract against the
-  installed package.
+  installed package. Upstream has dropped that comparison, so this has to change
+  at the next Excalidraw upgrade.
 - **`focusCanvas` queries `.excalidraw`,** the element that hears Excalidraw's
   keys. It lives in `src/canvas/`, and `SheetCanvas.test.tsx` pins it.
 - **The line field is uncontrolled and remounts per line.** Setting its value

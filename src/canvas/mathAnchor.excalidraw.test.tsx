@@ -11,10 +11,11 @@ import { sceneLoaded, undoControls } from '../test/excalidraw.ts'
  */
 const SOURCE = 'R = 10 kohm\nI = 2 mA'
 
-async function mount() {
+async function mount(moreAnchors: Parameters<typeof createMathAnchorElements>[0] = []) {
   let handle: SheetCanvasHandle | undefined
   const initialElements = createMathAnchorElements([
     { id: 'm1', x: 100, y: 100, width: 300, height: 80, source: SOURCE },
+    ...moreAnchors,
   ])
   const view = render(
     <SheetCanvas initialElements={initialElements} onReady={(h) => (handle = h)} />,
@@ -201,7 +202,33 @@ describe('writeAnchorSource after a change Excalidraw did not capture', () => {
     await waitFor(() => expect(api.getSceneElements()[0].link).toBeNull())
   })
 
-  it('never moves the version backwards', async () => {
+  // Spec section 6. Only the written anchor is recorded, and Excalidraw's undo
+  // folds the other's nudge into its captured copy, so no undo reaches it.
+  it('splits a nudge of two anchors: the other stays moved', async () => {
+    const { api, container, canUndo, undo, sourceOf, write, focusCanvas } = await mount([
+      { id: 'm2', x: 100, y: 300, width: 300, height: 80, source: 'b = 2' },
+    ])
+    const xOf = (id: string) => api.getSceneElements().find((e) => e.id === id)?.x
+    act(() => {
+      api.updateScene({ appState: { selectedElementIds: { m1: true, m2: true } } })
+    })
+    focusCanvas()
+    nudge(container)
+    expect([xOf('m1'), xOf('m2')]).toEqual([101, 101])
+
+    write('a = 1')
+
+    undo()
+    await waitFor(() => expect(sourceOf()).toBe(SOURCE))
+    expect([xOf('m1'), xOf('m2')]).toEqual([101, 101])
+
+    undo()
+    await waitFor(() => expect(xOf('m1')).toBe(100))
+    expect(xOf('m2')).toBe(101)
+    expect(canUndo()).toBe(false)
+  })
+
+  it('ends with the version ahead of where it started', async () => {
     const { api, container, write } = await mountSelected()
     nudge(container)
     const before = api.getSceneElements()[0].version

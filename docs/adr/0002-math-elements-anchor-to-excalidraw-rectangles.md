@@ -82,8 +82,10 @@ Engineering rules that make it work (Engineer's, found in the #2 spike and #28):
 
 - Moving and deleting math is Excalidraw's own behaviour, for free. Undoing a delete
   brings the element back with its source, because the source is in the anchor.
-- A math edit is on Excalidraw's undo stack, one step per line commit, written only
-  with `newElementWith` and `CaptureUpdateAction.IMMEDIATELY` (#10, #11).
+- A math edit is on Excalidraw's undo stack, one step per line commit. That step's write uses
+  `newElementWith` and `CaptureUpdateAction.IMMEDIATELY` (#10, #11). Before it, the app parks the
+  anchor's `version` in an uncaptured update, to record a change Excalidraw didn't capture (#41).
+  `docs/spec-v1.md` section 14 says why, and why that has to change at the next upgrade.
 - A copied or duplicated anchor keeps its source (probed on #41, recorded in
   `docs/spec-v1.md` section 17, with contract tests).
 - The overlay depends on Excalidraw details that are not public API. They are

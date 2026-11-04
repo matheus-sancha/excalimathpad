@@ -158,7 +158,8 @@ acceptance sheet* (pump sheet).
 
 **Undo and files**
 
-- Exactly one undo step per line commit, and none for keystrokes.
+- A line commit's source change is exactly one undo step, and keystrokes are none. A commit
+  can also record a nudge or Link edit before it as a step of its own ([section 6](#6-undo)).
 - Sheet undo never runs while a line is being edited.
 - A source write is never `EVENTUALLY` or the default capture.
 - Settings changes never enter Excalidraw's undo history.
@@ -543,8 +544,8 @@ Decided in: [unit slot](https://github.com/matheus-sancha/excalimathpad/issues/1
 
 ## 6. Undo
 
-Built in M1. There is one undo stack, Excalidraw's. It covers moves and line edits, and
-Excalidraw's own selection steps.
+Built in M1. There is one undo stack, Excalidraw's. It covers moves and line edits,
+Excalidraw's own selection steps, and a nudge or Link edit that a line commit follows.
 
 - **One step is one line's edit.** The line goes into the scene when the edit leaves it:
   ↑ / ↓, Enter (split), Backspace at the start (join), a click on another line, Esc, a
@@ -569,6 +570,16 @@ Excalidraw's own selection steps.
   the element is selected, leaving a line with a click outside also deselects it, so the first
   Ctrl+Z after that only re-selects the element, and the second takes back the line. Leaving
   with Esc adds no such step.
+- **A nudge or Link edit becomes its own step only if a line commit follows.** Excalidraw doesn't
+  record either by itself: Ctrl+Z doesn't reach it until Excalidraw's next step, such as a click
+  that deselects, sweeps it in. A line commit on that anchor records it first, so the commit adds two entries: the nudge or Link edit, then
+  the line. The line is still exactly one step, and undo takes it first.
+- **A nudge of several elements can split,** because only the anchor being written is recorded.
+  The line stays one step and loses nothing. With two anchors nudged and a line edited in one:
+  - Ctrl+Z straight away takes back the line, then the written anchor's nudge. The other anchor
+    stays moved and no undo reaches it, so the two end up out of line.
+  - After a click that deselects, the first Ctrl+Z moves the other anchor back and re-selects, the
+    second takes back the line, and the third moves the written anchor back.
 - **Not undo steps:** keystrokes, size writes, style restores, settings changes and
   results.
 
@@ -1054,10 +1065,17 @@ Engineer's design gate. Tested on Excalidraw 0.18.1, math.js 15.2 and Chromium.
 - **A change Excalidraw didn't capture comes first:** its arrow-key nudge and Link editor leave
   the anchor's `version` ahead of its last captured copy. `updateScene` then swaps the anchor for
   that copy before capturing, so a source write lands but adds no step, and undo can't reach it.
-  `writeAnchorSource` records that change as its own step first, by parking `version` at 0 in an
-  uncaptured update and capturing with the real version back. This relies on how `updateScene`
-  compares versions, which isn't public, so a contract test pins it.
+  `writeAnchorSource` first parks `version` at 0 in an uncaptured update, then captures with
+  `version` one above where it was. So each write adds 2 to `version`, and it adds no step when
+  nothing was pending. This relies on how `updateScene` compares versions, which isn't public, so
+  a contract test pins it. Matheus accepted this for now on 2026-11-04.
   ([#41](https://github.com/matheus-sancha/excalimathpad/issues/41))
+- **That comparison has to go at the next Excalidraw upgrade:** upstream's `App.tsx` no longer calls
+  `filterUncomittedElements` (checked on `master` at `7ded689ca`, 2026-11-04). In the review of
+  [PR 47](https://github.com/matheus-sancha/excalimathpad/pull/47), on the `next` build
+  `0.18.0-3c916c5`, this workaround left an extra undo entry on plain line commits, and the contract
+  tests failed. Removing it then likely means a nudge and the next line share one undo step, unless
+  upstream's new store offers something better.
 - **Size:** `newElementWith` + `CaptureUpdateAction.NEVER`, only for anchors whose size changed by more
   than half a pixel. Snap-back must also restore `x` and `y`: the top-right handle moved `y` by 45 px.
   ([auto-size](https://github.com/matheus-sancha/excalimathpad/issues/29))
@@ -1303,6 +1321,10 @@ Changes line if it changes behaviour.
   Excalidraw's own undo steps, found while probing and accepted. So with the element selected, a
   click outside adds a Ctrl+Z that only re-selects, and "the first Ctrl+Z empties the element"
   holds after Esc.
+- 2026-11-04, [sections 2](#invariants) and [6](#6-undo) (#41, accepted by Matheus for now): a nudge or
+  Link edit becomes its own step only if a line commit follows, a line commit after one adds two
+  entries, and a nudge of several elements can split. The line itself is still exactly one step.
+  [Section 14](#14-engineering-constraints) says what the next Excalidraw upgrade changes.
 - 2026-11-04, [section 16](#16-milestones-and-finish-line) (#41, agreed by Matheus): the bare line
   field and its keys (↑ ↓, Enter, Backspace, Esc, blur) moved from the third issue to the first,
   because section 6 can't hold without them. The third keeps the gestures, the field's final
