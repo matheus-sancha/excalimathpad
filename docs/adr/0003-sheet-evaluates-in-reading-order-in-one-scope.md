@@ -3,6 +3,10 @@
 - **Status**: accepted
 - **Date**: 2026-10-28
 - **Amended**: 2026-11-01 (#25: results format in a fixed unit system, SI)
+- **Amended**: 2026-11-03 (spec v1, [`docs/spec-v1.md`](../spec-v1.md): results show
+  through the sheet's settings, unit-named names warn, local unknowns and per-point
+  lines). Amended items name the milestone that builds them; until then
+  [`CONTEXT.md`](../../CONTEXT.md) says what the code does.
 
 ## Context
 
@@ -35,9 +39,13 @@ Decided by Matheus:
   redefines a name for the lines below it. Functions bind late: `f(x) = k * x`
   uses `k`'s value at the call. An assignment that fails (or does not parse)
   removes the name from the scope, so nothing below silently keeps using its
-  earlier value.
+  earlier value. Two cases sit inside this rule (ADR 0005): a solve's unknown is local
+  to its own line (#19; M3), and a line that uses a list runs once per point, with the
+  list's name bound to that point in the run's scope (#20; M4).
 - **Re-run the whole sheet**, synchronously, on every source edit and every
-  change of reading order (move, delete, undo, duplicate). No debounce.
+  change of reading order (move, delete, undo, duplicate, or a size change on a
+  rotated element, #29). No debounce. While a line is edited, the run uses the
+  line's text from memory, and the scene gets it at the line commit (#11; M1).
 
 Engineering rules (Engineer's):
 
@@ -49,13 +57,18 @@ Engineering rules (Engineer's):
   math.js mutates values in place (`A[1] = 5` changes the matrix object), so
   a cached scope would carry one run's changes into the next.
 - The engine hardening from #2 is unchanged (it lives in the namespace). The
-  `typed` stub is seeded per run instead of per block.
-- The unit system results format in is fixed to SI at engine setup
-  (#25). math.js's default, `auto`, is global state on the instance that
-  every unit read updates, so a result's unit depended on what any earlier
-  line or run had read: a route for a line to change the engine that the
-  hardening above did not close. Expressions cannot reach `Unit` to switch
-  it back.
+  `typed` stub is seeded per run instead of per block. The app's extra units register
+  once at setup, before `createUnit` is disabled, and what they add to the unit systems
+  is stripped, so they don't change how other results show (#24; M2).
+- math.js's unit system is fixed to SI at engine setup (#25). math.js's default,
+  `auto`, is global state on the instance that every unit read updates, so a result's
+  unit depended on what any earlier line or run had read: a route for a line to change
+  the engine that the hardening above did not close. Expressions cannot reach `Unit` to
+  switch it back. The sheet's unit system isn't this setting: it is an app formatter
+  above the engine (#15, #16; M2).
+- A result's **value** is a pure function of the ordered sources. A **shown result**
+  also depends on the sheet's unit system and Digits, passed to the formatter, so
+  changing a setting re-shows results and changes no value (#16, #30; M2).
 - An undefined name used above its definition says
   `x is defined below`, and one whose assignment
   failed says `x has an error above`. Both rely on math.js's
@@ -71,6 +84,11 @@ Engineering rules (Engineer's):
 - **Reset math.js's `auto` unit system per run** instead of fixing SI
   (#25). Separate runs would repeat, but a line would still change how the
   lines below it in the same run show their results.
+- **Switch math.js's unit system to the sheet's choice** (#15, #16). `to` throws where
+  the sheet should balance, and it would reopen global state on the engine.
+- **Show a kept unit as written** (`1 psi`, `60 mi / h`), as #25 did. A result with no
+  chosen unit now always follows the sheet's system, so switching the system moves all
+  of them together (#16).
 - **Debounced recalculation (~150 ms).** Shows stale results while typing and
   puts timers in every test, for no measured need.
 - **Row bands** (elements that overlap vertically form a row, read left to
@@ -84,22 +102,24 @@ Engineering rules (Engineer's):
 - Position is semantics: an element one unit higher on the right is read
   before one on the left. Moving an element can break the elements below it,
   and the error says where the name went.
-- Performance is linear in sheet size on every keystroke. If it ever lags,
-  the first lever is a per-line compile cache (compiled expressions are
-  reusable), not a debounce or a graph.
+- Performance is linear in sheet size on every keystroke, multiplied by solves and list
+  points: the pump sheet runs 30 Colebrook solves for its table on each run, plus nested
+  solves for `Q_op`. A 91-row sweep took 30 ms in the research (#18), and it gets measured
+  at M3 and M4. If it ever lags, the first lever is a per-line compile cache (compiled
+  expressions are reusable), not a debounce or a graph.
 - A name that is also a math.js unit or built-in (`V`, `A`, `m`, `s`, `g`,
-  `i`, `e`, ...) is ambiguous, silently, in both directions. Below its
-  definition it shadows the unit: after `V = I * R` (20 V), `U = 5 V` gives
-  `100 V`. Above it, or after it fails, lines read the unit: `V * 2` gives
-  `2 V`. Matheus kept redefinition silent and the seed uses `U`, which is not
-  a unit; warning on such names is issue #7. A test records the fallback.
-- How results display (a product decision, #25; accepted by Matheus at
-  merge of #26). A result math.js simplifies (a product or quotient that
-  collapses to a named or simpler unit) shows in SI with an SI prefix:
-  `5 ft * 2 ft` is `0.9290304 m^2` and `2 cm * 3 cm` is `600 mm^2` (under
-  `auto` they showed `10 ft^2` and `6 cm^2`). A result whose units it keeps
-  shows as written: `1 psi`, `60 mi / h`. Values are unchanged, and `to`
-  converts a result (`5 ft * 2 ft to ft^2` is `10 ft^2`). A sheet-level
-  choice of unit system is for the v1 spec, on top of this.
-- Excalidraw does not know the order; nothing in the scene stores it, so
-  persistence (still open, ADR 0001) does not need to either.
+  `i`, `e`, ...) is ambiguous in both directions. Below its definition it shadows the
+  unit: after `V = I * R` (20 V), `U = 5 V` gives `100 V`. Above it, or after it fails,
+  lines read the unit: `V * 2` gives `2 V`. The variable still wins, but such a name
+  warns on its line, as do function names, parameters and a solve's unknown (#7, #27;
+  M2). Plain redefinition of any other name stays silent, as Matheus chose. A test
+  records the fallback.
+- How results display (a product decision, #16 and #30; M2, replacing what #25 chose). A
+  result shows in its display unit, a trailing `in <unit>` on its line, else in the
+  sheet's unit system (SI with prefixes by default), at the sheet's Digits. A trailing
+  `in` or `to` with a pure unit comes off the line as its display unit, and a unit of
+  the wrong kind is balanced rather than an error. A conversion inside an expression
+  stays math.js's own. Until M2, results show as #25 left them: `5 ft * 2 ft` is
+  `0.9290304 m^2`, `1 psi` stays `1 psi`, and `to` converts.
+- Excalidraw does not know the order; nothing in the scene stores it, so the sheet file
+  (ADR 0004) does not need to either.

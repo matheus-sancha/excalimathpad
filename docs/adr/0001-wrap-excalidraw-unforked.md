@@ -2,6 +2,10 @@
 
 - **Status**: accepted
 - **Date**: 2026-10-25
+- **Amended**: 2026-11-03 (spec v1, [`docs/spec-v1.md`](../spec-v1.md): persistence
+  decided, chrome in Excalidraw's public slots, contract-tested internals allowed).
+  Amended items name the milestone that builds them; until then
+  [`CONTEXT.md`](../../CONTEXT.md) says what the code does.
 
 ## Context
 
@@ -17,20 +21,22 @@ Decided by Matheus in the project interview on 2026-10-25.
 
 Decided by Matheus: we use the official `@excalidraw/excalidraw` npm package
 as an unmodified React component. Math is a separate overlay layer stacked
-over the canvas plus a side panel, around Excalidraw rather than inside it.
+over the canvas, around Excalidraw rather than inside it. The app's chrome (file
+items, Add math, the Sheet panel) goes into Excalidraw's public UI slots: its main
+menu, `renderTopRightUI` and its sidebar (#17; M1, M2). It is still unforked.
+
+Math source persists in the anchor's scene `customData` (#10, #12; M1). The file
+around the scene is ADR 0004.
 
 Engineering rules that enforce it (Engineer's, not part of his decision):
-the overlay stays in sync through Excalidraw's public imperative API only
-(app state, scroll and zoom subscriptions), and only `src/canvas/` imports
-Excalidraw, so the dependency has one seam.
 
-Not decided here: how math is **persisted** with a sheet. It is open, with
-two candidates on the table:
-
-- scene `customData` (per-element metadata that Excalidraw stores and
-  round-trips with the scene), or
-- marker text elements (ordinary text elements tagged as math, re-rendered
-  by the overlay).
+- The app stays in sync through Excalidraw's public API first. A behaviour that
+  isn't public API (a CSS internal, event phase, DOM focus target) is allowed only
+  when a contract test against the installed package fails if it changes, and only
+  in `src/canvas/` (#28, #32; M1). `docs/spec-v1.md` section 14 lists them.
+- Only `src/canvas/` imports Excalidraw **at runtime**, so the dependency has one
+  seam. Tests may import it (e.g. the contract test against its own
+  `sceneCoordsToViewportCoords`), and other modules may import its *types*.
 
 ## Alternatives considered
 
@@ -43,15 +49,23 @@ two candidates on the table:
   internals.
 - **Render math as existing elements (e.g. text elements with a marker).**
   Keeps everything in one scene, but fights Excalidraw's text editing and
-  rendering for typeset output. Rejected for *rendering* only; whether
-  marker elements are used to *persist* math is the open question above.
+  rendering for typeset output. Rejected for rendering on 2026-10-25.
+- **Marker text elements to persist math,** a candidate this ADR first left open.
+  `customData` round-trips through Excalidraw's save and undo, so nothing needs
+  marker elements (#10).
+- **A side panel and app bar around Excalidraw,** as this ADR first said. Excalidraw's
+  own slots gave the same controls without a second bar, and the sidebar is public
+  API (#17).
 
 ## Consequences
 
-- Upgrades are `npm update`; we inherit Excalidraw's fixes and features.
+- Upgrades are `npm update`; we inherit Excalidraw's fixes and features. Each
+  non-public behaviour we rely on has a contract test, so an upgrade that breaks one
+  fails CI rather than the app.
 - We only get what the public API exposes. Overlay positioning has to follow
   scroll/zoom events; if that lags or the API changes, math visibly drifts
   (issue #2 is the spike that proves this works).
-- Excalidraw's own selection, undo/redo and export do not know about math.
-  Anything that should include math (undo, export to PNG/SVG, saving) needs
-  our own handling.
+- Undo includes math, because the source is in the scene (#10, #11; M1).
+- Excalidraw's own save and export don't know about the math, so neither is
+  reachable: the app writes files itself, and print is its own view built from the
+  overlay's views and Excalidraw's public `exportToSvg` (#12, #17, #21; M1, M5).
