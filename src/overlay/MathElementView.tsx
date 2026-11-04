@@ -129,12 +129,12 @@ interface LineFieldProps {
  */
 function LineField({ edit, onType, onMove, onEscape, onBlur }: LineFieldProps) {
   const fieldRef = useRef<HTMLInputElement>(null)
-  // Only when the field opens: from then on the caret is the user's.
-  const openingCaret = useRef(edit.caret)
+  // Only what the field opens with: from then on the text and caret are the user's.
+  const opening = useRef(edit)
 
   useLayoutEffect(() => {
     fieldRef.current?.focus()
-    fieldRef.current?.setSelectionRange(openingCaret.current, openingCaret.current)
+    fieldRef.current?.setSelectionRange(opening.current.caret, opening.current.caret)
   }, [])
 
   const onKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
@@ -167,7 +167,7 @@ function LineField({ edit, onType, onMove, onEscape, onBlur }: LineFieldProps) {
       ref={fieldRef}
       className="math-element__field"
       aria-label="Line source"
-      defaultValue={edit.text}
+      defaultValue={opening.current.text}
       spellCheck={false}
       autoCapitalize="off"
       autoComplete="off"

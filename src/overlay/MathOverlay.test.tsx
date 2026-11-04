@@ -15,8 +15,13 @@ function fakeScene(elements: ExcalidrawElement[]) {
   let view = { scrollX: 0, scrollY: 0, zoom: 1 }
   const changeListeners = new Set<() => void>()
   const scrollListeners = new Set<() => void>()
+  const sources = () => JSON.stringify(scene.map((e) => e.customData?.source))
+  // A line commit takes several updates; only one of them changes a source.
+  let sourceWrites = 0
   const updateScene = vi.fn((data: { elements?: unknown }) => {
+    const before = sources()
     if (data.elements) scene = data.elements as ExcalidrawElement[]
+    if (sources() !== before) sourceWrites++
     act(() => changeListeners.forEach((cb) => cb()))
   })
   const api: SceneApi = {
@@ -41,6 +46,7 @@ function fakeScene(elements: ExcalidrawElement[]) {
   return {
     api,
     updateScene,
+    sourceWrites: () => sourceWrites,
     sourceOf: (id: string) => scene.find((e) => e.id === id)?.customData?.source as string,
     listenerCount: () => changeListeners.size + scrollListeners.size,
     updateElements(next: ExcalidrawElement[]) {
@@ -186,7 +192,7 @@ describe('MathOverlay', () => {
       type(field, 'a = 12')
       type(field, 'a = 123')
 
-      expect(scene.updateScene).not.toHaveBeenCalled()
+      expect(scene.sourceWrites()).toBe(0)
       expect(scene.sourceOf('m1')).toBe('a = 1')
     })
 
@@ -199,6 +205,8 @@ describe('MathOverlay', () => {
       act(() => field.dispatchEvent(new Event('input', { bubbles: true })))
 
       expect(setValue).not.toHaveBeenCalled()
+      // Nor React's rewrite of the value attribute, from a changing defaultValue.
+      expect(field.getAttribute('value')).toBe('a = 1')
     })
 
     it('Esc writes the typed line once, ends the edit and gives the keyboard back', () => {
@@ -209,7 +217,7 @@ describe('MathOverlay', () => {
       fireEvent.keyDown(field, { key: 'Escape' })
 
       expect(openField()).toBeNull()
-      expect(scene.updateScene).toHaveBeenCalledOnce()
+      expect(scene.sourceWrites()).toBe(1)
       expect(scene.sourceOf('m1')).toBe('a = 2')
       expect(focusCanvas).toHaveBeenCalledOnce()
     })
@@ -220,7 +228,7 @@ describe('MathOverlay', () => {
       fireEvent.keyDown(openLine(1), { key: 'ArrowDown' })
       fireEvent.keyDown(openField()!, { key: 'Escape' })
 
-      expect(scene.updateScene).not.toHaveBeenCalled()
+      expect(scene.sourceWrites()).toBe(0)
     })
 
     it('blur writes the typed line and ends the edit', () => {
@@ -231,7 +239,7 @@ describe('MathOverlay', () => {
       act(() => field.blur())
 
       expect(openField()).toBeNull()
-      expect(scene.updateScene).toHaveBeenCalledOnce()
+      expect(scene.sourceWrites()).toBe(1)
       expect(scene.sourceOf('m1')).toBe('a = 2')
       expect(focusCanvas).not.toHaveBeenCalled()
     })
@@ -245,7 +253,7 @@ describe('MathOverlay', () => {
       fireEvent.blur(field)
 
       expect(openField()).toBe(field)
-      expect(scene.updateScene).not.toHaveBeenCalled()
+      expect(scene.sourceWrites()).toBe(0)
     })
 
     it('ArrowUp and ArrowDown stay put, and write nothing, at the ends', () => {
@@ -257,7 +265,7 @@ describe('MathOverlay', () => {
 
       expect(openField()).toBe(first)
       expect(first.value).toBe('typed')
-      expect(scene.updateScene).not.toHaveBeenCalled()
+      expect(scene.sourceWrites()).toBe(0)
     })
 
     it('Enter splits at the caret and continues at the start of the new line', () => {
@@ -267,12 +275,47 @@ describe('MathOverlay', () => {
 
       fireEvent.keyDown(field, { key: 'Enter' })
 
-      expect(scene.updateScene).toHaveBeenCalledOnce()
+      expect(scene.sourceWrites()).toBe(1)
       expect(scene.sourceOf('m1')).toBe('a =\n 1')
       const next = openField()!
       expect(next).not.toBe(field)
       expect(next.value).toBe(' 1')
       expect(next.selectionStart).toBe(0)
+    })
+
+    it('Enter with a selection replaces the selection', () => {
+      const { scene } = renderOverlay([anchorWith('a = 1')])
+      const field = openLine(1)
+      field.setSelectionRange(1, 3)
+
+      fireEvent.keyDown(field, { key: 'Enter' })
+
+      expect(scene.sourceOf('m1')).toBe('a\n 1')
+      expect(openField()!.value).toBe(' 1')
+    })
+
+    // Enter ends an IME's composition; it isn't the user's Enter.
+    it('leaves keys alone during IME composition', () => {
+      const { scene } = renderOverlay([anchorWith('a = 1')])
+      const field = openLine(1)
+
+      const notPrevented = fireEvent.keyDown(field, { key: 'Enter', isComposing: true })
+
+      expect(notPrevented).toBe(true)
+      expect(openField()).toBe(field)
+      expect(scene.sourceWrites()).toBe(0)
+    })
+
+    it('Backspace over a selection from the start deletes it, without a join', () => {
+      const { scene } = renderOverlay([anchorWith('a = 1\nb = 2')])
+      const field = openLine(2)
+      field.setSelectionRange(0, 3)
+
+      const notPrevented = fireEvent.keyDown(field, { key: 'Backspace' })
+
+      expect(notPrevented).toBe(true)
+      expect(openField()).toBe(field)
+      expect(scene.sourceWrites()).toBe(0)
     })
 
     it('Backspace at the start joins, with the caret at the join', () => {
@@ -282,7 +325,7 @@ describe('MathOverlay', () => {
 
       fireEvent.keyDown(field, { key: 'Backspace' })
 
-      expect(scene.updateScene).toHaveBeenCalledOnce()
+      expect(scene.sourceWrites()).toBe(1)
       expect(scene.sourceOf('m1')).toBe('a = 1b = 2')
       const joined = openField()!
       expect(joined.value).toBe('a = 1b = 2')
@@ -296,7 +339,7 @@ describe('MathOverlay', () => {
       const notPrevented = fireEvent.keyDown(field, { key: 'Backspace' })
 
       expect(notPrevented).toBe(true)
-      expect(scene.updateScene).not.toHaveBeenCalled()
+      expect(scene.sourceWrites()).toBe(0)
     })
 
     it('Backspace on the first line stays the field’s own', () => {
@@ -307,7 +350,7 @@ describe('MathOverlay', () => {
       fireEvent.keyDown(field, { key: 'Backspace' })
 
       expect(openField()).toBe(field)
-      expect(scene.updateScene).not.toHaveBeenCalled()
+      expect(scene.sourceWrites()).toBe(0)
     })
 
     it('holds at most one line in source form across the sheet', () => {
@@ -333,7 +376,7 @@ describe('MathOverlay', () => {
       fireEvent.keyDown(field, { key: 'Escape' })
 
       expect(openField()).toBeNull()
-      expect(scene.updateScene).not.toHaveBeenCalled()
+      expect(scene.sourceWrites()).toBe(0)
     })
   })
 

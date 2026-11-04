@@ -74,10 +74,16 @@ describe('evaluateSheet', () => {
       ['a unit in brackets', 'mu = 1.002 kg/(m s)'],
       ['a negative exponent', 'a = 2 m s^-2'],
       ['a sign', 'x = -5 m'],
+      ['brackets around the literal', 'x = (5 mm)'],
       ['a number over a unit', 'f = 5 / s'],
       ['a trailing note', 'D = 102.3 mm # 4" Sch 40'],
     ])('leaves the result cell of a plain input empty: %s', (_, line) => {
       expect(block(line)).toEqual([empty])
+    })
+
+    // Section 3: empty "unless it has a display unit".
+    it('shows a plain input that has a display unit', () => {
+      expect(block('D = 102.3 mm in cm')).toEqual([value('10.23 cm')])
     })
 
     it('still passes a plain input to the lines below', () => {

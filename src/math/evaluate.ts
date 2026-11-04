@@ -295,12 +295,13 @@ function plainInputUnits(node: MathNode): readonly string[] | null {
 
 function literalUnits(node: MathNode): readonly string[] | null {
   if (isConstantNode(node)) return []
+  if (isParenthesisNode(node)) return literalUnits(node.content)
   if (!isOperatorNode(node)) return null
   if (node.fn === 'unaryMinus' || node.fn === 'unaryPlus') return literalUnits(node.args[0])
   if (node.fn !== 'multiply' && node.fn !== 'divide') return null
-  const number = literalUnits(node.args[0])
-  const units = unitNames(node.args[1])
-  return number && units && [...number, ...units]
+  const left = literalUnits(node.args[0])
+  const right = unitNames(node.args[1])
+  return left && right && [...left, ...right]
 }
 
 /** The names in a pure unit expression (`m`, `kg/m^3`), or null if it isn't one. */

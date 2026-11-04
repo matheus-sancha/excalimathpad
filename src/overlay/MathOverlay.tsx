@@ -73,14 +73,14 @@ export function MathOverlay({ api, forwardWheel, focusCanvas }: MathOverlayProps
     setEdit(next)
   }
 
-  const sourceOf = (anchor: MathAnchor) =>
+  const typedSourceOf = (anchor: MathAnchor) =>
     edit?.anchorId === anchor.id ? withTypedLine(anchor.source, edit) : anchor.source
 
   // A string, so moves that keep the order and the sources keep the memo below.
   const sheetKey = JSON.stringify(
     readingOrder(anchors).map((id): SheetBlock => {
       const anchor = anchors.find((candidate) => candidate.id === id)
-      return { id, source: anchor ? sourceOf(anchor) : '' }
+      return { id, source: anchor ? typedSourceOf(anchor) : '' }
     }),
   )
   const results = useMemo(
@@ -127,7 +127,7 @@ export function MathOverlay({ api, forwardWheel, focusCanvas }: MathOverlayProps
           key={anchor.id}
           anchor={anchor}
           viewport={viewport}
-          source={sourceOf(anchor)}
+          source={typedSourceOf(anchor)}
           results={results.get(anchor.id) ?? []}
           edit={edit?.anchorId === anchor.id ? edit : null}
           onOpenLine={(lineIndex) => openLine(anchor.id, lineIndex)}
