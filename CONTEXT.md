@@ -68,9 +68,10 @@ server. v1 target: one sheet, for Matheus's own use.
   its results. A row opens in a one-line field on click, until the gestures
   arrive (#43). Depends on: canvas (anchor and layer contracts, API types), math.
 - **test setup** (`src/test/`) — jsdom stubs for browser APIs Excalidraw
-  touches on mount (canvas, fonts, matchMedia, ResizeObserver). Not app code.
+  touches on mount (canvas, fonts, matchMedia, ResizeObserver), and helpers for
+  tests against the real Excalidraw. Not app code.
 
-Planned (not built): saving to a file, a side panel, an "add math" tool (for
+Planned (not built): saving to a file, the Sheet panel, an "add math" tool (for
 now, duplicating an anchor makes a new math element with the same source).
 
 ## Domain
@@ -144,8 +145,13 @@ and everything downstream recalculates. Engine: math.js, client-side.
   a math element does nothing and ctrl+wheel zooms the browser page.
 - **Source writes go through `writeAnchorSource`.** A plain spread isn't recorded
   by undo, and `EVENTUALLY` or the default capture drops later updates to that
-  anchor off the stack (spec section 14). `mathAnchor.excalidraw.test.tsx` holds
-  the contract against the installed package.
+  anchor off the stack. Excalidraw's own nudge and Link leave the anchor in that
+  same state, so the write first records their change as its own step (spec
+  section 14). That relies on how `updateScene` compares versions, which isn't
+  public; `mathAnchor.excalidraw.test.tsx` holds the contract against the
+  installed package.
+- **`focusCanvas` queries `.excalidraw`,** the element that hears Excalidraw's
+  keys. It lives in `src/canvas/`, and `SheetCanvas.test.tsx` pins it.
 - **The line field is uncontrolled and remounts per line.** Setting its value
   from code clears the browser's text undo, which is what Ctrl+Z means while
   editing (spec section 6).

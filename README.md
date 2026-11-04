@@ -11,7 +11,7 @@ Mathcad: each one sees only what is defined above it. Move an element by
 dragging its dashed border; duplicate one (Ctrl+D) for a copy with the same
 source. Click a line to edit it: arrows move between lines, Enter splits,
 Backspace at the start joins, and Esc or a click outside leaves. Ctrl+Z then
-undoes one line at a time. Saving is not built yet. Assignment is plain math.js `=`; Mathcad's `:=` is
+undoes one line at a time, among Excalidraw's own steps such as selecting. Saving is not built yet. Assignment is plain math.js `=`; Mathcad's `:=` is
 not accepted. Avoid naming variables after units (`V`, `A`, `m`, `s`): the
 name silently shadows the unit for everything below it (#7).
 

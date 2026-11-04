@@ -88,8 +88,9 @@ Engineering rules that make it work (Engineer's, found in the #2 spike and #28):
   `docs/spec-v1.md` section 17, with contract tests).
 - The overlay depends on Excalidraw details that are not public API. They are
   localised in `src/canvas/`, each with a contract test against the installed package,
-  so an upgrade that breaks one fails CI. Today: layer z-indexes (`layers.test.ts`) and
-  the wheel handler (`SheetCanvas.test.tsx`). v1 adds the rest of the list in
+  so an upgrade that breaks one fails CI. Today: layer z-indexes (`layers.test.ts`), the
+  wheel handler and the `.excalidraw` focus query (`SheetCanvas.test.tsx`), and how
+  `updateScene` compares versions before it captures (`mathAnchor.excalidraw.test.tsx`). v1 adds the rest of the list in
   `docs/spec-v1.md` section 14.
 - Excalidraw's export isn't reachable, because it would show the anchor without the
   math. Print leaves anchors out of its `exportToSvg` call and applies their opacity to

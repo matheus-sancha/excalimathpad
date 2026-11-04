@@ -565,9 +565,10 @@ Excalidraw's own selection steps.
 - **Undoing a line shows nothing extra:** no selection, scroll or highlight. An undo off
   screen shows only as changed results.
 - **Selecting and deselecting are Excalidraw's own steps,** on the same stack; #41 found no
-  public API that keeps them off it. An undo that lands on one changes only the selection. Leaving a line
-  with a click outside also deselects, so the first Ctrl+Z after it only re-selects the
-  element, and the second takes back the line. Leaving with Esc adds no such step.
+  public API that keeps them off it. An undo that lands on one changes only the selection. When
+  the element is selected, leaving a line with a click outside also deselects it, so the first
+  Ctrl+Z after that only re-selects the element, and the second takes back the line. Leaving
+  with Esc adds no such step.
 - **Not undo steps:** keystrokes, size writes, style restores, settings changes and
   results.
 
@@ -1050,6 +1051,13 @@ Engineer's design gate. Tested on Excalidraw 0.18.1, math.js 15.2 and Chromium.
   `newElementWith(el, { customData: { ...el.customData, source } })`. A plain `{ ...el, customData }` is
   silently not recorded. Never `EVENTUALLY` or the default: afterwards later updates to that anchor drop
   off the undo stack. ([undo research](https://github.com/matheus-sancha/excalimathpad/issues/10))
+- **A change Excalidraw didn't capture comes first:** its arrow-key nudge and Link editor leave
+  the anchor's `version` ahead of its last captured copy. `updateScene` then swaps the anchor for
+  that copy before capturing, so a source write lands but adds no step, and undo can't reach it.
+  `writeAnchorSource` records that change as its own step first, by parking `version` at 0 in an
+  uncaptured update and capturing with the real version back. This relies on how `updateScene`
+  compares versions, which isn't public, so a contract test pins it.
+  ([#41](https://github.com/matheus-sancha/excalimathpad/issues/41))
 - **Size:** `newElementWith` + `CaptureUpdateAction.NEVER`, only for anchors whose size changed by more
   than half a pixel. Snap-back must also restore `x` and `y`: the top-right handle moved `y` by 45 px.
   ([auto-size](https://github.com/matheus-sancha/excalimathpad/issues/29))
@@ -1159,9 +1167,9 @@ spike is M0, done.
 
 **M1's issue order:**
 
-1. Source in `customData` + undo steps
+1. Source in `customData` + undo steps + bare line field and its keys
 2. Save, open, recovery copy, ☰ items
-3. Gestures + one-line edit field
+3. Gestures + the edit field's final layout and Esc's second press
 4. KaTeX grid, auto-size, comments
 5. Add math (M), empty removal
 6. Reduced panel + hint, Normal font
@@ -1292,5 +1300,10 @@ Changes line if it changes behaviour.
 ## Changes since agreed
 
 - 2026-11-04, [section 6](#6-undo) (#41, agreed by Matheus): selecting and deselecting are
-  Excalidraw's own undo steps, found while probing and accepted. So a click outside adds a
-  Ctrl+Z that only re-selects, and "the first Ctrl+Z empties the element" holds after Esc.
+  Excalidraw's own undo steps, found while probing and accepted. So with the element selected, a
+  click outside adds a Ctrl+Z that only re-selects, and "the first Ctrl+Z empties the element"
+  holds after Esc.
+- 2026-11-04, [section 16](#16-milestones-and-finish-line) (#41, agreed by Matheus): the bare line
+  field and its keys (↑ ↓, Enter, Backspace, Esc, blur) moved from the third issue to the first,
+  because section 6 can't hold without them. The third keeps the gestures, the field's final
+  layout and Esc's second press.
