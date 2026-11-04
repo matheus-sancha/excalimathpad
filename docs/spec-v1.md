@@ -38,6 +38,9 @@ installs as an offline app. It runs on Chrome and Edge on desktop.
 | Files | Excalidraw's image export; a supported round trip through plain Excalidraw; several sheets in one window |
 | Platforms | Touch and mobile layouts; browsers other than Chrome and Edge on desktop (a save and open fallback exists, untested) |
 
+v1 makes no promises on a touch device. A double tap on a math element would still
+add a text label to its anchor, and Add math and Enter need a keyboard or button.
+
 Decided in: [map](https://github.com/matheus-sancha/excalimathpad/issues/8),
 [spec contents](https://github.com/matheus-sancha/excalimathpad/issues/38).
 
@@ -193,6 +196,13 @@ Any form with code can end with a `# note`. Any line with a value can end with
 
 ```
 dP_pipe = f_d * (L_p/D) rho v_d^2 / 2 in kPa # friction only
+```
+
+A solve line follows the same rule: `in <unit>` comes last, after the guess. It sets the
+result's display unit and doesn't convert the guess. A clause added later goes before it.
+
+```
+Q_op = solve Hp(Q) = Hs(Q), guess Q = 15 L/s in L/s
 ```
 
 **How a line is read, in this order:**
@@ -640,8 +650,8 @@ Decided in: [file](https://github.com/matheus-sancha/excalimathpad/issues/12),
 ## 8. App chrome
 
 Built in M1 (☰ file items, file name, Add math) and M2 (Sheet button and panel). Print…
-and the Page row arrive in M5. There is no app bar: the chrome lives inside Excalidraw's
-own UI slots.
+and the Page row arrive in M5; until then Ctrl+P is the browser's own and prints the
+screen. There is no app bar: the chrome lives inside Excalidraw's own UI slots.
 
 ```
 ☰  ● pump-sizing.excalimathpad                  ∑ Add math (M) · Library · Sheet ②
@@ -650,8 +660,10 @@ own UI slots.
 - **☰ menu:** Open… (Ctrl+O), Save (Ctrl+S), Save as… (Ctrl+Shift+S) and Print… (Ctrl+P)
   at the top. Excalidraw's own Open, Save to… and Export image… are removed. Its other
   items stay: Find on canvas, Help, Reset the canvas, dark mode, canvas background.
-- **File name** beside the ☰ button, with `●` while dirty. The window title is the sheet's
-  name too, because Save as PDF names the file from it.
+- **File name** beside the ☰ button, with `●` while dirty.
+- **Window title:** the name without its extension, with `●` while dirty: `● pump-sizing`.
+  An unsaved sheet reads `● Untitled`. While printing, the title drops the mark, so the PDF is
+  named `pump-sizing.pdf`, because Save as PDF names the file from the title.
 - **∑ Add math** is the primary button, labelled with its shortcut **M**.
 - **Sheet** opens and closes the panel, with a red badge counting errors and warnings
   while the sheet has problems.
@@ -878,6 +890,8 @@ whatever the dark mode or canvas background.
   drawing's SVG, cached and refreshed on idle after a scene change, plus clones of the overlay's
   math and plots, with KaTeX fonts loaded ahead of printing. If the cache is empty, it prints one
   line: "Use Print… from the app's menu".
+- **Both routes** set the window title to the plain name while printing
+  ([section 8](#8-app-chrome)), and restore it afterwards.
 - **No page guides.** To change a bad break, close the dialog, move something and print again.
 
 Decided in: [print](https://github.com/matheus-sancha/excalimathpad/issues/21),
@@ -911,8 +925,7 @@ Decided in: [PWA](https://github.com/matheus-sancha/excalimathpad/issues/22),
 ## 13. Messages
 
 The wording of every user-facing message. `<…>` is filled in. Numbers follow
-[section 5](#numbers), in the plain-text form. Marked **new** where the tickets left the wording to
-this spec, so check these in review.
+[section 5](#numbers), in the plain-text form.
 
 **Reading and names**
 
@@ -920,9 +933,9 @@ this spec, so check these in review.
 |---|---|---|
 | A name used above its definition | `x is defined below` | M0 |
 | A name whose assignment failed | `x has an error above` | M0 |
-| `table`, `plot` or `solve` assigned to | `table is a line form: choose another name` **new** | M2 |
+| `table`, `plot` or `solve` assigned to | `table is a line form: choose another name` | M2 |
 | A name shadows a unit or built-in (warning) | `K shadows the unit K` | M2 |
-| A use that falls back to the unit (warning) | `V reads as the unit V here: the variable is defined below` or `… its definition failed` **new** | M2 |
+| A use that falls back to the unit (warning) | `V reads as the unit V here: the variable is defined below` or `… its definition failed` | M2 |
 | A body name not defined above (warning) | `y isn't defined above this line` | M2 |
 
 **Functions**
@@ -949,36 +962,36 @@ this spec, so check these in review.
 | No guess | `solve needs a guess: ", guess Q = <value>"` | M3 |
 | No root | `no root near Q = 15 L/s (searched 0.9 .. 240 L/s)` | M3 |
 | No root, on a call | `in f(1.86·10⁵, 4.399·10⁻⁴): no root near f = 0.02 (searched <range>)` | M3 |
-| Outer solve fails after inner failures | `no root near Q = 15 L/s (searched <range>); last inner error: <message>` **new** | M3 |
+| Outer solve fails after inner failures | `no root near Q = 15 L/s (searched <range>); last inner error: <message>` | M3 |
 | Units of the two sides differ | `guess Q = 15 m: Hp(Q) - Hs(Q) units do not match` | M3 |
-| Iteration cap | `no convergence for Q after 100 iterations` **new** | M3 |
-| The guess fails | `guess Q: <message>` **new** | M3 |
+| Iteration cap | `no convergence for Q after 100 iterations` | M3 |
+| The guess fails | `guess Q: <message>` | M3 |
 
 **Ranges, tables, plots**
 
 | When | Message | Arrives |
 |---|---|---|
-| Ends with units and no step | `a range with units needs a step, such as "step 1 L/s"` **new** | M4 |
-| Zero step, or one pointing away | `step 0 m never reaches the end` **new** | M4 |
-| Start, end and step of different kinds | `start, end and step must be the same kind` **new** | M4 |
-| Too many points | `Q_s has more than 10,000 points` **new** | M4 |
+| Ends with units and no step | `a range with units needs a step, such as "step 1 L/s"` | M4 |
+| Zero step, or one pointing away | `step 0 m never reaches the end` | M4 |
+| Start, end and step of different kinds | `start, end and step must be the same kind` | M4 |
+| Too many points | `Q_s has more than 10,000 points` | M4 |
 | Lists of different lengths | `Q_s has 30 values, x has 11` | M4 |
 | A body reaching an outside list | `pass Q_s as an argument` | M4 |
 | Failed points on a line | `1 of 30 points failed. At Q_s = 0 L/s: solve found no root` | M4 |
 | Aggregate over a failed point | `H_s has a failed point` | M4 |
 | Mixed kinds on a plot | `H_s is a length, P is a power: one plot shows one kind` | M4 |
-| Unknown clause | `Unknown plot setting xyz` **new** | M4 |
-| Log axis with zero or negative | `x log needs values above 0` **new** | M4 |
-| All of a series' points failed | `H_s: every point failed. At Q_s = 1 L/s: <message>` **new** | M4 |
+| Unknown clause | `Unknown plot setting xyz` | M4 |
+| Log axis with zero or negative | `x log needs values above 0` | M4 |
+| All of a series' points failed | `H_s: every point failed. At Q_s = 1 L/s: <message>` | M4 |
 
 **App**
 
 | When | Message | Arrives |
 |---|---|---|
 | Newer file | `This sheet was saved by a newer Excalimathpad. Update the app.` | M1 |
-| File that doesn't parse | `This file isn't a sheet, so it wasn't opened.` **new** | M1 |
+| File that doesn't parse | `This file isn't a sheet, so it wasn't opened.` | M1 |
 | Recovery copy | `Restore unsaved changes to pump-sizing.excalimathpad?` or `… to an untitled sheet?` | M1 |
-| Opening with unsaved changes | `Save changes to pump-sizing.excalimathpad?` Save, Don't save, Cancel **new** | M1 |
+| Opening with unsaved changes | `Save changes to pump-sizing.excalimathpad?` Save, Don't save, Cancel | M1 |
 | Hint, one math element selected | `Double-click a line or press Enter to edit` | M1 |
 | Browser's Print with an empty cache | `Use Print… from the app's menu` | M5 |
 
@@ -1265,6 +1278,7 @@ Changes line if it changes behaviour.
 | [What are v1's build milestones, and what does the finish line become?](https://github.com/matheus-sancha/excalimathpad/issues/37) | 16 |
 | [What does docs/spec-v1.md contain, and how does it relate to CONTEXT.md and the ADRs?](https://github.com/matheus-sancha/excalimathpad/issues/38) | 1, 3, 11, 13, this structure, ADR amendments, acceptance file |
 | [Warn when a variable name shadows a unit](https://github.com/matheus-sancha/excalimathpad/issues/7) (open, joins M2) | 5, 13 |
+| [Spec for Excalimathpad v1](https://github.com/matheus-sancha/excalimathpad/pull/39) (the review, this PR) | 1, 3, 4, 7, 8, 11, 13, acceptance file |
 
 ## Changes since agreed
 
