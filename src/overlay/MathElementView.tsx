@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, type KeyboardEvent } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react'
 import type { MathAnchor } from '../canvas/mathAnchor.ts'
 import type { ForwardWheel } from '../canvas/SheetCanvas.tsx'
 import { splitLines, type LineResult } from '../math/evaluate.ts'
@@ -130,12 +130,12 @@ interface LineFieldProps {
 function LineField({ edit, onType, onMove, onEscape, onBlur }: LineFieldProps) {
   const fieldRef = useRef<HTMLInputElement>(null)
   // Only what the field opens with: from then on the text and caret are the user's.
-  const opening = useRef(edit)
+  const [opening] = useState(edit)
 
   useLayoutEffect(() => {
     fieldRef.current?.focus()
-    fieldRef.current?.setSelectionRange(opening.current.caret, opening.current.caret)
-  }, [])
+    fieldRef.current?.setSelectionRange(opening.caret, opening.caret)
+  }, [opening])
 
   const onKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
     if (event.nativeEvent.isComposing) return
@@ -167,7 +167,7 @@ function LineField({ edit, onType, onMove, onEscape, onBlur }: LineFieldProps) {
       ref={fieldRef}
       className="math-element__field"
       aria-label="Line source"
-      defaultValue={opening.current.text}
+      defaultValue={opening.text}
       spellCheck={false}
       autoCapitalize="off"
       autoComplete="off"
