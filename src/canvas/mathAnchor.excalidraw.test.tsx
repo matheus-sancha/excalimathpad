@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { CaptureUpdateAction, newElementWith } from '@excalidraw/excalidraw'
 import { SheetCanvas, type SheetCanvasHandle } from './SheetCanvas.tsx'
 import { createMathAnchorElements, writeAnchorSource } from './mathAnchor.ts'
+import { sceneLoaded, undoControls } from '../test/excalidraw.ts'
 
 /**
  * Contracts against the real, installed Excalidraw (ADR 0002): an upgrade that
@@ -20,20 +21,13 @@ async function mount() {
   )
   await waitFor(() => expect(handle).toBeDefined())
   const { api, focusCanvas } = handle!
-  await waitFor(() => expect(api.getAppState().isLoading).toBe(false))
-  // Excalidraw's Undo button subscribes to the history in an effect, and misses
-  // any step recorded before that runs. A person can't get in first; a test can.
-  await act(() => new Promise((resolve) => setTimeout(resolve)))
+  await sceneLoaded(api)
   const container = view.container.querySelector<HTMLElement>('.excalidraw')!
-  const button = (name: 'undo' | 'redo') =>
-    view.container.querySelector<HTMLButtonElement>(`[data-testid="button-${name}"]`)!
   return {
     api,
     container,
     focusCanvas,
-    canUndo: () => !button('undo').disabled,
-    undo: () => fireEvent.click(button('undo')),
-    redo: () => fireEvent.click(button('redo')),
+    ...undoControls(view.container),
     sourceOf: (id = 'm1') =>
       api.getSceneElementsIncludingDeleted().find((e) => e.id === id)?.customData?.source,
     write: (source: string, id = 'm1') => {
@@ -131,6 +125,90 @@ describe('writeAnchorSource on real Excalidraw', () => {
 
     undo()
     await waitFor(() => expect(sourceOf()).toBe(SOURCE))
+  })
+})
+
+// Excalidraw changes an element without capturing it in its arrow-key nudge and
+// its Link editor. Until the app records that change, a write lands in the scene
+// but adds no step, or its undo takes earlier lines with it.
+describe('writeAnchorSource after a change Excalidraw did not capture', () => {
+  async function mountSelected() {
+    const mounted = await mount()
+    mounted.select()
+    mounted.focusCanvas()
+    return mounted
+  }
+
+  function nudge(container: HTMLElement) {
+    fireEvent.keyDown(container, { key: 'ArrowRight', code: 'ArrowRight' })
+    fireEvent.keyUp(container, { key: 'ArrowRight', code: 'ArrowRight' })
+  }
+
+  it('takes one step for the write after a nudge, and one for the nudge', async () => {
+    const { api, container, canUndo, undo, redo, sourceOf, write } = await mountSelected()
+    nudge(container)
+    expect(api.getSceneElements()[0].x).toBe(101)
+    // The nudge alone is on no stack: this is what the write has to cope with.
+    expect(canUndo()).toBe(false)
+
+    write('a = 1')
+
+    undo()
+    await waitFor(() => expect(sourceOf()).toBe(SOURCE))
+    expect(api.getSceneElements()[0].x).toBe(101)
+
+    undo()
+    await waitFor(() => expect(api.getSceneElements()[0].x).toBe(100))
+    expect(canUndo()).toBe(false)
+
+    redo()
+    await waitFor(() => expect(api.getSceneElements()[0].x).toBe(101))
+    expect(sourceOf()).toBe(SOURCE)
+    redo()
+    await waitFor(() => expect(sourceOf()).toBe('a = 1'))
+  })
+
+  it('keeps lines on either side of a nudge as separate steps', async () => {
+    const { api, container, undo, sourceOf, write } = await mountSelected()
+    write('one')
+    nudge(container)
+    write('two')
+
+    undo()
+    await waitFor(() => expect(sourceOf()).toBe('one'))
+    expect(api.getSceneElements()[0].x).toBe(101)
+  })
+
+  // The Link editor's path: a change made with no capture. Its UI needs a real
+  // browser; the check by hand is on PR #47.
+  it('takes one step for the write after an uncaptured link', async () => {
+    const { api, undo, sourceOf, write } = await mountSelected()
+    act(() => {
+      api.updateScene({
+        elements: api
+          .getSceneElementsIncludingDeleted()
+          .map((e) => newElementWith(e, { link: 'https://example.com' })),
+      })
+    })
+
+    write('a = 1')
+
+    undo()
+    await waitFor(() => expect(sourceOf()).toBe(SOURCE))
+    expect(api.getSceneElements()[0].link).toBe('https://example.com')
+
+    undo()
+    await waitFor(() => expect(api.getSceneElements()[0].link).toBeNull())
+  })
+
+  it('never moves the version backwards', async () => {
+    const { api, container, write } = await mountSelected()
+    nudge(container)
+    const before = api.getSceneElements()[0].version
+
+    write('a = 1')
+
+    expect(api.getSceneElements()[0].version).toBeGreaterThan(before)
   })
 })
 

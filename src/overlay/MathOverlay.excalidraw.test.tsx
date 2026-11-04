@@ -6,6 +6,7 @@ import type { NormalizedZoomValue } from '@excalidraw/excalidraw/types'
 import { SheetCanvas, type SheetCanvasHandle } from '../canvas/SheetCanvas.tsx'
 import { createMathAnchorElements } from '../canvas/mathAnchor.ts'
 import { AppShell } from '../shell/AppShell.tsx'
+import { sceneLoaded, undoControls } from '../test/excalidraw.ts'
 import { MathOverlay } from './MathOverlay.tsx'
 
 /**
@@ -57,17 +58,10 @@ async function mount() {
   render(<Harness onReady={(h) => (handle = h)} />)
   await screen.findAllByRole('list', { name: 'Lines' })
   const { api } = handle!
-  await waitFor(() => expect(api.getAppState().isLoading).toBe(false))
-  // Excalidraw's Undo button subscribes to the history in an effect, and misses
-  // any step recorded before that runs. A person can't get in first; a test can.
-  await act(() => new Promise((resolve) => setTimeout(resolve)))
-  const button = (name: 'undo' | 'redo') =>
-    document.querySelector<HTMLButtonElement>(`[data-testid="button-${name}"]`)!
+  await sceneLoaded(api)
   return {
     api,
-    canUndo: () => !button('undo').disabled,
-    undo: () => fireEvent.click(button('undo')),
-    redo: () => fireEvent.click(button('redo')),
+    ...undoControls(document),
     sourceOf: (id = 'm1') =>
       api.getSceneElements().find((e) => e.id === id)?.customData?.source as string,
     sceneCount: () => api.getSceneElements().length,
@@ -159,8 +153,16 @@ describe('MathOverlay on real Excalidraw', () => {
       press('ArrowDown') // Commits line 1.
       type('I = 4 mA')
       press('Escape') // Commits line 2.
+      openLine(1, 'm2')
+      type('U = I * R * 2')
+      press('Escape') // Commits a line in another element.
       expect(sourceOf()).toBe('R = 20 kohm\nI = 4 mA')
-      expect(resultsOf('m2')).toBe('= 80 V')
+      expect(resultsOf('m2')).toBe('= 160 V')
+
+      undo()
+      await waitFor(() => expect(sourceOf('m2')).toBe('U = I * R'))
+      await waitFor(() => expect(resultsOf('m2')).toBe('= 80 V'))
+      expect(sourceOf()).toBe('R = 20 kohm\nI = 4 mA')
 
       undo()
       await waitFor(() => expect(sourceOf()).toBe('R = 20 kohm\nI = 2 mA'))
@@ -176,6 +178,8 @@ describe('MathOverlay on real Excalidraw', () => {
       redo()
       await waitFor(() => expect(sourceOf()).toBe('R = 20 kohm\nI = 4 mA'))
       await waitFor(() => expect(resultsOf('m2')).toBe('= 80 V'))
+      redo()
+      await waitFor(() => expect(sourceOf('m2')).toBe('U = I * R * 2'))
     })
 
     it('a line left unchanged adds no step', async () => {
@@ -285,6 +289,8 @@ describe('MathOverlay on real Excalidraw', () => {
     openLine(1, 'm2')
     type('U = 5')
     press('Escape')
+    // The write leaves the deleted element in the scene's list.
+    expect(api.getSceneElementsIncludingDeleted().map((e) => e.id)).toContain('m1')
 
     undo()
     await waitFor(() => expect(sourceOf('m2')).toBe('U = I * R'))
