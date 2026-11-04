@@ -8,8 +8,10 @@ Status: live recalculation across math elements (#3). The sheet opens with two
 math elements: `R = 10 kohm`, `I = 2 mA` above, and `U = I * R` (`20 V`) below.
 Edit `I` and `U` updates. Elements read top to bottom, then left to right, like
 Mathcad: each one sees only what is defined above it. Move an element by
-dragging its dashed border; duplicate one (Ctrl+D) for a new, empty element.
-Saving is not built yet. Assignment is plain math.js `=`; Mathcad's `:=` is
+dragging its dashed border; duplicate one (Ctrl+D) for a copy with the same
+source. Click a line to edit it: arrows move between lines, Enter splits,
+Backspace at the start joins, and Esc or a click outside leaves. Ctrl+Z then
+undoes one line at a time. Saving is not built yet. Assignment is plain math.js `=`; Mathcad's `:=` is
 not accepted. Avoid naming variables after units (`V`, `A`, `m`, `s`): the
 name silently shadows the unit for everything below it (#7).
 

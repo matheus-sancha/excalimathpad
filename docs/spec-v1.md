@@ -543,7 +543,8 @@ Decided in: [unit slot](https://github.com/matheus-sancha/excalimathpad/issues/1
 
 ## 6. Undo
 
-Built in M1. There is one undo stack, Excalidraw's. It covers moves and line edits.
+Built in M1. There is one undo stack, Excalidraw's. It covers moves and line edits, and
+Excalidraw's own selection steps.
 
 - **One step is one line's edit.** The line goes into the scene when the edit leaves it:
   ↑ / ↓, Enter (split), Backspace at the start (join), a click on another line, Esc, a
@@ -556,13 +557,17 @@ Built in M1. There is one undo stack, Excalidraw's. It covers moves and line edi
 - **Starting a drag while editing** writes the line (one step); the move is Excalidraw's
   own step.
 - **Add math** is one step, the first line another. So after Add math, typing a line and
-  leaving, the first Ctrl+Z empties the element and the second removes it. An element
+  leaving with Esc, the first Ctrl+Z empties the element and the second removes it. An element
   removed for being empty is one step, so Ctrl+Z after an empty Add math brings back the
   empty box.
 - **A unit slot or plot popover change** is one line commit.
 - **Redo** (Ctrl+Y, Ctrl+Shift+Z) is Excalidraw's own and mirrors undo.
-- **Undo shows nothing extra:** no selection, scroll or highlight. An undo off screen
-  shows only as changed results.
+- **Undoing a line shows nothing extra:** no selection, scroll or highlight. An undo off
+  screen shows only as changed results.
+- **Selecting and deselecting are Excalidraw's own steps,** on the same stack, and no public
+  API keeps them off it. An undo that lands on one changes only the selection. Leaving a line
+  with a click outside also deselects, so the first Ctrl+Z after it only re-selects the
+  element, and the second takes back the line. Leaving with Esc adds no such step.
 - **Not undo steps:** keystrokes, size writes, style restores, settings changes and
   results.
 
@@ -1206,7 +1211,11 @@ Changes line if it changes behaviour.
 
 **M1**
 
-- A duplicated or copied anchor keeps its source (from the code, not probed).
+- A duplicated or copied anchor keeps its source. **Passed (#41):** Ctrl+D, Alt+drag, copy and
+  paste, cut and paste, and a paste after a page reload each give a new id with the same
+  `customData`, in Chromium. Ctrl+D used real keys; the others used dispatched events. Alt+drag
+  leaves the copy in place, and the dragged anchor keeps its id. Ctrl+D and copy and paste are
+  contract tests in `src/canvas/mathAnchor.excalidraw.test.tsx`.
 - The unit slot and ⚙ open on `click` while a drag can still start on them (only the stopping form was probed;
   needed from M2).
 - The reduced panel's CSS on `.panelColumn` children, and the hint's replacement through `.HintViewer`.
@@ -1282,4 +1291,6 @@ Changes line if it changes behaviour.
 
 ## Changes since agreed
 
-None yet.
+- 2026-11-04, [section 6](#6-undo) (#41, agreed by Matheus): selecting and deselecting are
+  Excalidraw's own undo steps, found while probing and accepted. So a click outside adds a
+  Ctrl+Z that only re-selects, and "the first Ctrl+Z empties the element" holds after Esc.

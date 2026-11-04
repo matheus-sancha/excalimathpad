@@ -84,8 +84,8 @@ Engineering rules that make it work (Engineer's, found in the #2 spike and #28):
   brings the element back with its source, because the source is in the anchor.
 - A math edit is on Excalidraw's undo stack, one step per line commit, written only
   with `newElementWith` and `CaptureUpdateAction.IMMEDIATELY` (#10, #11).
-- A copied or duplicated anchor keeps its source (from Excalidraw's code, not probed;
-  `docs/spec-v1.md` section 17).
+- A copied or duplicated anchor keeps its source (probed on #41, recorded in
+  `docs/spec-v1.md` section 17, with contract tests).
 - The overlay depends on Excalidraw details that are not public API. They are
   localised in `src/canvas/`, each with a contract test against the installed package,
   so an upgrade that breaks one fails CI. Today: layer z-indexes (`layers.test.ts`) and
