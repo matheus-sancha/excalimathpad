@@ -57,6 +57,10 @@ async function mount() {
   render(<Harness onReady={(h) => (handle = h)} />)
   await screen.findAllByRole('list', { name: 'Lines' })
   const { api } = handle!
+  await waitFor(() => expect(api.getAppState().isLoading).toBe(false))
+  // Excalidraw's Undo button subscribes to the history in an effect, and misses
+  // any step recorded before that runs. A person can't get in first; a test can.
+  await act(() => new Promise((resolve) => setTimeout(resolve)))
   const button = (name: 'undo' | 'redo') =>
     document.querySelector<HTMLButtonElement>(`[data-testid="button-${name}"]`)!
   return {

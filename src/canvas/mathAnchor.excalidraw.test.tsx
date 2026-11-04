@@ -20,6 +20,10 @@ async function mount() {
   )
   await waitFor(() => expect(handle).toBeDefined())
   const { api, focusCanvas } = handle!
+  await waitFor(() => expect(api.getAppState().isLoading).toBe(false))
+  // Excalidraw's Undo button subscribes to the history in an effect, and misses
+  // any step recorded before that runs. A person can't get in first; a test can.
+  await act(() => new Promise((resolve) => setTimeout(resolve)))
   const container = view.container.querySelector<HTMLElement>('.excalidraw')!
   const button = (name: 'undo' | 'redo') =>
     view.container.querySelector<HTMLButtonElement>(`[data-testid="button-${name}"]`)!
