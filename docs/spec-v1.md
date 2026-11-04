@@ -1,6 +1,6 @@
 # Excalimathpad v1 spec
 
-**Status:** draft for Matheus's agreement · agreed when its PR is merged · living
+**Status:** agreed 2026-11-03 · living
 until v1 is done
 
 ## 1. What v1 is, and what it isn't
