@@ -1,6 +1,6 @@
 # 0004. The sheet file is Excalidraw JSON plus one block, saved as `.excalimathpad`
 
-- **Status**: accepted, not built yet (M1)
+- **Status**: accepted, built in M1 (#42)
 - **Date**: 2026-11-03
 
 ## Context
@@ -28,7 +28,15 @@ Decided by Matheus: a sheet is the JSON Excalidraw itself writes (`type: "excali
 Engineering rules (Engineer's):
 
 - Serialize with `serializeAsJSON(…, "local")`, then add the block. Excalidraw's own save
-  drops the block, so its save, open and export are never reachable.
+  drops the block, so its save, open and export are never reachable. In 0.18 turning off
+  `canvasActions` leaves three routes open (#42): Ctrl+Shift+S, Ctrl+Shift+E and a dropped
+  scene file. The app takes those keys, with Ctrl+S and Ctrl+O, and those drops on the
+  window in the capture phase (`src/file/FileChrome.tsx`), before Excalidraw hears them.
+- An open is never an undo step and clears the undo history (`src/canvas/sceneFile.ts`), so
+  Ctrl+Z never reaches into the previous sheet. A refused file leaves the sheet as it was.
+- Dirty is a key of what a save writes: element versions plus the kept app state. Selection,
+  scroll and zoom never make a sheet dirty. Writes that mustn't (auto-size, style restore) go
+  through the session's `keepClean`.
 - A migration is a pure function from format *n* to *n + 1*, one per step.
 - Results are never saved: they are derived on every run (ADR 0003).
 

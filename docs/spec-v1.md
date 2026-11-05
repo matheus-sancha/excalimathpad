@@ -86,7 +86,7 @@ One name per concept, used the same in conversation, code, tests, docs and the U
 | **Comment line, note** | A line starting with `#`; the text after `#` on a line with code |
 | **Sheet file** | Excalidraw scene JSON + the `excalimathpad` block. The sheet's only durable form |
 | **Dirty** | The scene or settings changed since the last save or open |
-| **Recovery copy** | The whole sheet file and its name in IndexedDB. Exists only while dirty |
+| **Recovery copy** | The whole sheet file, its name and its file handle in IndexedDB. Exists only while dirty |
 | **Sheet panel** | Excalidraw's sidebar with the tabs Variables, Problems and Settings |
 | **Placing** | The UI mode between Add math and the click that creates the anchor |
 | **Print pages** | The sheet laid out for its Page setting. Computed at print time, never stored |
@@ -630,13 +630,19 @@ A sheet is Excalidraw's own JSON with one extra top-level block, saved as
 
 - **Ctrl+S** writes back to the sheet's file. On an untitled sheet it works as Save as.
 - **Ctrl+Shift+S** picks a new file, which becomes the sheet's file.
+- **A plain drawing** opened as a sheet (a `.excalidraw`) isn't written back: its first Ctrl+S works
+  as Save as and suggests `<name>.excalimathpad`, so the drawing file keeps its own format.
 - The file on disk changes only when you save, as in Mathcad.
-- **Saving during a line edit** commits the line first.
+- **Saving during a line edit** commits the line first, as a line commit, and the line stays open.
+- **A failed save** (permission refused, a disk error) shows a message and leaves the sheet dirty.
 - **Unsaved changes** show as `●` before the file name. Closing the tab or window with
   unsaved changes asks to confirm.
 - **Recovery copy:** after every line commit and every scene change, the app writes the
-  whole sheet and its file name to IndexedDB. It holds every line up to the last commit.
-  It is cleared on a successful save and when you discard it. There is one at a time.
+  whole sheet, its file name and its file handle to IndexedDB, about half a second after the last
+  change and at once when the page goes away. It holds every line up to the last commit. It is
+  cleared on a successful save, when you discard it, and when another file is opened. There is one
+  at a time. Because it keeps the handle, Ctrl+S after Restore writes back to the same file, once
+  the browser grants permission again.
 
 ### Opening
 
@@ -644,7 +650,9 @@ A sheet is Excalidraw's own JSON with one extra top-level block, saved as
 - **If a recovery copy exists, it is offered first:** "Restore unsaved changes to
   pump-sizing.excalimathpad?" (or "to an untitled sheet"), with Restore and Discard. This
   also comes before a file opened by double-click, and before opening another file.
-- **Opening:** Ctrl+O, the ☰ menu's Open…, or a double-click in Windows.
+- **Opening:** Ctrl+O, the ☰ menu's Open…, a double-click in Windows, or dropping the file on
+  the canvas. A dropped `.excalimathpad`, `.excalidraw` or `.json` goes through Open, so it gets the
+  unsaved-changes question and the refusals below. Dropped images and libraries stay Excalidraw's.
 - **With unsaved changes** in the current sheet, opening asks: Save, Don't save or Cancel.
 
 | The file | What happens |
@@ -1009,6 +1017,7 @@ The wording of every user-facing message. `<…>` is filled in. Numbers follow
 | File that doesn't parse | `This file isn't a sheet, so it wasn't opened.` | M1 |
 | Recovery copy | `Restore unsaved changes to pump-sizing.excalimathpad?` or `… to an untitled sheet?` | M1 |
 | Opening with unsaved changes | `Save changes to pump-sizing.excalimathpad?` Save, Don't save, Cancel | M1 |
+| A save that fails | `Couldn't save pump-sizing.excalimathpad: <reason>` | M1 |
 | Hint, one math element selected | `Double-click a line or press Enter to edit` | M1 |
 | Browser's Print with an empty cache | `Use Print… from the app's menu` | M5 |
 
@@ -1115,7 +1124,12 @@ Evidence: [`excalidraw-gestures.md`](research/excalidraw-gestures.md).
 
 **File:** serialize with `serializeAsJSON(…, "local")`, then add the block. Excalidraw's own Ctrl+S and Ctrl+O
 must be taken over, because its save drops the block. `UIOptions.canvasActions` turns off `loadScene`,
-`saveToActiveFile`, `saveAsImage` and `export`.
+`saveToActiveFile`, `saveAsImage` and `export`. That isn't enough in 0.18 (#42): Ctrl+Shift+S
+(`saveFileToDisk`) isn't in `canvasActions` and always runs, Ctrl+Shift+E opens the image export dialog
+outside the action manager, and a dropped scene file replaces the scene as an undo step. So the app takes
+Ctrl+S, Ctrl+Shift+S, Ctrl+O and Ctrl+Shift+E, and drops of scene files, on the window in the capture phase.
+Excalidraw reports a change only after React commits, so a flow that has just written a line reads the
+scene itself rather than wait for `onChange`.
 ([file](https://github.com/matheus-sancha/excalimathpad/issues/12),
 [chrome](https://github.com/matheus-sancha/excalimathpad/issues/17))
 
@@ -1213,6 +1227,8 @@ lines through `evaluateSheet` and compares with the reference at 4 s.f. It grows
   today's formatting until M2. M1's check doesn't judge values, so neither blocks it.
 - **Line 6's warning** is checked at M2, when the shadow warning lands.
 - **Settings:** the Settings tab arrives in M2, its Page row in M5. The Print… menu item arrives in M5.
+- **The seed:** until Add math (the fifth issue), the untitled sheet starts with the two seeded elements,
+  loaded clean, because an empty sheet has no other way to get a math element. Add math removes them.
 
 ### The finish line
 
@@ -1329,3 +1345,8 @@ Changes line if it changes behaviour.
   field and its keys (↑ ↓, Enter, Backspace, Esc, blur) moved from the third issue to the first,
   because section 6 can't hold without them. The third keeps the gestures, the field's final
   layout and Esc's second press.
+- 2026-11-05, [sections 7](#7-file-and-save), [13](#13-messages) and [16](#16-milestones-and-finish-line)
+  (#42, agreed by Matheus): a scene file dropped on the canvas opens through Open; a plain `.excalidraw`
+  saves through Save as on its first Ctrl+S; the recovery copy keeps the file handle and is also cleared
+  when another file opens; a failed save has a message; saving during an edit keeps the line open; the seed
+  stays on the untitled sheet until Add math.

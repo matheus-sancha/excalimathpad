@@ -15,9 +15,10 @@ server. v1 target: one sheet, for Matheus's own use.
 ## Modules
 
 - **App** (`src/App.tsx`) — composition root. Decides what fills each shell
-  slot and seeds the sheet (two anchors with their source: inputs above,
-  `U = I * R` below). Depends on:
-  shell, canvas, overlay.
+  slot, seeds the untitled sheet (two anchors with their source: inputs above,
+  `U = I * R` below, loaded clean, until Add math in #45) and wires the sheet
+  file to the canvas and the line edit. Takes `files` and `recovery` so tests
+  pass fakes. Depends on: shell, canvas, overlay, file.
 - **shell** (`src/shell/`) — full-viewport layout with three slots: `canvas`,
   `overlay` (stacked exactly over the canvas, pointer-transparent by default)
   and `sidePanel` (docked right). Empty (falsy) slots render nothing. Neither
@@ -28,7 +29,11 @@ server. v1 target: one sheet, for Matheus's own use.
   `SheetCanvasHandle`: Excalidraw's imperative API plus `forwardWheel` and
   `focusCanvas`. `mathAnchor.ts` defines a math element's anchor (a rectangle
   with `customData.kind === "math"` and `customData.source`, ADR 0002) and
-  `writeAnchorSource`, the only way source enters the scene. `layers.ts` records where overlay
+  `writeAnchorSource`, the only way source enters the scene. `sceneFile.ts` is
+  the Excalidraw half of the sheet file: `serializeScene`, `loadScene` (no undo
+  step, clears history) and `saveKey`, the key dirty is measured by.
+  `SheetCanvas` also turns off Excalidraw's own open, save and export and draws
+  the ☰ menu with the app's file items. `layers.ts` records where overlay
   content sits among Excalidraw's DOM layers. The only module that imports
   Excalidraw at runtime; tests may too, and other modules may import its
   types. This is ADR 0001's engineering rule as amended in ADR 0002. Depends
@@ -66,13 +71,25 @@ server. v1 target: one sheet, for Matheus's own use.
   `readingOrder.ts` (pure) and runs `evaluateSheet` on every keystroke, every
   source change and every change of order, then hands each `MathElementView`
   its results. A row opens in a one-line field on click, until the gestures
-  arrive (#43). Depends on: canvas (anchor and layer contracts, API types), math.
+  arrive (#43). Its `control` lets the sheet file commit the line (Ctrl+S keeps
+  it open) or leave it (Open). Depends on: canvas (anchor and layer contracts,
+  API types), math.
+- **file** (`src/file/`) — the sheet file (ADR 0004, spec section 7).
+  `sheetFormat.ts` (pure) reads and writes the `excalimathpad` block, settings
+  and migrations. `sheetSession.ts` is the deep module: save, save as, open,
+  startup with the recovery offer, the clean mark and the recovery copy, over
+  ports (scene, file access, recovery store, dialogs, line), so it knows no
+  Excalidraw, React or DOM. `fileAccess.ts` wraps the File System Access API,
+  with a download and file-input fallback. `recovery.ts` keeps the one copy in
+  IndexedDB. `FileChrome.tsx` shows the name and title, asks the two questions,
+  asks before leaving while dirty, and takes the file keys and drops from
+  Excalidraw. Depends on: canvas (layers).
 - **test setup** (`src/test/`) — jsdom stubs for browser APIs Excalidraw
   touches on mount (canvas, fonts, matchMedia, ResizeObserver), and helpers for
   tests against the real Excalidraw. Not app code.
 
-Planned (not built): saving to a file, the Sheet panel, an "add math" tool (for
-now, duplicating an anchor makes a new math element with the same source).
+Planned (not built): the Sheet panel, an "add math" tool (for now, duplicating
+an anchor makes a new math element with the same source).
 
 ## Domain
 
@@ -158,6 +175,14 @@ and everything downstream recalculates. Engine: math.js, client-side.
 - **The line field is uncontrolled and remounts per line.** Setting its value
   from code clears the browser's text undo, which is what Ctrl+Z means while
   editing (spec section 6).
+- **The app takes the file keys and drops before Excalidraw**
+  (`src/file/FileChrome.tsx`): Ctrl+S, Ctrl+Shift+S, Ctrl+O, Ctrl+Shift+E and
+  dropped scene files, on the window in the capture phase. In Excalidraw 0.18,
+  Ctrl+Shift+S and Ctrl+Shift+E ignore `canvasActions`, and a dropped scene
+  replaces the sheet; each would drop the block (ADR 0004).
+- **Excalidraw's `onChange` comes after React commits,** not inside
+  `updateScene`. A file flow that has just written a line re-reads the save key
+  itself; trusting the last `onChange` misses that line.
 - **Static-only build** with relative `base` (`vite.config.ts`). Adding a
   server dependency breaks the deploy model.
 
@@ -175,6 +200,10 @@ and everything downstream recalculates. Engine: math.js, client-side.
   katex, nanoid, lodash-es); the only "fix" downgrades Excalidraw to 0.17.
 - `test.server.deps.inline` for Excalidraw in `vite.config.ts` exists because
   its ESM build imports JSON without import attributes, which Node rejects.
+- After an Open, Excalidraw's Undo button can stay lit: `history.clear()`
+  doesn't notify it. Pressing it undoes nothing and puts it right.
+- The file name's width cap assumes Excalidraw 0.18's toolbar width
+  (`FileChrome.css`); a wider toolbar would paint over the name's end.
 - The seeded anchor has a fixed size; source longer than three lines
   overflows its border (spike limitation, until auto-size in #44). Rows and
   results have one fixed line height, which keeps each result beside its line.
