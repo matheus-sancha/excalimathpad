@@ -1,4 +1,11 @@
-import { useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import {
+  useImperativeHandle,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type Ref,
+} from 'react'
 import type { ExcalidrawImperativeAPI } from '@excalidraw/excalidraw/types'
 import { ABOVE_DRAWING_BELOW_UI_Z_INDEX } from '../canvas/layers.ts'
 import {
@@ -33,11 +40,20 @@ export type SceneApi = Pick<
   | 'updateScene'
 >
 
+/** What the app outside the overlay may do to the line edit: the sheet file saves with it. */
+export interface LineEditControl {
+  /** Writes the typed line to the scene, as a line commit, and keeps it open. */
+  commitLine(): void
+  /** Writes the typed line and closes the edit. */
+  leaveLine(): void
+}
+
 export interface MathOverlayProps {
   api: SceneApi
   forwardWheel: ForwardWheel
   /** Gives the keyboard back to Excalidraw, so its Ctrl+Z works after Esc. */
   focusCanvas: () => void
+  control?: Ref<LineEditControl>
 }
 
 interface SceneSnapshot {
@@ -60,7 +76,7 @@ interface SceneSnapshot {
  * gets it once, at the line commit (docs/spec-v1.md section 6). Holding a single
  * edit is what keeps at most one line across the sheet in source form.
  */
-export function MathOverlay({ api, forwardWheel, focusCanvas }: MathOverlayProps) {
+export function MathOverlay({ api, forwardWheel, focusCanvas, control }: MathOverlayProps) {
   const store = useMemo(() => createSceneStore(api), [api])
   const { viewport, anchors } = useSyncExternalStore(store.subscribe, store.getSnapshot)
 
@@ -110,6 +126,16 @@ export function MathOverlay({ api, forwardWheel, focusCanvas }: MathOverlayProps
     const anchor = findAnchor(anchorId)
     if (anchor) changeEdit(startLineEdit(anchor.source, anchorId, lineIndex))
   }
+
+  useImperativeHandle(control, () => ({
+    // Saving during an edit writes what's on screen, and the field stays open.
+    commitLine() {
+      const current = editRef.current
+      const anchor = current && findAnchor(current.anchorId)
+      if (current && anchor) writeAnchorSource(api, current.anchorId, withTypedLine(anchor.source, current))
+    },
+    leaveLine: () => moveEdit({ kind: 'leave' }),
+  }))
 
   const leaveLine = (anchorId: string, lineIndex: number) => {
     const current = editRef.current

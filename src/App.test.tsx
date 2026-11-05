@@ -1,10 +1,13 @@
 import { render, screen, waitFor, within } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import App from './App.tsx'
+import { fakeFileAccess, fakeRecovery } from './test/files.ts'
+
+const renderApp = () => render(<App files={fakeFileAccess()} recovery={fakeRecovery()} />)
 
 describe('App', () => {
   it('mounts the Excalidraw editor as the sheet canvas', async () => {
-    const { container } = render(<App />)
+    const { container } = renderApp()
 
     await waitFor(() => {
       expect(container.querySelector('.excalidraw')).toBeInTheDocument()
@@ -14,7 +17,7 @@ describe('App', () => {
   })
 
   it('seeds inputs above and U = I * R below, evaluating to 20 V', async () => {
-    render(<App />)
+    renderApp()
 
     const [inputs, result] = await screen.findAllByRole('list', { name: 'Lines' })
     expect(within(inputs).getAllByRole('button').map((line) => line.textContent)).toEqual([
@@ -24,5 +27,12 @@ describe('App', () => {
     expect(result).toHaveTextContent('U = I * R')
     const [, results] = screen.getAllByRole('list', { name: 'Results' })
     expect(results).toHaveTextContent('= 20 V')
+  })
+
+  it('starts on a clean untitled sheet', async () => {
+    renderApp()
+
+    expect(await screen.findByTestId('file-name')).toHaveTextContent(/^Untitled$/)
+    await waitFor(() => expect(document.title).toBe('Untitled'))
   })
 })

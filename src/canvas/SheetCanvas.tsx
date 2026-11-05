@@ -1,7 +1,7 @@
 import { useCallback, useRef } from 'react'
-import { Excalidraw } from '@excalidraw/excalidraw'
+import { Excalidraw, MainMenu } from '@excalidraw/excalidraw'
 import type { ExcalidrawElement } from '@excalidraw/excalidraw/element/types'
-import type { ExcalidrawImperativeAPI } from '@excalidraw/excalidraw/types'
+import type { ExcalidrawImperativeAPI, UIOptions } from '@excalidraw/excalidraw/types'
 import '@excalidraw/excalidraw/index.css'
 
 /**
@@ -21,11 +21,29 @@ export interface SheetCanvasHandle {
   focusCanvas: () => void
 }
 
+/** The ☰ menu's file items (docs/spec-v1.md section 8). */
+export interface FileMenu {
+  open: () => void
+  save: () => void
+  saveAs: () => void
+}
+
 export interface SheetCanvasProps {
   /** Called once Excalidraw has mounted. */
   onReady?: (handle: SheetCanvasHandle) => void
   /** Scene to start with. */
   initialElements?: readonly ExcalidrawElement[]
+  /** The app's file items, at the top of the ☰ menu. */
+  fileMenu?: FileMenu
+}
+
+/**
+ * Excalidraw's own open, save and export, turned off: its save drops the
+ * sheet's block (ADR 0004). Its Ctrl+Shift+S and Ctrl+Shift+E ignore these, so
+ * the file chrome takes those keys itself.
+ */
+const UI_OPTIONS: Partial<UIOptions> = {
+  canvasActions: { loadScene: false, saveToActiveFile: false, saveAsImage: false, export: false },
 }
 
 /**
@@ -33,7 +51,7 @@ export interface SheetCanvasProps {
  * This is the only module (with `mathAnchor.ts`) that imports
  * `@excalidraw/excalidraw` at runtime (ADR 0001).
  */
-export function SheetCanvas({ onReady, initialElements }: SheetCanvasProps) {
+export function SheetCanvas({ onReady, initialElements, fileMenu }: SheetCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null)
 
   const forwardWheel = useCallback((event: WheelEvent) => {
@@ -58,7 +76,42 @@ export function SheetCanvas({ onReady, initialElements }: SheetCanvasProps) {
       <Excalidraw
         excalidrawAPI={handleApi}
         initialData={initialElements ? { elements: initialElements } : null}
-      />
+        UIOptions={UI_OPTIONS}
+      >
+        <SheetMenu fileMenu={fileMenu} />
+      </Excalidraw>
     </div>
+  )
+}
+
+/**
+ * The ☰ menu: the app's file items first, then the Excalidraw items v1 keeps.
+ * Excalidraw's Open, Save to… and Export image… are left out. Print… arrives
+ * in M5.
+ */
+function SheetMenu({ fileMenu }: { fileMenu?: FileMenu }) {
+  return (
+    <MainMenu>
+      {fileMenu && (
+        <>
+          <MainMenu.Item onSelect={fileMenu.open} shortcut="Ctrl+O">
+            Open…
+          </MainMenu.Item>
+          <MainMenu.Item onSelect={fileMenu.save} shortcut="Ctrl+S">
+            Save
+          </MainMenu.Item>
+          <MainMenu.Item onSelect={fileMenu.saveAs} shortcut="Ctrl+Shift+S">
+            Save as…
+          </MainMenu.Item>
+          <MainMenu.Separator />
+        </>
+      )}
+      <MainMenu.DefaultItems.SearchMenu />
+      <MainMenu.DefaultItems.Help />
+      <MainMenu.DefaultItems.ClearCanvas />
+      <MainMenu.Separator />
+      <MainMenu.DefaultItems.ToggleTheme />
+      <MainMenu.DefaultItems.ChangeCanvasBackground />
+    </MainMenu>
   )
 }
