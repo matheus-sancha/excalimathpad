@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import App from './App.tsx'
 
@@ -16,11 +16,12 @@ describe('App', () => {
   it('seeds inputs above and U = I * R below, evaluating to 20 V', async () => {
     render(<App />)
 
-    const sources = await screen.findAllByRole('textbox', { name: 'Math source' })
-    expect(sources.map((source) => (source as HTMLTextAreaElement).value)).toEqual([
-      'R = 10 kohm\nI = 2 mA',
-      'U = I * R',
+    const [inputs, result] = await screen.findAllByRole('list', { name: 'Lines' })
+    expect(within(inputs).getAllByRole('button').map((line) => line.textContent)).toEqual([
+      'R = 10 kohm',
+      'I = 2 mA',
     ])
+    expect(result).toHaveTextContent('U = I * R')
     const [, results] = screen.getAllByRole('list', { name: 'Results' })
     expect(results).toHaveTextContent('= 20 V')
   })

@@ -15,8 +15,8 @@ server. v1 target: one sheet, for Matheus's own use.
 ## Modules
 
 - **App** (`src/App.tsx`) — composition root. Decides what fills each shell
-  slot and seeds the sheet (two math elements: inputs above, `U = I * R`
-  below). Depends on:
+  slot and seeds the sheet (two anchors with their source: inputs above,
+  `U = I * R` below). Depends on:
   shell, canvas, overlay.
 - **shell** (`src/shell/`) — full-viewport layout with three slots: `canvas`,
   `overlay` (stacked exactly over the canvas, pointer-transparent by default)
@@ -25,16 +25,19 @@ server. v1 target: one sheet, for Matheus's own use.
   Depends on: nothing.
 - **canvas** (`src/canvas/`) — everything that knows Excalidraw. `SheetCanvas`
   is the official, unforked component; its `onReady` hands out a
-  `SheetCanvasHandle`: Excalidraw's imperative API plus `forwardWheel`.
-  `mathAnchor.ts` defines a math element's anchor (a rectangle with
-  `customData.kind === "math"`, ADR 0002). `layers.ts` records where overlay
+  `SheetCanvasHandle`: Excalidraw's imperative API plus `forwardWheel` and
+  `focusCanvas`. `mathAnchor.ts` defines a math element's anchor (a rectangle
+  with `customData.kind === "math"` and `customData.source`, ADR 0002) and
+  `writeAnchorSource`, the only way source enters the scene. `layers.ts` records where overlay
   content sits among Excalidraw's DOM layers. The only module that imports
   Excalidraw at runtime; tests may too, and other modules may import its
   types. This is ADR 0001's engineering rule as amended in ADR 0002. Depends
   on: `@excalidraw/excalidraw`.
 - **math** (`src/math/`) — the engine. Interface: `evaluateSheet(blocks)`,
   with blocks `{ id, source }` already in reading order → one `LineResult`
-  (value | error | empty) per line, keyed by block id; never throws. All lines
+  (value | error | empty) per line, keyed by block id; never throws. A plain
+  input and any line whose value is a function are empty, and their value still
+  reaches the lines below. All lines
   share one scope, fresh for every call (ADR 0003). Each line is parsed once
   (captured `parse`) to know what it defines, which turns "Undefined symbol"
   into "defined below" / "has an error above". Every known route for an
@@ -57,16 +60,19 @@ server. v1 target: one sheet, for Matheus's own use.
 - **overlay** (`src/overlay/`) — renders math elements over the canvas.
   `MathOverlay` subscribes to the scene (`onChange`, `onScrollChange`) and
   places each element from its anchor's scene position via `viewport.ts`
-  (`sceneToStage`, pure). Source text is held here, in memory, keyed by
-  anchor id (persistence is open). It owns the sheet's evaluation: it sorts
-  anchors with `readingOrder.ts` (pure) and runs `evaluateSheet` on every
-  edit and every change of order, then hands each `MathElementView` its
-  results. Depends on: canvas (anchor and layer contracts, API types), math.
+  (`sceneToStage`, pure). It reads source from the anchors and holds the sheet's
+  one **line edit**; `lineEdit.ts` (pure) decides what each way of leaving a
+  line writes. It owns the sheet's evaluation: it sorts anchors with
+  `readingOrder.ts` (pure) and runs `evaluateSheet` on every keystroke, every
+  source change and every change of order, then hands each `MathElementView`
+  its results. A row opens in a one-line field on click, until the gestures
+  arrive (#43). Depends on: canvas (anchor and layer contracts, API types), math.
 - **test setup** (`src/test/`) — jsdom stubs for browser APIs Excalidraw
-  touches on mount (canvas, fonts, matchMedia, ResizeObserver). Not app code.
+  touches on mount (canvas, fonts, matchMedia, ResizeObserver), and helpers for
+  tests against the real Excalidraw. Not app code.
 
-Planned (not built): persistence, a side panel, an "add math" tool (for now,
-duplicating an anchor makes a new, empty math element).
+Planned (not built): saving to a file, the Sheet panel, an "add math" tool (for
+now, duplicating an anchor makes a new math element with the same source).
 
 ## Domain
 
@@ -78,14 +84,26 @@ and everything downstream recalculates. Engine: math.js, client-side.
   **result** per line: a value with unit (`20 V`), an error (message), or
   empty.
 - **Anchor** — the Excalidraw rectangle that carries a math element's
-  position, size and rotation. Excalidraw owns it (move, select, delete,
-  undo); the overlay only reads it.
+  position, size, rotation and source. Excalidraw owns it (move, select, delete,
+  undo); the app writes only `customData.source`, the only stored copy.
+- **Line edit** — the one line shown as raw source: anchor id, line index and
+  the typed text. UI state, never in the scene. The sheet runs from the typed
+  text on every keystroke.
+- **Line commit** — the moment an edit leaves a line whose text differs from the
+  scene. It writes the element's whole source once, as one undo step, so a split
+  or a join is one step too.
 - **Viewport** — `scrollX`, `scrollY`, `zoom` from Excalidraw's app state.
 - **Sheet** — all live math elements, in **reading order**: by the top of each
   anchor's visual bounds, then its left, then its id (ADR 0003). Derived from
   positions every time, never stored. The sheet, not the element, is the unit
   of evaluation: one scope, lines top to bottom.
-- Invariants: scene coordinates are the only stored position, and the screen
+- Invariants: a line commit's source change is one undo step, and keystrokes are
+  none (a commit can also record a nudge or Link edit before it as its own step,
+  spec section 6); sheet undo
+  never runs during a line edit, because the field is outside Excalidraw's
+  container; results are never in a step. Selecting and deselecting are
+  Excalidraw's own steps on the same stack (spec section 6). Scene coordinates
+  are the only stored position, and the screen
   position is always derived as `(scene + scroll) * zoom`. Evaluation never
   throws, and a failed line does not stop the lines after it. A line sees only
   names assigned above it in reading order; a later assignment silently
@@ -127,6 +145,19 @@ and everything downstream recalculates. Engine: math.js, client-side.
   (`SheetCanvasHandle.forwardWheel`): Excalidraw listens for `wheel` on its
   own container, which the overlay is not inside. Without it, scrolling over
   a math element does nothing and ctrl+wheel zooms the browser page.
+- **Source writes go through `writeAnchorSource`.** A plain spread isn't recorded
+  by undo, and `EVENTUALLY` or the default capture drops later updates to that
+  anchor off the stack. Excalidraw's own nudge and Link leave the anchor in that
+  same state, so the write first records their change as its own step (spec
+  section 14). That relies on how `updateScene` compares versions, which isn't
+  public; `mathAnchor.excalidraw.test.tsx` holds the contract against the
+  installed package. Upstream has dropped that comparison, so this has to change
+  at the next Excalidraw upgrade.
+- **`focusCanvas` queries `.excalidraw`,** the element that hears Excalidraw's
+  keys. It lives in `src/canvas/`, and `SheetCanvas.test.tsx` pins it.
+- **The line field is uncontrolled and remounts per line.** Setting its value
+  from code clears the browser's text undo, which is what Ctrl+Z means while
+  editing (spec section 6).
 - **Static-only build** with relative `base` (`vite.config.ts`). Adding a
   server dependency breaks the deploy model.
 
@@ -145,8 +176,8 @@ and everything downstream recalculates. Engine: math.js, client-side.
 - `test.server.deps.inline` for Excalidraw in `vite.config.ts` exists because
   its ESM build imports JSON without import attributes, which Node rejects.
 - The seeded anchor has a fixed size; source longer than three lines
-  overflows its border (spike limitation). The textarea has one row per line
-  so it never scrolls, which keeps each result beside its line.
+  overflows its border (spike limitation, until auto-size in #44). Rows and
+  results have one fixed line height, which keeps each result beside its line.
 
 ## Decisions
 

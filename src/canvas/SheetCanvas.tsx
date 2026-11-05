@@ -17,6 +17,8 @@ export interface SheetCanvasHandle {
   /** Excalidraw's public imperative API: scene, app state, subscriptions. */
   api: ExcalidrawImperativeAPI
   forwardWheel: ForwardWheel
+  /** Gives the keyboard to Excalidraw, which only hears keys inside its container. */
+  focusCanvas: () => void
 }
 
 export interface SheetCanvasProps {
@@ -42,9 +44,13 @@ export function SheetCanvas({ onReady, initialElements }: SheetCanvasProps) {
     canvas.dispatchEvent(new WheelEvent(event.type, event))
   }, [])
 
+  const focusCanvas = useCallback(() => {
+    containerRef.current?.querySelector<HTMLElement>('.excalidraw')?.focus()
+  }, [])
+
   const handleApi = useCallback(
-    (api: ExcalidrawImperativeAPI) => onReady?.({ api, forwardWheel }),
-    [onReady, forwardWheel],
+    (api: ExcalidrawImperativeAPI) => onReady?.({ api, forwardWheel, focusCanvas }),
+    [onReady, forwardWheel, focusCanvas],
   )
 
   return (

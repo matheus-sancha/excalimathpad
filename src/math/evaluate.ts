@@ -3,7 +3,11 @@ import {
   create,
   isAssignmentNode,
   isBlockNode,
+  isConstantNode,
   isFunctionAssignmentNode,
+  isOperatorNode,
+  isParenthesisNode,
+  isSymbolNode,
   type MathNode,
 } from 'mathjs'
 
@@ -137,7 +141,13 @@ type ParsedLine =
   | { kind: 'blank' }
   /** `defines` is a best guess from the raw text: the line did not parse. */
   | { kind: 'syntax-error'; message: string; defines: readonly string[] }
-  | { kind: 'parsed'; node: MathNode; defines: readonly string[] }
+  | {
+      kind: 'parsed'
+      node: MathNode
+      defines: readonly string[]
+      /** The unit names of a plain input, or null for any other line. */
+      plainInputUnits: readonly string[] | null
+    }
 
 /**
  * Evaluates the whole sheet: every block's lines, one math.js statement per
@@ -213,10 +223,16 @@ export function evaluateSheet(
         }
         if (line.kind === 'syntax-error') return fail(line.message)
         try {
+          // Asked before the line runs: the line itself may assign one of these names.
+          const isPlain = line.plainInputUnits?.every((name) => !scope.has(name)) ?? false
           const value: unknown = line.node.compile().evaluate(scope)
           line.defines.forEach((name) => failed.delete(name))
-          // Comment-only lines evaluate to nothing.
-          if (value === undefined) return { kind: 'empty' }
+          // Comment-only lines evaluate to nothing. A plain input and a line
+          // whose value is a function leave the result cell empty, though the
+          // value still reaches the lines below (docs/spec-v1.md section 3).
+          if (value === undefined || typeof value === 'function' || isPlain) {
+            return { kind: 'empty' }
+          }
           return { kind: 'value', text: math.format(value, { precision: 14 }) }
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error)
@@ -240,7 +256,12 @@ function parseLine(line: string): ParsedLine {
   if (line.trim() === '') return { kind: 'blank' }
   try {
     const node = parse(line)
-    return { kind: 'parsed', node, defines: definedNames(node) }
+    return {
+      kind: 'parsed',
+      node,
+      defines: definedNames(node),
+      plainInputUnits: plainInputUnits(node),
+    }
   } catch (error) {
     const target = ASSIGNMENT_TARGET.exec(line)?.[1]
     return {
@@ -261,6 +282,48 @@ function definedNames(node: MathNode): string[] {
   // `A[1] = 5` and `a.b = 2` change an existing value; they define nothing.
   if (isAssignmentNode(node)) return node.index ? [] : [node.name]
   return []
+}
+
+/**
+ * The unit names on the right of a plain input (`D = 102.3 mm`): a literal
+ * number with an optional sign and unit. Null for any other line. A name that a
+ * line above assigned isn't a unit on that line, so the caller checks the scope.
+ */
+function plainInputUnits(node: MathNode): readonly string[] | null {
+  return isAssignmentNode(node) && !node.index ? literalUnits(node.value) : null
+}
+
+function literalUnits(node: MathNode): readonly string[] | null {
+  if (isConstantNode(node)) return []
+  if (isParenthesisNode(node)) return literalUnits(node.content)
+  if (!isOperatorNode(node)) return null
+  if (node.fn === 'unaryMinus' || node.fn === 'unaryPlus') return literalUnits(node.args[0])
+  if (node.fn !== 'multiply' && node.fn !== 'divide') return null
+  const left = literalUnits(node.args[0])
+  const right = unitNames(node.args[1])
+  return left && right && [...left, ...right]
+}
+
+/** The names in a pure unit expression (`m`, `kg/m^3`), or null if it isn't one. */
+function unitNames(node: MathNode): readonly string[] | null {
+  if (isSymbolNode(node)) {
+    // math.js resolves a name in its namespace before trying it as a unit.
+    return math.Unit.isValuelessUnit(node.name) && !(node.name in math) ? [node.name] : null
+  }
+  if (isParenthesisNode(node)) return unitNames(node.content)
+  if (!isOperatorNode(node)) return null
+  if (node.fn === 'pow') {
+    return isUnitExponent(node.args[1]) ? unitNames(node.args[0]) : null
+  }
+  if (node.fn !== 'multiply' && node.fn !== 'divide') return null
+  const left = unitNames(node.args[0])
+  const right = unitNames(node.args[1])
+  return left && right && [...left, ...right]
+}
+
+function isUnitExponent(node: MathNode): boolean {
+  if (isConstantNode(node)) return true
+  return isOperatorNode(node) && node.fn === 'unaryMinus' && isConstantNode(node.args[0])
 }
 
 // math.js's own wording (pinned by a test, so an upgrade that rewords it fails CI).

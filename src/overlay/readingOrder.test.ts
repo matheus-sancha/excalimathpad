@@ -8,6 +8,7 @@ const at = (id: string, x: number, y: number, more: Partial<MathAnchor> = {}): M
   y,
   width: 100,
   height: 40,
+  source: '',
   angle: 0,
   ...more,
 })

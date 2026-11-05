@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import type { ExcalidrawElement } from '@excalidraw/excalidraw/element/types'
 import type { AppState } from '@excalidraw/excalidraw/types'
@@ -15,8 +15,18 @@ function fakeScene(elements: ExcalidrawElement[]) {
   let view = { scrollX: 0, scrollY: 0, zoom: 1 }
   const changeListeners = new Set<() => void>()
   const scrollListeners = new Set<() => void>()
+  const sources = () => JSON.stringify(scene.map((e) => e.customData?.source))
+  // A line commit takes several updates; only one of them changes a source.
+  let sourceWrites = 0
+  const updateScene = vi.fn((data: { elements?: unknown }) => {
+    const before = sources()
+    if (data.elements) scene = data.elements as ExcalidrawElement[]
+    if (sources() !== before) sourceWrites++
+    act(() => changeListeners.forEach((cb) => cb()))
+  })
   const api: SceneApi = {
     getSceneElements: () => scene.filter((e) => !e.isDeleted) as never,
+    getSceneElementsIncludingDeleted: () => scene as never,
     getAppState: () =>
       ({
         scrollX: view.scrollX,
@@ -31,9 +41,13 @@ function fakeScene(elements: ExcalidrawElement[]) {
       scrollListeners.add(cb as () => void)
       return () => scrollListeners.delete(cb as () => void)
     },
+    updateScene: updateScene as never,
   }
   return {
     api,
+    updateScene,
+    sourceWrites: () => sourceWrites,
+    sourceOf: (id: string) => scene.find((e) => e.id === id)?.customData?.source as string,
     listenerCount: () => changeListeners.size + scrollListeners.size,
     updateElements(next: ExcalidrawElement[]) {
       scene = next
@@ -46,24 +60,41 @@ function fakeScene(elements: ExcalidrawElement[]) {
   }
 }
 
-const [anchor] = createMathAnchorElements([
-  { id: 'm1', x: 100, y: 50, width: 400, height: 96 },
-])
+const box = { x: 100, y: 50, width: 400, height: 96 }
+const [anchor] = createMathAnchorElements([{ id: 'm1', ...box }])
 const [plainRect] = createMathAnchorElements([
   { id: 'r1', x: 0, y: 0, width: 10, height: 10 },
 ]).map((e) => ({ ...e, customData: undefined }))
 
+const anchorWith = (source: string) =>
+  createMathAnchorElements([{ id: 'm1', ...box, source }])[0]
+
 const elementOf = (id: string) =>
   document.querySelector<HTMLElement>(`[data-anchor-id="${id}"]`)
 
-function renderOverlay(elements: ExcalidrawElement[], sources = {}) {
+function renderOverlay(elements: ExcalidrawElement[]) {
   const scene = fakeScene(elements)
   const forwardWheel = vi.fn()
+  const focusCanvas = vi.fn()
   const view = render(
-    <MathOverlay api={scene.api} forwardWheel={forwardWheel} initialSources={sources} />,
+    <MathOverlay api={scene.api} forwardWheel={forwardWheel} focusCanvas={focusCanvas} />,
   )
-  return { scene, forwardWheel, unmount: view.unmount }
+  return { scene, forwardWheel, focusCanvas, unmount: view.unmount }
 }
+
+const resultsOf = (id: string) =>
+  elementOf(id)!.querySelector('.math-element__results')!.textContent!.trim()
+
+function openLine(n: number, id = 'm1') {
+  fireEvent.click(within(elementOf(id)!).getByRole('button', { name: `Edit line ${n}` }))
+  return screen.getByRole<HTMLInputElement>('textbox', { name: 'Line source' })
+}
+
+function type(field: HTMLInputElement, text: string) {
+  fireEvent.input(field, { target: { value: text } })
+}
+
+const openField = () => screen.queryByRole<HTMLInputElement>('textbox', { name: 'Line source' })
 
 describe('MathOverlay', () => {
   it('places each math element at its anchor, ignoring other elements', () => {
@@ -114,56 +145,258 @@ describe('MathOverlay', () => {
     expect(elementOf('m1')).toBeNull()
   })
 
-  it('evaluates the source and re-evaluates on edit', () => {
-    renderOverlay([anchor], { m1: 'R = 10 kohm\nI = 2 mA\nI * R' })
-    const results = screen.getByRole('list', { name: 'Results' })
-    expect(results).toHaveTextContent('= 10 kohm= 2 mA= 20 V')
+  it('evaluates the source from the anchor and re-evaluates on each keystroke', () => {
+    renderOverlay([anchorWith('R = 10 kohm\nI = 2 mA\nI * R')])
+    expect(resultsOf('m1')).toBe('= 20 V')
 
-    fireEvent.change(screen.getByRole('textbox', { name: 'Math source' }), {
-      target: { value: 'R = 10 kohm\nI = 2 mA\nR + I' },
-    })
+    type(openLine(3), 'R + I')
 
-    expect(results).toHaveTextContent('Units do not match')
+    expect(resultsOf('m1')).toBe('Units do not match')
   })
 
-  // Regression (PR #5 review): a textarea shorter than its source scrolled to
-  // the caret, so results sat next to the wrong lines. One row per line means
-  // it never needs to scroll.
-  it('sizes the source to one row per line, matching the results', () => {
-    renderOverlay([anchor], { m1: 'a = 1\nb = 2\nc = 3\nd = 4\ne = 5' })
-    const source = screen.getByRole('textbox', { name: 'Math source' })
-    const rows = () => screen.getAllByRole('listitem')
+  it('re-evaluates when the source in the scene changes, as an undo does', () => {
+    const { scene } = renderOverlay([anchorWith('I = 2 mA\nI * 2')])
+    expect(resultsOf('m1')).toBe('= 4 mA')
 
-    expect(source).toHaveAttribute('rows', '5')
-    expect(rows()).toHaveLength(5)
+    scene.updateElements([anchorWith('I = 3 mA\nI * 2')])
 
-    fireEvent.change(source, { target: { value: 'a = 1\nb = 2' } })
-    expect(source).toHaveAttribute('rows', '2')
-    expect(rows()).toHaveLength(2)
+    expect(resultsOf('m1')).toBe('= 6 mA')
+    expect(screen.getByRole('button', { name: 'Edit line 1' })).toHaveTextContent('I = 3 mA')
+  })
+
+  it('keeps one row per line beside one result per line', () => {
+    renderOverlay([anchorWith('a = 1\nb = 2\n\nd = 4')])
+    const lines = within(screen.getByRole('list', { name: 'Lines' })).getAllByRole('listitem')
+    const results = within(screen.getByRole('list', { name: 'Results' })).getAllByRole('listitem')
+
+    expect(lines).toHaveLength(4)
+    expect(results).toHaveLength(4)
+  })
+
+  describe('line edit', () => {
+    it('shows the line in a field with the caret at the end', () => {
+      renderOverlay([anchorWith('a = 1\nb = 2')])
+
+      const field = openLine(2)
+
+      expect(field.value).toBe('b = 2')
+      expect(document.activeElement).toBe(field)
+      expect(field.selectionStart).toBe(5)
+      expect(field.selectionEnd).toBe(5)
+    })
+
+    it('writes nothing for keystrokes', () => {
+      const { scene } = renderOverlay([anchorWith('a = 1')])
+      const field = openLine(1)
+
+      type(field, 'a = 12')
+      type(field, 'a = 123')
+
+      expect(scene.sourceWrites()).toBe(0)
+      expect(scene.sourceOf('m1')).toBe('a = 1')
+    })
+
+    it('never sets the field while typing, which would clear its text undo', () => {
+      renderOverlay([anchorWith('a = 1')])
+      const field = openLine(1)
+      type(field, 'a = 12')
+      const setValue = vi.spyOn(field, 'value', 'set')
+
+      act(() => field.dispatchEvent(new Event('input', { bubbles: true })))
+
+      expect(setValue).not.toHaveBeenCalled()
+      // Nor React's rewrite of the value attribute, from a changing defaultValue.
+      expect(field.getAttribute('value')).toBe('a = 1')
+    })
+
+    it('Esc writes the typed line once, ends the edit and gives the keyboard back', () => {
+      const { scene, focusCanvas } = renderOverlay([anchorWith('a = 1')])
+      const field = openLine(1)
+      type(field, 'a = 2')
+
+      fireEvent.keyDown(field, { key: 'Escape' })
+
+      expect(openField()).toBeNull()
+      expect(scene.sourceWrites()).toBe(1)
+      expect(scene.sourceOf('m1')).toBe('a = 2')
+      expect(focusCanvas).toHaveBeenCalledOnce()
+    })
+
+    it('a line left unchanged writes nothing', () => {
+      const { scene } = renderOverlay([anchorWith('a = 1\nb = 2')])
+
+      fireEvent.keyDown(openLine(1), { key: 'ArrowDown' })
+      fireEvent.keyDown(openField()!, { key: 'Escape' })
+
+      expect(scene.sourceWrites()).toBe(0)
+    })
+
+    it('blur writes the typed line and ends the edit', () => {
+      const { scene, focusCanvas } = renderOverlay([anchorWith('a = 1')])
+      const field = openLine(1)
+      type(field, 'a = 2')
+
+      act(() => field.blur())
+
+      expect(openField()).toBeNull()
+      expect(scene.sourceWrites()).toBe(1)
+      expect(scene.sourceOf('m1')).toBe('a = 2')
+      expect(focusCanvas).not.toHaveBeenCalled()
+    })
+
+    // The field stays the active element while the window is away.
+    it('stays open when only the window lost focus', () => {
+      const { scene } = renderOverlay([anchorWith('a = 1')])
+      const field = openLine(1)
+      type(field, 'a = 2')
+
+      fireEvent.blur(field)
+
+      expect(openField()).toBe(field)
+      expect(scene.sourceWrites()).toBe(0)
+    })
+
+    it('ArrowUp and ArrowDown stay put, and write nothing, at the ends', () => {
+      const { scene } = renderOverlay([anchorWith('a = 1\nb = 2')])
+      const first = openLine(1)
+      type(first, 'typed')
+
+      fireEvent.keyDown(first, { key: 'ArrowUp' })
+
+      expect(openField()).toBe(first)
+      expect(first.value).toBe('typed')
+      expect(scene.sourceWrites()).toBe(0)
+    })
+
+    it('Enter splits at the caret and continues at the start of the new line', () => {
+      const { scene } = renderOverlay([anchorWith('a = 1')])
+      const field = openLine(1)
+      field.setSelectionRange(3, 3)
+
+      fireEvent.keyDown(field, { key: 'Enter' })
+
+      expect(scene.sourceWrites()).toBe(1)
+      expect(scene.sourceOf('m1')).toBe('a =\n 1')
+      const next = openField()!
+      expect(next).not.toBe(field)
+      expect(next.value).toBe(' 1')
+      expect(next.selectionStart).toBe(0)
+    })
+
+    it('Enter with a selection replaces the selection', () => {
+      const { scene } = renderOverlay([anchorWith('a = 1')])
+      const field = openLine(1)
+      field.setSelectionRange(1, 3)
+
+      fireEvent.keyDown(field, { key: 'Enter' })
+
+      expect(scene.sourceOf('m1')).toBe('a\n 1')
+      expect(openField()!.value).toBe(' 1')
+    })
+
+    // Enter ends an IME's composition; it isn't the user's Enter.
+    it('leaves keys alone during IME composition', () => {
+      const { scene } = renderOverlay([anchorWith('a = 1')])
+      const field = openLine(1)
+
+      const notPrevented = fireEvent.keyDown(field, { key: 'Enter', isComposing: true })
+
+      expect(notPrevented).toBe(true)
+      expect(openField()).toBe(field)
+      expect(scene.sourceWrites()).toBe(0)
+    })
+
+    it('Backspace over a selection from the start deletes it, without a join', () => {
+      const { scene } = renderOverlay([anchorWith('a = 1\nb = 2')])
+      const field = openLine(2)
+      field.setSelectionRange(0, 3)
+
+      const notPrevented = fireEvent.keyDown(field, { key: 'Backspace' })
+
+      expect(notPrevented).toBe(true)
+      expect(openField()).toBe(field)
+      expect(scene.sourceWrites()).toBe(0)
+    })
+
+    it('Backspace at the start joins, with the caret at the join', () => {
+      const { scene } = renderOverlay([anchorWith('a = 1\nb = 2')])
+      const field = openLine(2)
+      field.setSelectionRange(0, 0)
+
+      fireEvent.keyDown(field, { key: 'Backspace' })
+
+      expect(scene.sourceWrites()).toBe(1)
+      expect(scene.sourceOf('m1')).toBe('a = 1b = 2')
+      const joined = openField()!
+      expect(joined.value).toBe('a = 1b = 2')
+      expect(joined.selectionStart).toBe(5)
+    })
+
+    it('Backspace elsewhere stays the field’s own', () => {
+      const { scene } = renderOverlay([anchorWith('a = 1\nb = 2')])
+      const field = openLine(2)
+
+      const notPrevented = fireEvent.keyDown(field, { key: 'Backspace' })
+
+      expect(notPrevented).toBe(true)
+      expect(scene.sourceWrites()).toBe(0)
+    })
+
+    it('Backspace on the first line stays the field’s own', () => {
+      const { scene } = renderOverlay([anchorWith('a = 1')])
+      const field = openLine(1)
+      field.setSelectionRange(0, 0)
+
+      fireEvent.keyDown(field, { key: 'Backspace' })
+
+      expect(openField()).toBe(field)
+      expect(scene.sourceWrites()).toBe(0)
+    })
+
+    it('holds at most one line in source form across the sheet', () => {
+      const [first, second] = createMathAnchorElements([
+        { id: 'm1', x: 0, y: 0, width: 100, height: 50, source: 'a = 1' },
+        { id: 'm2', x: 0, y: 100, width: 100, height: 50, source: 'b = 2' },
+      ])
+      const { scene } = renderOverlay([first, second])
+      type(openLine(1, 'm1'), 'a = 9')
+
+      const next = openLine(1, 'm2')
+
+      expect(screen.getAllByRole('textbox', { name: 'Line source' })).toEqual([next])
+      expect(scene.sourceOf('m1')).toBe('a = 9')
+    })
+
+    it('drops the edit, writing nothing, when its anchor has gone', () => {
+      const { scene } = renderOverlay([anchorWith('a = 1')])
+      const field = openLine(1)
+      type(field, 'a = 2')
+
+      scene.updateElements([{ ...anchorWith('a = 1'), isDeleted: true }])
+      fireEvent.keyDown(field, { key: 'Escape' })
+
+      expect(openField()).toBeNull()
+      expect(scene.sourceWrites()).toBe(0)
+    })
   })
 
   describe('across elements (one sheet, reading order)', () => {
     const [inputs, uses] = createMathAnchorElements([
-      { id: 'inputs', x: 100, y: 50, width: 400, height: 72 },
-      { id: 'uses', x: 100, y: 200, width: 400, height: 48 },
+      { id: 'inputs', x: 100, y: 50, width: 400, height: 72, source: 'R = 10 kohm\nI = 2 mA' },
+      { id: 'uses', x: 100, y: 200, width: 400, height: 48, source: 'U = I * R' },
     ])
-    const sources = { inputs: 'R = 10 kohm\nI = 2 mA', uses: 'U = I * R' }
-    const resultsOf = (id: string) =>
-      elementOf(id)!.querySelector('.math-element__results')!.textContent
-    const sourceOf = (id: string) =>
-      elementOf(id)!.querySelector<HTMLTextAreaElement>('.math-element__source')!
 
-    it('recalculates a later element when an earlier one is edited', () => {
-      renderOverlay([inputs, uses], sources)
+    it('recalculates a later element while an earlier one is typed in', () => {
+      renderOverlay([inputs, uses])
       expect(resultsOf('uses')).toBe('= 20 V')
 
-      fireEvent.change(sourceOf('inputs'), { target: { value: 'R = 10 kohm\nI = 4 mA' } })
+      type(openLine(2, 'inputs'), 'I = 4 mA')
 
       expect(resultsOf('uses')).toBe('= 40 V')
     })
 
     it('re-evaluates in the new order when an anchor moves above another', () => {
-      const { scene } = renderOverlay([inputs, uses], sources)
+      const { scene } = renderOverlay([inputs, uses])
 
       scene.updateElements([inputs, { ...uses, y: 0 }])
 
@@ -176,12 +409,12 @@ describe('MathOverlay', () => {
     })
 
     it('loses the inputs when their element is deleted, and gets them back on undo', () => {
-      const { scene } = renderOverlay([inputs, uses], sources)
+      const { scene } = renderOverlay([inputs, uses])
 
       scene.updateElements([{ ...inputs, isDeleted: true }, uses])
       expect(resultsOf('uses')).toBe('Undefined symbol I')
 
-      // Excalidraw's undo brings the anchor back; its source was kept by id.
+      // Excalidraw's undo brings the anchor back, with its source in it.
       scene.updateElements([inputs, uses])
       expect(resultsOf('uses')).toBe('= 20 V')
     })
@@ -199,7 +432,7 @@ describe('MathOverlay', () => {
   it('forwards wheel events over a math element to the canvas', () => {
     const { forwardWheel } = renderOverlay([anchor])
 
-    fireEvent.wheel(screen.getByRole('textbox', { name: 'Math source' }), {
+    fireEvent.wheel(screen.getByRole('button', { name: 'Edit line 1' }), {
       deltaY: 50,
     })
 

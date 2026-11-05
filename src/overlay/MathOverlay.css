@@ -13,40 +13,57 @@
   pointer-events: none;
 }
 
-/* The inset keeps the anchor's border grabbable around the textarea. */
+/* The inset keeps the anchor's border grabbable around the lines. */
 .math-element__body {
   box-sizing: border-box;
   width: 100%;
   height: 100%;
   padding: 12px 14px;
   display: grid;
-  /* The source keeps at least half the width: a long result (an error
-     message) is cut with an ellipsis rather than squeezing the source to
+  /* The lines keep at least half the width: a long result (an error
+     message) is cut with an ellipsis rather than squeezing the lines to
      nothing. The full text is in the result's title. */
   grid-template-columns: minmax(50%, 1fr) minmax(0, auto);
-  /* Rows size to content, so the textarea keeps its `rows` height even when
-     that is taller than the anchor (it overflows rather than scrolls). */
+  /* Rows size to content, so lines taller than the anchor overflow it. */
   align-items: start;
   column-gap: 16px;
   transform-origin: center;
   font: 16px/24px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 
-.math-element__source {
-  pointer-events: auto;
+.math-element__lines {
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+  list-style: none;
+}
+
+/* One line height each, empty lines too, so results stay beside their lines. */
+.math-element__line,
+.math-element__field {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  height: 24px;
   margin: 0;
   padding: 0;
   border: 0;
   background: transparent;
   color: #1e1e1e;
   font: inherit;
-  resize: none;
-  /* Height comes from `rows` (one per line), so there is never anything to
-     scroll vertically; see MathElementView. */
-  height: auto;
-  overflow: hidden;
-  white-space: pre;
   outline: none;
+  pointer-events: auto;
+}
+
+.math-element__line {
+  overflow: hidden;
+  text-align: left;
+  white-space: pre;
+  cursor: text;
+}
+
+.math-element__field {
+  box-shadow: inset 0 -1px 0 #1971c2;
 }
 
 .math-element__results {

@@ -1,30 +1,43 @@
-import { useMemo, useState, useSyncExternalStore } from 'react'
+import { useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import type { ExcalidrawImperativeAPI } from '@excalidraw/excalidraw/types'
 import { ABOVE_DRAWING_BELOW_UI_Z_INDEX } from '../canvas/layers.ts'
 import {
   isMathAnchor,
   sameAnchor,
   toMathAnchor,
+  writeAnchorSource,
   type MathAnchor,
 } from '../canvas/mathAnchor.ts'
 import type { ForwardWheel } from '../canvas/SheetCanvas.tsx'
-import { evaluateSheet } from '../math/evaluate.ts'
+import { evaluateSheet, type SheetBlock } from '../math/evaluate.ts'
+import {
+  applyLineMove,
+  startLineEdit,
+  withTypedLine,
+  type LineEdit,
+  type LineMove,
+} from './lineEdit.ts'
 import { MathElementView } from './MathElementView.tsx'
 import { readingOrder } from './readingOrder.ts'
 import type { Viewport } from './viewport.ts'
 import './MathOverlay.css'
 
-/** The slice of Excalidraw's API the overlay reads. */
+/** The slice of Excalidraw's API the overlay uses. */
 export type SceneApi = Pick<
   ExcalidrawImperativeAPI,
-  'getSceneElements' | 'getAppState' | 'onChange' | 'onScrollChange'
+  | 'getSceneElements'
+  | 'getSceneElementsIncludingDeleted'
+  | 'getAppState'
+  | 'onChange'
+  | 'onScrollChange'
+  | 'updateScene'
 >
 
 export interface MathOverlayProps {
   api: SceneApi
   forwardWheel: ForwardWheel
-  /** Source text per anchor id, for anchors that exist at mount. */
-  initialSources?: Readonly<Record<string, string>>
+  /** Gives the keyboard back to Excalidraw, so its Ctrl+Z works after Esc. */
+  focusCanvas: () => void
 }
 
 interface SceneSnapshot {
@@ -38,27 +51,72 @@ interface SceneSnapshot {
  * moved, resized, deleted, undone) or a scroll/zoom.
  *
  * Owns the sheet's evaluation (ADR 0003): every element's source runs in
- * reading order, in one scope, synchronously on every edit and whenever the
- * order changes. A drag that does not change the order does not re-evaluate.
+ * reading order, in one scope, synchronously on every keystroke and whenever a
+ * source or the order changes. A drag that does not change the order does not
+ * re-evaluate.
  *
- * Source text lives here, in memory, keyed by anchor id; how it is persisted
- * with the sheet is still open (ADR 0001, ADR 0002).
+ * Source lives in the anchors (ADR 0002). The one thing held here is the line
+ * edit: the typed text stays in memory, the sheet runs from it, and the scene
+ * gets it once, at the line commit (docs/spec-v1.md section 6). Holding a single
+ * edit is what keeps at most one line across the sheet in source form.
  */
-export function MathOverlay({ api, forwardWheel, initialSources }: MathOverlayProps) {
+export function MathOverlay({ api, forwardWheel, focusCanvas }: MathOverlayProps) {
   const store = useMemo(() => createSceneStore(api), [api])
   const { viewport, anchors } = useSyncExternalStore(store.subscribe, store.getSnapshot)
-  const [sources, setSources] = useState<Record<string, string>>(() => ({
-    ...initialSources,
-  }))
-  // A string, so moves that keep the order keep the memo below.
-  const orderKey = JSON.stringify(readingOrder(anchors))
-  const results = useMemo(
-    () =>
-      evaluateSheet(
-        (JSON.parse(orderKey) as string[]).map((id) => ({ id, source: sources[id] ?? '' })),
-      ),
-    [orderKey, sources],
+
+  const [edit, setEdit] = useState<LineEdit | null>(null)
+  // Events read the latest edit from here: a field being removed can report its
+  // blur while the render that removed it is still committing.
+  const editRef = useRef(edit)
+  const changeEdit = (next: LineEdit | null) => {
+    editRef.current = next
+    setEdit(next)
+  }
+
+  const typedSourceOf = (anchor: MathAnchor) =>
+    edit?.anchorId === anchor.id ? withTypedLine(anchor.source, edit) : anchor.source
+
+  // A string, so moves that keep the order and the sources keep the memo below.
+  const sheetKey = JSON.stringify(
+    readingOrder(anchors).map((id): SheetBlock => {
+      const anchor = anchors.find((candidate) => candidate.id === id)
+      return { id, source: anchor ? typedSourceOf(anchor) : '' }
+    }),
   )
+  const results = useMemo(
+    () => evaluateSheet(JSON.parse(sheetKey) as SheetBlock[]),
+    [sheetKey],
+  )
+
+  const findAnchor = (anchorId: string) =>
+    store.getSnapshot().anchors.find(({ id }) => id === anchorId)
+
+  /** Every line commit goes through here, so each one is written exactly once. */
+  const moveEdit = (move: LineMove) => {
+    const current = editRef.current
+    if (!current) return
+    const anchor = findAnchor(current.anchorId)
+    if (!anchor) {
+      changeEdit(null)
+      return
+    }
+    const next = applyLineMove(anchor.source, current, move)
+    writeAnchorSource(api, current.anchorId, next.source)
+    changeEdit(next.edit)
+  }
+
+  const openLine = (anchorId: string, lineIndex: number) => {
+    moveEdit({ kind: 'leave' })
+    const anchor = findAnchor(anchorId)
+    if (anchor) changeEdit(startLineEdit(anchor.source, anchorId, lineIndex))
+  }
+
+  const leaveLine = (anchorId: string, lineIndex: number) => {
+    const current = editRef.current
+    if (current?.anchorId === anchorId && current.lineIndex === lineIndex) {
+      moveEdit({ kind: 'leave' })
+    }
+  }
 
   return (
     // Above the drawing, below Excalidraw's toolbar and panels, so math never
@@ -69,11 +127,20 @@ export function MathOverlay({ api, forwardWheel, initialSources }: MathOverlayPr
           key={anchor.id}
           anchor={anchor}
           viewport={viewport}
-          source={sources[anchor.id] ?? ''}
+          source={typedSourceOf(anchor)}
           results={results.get(anchor.id) ?? []}
-          onSourceChange={(source) =>
-            setSources((prev) => ({ ...prev, [anchor.id]: source }))
-          }
+          edit={edit?.anchorId === anchor.id ? edit : null}
+          onOpenLine={(lineIndex) => openLine(anchor.id, lineIndex)}
+          onType={(text) => {
+            const current = editRef.current
+            if (current) changeEdit({ ...current, text })
+          }}
+          onMove={moveEdit}
+          onEscape={() => {
+            moveEdit({ kind: 'leave' })
+            focusCanvas()
+          }}
+          onBlurLine={(lineIndex) => leaveLine(anchor.id, lineIndex)}
           forwardWheel={forwardWheel}
         />
       ))}
