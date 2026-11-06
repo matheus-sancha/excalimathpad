@@ -5,6 +5,7 @@ import {
   readSheet,
   SHEET_EXTENSION,
   writeSheet,
+  type ReadSheet,
   type SheetData,
   type SheetSettings,
 } from './sheetFormat.ts'
@@ -222,6 +223,23 @@ export function createSheetSession({
     return true
   }
 
+  /** Runs a pick or a read; a failure is said, not taken for a file that isn't a sheet. */
+  const readOrSay = async (get: () => Promise<PickedFile | null>) => {
+    try {
+      return await get()
+    } catch (error) {
+      dialogs.message(MESSAGES.openFailed(reason(error)))
+      return null
+    }
+  }
+
+  /** Says why a file can't open. */
+  const isReadable = (read: ReadSheet): read is Extract<ReadSheet, { kind: 'sheet' }> => {
+    if (read.kind === 'sheet') return true
+    dialogs.message(read.kind === 'newer' ? MESSAGES.newer : MESSAGES.notASheet)
+    return false
+  }
+
   return {
     get settings() {
       return settings
@@ -273,23 +291,26 @@ export function createSheetSession({
         onSceneChange()
         // Pick first, while the key press or click that asked is fresh: Chromium's
         // pickers need it, and a Save as before would use it up.
-        let picked: PickedFile | null
-        try {
-          picked = await (pick ?? (() => files.open()))()
-        } catch (error) {
-          dialogs.message(MESSAGES.openFailed(reason(error)))
-          return
-        }
+        let picked = await readOrSay(pick ?? (() => files.open()))
         if (!picked) return
-        const read = readSheet(picked.text)
-        if (read.kind !== 'sheet') {
-          dialogs.message(read.kind === 'newer' ? MESSAGES.newer : MESSAGES.notASheet)
-          return
-        }
+        let read = readSheet(picked.text)
+        if (!isReadable(read)) return
         if (isDirty()) {
           const answer = await dialogs.askSaveChanges(name)
           if (answer === 'cancel') return
-          if (answer === 'save' && !(await doSave())) return
+          if (answer === 'save') {
+            if (!(await doSave())) return
+            // The save may have written the very file that was picked (the sheet's
+            // own file, or Save as onto it). Read it again, so what loads is what's
+            // on disk, not the text from before the save.
+            const pickedHandle = picked.handle
+            if (pickedHandle) {
+              picked = await readOrSay(() => files.read(pickedHandle))
+              if (!picked) return
+              read = readSheet(picked.text)
+              if (!isReadable(read)) return
+            }
+          }
         }
         line.leaveLine()
         scene.load(read.scene)

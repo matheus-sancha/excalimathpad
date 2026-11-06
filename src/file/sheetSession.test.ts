@@ -69,6 +69,11 @@ function fakeFiles() {
       disk.set(name, text)
       return { name, handle: handleFor(name) }
     }),
+    read: vi.fn<FileAccess['read']>(async (handle) => ({
+      name: handle.name,
+      text: disk.get(handle.name) ?? '',
+      handle,
+    })),
   }
   return files
 }
@@ -447,6 +452,7 @@ describe('opening', () => {
     const dirtySetup = async () => {
       const ctx = await setup()
       ctx.scene.edit('mine')
+      ctx.files.disk.set('pump.excalimathpad', sheetFile('theirs'))
       ctx.files.open.mockResolvedValue(picked('pump.excalimathpad', sheetFile('theirs')))
       return ctx
     }
@@ -517,6 +523,45 @@ describe('opening', () => {
 
       expect(files.disk.get('Untitled.excalimathpad')).toContain('mine')
       expect(scene.source()).toBe('theirs')
+    })
+
+    it("reopening the sheet's own file with Save loads what was just saved, clean", async () => {
+      const { session, scene, files, dialogs } = await setup()
+      files.disk.set('pump.excalimathpad', sheetFile('v1'))
+      files.open.mockResolvedValue(picked('pump.excalimathpad', files.disk.get('pump.excalimathpad')!))
+      await session.open()
+      scene.edit('v2')
+      // Picked before the save, so its text is still v1.
+      files.open.mockResolvedValue(picked('pump.excalimathpad', files.disk.get('pump.excalimathpad')!))
+      dialogs.askSaveChanges.mockResolvedValue('save')
+
+      await session.open()
+
+      expect(files.disk.get('pump.excalimathpad')).toContain('v2')
+      expect(scene.source()).toBe('v2')
+      expect(session.getState()).toEqual({ name: 'pump.excalimathpad', dirty: false })
+    })
+
+    it('Save as onto the picked file loads what was just saved', async () => {
+      const { session, scene, files, dialogs } = await dirtySetup()
+      files.open.mockResolvedValue(picked('Untitled.excalimathpad', sheetFile('old')))
+      dialogs.askSaveChanges.mockResolvedValue('save')
+
+      await session.open()
+
+      expect(scene.source()).toBe('mine')
+      expect(session.getState()).toEqual({ name: 'Untitled.excalimathpad', dirty: false })
+    })
+
+    it('says so when the file cannot be read again after the save, and keeps the sheet', async () => {
+      const { session, scene, files, dialogs } = await dirtySetup()
+      dialogs.askSaveChanges.mockResolvedValue('save')
+      files.read.mockRejectedValue(new Error('the file is gone'))
+
+      await session.open()
+
+      expect(dialogs.message).toHaveBeenCalledWith("Couldn't open the file: the file is gone")
+      expect(scene.source()).toBe('mine')
     })
 
     it('Save, then a cancelled Save as, opens nothing', async () => {

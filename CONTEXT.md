@@ -208,6 +208,9 @@ and everything downstream recalculates. Engine: math.js, client-side.
   katex, nanoid, lodash-es); the only "fix" downgrades Excalidraw to 0.17.
 - `test.server.deps.inline` for Excalidraw in `vite.config.ts` exists because
   its ESM build imports JSON without import attributes, which Node rejects.
+- In Excalidraw's phone layout (a narrow window), ☰ moves to the bottom bar and
+  the file name, placed beside it, sits under that bar, so it doesn't show. v1
+  targets desktop Chrome and Edge.
 - After an Open, Excalidraw's Undo button can stay lit: `history.clear()`
   doesn't notify it. Pressing it undoes nothing and puts it right.
 - The seeded anchor has a fixed size; source longer than three lines

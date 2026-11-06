@@ -655,7 +655,8 @@ A sheet is Excalidraw's own JSON with one extra top-level block, saved as
   unsaved-changes question and the refusals below. Dropped images and libraries stay Excalidraw's.
 - **With unsaved changes** in the current sheet, opening asks: Save, Don't save or Cancel. It
   asks after the file is picked and read, so a refused file never asks, and the Save picker gets
-  the click on Save (Chromium allows one picker per gesture).
+  the click on Save (Chromium allows one picker per gesture). After a Save, the picked file is read
+  again, so reopening the sheet's own file shows what was just saved.
 
 | The file | What happens |
 |---|---|

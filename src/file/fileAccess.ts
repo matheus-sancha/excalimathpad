@@ -32,6 +32,8 @@ export interface FileAccess {
   save(handle: SheetFileHandle, text: string): Promise<void>
   /** Asks for a new file. Null when the user cancels. */
   saveAs(suggestedName: string, text: string): Promise<SavedFile | null>
+  /** Reads a file again from its handle, as it is on disk now. */
+  read(handle: SheetFileHandle): Promise<PickedFile>
 }
 
 /** What the picker offers. Plain drawings open too, as format 1 sheets. */
@@ -79,6 +81,7 @@ function fileSystemAccess(picker: PickerWindow): FileAccess {
     async save(handle, text) {
       await writeHandle(handle as WritableHandle, text)
     },
+    read: readHandle,
     async saveAs(suggestedName, text) {
       const handle = await cancellable(() =>
         picker.showSaveFilePicker({ types: PICKER_TYPES, suggestedName, id: 'sheet' }),
@@ -133,6 +136,9 @@ function fallbackAccess(document: Document): FileAccess {
       }),
     async save() {
       throw new Error('this browser cannot write back to a file')
+    },
+    async read() {
+      throw new Error('this browser cannot read a file again')
     },
     async saveAs(suggestedName, text) {
       const url = URL.createObjectURL(new Blob([text], { type: 'application/json' }))

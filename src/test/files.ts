@@ -17,6 +17,11 @@ export function fakeFileAccess() {
       disk.set(name, text)
       return { name, handle: handleFor(name) }
     }),
+    read: vi.fn<FileAccess['read']>(async (handle) => ({
+      name: handle.name,
+      text: disk.get(handle.name) ?? '',
+      handle,
+    })),
   }
 }
 
