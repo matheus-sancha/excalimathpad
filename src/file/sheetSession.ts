@@ -58,8 +58,13 @@ export interface SheetSession {
   attach(): () => void
   save(): Promise<boolean>
   saveAs(): Promise<boolean>
-  /** Opens a file: the picked or dropped one, or one from the picker. */
-  open(file?: PickedFile): Promise<void>
+  /**
+   * Opens a file: from `pick` (a dropped file) or the picker. Picks first, then
+   * asks about unsaved changes, then replaces the sheet.
+   */
+  open(pick?: () => Promise<PickedFile | null>): Promise<void>
+  /** Commits the line being typed, so it counts as a change (before the page goes away). */
+  commitPending(): void
   /** Runs a scene write that mustn't make a clean sheet dirty (auto-size, style restore). */
   keepClean(write: () => void): void
   /** Writes a pending recovery copy now, as the page goes away. */
@@ -81,6 +86,7 @@ export const MESSAGES = {
   newer: 'This sheet was saved by a newer Excalimathpad. Update the app.',
   notASheet: "This file isn't a sheet, so it wasn't opened.",
   saveFailed: (name: string, reason: string) => `Couldn't save ${name}: ${reason}`,
+  openFailed: (reason: string) => `Couldn't open the file: ${reason}`,
 }
 
 export function createSheetSession({
@@ -123,6 +129,8 @@ export function createSheetSession({
     return recoveryQueue
   }
   const sheetText = () => writeSheet(scene.serialize(), settings)
+  /** What a save would write: the scene's key and the settings. */
+  const currentKey = () => `${scene.saveKey()}|${JSON.stringify(settings)}`
   const cancelPendingCopy = () => {
     if (pendingCopy !== null) clearTimeout(pendingCopy)
     pendingCopy = null
@@ -143,7 +151,7 @@ export function createSheetSession({
    * so a flow that has just written the line reads the key itself.
    */
   const onSceneChange = () => {
-    const key = scene.saveKey()
+    const key = currentKey()
     if (key === lastKey) return
     lastKey = key
     publish()
@@ -153,7 +161,7 @@ export function createSheetSession({
   /** The sheet as it is now is what the file holds. */
   const markClean = (key: string) => {
     cleanKey = key
-    lastKey = scene.saveKey()
+    lastKey = currentKey()
     cancelPendingCopy()
     void queueRecovery(() => recovery.clear())
     publish()
@@ -185,7 +193,7 @@ export function createSheetSession({
   const doSaveAs = async (): Promise<boolean> => {
     line.commitLine()
     const text = sheetText()
-    const key = scene.saveKey()
+    const key = currentKey()
     let saved
     try {
       saved = await files.saveAs(suggestedName(name), text)
@@ -203,7 +211,7 @@ export function createSheetSession({
     if (saveAsOnly || !handle || !name) return doSaveAs()
     line.commitLine()
     const text = sheetText()
-    const key = scene.saveKey()
+    const key = currentKey()
     try {
       await files.save(handle, text)
     } catch (error) {
@@ -211,18 +219,6 @@ export function createSheetSession({
       return false
     }
     markClean(key)
-    return true
-  }
-
-  /** Loads a file's text. False when it was refused, with the current sheet untouched. */
-  const load = (file: PickedFile): boolean => {
-    const read = readSheet(file.text)
-    if (read.kind !== 'sheet') {
-      dialogs.message(read.kind === 'newer' ? MESSAGES.newer : MESSAGES.notASheet)
-      return false
-    }
-    scene.load(read.scene)
-    adopt(file, read.settings)
     return true
   }
 
@@ -251,7 +247,7 @@ export function createSheetSession({
           }
         }
         if (copy && !restored) await queueRecovery(() => recovery.clear())
-        lastKey = scene.saveKey()
+        lastKey = currentKey()
         cleanKey = restored ? null : lastKey
         started = true
         publish()
@@ -270,33 +266,50 @@ export function createSheetSession({
     save: () => exclusive(doSave, false),
     saveAs: () => exclusive(doSaveAs, false),
 
-    open: (file) =>
+    open: (pick) =>
       exclusive(async () => {
-        line.leaveLine()
+        // Commit but keep the line open: Cancel or a refused file leave it as it was.
+        line.commitLine()
         onSceneChange()
+        // Pick first, while the key press or click that asked is fresh: Chromium's
+        // pickers need it, and a Save as before would use it up.
+        let picked: PickedFile | null
+        try {
+          picked = await (pick ?? (() => files.open()))()
+        } catch (error) {
+          dialogs.message(MESSAGES.openFailed(reason(error)))
+          return
+        }
+        if (!picked) return
+        const read = readSheet(picked.text)
+        if (read.kind !== 'sheet') {
+          dialogs.message(read.kind === 'newer' ? MESSAGES.newer : MESSAGES.notASheet)
+          return
+        }
         if (isDirty()) {
           const answer = await dialogs.askSaveChanges(name)
           if (answer === 'cancel') return
           if (answer === 'save' && !(await doSave())) return
         }
-        let picked: PickedFile | null | undefined = file
-        try {
-          picked ??= await files.open()
-        } catch {
-          dialogs.message(MESSAGES.notASheet)
-          return
-        }
-        if (!picked || !load(picked)) return
+        line.leaveLine()
+        scene.load(read.scene)
+        adopt(picked, read.settings)
         // The user chose not to keep the old sheet's changes, so its copy goes too.
-        markClean(scene.saveKey())
+        markClean(currentKey())
       }, undefined),
+
+    commitPending() {
+      if (!started) return
+      line.commitLine()
+      onSceneChange()
+    },
 
     keepClean(write) {
       onSceneChange()
       const wasClean = !isDirty()
       write()
       if (wasClean) {
-        cleanKey = scene.saveKey()
+        cleanKey = currentKey()
         lastKey = cleanKey
         publish()
       }
@@ -311,11 +324,6 @@ export function createSheetSession({
 /** True for a file Ctrl+S may write back to: a sheet, not a plain drawing. */
 export function isSheetName(name: string | null): boolean {
   return !!name && name.toLowerCase().endsWith(SHEET_EXTENSION)
-}
-
-/** Files Excalidraw would load as its own scene if dropped, replacing the sheet. */
-export function isSceneFileName(name: string): boolean {
-  return /\.(excalimathpad|excalidraw|json)$/i.test(name)
 }
 
 /**
@@ -346,6 +354,8 @@ export function displayName(name: string | null): string {
   return name ? name.replace(/\.[^.]*$/, '') : 'Untitled'
 }
 
+/** The error's own words. A DOMException isn't an `Error` in every realm, so read `message`. */
 function reason(error: unknown): string {
-  return error instanceof Error && error.message ? error.message : String(error)
+  const message = (error as { message?: unknown } | null)?.message
+  return typeof message === 'string' && message ? message : String(error)
 }

@@ -19,6 +19,8 @@ export interface SheetCanvasHandle {
   forwardWheel: ForwardWheel
   /** Gives the keyboard to Excalidraw, which only hears keys inside its container. */
   focusCanvas: () => void
+  /** The element Excalidraw fills, the same box as the overlay's stage. */
+  root: HTMLElement
 }
 
 /** The ☰ menu's file items (docs/spec-v1.md section 8). */
@@ -48,7 +50,7 @@ const UI_OPTIONS: Partial<UIOptions> = {
 
 /**
  * The drawing surface: the official, unforked Excalidraw component.
- * This is the only module (with `mathAnchor.ts`) that imports
+ * The `src/canvas/` modules are the only ones that import
  * `@excalidraw/excalidraw` at runtime (ADR 0001).
  */
 export function SheetCanvas({ onReady, initialElements, fileMenu }: SheetCanvasProps) {
@@ -67,7 +69,10 @@ export function SheetCanvas({ onReady, initialElements, fileMenu }: SheetCanvasP
   }, [])
 
   const handleApi = useCallback(
-    (api: ExcalidrawImperativeAPI) => onReady?.({ api, forwardWheel, focusCanvas }),
+    (api: ExcalidrawImperativeAPI) => {
+      const root = containerRef.current
+      if (root) onReady?.({ api, forwardWheel, focusCanvas, root })
+    },
     [onReady, forwardWheel, focusCanvas],
   )
 

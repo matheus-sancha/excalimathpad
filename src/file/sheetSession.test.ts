@@ -381,55 +381,114 @@ describe('opening', () => {
     expect(JSON.parse(files.disk.get('pump.excalimathpad')!).excalimathpad.settings).toEqual(settings)
   })
 
-  it('leaves the line being edited first', async () => {
-    const { session, line } = await setup()
+  it('commits the line being typed first, and leaves it only as the new sheet loads', async () => {
+    const { session, files, line } = await setup()
+    const order: string[] = []
+    line.commitLine.mockImplementation(() => order.push('commit'))
+    line.leaveLine.mockImplementation(() => order.push('leave'))
+    files.open.mockImplementation(async () => {
+      order.push('pick')
+      return picked('pump.excalimathpad', sheetFile('x'))
+    })
 
     await session.open()
 
-    expect(line.leaveLine).toHaveBeenCalledOnce()
+    expect(order).toEqual(['commit', 'pick', 'leave'])
   })
 
   it.each([
     ['newer', JSON.stringify({ type: 'excalidraw', elements: [], excalimathpad: { format: 99 } }), MESSAGES.newer],
     ['not a sheet', 'not json', MESSAGES.notASheet],
-  ])('refuses a %s file and leaves the sheet as it was', async (_, text, message) => {
-    const { session, scene, files, dialogs } = await setup()
+  ])('refuses a %s file without asking, and leaves the sheet as it was', async (_, text, message) => {
+    const { session, scene, files, dialogs, line } = await setup()
     scene.edit('mine')
     files.open.mockResolvedValue(picked('x.excalimathpad', text))
-    dialogs.askSaveChanges.mockResolvedValue('dont-save')
 
     await session.open()
 
     expect(dialogs.message).toHaveBeenCalledWith(message)
+    expect(dialogs.askSaveChanges).not.toHaveBeenCalled()
+    expect(line.leaveLine).not.toHaveBeenCalled()
     expect(scene.source()).toBe('mine')
     expect(session.getState()).toEqual({ name: null, dirty: true })
+  })
+
+  it('says why the picker or the read failed, not that the file is not a sheet', async () => {
+    const { session, files, dialogs } = await setup()
+    files.open.mockRejectedValue(new DOMException('Must be handling a user gesture.', 'SecurityError'))
+
+    await session.open()
+
+    expect(dialogs.message).toHaveBeenCalledWith(
+      "Couldn't open the file: Must be handling a user gesture.",
+    )
+  })
+
+  it('does nothing when the picker is cancelled, even with unsaved changes', async () => {
+    const { session, scene, dialogs } = await setup()
+    scene.edit('mine')
+
+    await session.open()
+
+    expect(dialogs.askSaveChanges).not.toHaveBeenCalled()
+    expect(scene.source()).toBe('mine')
   })
 
   it('opens a dropped file the same way', async () => {
     const { session, scene, files } = await setup()
 
-    await session.open(picked('dropped.excalimathpad', sheetFile('dropped')))
+    await session.open(async () => picked('dropped.excalimathpad', sheetFile('dropped')))
 
     expect(files.open).not.toHaveBeenCalled()
     expect(scene.source()).toBe('dropped')
   })
 
   describe('with unsaved changes', () => {
-    it('asks first, and Cancel leaves everything as it was', async () => {
-      const { session, scene, files, dialogs } = await setup()
-      scene.edit('mine')
+    const dirtySetup = async () => {
+      const ctx = await setup()
+      ctx.scene.edit('mine')
+      ctx.files.open.mockResolvedValue(picked('pump.excalimathpad', sheetFile('theirs')))
+      return ctx
+    }
+
+    it('picks the file before asking, so a Save as never follows the open picker', async () => {
+      const { session, files, dialogs } = await dirtySetup()
+      const order: string[] = []
+      files.open.mockImplementation(async () => {
+        order.push('open picker')
+        return picked('pump.excalimathpad', sheetFile('theirs'))
+      })
+      dialogs.askSaveChanges.mockImplementation(async () => {
+        order.push('question')
+        return 'save'
+      })
+      files.saveAs.mockImplementation(async (name) => {
+        order.push('save picker')
+        return { name, handle: handleFor(name) }
+      })
+
+      await session.open()
+
+      // Each picker runs on its own gesture: Ctrl+O, then the Save button.
+      expect(order).toEqual(['open picker', 'question', 'save picker'])
+    })
+
+    it('Cancel leaves everything as it was, the line edit included', async () => {
+      const { session, scene, dialogs, line } = await dirtySetup()
 
       await session.open()
 
       expect(dialogs.askSaveChanges).toHaveBeenCalledWith(null)
-      expect(files.open).not.toHaveBeenCalled()
+      expect(line.leaveLine).not.toHaveBeenCalled()
       expect(scene.source()).toBe('mine')
+      expect(session.getState()).toEqual({ name: null, dirty: true })
     })
 
-    it('counts the line it just left, before the scene reports the change', async () => {
-      const { session, scene, dialogs, line } = await setup()
+    it('counts the line it just committed, before the scene reports the change', async () => {
+      const { session, scene, dialogs, line, files } = await setup()
+      files.open.mockResolvedValue(picked('pump.excalimathpad', sheetFile('theirs')))
       // Excalidraw's onChange comes after React commits, not inside the write.
-      line.leaveLine.mockImplementation(() => scene.editQuietly('typed'))
+      line.commitLine.mockImplementation(() => scene.editQuietly('typed'))
 
       await session.open()
 
@@ -437,12 +496,10 @@ describe('opening', () => {
     })
 
     it("Don't save opens the file and drops the old sheet's recovery copy", async () => {
-      const { session, scene, files, dialogs, recovery } = await setup()
-      scene.edit('mine')
+      const { session, scene, dialogs, recovery } = await dirtySetup()
       await vi.advanceTimersByTimeAsync(500)
       expect(recovery.current()).not.toBeNull()
       dialogs.askSaveChanges.mockResolvedValue('dont-save')
-      files.open.mockResolvedValue(picked('pump.excalimathpad', sheetFile('theirs')))
 
       await session.open()
       await vi.runAllTimersAsync()
@@ -453,10 +510,8 @@ describe('opening', () => {
     })
 
     it('Save saves, then opens', async () => {
-      const { session, scene, files, dialogs } = await setup()
-      scene.edit('mine')
+      const { session, scene, files, dialogs } = await dirtySetup()
       dialogs.askSaveChanges.mockResolvedValue('save')
-      files.open.mockResolvedValue(picked('pump.excalimathpad', sheetFile('theirs')))
 
       await session.open()
 
@@ -465,16 +520,25 @@ describe('opening', () => {
     })
 
     it('Save, then a cancelled Save as, opens nothing', async () => {
-      const { session, scene, files, dialogs } = await setup()
-      scene.edit('mine')
+      const { session, scene, files, dialogs } = await dirtySetup()
       dialogs.askSaveChanges.mockResolvedValue('save')
       files.saveAs.mockResolvedValue(null)
 
       await session.open()
 
-      expect(files.open).not.toHaveBeenCalled()
       expect(scene.source()).toBe('mine')
     })
+  })
+})
+
+describe('commitPending', () => {
+  it('counts a line still being typed, as before the page goes away', async () => {
+    const { session, scene, line } = await setup()
+    line.commitLine.mockImplementation(() => scene.editQuietly('typed'))
+
+    session.commitPending()
+
+    expect(session.getState().dirty).toBe(true)
   })
 })
 

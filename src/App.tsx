@@ -85,7 +85,7 @@ export default function App({ files, recovery }: AppProps = {}) {
               focusCanvas={canvas.focusCanvas}
               control={line}
             />
-            <FileChrome session={file.session} dialogs={file.dialogs} />
+            <FileChrome session={file.session} dialogs={file.dialogs} canvasRoot={canvas.root} />
           </>
         )
       }

@@ -1,24 +1,29 @@
-import { useEffect, useLayoutEffect, useRef, useSyncExternalStore } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useSyncExternalStore } from 'react'
 import { createPortal } from 'react-dom'
+import { useBesideMenu, useFileRoutes, type FileRouteHandlers } from '../canvas/fileRoutes.ts'
 import { ABOVE_DRAWING_BELOW_UI_Z_INDEX } from '../canvas/layers.ts'
-import type { DialogHost, PendingDialog } from './dialogs.ts'
+import type { Choice, DialogHost, PendingDialog } from './dialogs.ts'
 import type { SheetFileHandle } from './fileAccess.ts'
-import { displayName, isSceneFileName, type SheetSession } from './sheetSession.ts'
+import { displayName, type SheetSession } from './sheetSession.ts'
 import './FileChrome.css'
 
 export interface FileChromeProps {
   session: SheetSession
   dialogs: DialogHost
+  /** The element the canvas fills, to place the name beside Excalidraw's ☰ button. */
+  canvasRoot: HTMLElement | null
 }
 
 /**
  * The sheet file's part of the screen (docs/spec-v1.md sections 7 and 8): the
- * file name beside the ☰ button, the window title, the two questions, and the
- * routes into Excalidraw's own file handling that the app takes over.
+ * file name beside the ☰ button, the window title, the two questions and the
+ * leave prompt. The keys and drops it answers are taken from Excalidraw by
+ * `src/canvas/fileRoutes.ts`.
  */
-export function FileChrome({ session, dialogs }: FileChromeProps) {
+export function FileChrome({ session, dialogs, canvasRoot }: FileChromeProps) {
   const { name, dirty } = useSyncExternalStore(session.subscribe, session.getState)
   const pending = useSyncExternalStore(dialogs.subscribe, dialogs.getPending)
+  const besideMenu = useBesideMenu(canvasRoot)
 
   useEffect(() => {
     const detach = session.attach()
@@ -32,6 +37,8 @@ export function FileChrome({ session, dialogs }: FileChromeProps) {
 
   useEffect(() => {
     const onBeforeUnload = (event: BeforeUnloadEvent) => {
+      // A line still being typed counts, as it does for Open.
+      session.commitPending()
       if (!session.getState().dirty) return
       event.preventDefault()
       // Older Chromium still asks only when this is set.
@@ -46,15 +53,37 @@ export function FileChrome({ session, dialogs }: FileChromeProps) {
     }
   }, [session])
 
-  useFileKeys(session)
-  useSheetDrop(session)
+  const routes = useMemo<FileRouteHandlers>(
+    () => ({
+      save: () => void session.save(),
+      saveAs: () => void session.saveAs(),
+      open: () => void session.open(),
+      openDropped: (file, handle) =>
+        void session.open(async () => ({
+          name: file.name,
+          text: await file.text(),
+          handle: asFileHandle(await handle),
+        })),
+    }),
+    [session],
+  )
+  useFileRoutes(routes)
 
   return (
     <>
       <div
         className="file-name"
         data-testid="file-name"
-        style={{ zIndex: ABOVE_DRAWING_BELOW_UI_Z_INDEX }}
+        style={{
+          zIndex: ABOVE_DRAWING_BELOW_UI_Z_INDEX,
+          // Hidden until Excalidraw's ☰ button is laid out.
+          visibility: besideMenu ? undefined : 'hidden',
+          left: besideMenu?.left,
+          top: besideMenu?.top,
+          height: besideMenu?.height,
+          lineHeight: besideMenu ? `${besideMenu.height}px` : undefined,
+          maxWidth: besideMenu?.maxWidth,
+        }}
       >
         {dirty ? '● ' : ''}
         {name ?? 'Untitled'}
@@ -64,81 +93,23 @@ export function FileChrome({ session, dialogs }: FileChromeProps) {
   )
 }
 
-/**
- * Ctrl+S, Ctrl+Shift+S, Ctrl+O and Ctrl+Shift+E, taken on the window in the
- * capture phase, before Excalidraw's container or the line field hears them.
- * Excalidraw's own Ctrl+Shift+S and Ctrl+Shift+E run even with its file items
- * turned off, and its save drops the block (ADR 0004).
- */
-function useFileKeys(session: SheetSession) {
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (!(event.ctrlKey || event.metaKey) || event.altKey) return
-      const key = event.key.toLowerCase()
-      const run =
-        key === 's'
-          ? () => (event.shiftKey ? session.saveAs() : session.save())
-          : key === 'o' && !event.shiftKey
-            ? () => session.open()
-            : key === 'e' && event.shiftKey
-              ? () => {}
-              : null
-      if (!run) return
-      event.preventDefault()
-      event.stopPropagation()
-      if (!event.repeat) void run()
-    }
-    window.addEventListener('keydown', onKeyDown, { capture: true })
-    return () => window.removeEventListener('keydown', onKeyDown, { capture: true })
-  }, [session])
-}
-
-/**
- * A sheet or drawing dropped on the canvas opens through Open (#42, question 2):
- * otherwise Excalidraw replaces the scene and drops the block. Images and
- * library files stay Excalidraw's.
- */
-function useSheetDrop(session: SheetSession) {
-  useEffect(() => {
-    const onDrop = (event: DragEvent) => {
-      const transfer = event.dataTransfer
-      const file = transfer?.files[0]
-      if (!transfer || !file || !isSceneFileName(file.name)) return
-      event.preventDefault()
-      event.stopPropagation()
-      // Only during the event: the handle lets Ctrl+S write back to the file.
-      const item = Array.from(transfer.items).find(({ kind }) => kind === 'file') as
-        | (DataTransferItem & { getAsFileSystemHandle?: () => Promise<unknown> })
-        | undefined
-      const handle = item?.getAsFileSystemHandle?.().catch(() => null) ?? Promise.resolve(null)
-      void Promise.all([file.text(), handle]).then(([text, found]) =>
-        session.open({ name: file.name, text, handle: asFileHandle(found) }),
-      )
-    }
-    window.addEventListener('drop', onDrop, { capture: true })
-    return () => window.removeEventListener('drop', onDrop, { capture: true })
-  }, [session])
-}
-
 function asFileHandle(value: unknown): SheetFileHandle | null {
   return typeof value === 'object' && value !== null && (value as { kind?: string }).kind === 'file'
     ? (value as SheetFileHandle)
     : null
 }
 
-const LABELS = {
+const LABELS: Record<Choice, string> = {
   restore: 'Restore',
   discard: 'Discard',
   save: 'Save',
   'dont-save': "Don't save",
   cancel: 'Cancel',
-} as const
+}
 
 function FileDialog({ dialog }: { dialog: PendingDialog }) {
   const firstRef = useRef<HTMLButtonElement>(null)
   useLayoutEffect(() => firstRef.current?.focus(), [dialog])
-
-  const answer = (choice: string) => (dialog.answer as (choice: string) => void)(choice)
 
   return (
     <div className="file-dialog__backdrop">
@@ -148,7 +119,7 @@ function FileDialog({ dialog }: { dialog: PendingDialog }) {
         aria-labelledby="file-dialog-title"
         className="file-dialog"
         onKeyDown={(event) => {
-          if (event.key === 'Escape' && dialog.kind === 'save-changes') answer('cancel')
+          if (event.key === 'Escape' && dialog.escape) dialog.answer(dialog.escape)
         }}
       >
         <p id="file-dialog-title" className="file-dialog__title">
@@ -161,7 +132,7 @@ function FileDialog({ dialog }: { dialog: PendingDialog }) {
               ref={i === 0 ? firstRef : undefined}
               type="button"
               className={i === 0 ? 'file-dialog__primary' : undefined}
-              onClick={() => answer(choice)}
+              onClick={() => dialog.answer(choice)}
             >
               {LABELS[choice]}
             </button>

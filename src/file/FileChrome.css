@@ -1,20 +1,15 @@
 /*
- * The file name sits to the right of Excalidraw's ☰ button: its container
- * padding (1rem) plus the 2.25rem button and a gap. It takes no clicks. It
- * stops short of the centred toolbar (about 37.5rem wide in Excalidraw 0.18)
- * with an ellipsis, since the toolbar paints over it.
+ * The file name, beside Excalidraw's ☰ button. Its position, height and width
+ * come from Excalidraw's rendered layout (`useBesideMenu` in
+ * src/canvas/fileRoutes.ts), not from numbers copied out of its CSS. It takes
+ * no clicks.
  */
 .file-name {
   position: absolute;
-  top: 1rem;
-  left: 3.75rem;
-  height: 2.25rem;
-  line-height: 2.25rem;
-  max-width: max(4rem, calc(50% - 3.75rem - 19.25rem));
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font: 500 0.875rem/2.25rem system-ui, sans-serif;
+  font: 500 0.875rem system-ui, sans-serif;
   color: #1b1b1f;
   pointer-events: none;
 }

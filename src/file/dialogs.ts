@@ -3,21 +3,20 @@ import { SHEET_EXTENSION } from './sheetFormat.ts'
 
 /**
  * The questions the sheet session asks, held as plain state for the UI to show
- * (`FileDialogs`). Each question is a promise that the UI's button settles.
+ * (`FileDialog` in `FileChrome.tsx`). Each question is a promise that the UI's
+ * button settles.
  */
-export type PendingDialog =
-  | {
-      kind: 'restore'
-      title: string
-      choices: readonly ['restore', 'discard']
-      answer: (choice: 'restore' | 'discard') => void
-    }
-  | {
-      kind: 'save-changes'
-      title: string
-      choices: readonly ['save', 'dont-save', 'cancel']
-      answer: (choice: 'save' | 'dont-save' | 'cancel') => void
-    }
+export interface PendingDialog {
+  kind: 'restore' | 'save-changes'
+  title: string
+  /** The first is the default button. */
+  choices: readonly Choice[]
+  answer: (choice: Choice) => void
+  /** What Esc answers, if anything. */
+  escape: Choice | null
+}
+
+export type Choice = 'restore' | 'discard' | 'save' | 'dont-save' | 'cancel'
 
 export interface DialogHost extends SessionDialogs {
   getPending(): PendingDialog | null
@@ -39,36 +38,36 @@ export function createDialogHost(message: (text: string) => void): DialogHost {
     listeners.forEach((listener) => listener())
   }
 
+  function ask<C extends Choice>(
+    kind: PendingDialog['kind'],
+    title: string,
+    choices: readonly C[],
+    escape: C | null,
+  ): Promise<C> {
+    return new Promise((resolve) =>
+      show({
+        kind,
+        title,
+        choices,
+        escape,
+        answer: (choice) => {
+          show(null)
+          resolve(choice as C)
+        },
+      }),
+    )
+  }
+
   return {
     getPending: () => pending,
     subscribe(listener) {
       listeners.add(listener)
       return () => listeners.delete(listener)
     },
-    askRestore: (name) =>
-      new Promise((resolve) =>
-        show({
-          kind: 'restore',
-          title: restoreTitle(name),
-          choices: ['restore', 'discard'],
-          answer: (choice) => {
-            show(null)
-            resolve(choice)
-          },
-        }),
-      ),
+    // No Esc on the restore offer: discarding the copy by accident loses work.
+    askRestore: (name) => ask('restore', restoreTitle(name), ['restore', 'discard'], null),
     askSaveChanges: (name) =>
-      new Promise((resolve) =>
-        show({
-          kind: 'save-changes',
-          title: saveChangesTitle(name),
-          choices: ['save', 'dont-save', 'cancel'],
-          answer: (choice) => {
-            show(null)
-            resolve(choice)
-          },
-        }),
-      ),
+      ask('save-changes', saveChangesTitle(name), ['save', 'dont-save', 'cancel'], 'cancel'),
     message,
   }
 }

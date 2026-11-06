@@ -123,6 +123,18 @@ describe('keys', () => {
     expect(document.querySelector('.ImageExportModal')).toBeNull()
   })
 
+  it('takes Ctrl+Shift+S and Ctrl+Shift+E in the line field too', async () => {
+    const { files } = await mount()
+    const field = typeLine(2, 'I = 7 mA')
+
+    fireEvent.keyDown(field, { key: 'E', ctrlKey: true, shiftKey: true })
+    fireEvent.keyDown(field, { key: 'S', ctrlKey: true, shiftKey: true })
+
+    await waitFor(() => expect(files.saveAs).toHaveBeenCalledOnce())
+    expect(files.disk.get('Untitled.excalimathpad')).toContain('I = 7 mA')
+    expect(document.querySelector('.ImageExportModal')).toBeNull()
+  })
+
   it('Ctrl+S in the line field saves what is typed, and the field stays open', async () => {
     const { files } = await mount()
     const field = typeLine(2, 'I = 5 mA')
@@ -176,6 +188,13 @@ describe('leaving the page', () => {
 
     expect(leave().defaultPrevented).toBe(true)
   })
+
+  it('asks for a line still being typed on a clean sheet', async () => {
+    await mount()
+    typeLine(1, 'R = 3 kohm')
+
+    expect(leave().defaultPrevented).toBe(true)
+  })
 })
 
 describe('the recovery copy', () => {
@@ -206,9 +225,10 @@ describe('the recovery copy', () => {
 })
 
 describe('opening', () => {
-  it('asks to save unsaved changes first, worded as section 13', async () => {
+  it('asks about unsaved changes after the pick, worded as section 13, and Esc cancels', async () => {
     const { files } = await mount()
     commitLine(1, 'R = 1 kohm')
+    files.open.mockResolvedValue({ name: 'pump.excalimathpad', text: sheetText(['x = 1']), handle: null })
 
     fireEvent.keyDown(canvasRoot(), { key: 'o', ctrlKey: true })
 
@@ -221,17 +241,32 @@ describe('opening', () => {
     ])
     fireEvent.keyDown(dialog, { key: 'Escape' })
     await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull())
-    expect(files.open).not.toHaveBeenCalled()
+    expect(linesOnScreen()).toEqual(['R = 1 kohmI = 2 mA', 'U = I * R'])
   })
 
-  it('asks when the only change is a line still being typed', async () => {
+  it('asks when the only change is a line still being typed, and Cancel keeps the line', async () => {
+    const { files } = await mount()
+    files.open.mockResolvedValue({ name: 'pump.excalimathpad', text: sheetText(['x = 1']), handle: null })
+    const field = typeLine(1, 'R = 100 kohm')
+
+    fireEvent.keyDown(field, { key: 'o', ctrlKey: true })
+
+    const dialog = await screen.findByRole('alertdialog')
+    expect(dialog).toHaveTextContent('Save changes to')
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }))
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull())
+    // The dialog took focus, which leaves the field as any click outside does.
+    expect(linesOnScreen()[0]).toBe('R = 100 kohmI = 2 mA')
+  })
+
+  it('keeps the line field open when the picker is cancelled', async () => {
     const { files } = await mount()
     const field = typeLine(1, 'R = 100 kohm')
 
     fireEvent.keyDown(field, { key: 'o', ctrlKey: true })
 
-    expect(await screen.findByRole('alertdialog')).toHaveTextContent('Save changes to')
-    expect(files.open).not.toHaveBeenCalled()
+    await waitFor(() => expect(files.open).toHaveBeenCalledOnce())
+    expect(screen.getByRole('textbox', { name: 'Line source' })).toBe(field)
   })
 
   it('replaces the sheet with the file, clean, under its name', async () => {
