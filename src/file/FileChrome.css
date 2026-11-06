@@ -1,0 +1,62 @@
+/*
+ * The file name, beside Excalidraw's ☰ button. Its position, height and width
+ * come from Excalidraw's rendered layout (`useBesideMenu` in
+ * src/canvas/fileRoutes.ts), not from numbers copied out of its CSS. It takes
+ * no clicks.
+ */
+.file-name {
+  position: absolute;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 500 0.875rem system-ui, sans-serif;
+  color: #1b1b1f;
+  pointer-events: none;
+}
+
+/* Above everything Excalidraw draws, its own dialogs included. */
+.file-dialog__backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  background: rgb(18 18 18 / 0.25);
+}
+
+.file-dialog {
+  min-width: 22rem;
+  max-width: min(32rem, calc(100vw - 2rem));
+  padding: 1.25rem 1.5rem;
+  border-radius: 0.75rem;
+  background: #fff;
+  color: #1b1b1f;
+  box-shadow: 0 8px 32px rgb(0 0 0 / 0.2);
+  font: 0.9375rem/1.4 system-ui, sans-serif;
+}
+
+.file-dialog__title {
+  margin: 0 0 1.25rem;
+}
+
+.file-dialog__buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+.file-dialog__buttons button {
+  padding: 0.5rem 1rem;
+  border: 1px solid #d0d0d6;
+  border-radius: 0.5rem;
+  background: #fff;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.file-dialog__buttons .file-dialog__primary {
+  border-color: #6965db;
+  background: #6965db;
+  color: #fff;
+}

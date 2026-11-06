@@ -21,6 +21,19 @@ describe('SheetCanvas', () => {
     expect(typeof handle.api.onChange).toBe('function')
   })
 
+  it('hands out the handle once, with the container it fills as its root', async () => {
+    const onReady = vi.fn<(handle: SheetCanvasHandle) => void>()
+    const { container, rerender } = render(<SheetCanvas onReady={onReady} />)
+    await waitFor(() => expect(onReady).toHaveBeenCalled())
+    // A new onReady on a re-render doesn't hand the handle out again.
+    rerender(<SheetCanvas onReady={(handle) => onReady(handle)} />)
+
+    expect(onReady).toHaveBeenCalledOnce()
+    const { root } = onReady.mock.calls[0][0]
+    expect(root).toBe(container.firstElementChild)
+    expect(root.querySelector('.excalidraw')).not.toBeNull()
+  })
+
   it('starts with the given elements, math anchors recognisable', async () => {
     const initialElements = createMathAnchorElements([
       { id: 'm1', x: 10, y: 20, width: 300, height: 100 },

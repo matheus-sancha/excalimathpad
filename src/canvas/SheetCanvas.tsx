@@ -1,7 +1,7 @@
-import { useCallback, useRef } from 'react'
-import { Excalidraw } from '@excalidraw/excalidraw'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { Excalidraw, MainMenu } from '@excalidraw/excalidraw'
 import type { ExcalidrawElement } from '@excalidraw/excalidraw/element/types'
-import type { ExcalidrawImperativeAPI } from '@excalidraw/excalidraw/types'
+import type { ExcalidrawImperativeAPI, UIOptions } from '@excalidraw/excalidraw/types'
 import '@excalidraw/excalidraw/index.css'
 
 /**
@@ -19,6 +19,15 @@ export interface SheetCanvasHandle {
   forwardWheel: ForwardWheel
   /** Gives the keyboard to Excalidraw, which only hears keys inside its container. */
   focusCanvas: () => void
+  /** The element Excalidraw fills, the same box as the overlay's stage. */
+  root: HTMLElement
+}
+
+/** The ☰ menu's file items (docs/spec-v1.md section 8). */
+export interface FileMenu {
+  open: () => void
+  save: () => void
+  saveAs: () => void
 }
 
 export interface SheetCanvasProps {
@@ -26,14 +35,25 @@ export interface SheetCanvasProps {
   onReady?: (handle: SheetCanvasHandle) => void
   /** Scene to start with. */
   initialElements?: readonly ExcalidrawElement[]
+  /** The app's file items, at the top of the ☰ menu. */
+  fileMenu?: FileMenu
+}
+
+/**
+ * Excalidraw's own open, save and export, turned off: its save drops the
+ * sheet's block (ADR 0004). Its Ctrl+Shift+S and Ctrl+Shift+E ignore these, so
+ * the file chrome takes those keys itself.
+ */
+const UI_OPTIONS: Partial<UIOptions> = {
+  canvasActions: { loadScene: false, saveToActiveFile: false, saveAsImage: false, export: false },
 }
 
 /**
  * The drawing surface: the official, unforked Excalidraw component.
- * This is the only module (with `mathAnchor.ts`) that imports
+ * The `src/canvas/` modules are the only ones that import
  * `@excalidraw/excalidraw` at runtime (ADR 0001).
  */
-export function SheetCanvas({ onReady, initialElements }: SheetCanvasProps) {
+export function SheetCanvas({ onReady, initialElements, fileMenu }: SheetCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null)
 
   const forwardWheel = useCallback((event: WheelEvent) => {
@@ -48,17 +68,60 @@ export function SheetCanvas({ onReady, initialElements }: SheetCanvasProps) {
     containerRef.current?.querySelector<HTMLElement>('.excalidraw')?.focus()
   }, [])
 
-  const handleApi = useCallback(
-    (api: ExcalidrawImperativeAPI) => onReady?.({ api, forwardWheel, focusCanvas }),
-    [onReady, forwardWheel, focusCanvas],
-  )
+  // Excalidraw hands out its API from its own constructor, which can run before
+  // this container is attached. So the handle goes out from an effect, once both
+  // exist, rather than from that callback.
+  const [api, setApi] = useState<ExcalidrawImperativeAPI | null>(null)
+  const onReadyRef = useRef(onReady)
+  useLayoutEffect(() => {
+    onReadyRef.current = onReady
+  })
+  useEffect(() => {
+    const root = containerRef.current
+    if (api && root) onReadyRef.current?.({ api, forwardWheel, focusCanvas, root })
+  }, [api, forwardWheel, focusCanvas])
 
   return (
     <div ref={containerRef} style={{ width: '100%', height: '100%' }}>
       <Excalidraw
-        excalidrawAPI={handleApi}
+        excalidrawAPI={setApi}
         initialData={initialElements ? { elements: initialElements } : null}
-      />
+        UIOptions={UI_OPTIONS}
+      >
+        <SheetMenu fileMenu={fileMenu} />
+      </Excalidraw>
     </div>
+  )
+}
+
+/**
+ * The ☰ menu: the app's file items first, then the Excalidraw items v1 keeps.
+ * Excalidraw's Open, Save to… and Export image… are left out. Print… arrives
+ * in M5.
+ */
+function SheetMenu({ fileMenu }: { fileMenu?: FileMenu }) {
+  return (
+    <MainMenu>
+      {fileMenu && (
+        <>
+          <MainMenu.Item onSelect={fileMenu.open} shortcut="Ctrl+O">
+            Open…
+          </MainMenu.Item>
+          <MainMenu.Item onSelect={fileMenu.save} shortcut="Ctrl+S">
+            Save
+          </MainMenu.Item>
+          <MainMenu.Item onSelect={fileMenu.saveAs} shortcut="Ctrl+Shift+S">
+            Save as…
+          </MainMenu.Item>
+          <MainMenu.Separator />
+        </>
+      )}
+      <MainMenu.DefaultItems.SearchMenu />
+      <MainMenu.DefaultItems.Help />
+      <MainMenu.DefaultItems.ClearCanvas />
+      <MainMenu.Separator />
+      <MainMenu.DefaultItems.ToggleTheme />
+      <MainMenu.DefaultItems.ChangeCanvasBackground />
+    </MainMenu>
   )
 }
