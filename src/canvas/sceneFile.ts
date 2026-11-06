@@ -56,7 +56,7 @@ export function sceneReady(api: Pick<SceneFileApi, 'getAppState' | 'onChange'>) 
  * The app state a saved file keeps: what Excalidraw's own "local" save keeps.
  * Anything else (selection, scroll, zoom, theme, open dialogs) is never saved.
  */
-const SAVED_APP_STATE = ['viewBackgroundColor', 'gridModeEnabled', 'gridSize', 'gridStep'] as const
+export const SAVED_APP_STATE = ['viewBackgroundColor', 'gridModeEnabled', 'gridSize', 'gridStep'] as const
 
 type SavedAppState = Pick<AppState, (typeof SAVED_APP_STATE)[number]>
 

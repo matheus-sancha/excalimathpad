@@ -1,9 +1,15 @@
 import { act, render, waitFor } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
-import { CaptureUpdateAction, newElementWith } from '@excalidraw/excalidraw'
+import {
+  CaptureUpdateAction,
+  convertToExcalidrawElements,
+  newElementWith,
+} from '@excalidraw/excalidraw'
+import type { BinaryFileData, DataURL } from '@excalidraw/excalidraw/types'
+import type { FileId } from '@excalidraw/excalidraw/element/types'
 import { SheetCanvas, type SheetCanvasHandle } from './SheetCanvas.tsx'
 import { createMathAnchorElements, writeAnchorSource } from './mathAnchor.ts'
-import { loadScene, saveKey, serializeScene } from './sceneFile.ts'
+import { loadScene, SAVED_APP_STATE, saveKey, serializeScene } from './sceneFile.ts'
 import { sceneLoaded, undoControls } from '../test/excalidraw.ts'
 
 /**
@@ -52,6 +58,40 @@ describe('serializeScene and loadScene on real Excalidraw', () => {
     })
   })
 
+  it('keeps an embedded image and its file, and opening it leaves the sheet clean', async () => {
+    const first = await mount()
+    const file: BinaryFileData = {
+      id: 'img-1' as FileId,
+      mimeType: 'image/png',
+      // A 1×1 transparent PNG.
+      dataURL:
+        'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=' as DataURL,
+      created: 1,
+    }
+    const [image] = convertToExcalidrawElements([
+      { type: 'image', id: 'pic', x: 0, y: 300, width: 40, height: 40, fileId: file.id, status: 'saved' },
+    ], { regenerateIds: false })
+    act(() => {
+      first.api.addFiles([file])
+      first.api.updateScene({
+        elements: [...first.api.getSceneElements(), image],
+        captureUpdate: CaptureUpdateAction.IMMEDIATELY,
+      })
+    })
+    const data = JSON.parse(serializeScene(first.api))
+    expect(Object.keys(data.files)).toEqual(['img-1'])
+
+    const second = await mount()
+    act(() => loadScene(second.api, data))
+    const opened = saveKey(second.api)
+
+    expect(second.api.getSceneElements().map(({ id }) => id)).toEqual(['m1', 'pic'])
+    expect(second.api.getFiles()['img-1']).toMatchObject({ mimeType: 'image/png', dataURL: file.dataURL })
+    // Excalidraw settles the image after adding its file: that mustn't count as a change.
+    await new Promise((resolve) => setTimeout(resolve, 100))
+    expect(saveKey(second.api)).toBe(opened)
+  })
+
   it('saves no results, selection or scroll', async () => {
     const { api } = await mount()
     act(() => {
@@ -60,9 +100,9 @@ describe('serializeScene and loadScene on real Excalidraw', () => {
 
     const data = JSON.parse(serializeScene(api))
 
-    expect(Object.keys(data.appState).sort()).toEqual(
-      ['gridModeEnabled', 'gridSize', 'gridStep', 'viewBackgroundColor'],
-    )
+    // Contract: what Excalidraw's "local" save keeps is exactly what the app
+    // restores and counts in the save key (SAVED_APP_STATE).
+    expect(Object.keys(data.appState).sort()).toEqual([...SAVED_APP_STATE].sort())
     expect(JSON.stringify(data)).not.toContain('= 2')
   })
 
