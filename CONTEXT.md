@@ -33,7 +33,10 @@ server. v1 target: one sheet, for Matheus's own use.
   the Excalidraw half of the sheet file: `serializeScene`, `loadScene` (no undo
   step, clears history) and `saveKey`, the key dirty is measured by.
   `SheetCanvas` also turns off Excalidraw's own open, save and export and draws
-  the ☰ menu with the app's file items. `layers.ts` records where overlay
+  the ☰ menu with the app's file items; its handle carries `root`, the box it
+  shares with the overlay. `fileRoutes.ts` takes the file keys and scene-file
+  drops from Excalidraw, and measures the space beside the ☰ button
+  (`useBesideMenu`). `layers.ts` records where overlay
   content sits among Excalidraw's DOM layers. The only module that imports
   Excalidraw at runtime; tests may too, and other modules may import its
   types. This is ADR 0001's engineering rule as amended in ADR 0002. Depends
@@ -81,9 +84,11 @@ server. v1 target: one sheet, for Matheus's own use.
   ports (scene, file access, recovery store, dialogs, line), so it knows no
   Excalidraw, React or DOM. `fileAccess.ts` wraps the File System Access API,
   with a download and file-input fallback. `recovery.ts` keeps the one copy in
-  IndexedDB. `FileChrome.tsx` shows the name and title, asks the two questions,
-  asks before leaving while dirty, and takes the file keys and drops from
-  Excalidraw. Depends on: canvas (layers).
+  IndexedDB. `FileChrome.tsx` shows the name and title, asks the two questions
+  and asks before leaving while dirty; it answers the keys and drops that
+  `canvas/fileRoutes.ts` takes. Opening picks the file before it asks about
+  unsaved changes: Chromium allows one picker per gesture. Depends on: canvas
+  (file routes, layers).
 - **test setup** (`src/test/`) — jsdom stubs for browser APIs Excalidraw
   touches on mount (canvas, fonts, matchMedia, ResizeObserver), and helpers for
   tests against the real Excalidraw. Not app code.
@@ -176,10 +181,13 @@ and everything downstream recalculates. Engine: math.js, client-side.
   from code clears the browser's text undo, which is what Ctrl+Z means while
   editing (spec section 6).
 - **The app takes the file keys and drops before Excalidraw**
-  (`src/file/FileChrome.tsx`): Ctrl+S, Ctrl+Shift+S, Ctrl+O, Ctrl+Shift+E and
+  (`src/canvas/fileRoutes.ts`): Ctrl+S, Ctrl+Shift+S, Ctrl+O, Ctrl+Shift+E and
   dropped scene files, on the window in the capture phase. In Excalidraw 0.18,
   Ctrl+Shift+S and Ctrl+Shift+E ignore `canvasActions`, and a dropped scene
   replaces the sheet; each would drop the block (ADR 0004).
+  `fileRoutes.excalidraw.test.tsx` holds the contract: the routes are open
+  without the takeover and closed with it, and `.main-menu-trigger` and
+  `.App-toolbar`, which place the file name, still render.
 - **Excalidraw's `onChange` comes after React commits,** not inside
   `updateScene`. A file flow that has just written a line re-reads the save key
   itself; trusting the last `onChange` misses that line.
@@ -202,8 +210,6 @@ and everything downstream recalculates. Engine: math.js, client-side.
   its ESM build imports JSON without import attributes, which Node rejects.
 - After an Open, Excalidraw's Undo button can stay lit: `history.clear()`
   doesn't notify it. Pressing it undoes nothing and puts it right.
-- The file name's width cap assumes Excalidraw 0.18's toolbar width
-  (`FileChrome.css`); a wider toolbar would paint over the name's end.
 - The seeded anchor has a fixed size; source longer than three lines
   overflows its border (spike limitation, until auto-size in #44). Rows and
   results have one fixed line height, which keeps each result beside its line.

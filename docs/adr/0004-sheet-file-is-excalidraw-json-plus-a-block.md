@@ -31,7 +31,8 @@ Engineering rules (Engineer's):
   drops the block, so its save, open and export are never reachable. In 0.18 turning off
   `canvasActions` leaves three routes open (#42): Ctrl+Shift+S, Ctrl+Shift+E and a dropped
   scene file. The app takes those keys, with Ctrl+S and Ctrl+O, and those drops on the
-  window in the capture phase (`src/file/FileChrome.tsx`), before Excalidraw hears them.
+  window in the capture phase (`src/canvas/fileRoutes.ts`, with contract tests), before
+  Excalidraw hears them.
 - An open is never an undo step and clears the undo history (`src/canvas/sceneFile.ts`), so
   Ctrl+Z never reaches into the previous sheet. A refused file leaves the sheet as it was.
 - Dirty is a key of what a save writes: element versions plus the kept app state. Selection,

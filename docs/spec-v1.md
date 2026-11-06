@@ -653,7 +653,9 @@ A sheet is Excalidraw's own JSON with one extra top-level block, saved as
 - **Opening:** Ctrl+O, the ☰ menu's Open…, a double-click in Windows, or dropping the file on
   the canvas. A dropped `.excalimathpad`, `.excalidraw` or `.json` goes through Open, so it gets the
   unsaved-changes question and the refusals below. Dropped images and libraries stay Excalidraw's.
-- **With unsaved changes** in the current sheet, opening asks: Save, Don't save or Cancel.
+- **With unsaved changes** in the current sheet, opening asks: Save, Don't save or Cancel. It
+  asks after the file is picked and read, so a refused file never asks, and the Save picker gets
+  the click on Save (Chromium allows one picker per gesture).
 
 | The file | What happens |
 |---|---|
@@ -1018,6 +1020,7 @@ The wording of every user-facing message. `<…>` is filled in. Numbers follow
 | Recovery copy | `Restore unsaved changes to pump-sizing.excalimathpad?` or `… to an untitled sheet?` | M1 |
 | Opening with unsaved changes | `Save changes to pump-sizing.excalimathpad?` Save, Don't save, Cancel | M1 |
 | A save that fails | `Couldn't save pump-sizing.excalimathpad: <reason>` | M1 |
+| The picker or the file read fails | `Couldn't open the file: <reason>` | M1 |
 | Hint, one math element selected | `Double-click a line or press Enter to edit` | M1 |
 | Browser's Print with an empty cache | `Use Print… from the app's menu` | M5 |
 
@@ -1127,7 +1130,9 @@ must be taken over, because its save drops the block. `UIOptions.canvasActions` 
 `saveToActiveFile`, `saveAsImage` and `export`. That isn't enough in 0.18 (#42): Ctrl+Shift+S
 (`saveFileToDisk`) isn't in `canvasActions` and always runs, Ctrl+Shift+E opens the image export dialog
 outside the action manager, and a dropped scene file replaces the scene as an undo step. So the app takes
-Ctrl+S, Ctrl+Shift+S, Ctrl+O and Ctrl+Shift+E, and drops of scene files, on the window in the capture phase.
+Ctrl+S, Ctrl+Shift+S, Ctrl+O and Ctrl+Shift+E, and drops of scene files, on the window in the capture phase
+(`src/canvas/fileRoutes.ts`, contract-tested). The file name is placed from Excalidraw's rendered ☰ button and
+toolbar, not from numbers copied out of its CSS.
 Excalidraw reports a change only after React commits, so a flow that has just written a line reads the
 scene itself rather than wait for `onChange`.
 ([file](https://github.com/matheus-sancha/excalimathpad/issues/12),
@@ -1350,3 +1355,6 @@ Changes line if it changes behaviour.
   saves through Save as on its first Ctrl+S; the recovery copy keeps the file handle and is also cleared
   when another file opens; a failed save has a message; saving during an edit keeps the line open; the seed
   stays on the untitled sheet until Add math.
+- 2026-11-05, [sections 7](#7-file-and-save) and [13](#13-messages) (#42 review, Engineer's, for Matheus to
+  confirm on the PR): opening picks the file before the unsaved-changes question, because Chromium allows one
+  picker per gesture; a picker or read failure has its own message, `Couldn't open the file: <reason>`.
