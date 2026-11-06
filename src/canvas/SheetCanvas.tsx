@@ -1,4 +1,4 @@
-import { useCallback, useRef } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Excalidraw, MainMenu } from '@excalidraw/excalidraw'
 import type { ExcalidrawElement } from '@excalidraw/excalidraw/element/types'
 import type { ExcalidrawImperativeAPI, UIOptions } from '@excalidraw/excalidraw/types'
@@ -68,18 +68,23 @@ export function SheetCanvas({ onReady, initialElements, fileMenu }: SheetCanvasP
     containerRef.current?.querySelector<HTMLElement>('.excalidraw')?.focus()
   }, [])
 
-  const handleApi = useCallback(
-    (api: ExcalidrawImperativeAPI) => {
-      const root = containerRef.current
-      if (root) onReady?.({ api, forwardWheel, focusCanvas, root })
-    },
-    [onReady, forwardWheel, focusCanvas],
-  )
+  // Excalidraw hands out its API from its own constructor, which can run before
+  // this container is attached. So the handle goes out from an effect, once both
+  // exist, rather than from that callback.
+  const [api, setApi] = useState<ExcalidrawImperativeAPI | null>(null)
+  const onReadyRef = useRef(onReady)
+  useLayoutEffect(() => {
+    onReadyRef.current = onReady
+  })
+  useEffect(() => {
+    const root = containerRef.current
+    if (api && root) onReadyRef.current?.({ api, forwardWheel, focusCanvas, root })
+  }, [api, forwardWheel, focusCanvas])
 
   return (
     <div ref={containerRef} style={{ width: '100%', height: '100%' }}>
       <Excalidraw
-        excalidrawAPI={handleApi}
+        excalidrawAPI={setApi}
         initialData={initialElements ? { elements: initialElements } : null}
         UIOptions={UI_OPTIONS}
       >
