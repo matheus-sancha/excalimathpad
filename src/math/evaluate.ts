@@ -10,6 +10,7 @@ import {
   isSymbolNode,
   type MathNode,
 } from 'mathjs'
+import { readLine } from './lineForm.ts'
 
 /**
  * The math engine: math.js with units, fully client-side.
@@ -138,6 +139,7 @@ export interface SheetBlock {
 
 /** A line of the sheet, parsed once before anything is evaluated. */
 type ParsedLine =
+  /** A blank line or a comment line: never evaluated, so its result is empty. */
   | { kind: 'blank' }
   /** `defines` is a best guess from the raw text: the line did not parse. */
   | { kind: 'syntax-error'; message: string; defines: readonly string[] }
@@ -252,8 +254,14 @@ export function splitLines(source: string): string[] {
   return source.split(/\r?\n/)
 }
 
-function parseLine(line: string): ParsedLine {
-  if (line.trim() === '') return { kind: 'blank' }
+/**
+ * Reads the line's comment first (ADR 0005), then parses only its code: a note
+ * never reaches math.js, so it never changes a result.
+ */
+function parseLine(text: string): ParsedLine {
+  const form = readLine(text)
+  if (form.kind !== 'code') return { kind: 'blank' }
+  const line = form.code
   try {
     const node = parse(line)
     return {

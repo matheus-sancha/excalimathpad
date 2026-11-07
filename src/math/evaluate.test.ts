@@ -118,6 +118,20 @@ describe('evaluateSheet', () => {
     it('reads a blank line and a bare # as empty', () => {
       expect(block('\n#')).toEqual([empty, empty])
     })
+
+    // Section 2: comments and notes never change a result (#44).
+    it('never lets a note change a result', () => {
+      expect(block('x = 2 * 3 # times three\nx + 1 # 1 + x')).toEqual([value('6'), value('7')])
+      expect(block('x = 2 * 3\nx + 1')).toEqual([value('6'), value('7')])
+    })
+
+    it('reads a comment line as empty, defining nothing', () => {
+      expect(block('# x = 5\nx')).toEqual([empty, error('Undefined symbol x')])
+    })
+
+    it('keeps a # inside a string out of the note', () => {
+      expect(block('s = concat("a # b", "c") # note')).toEqual([value('"a # bc"')])
+    })
   })
 
   describe('reading order (one scope across blocks)', () => {
