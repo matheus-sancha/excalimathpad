@@ -54,11 +54,14 @@ Engineering rules that make it work (Engineer's, found in the #2 spike and #28):
 - The overlay is `pointer-events: none`, except the open line editor, unit field and
   plot popover (#28, #31; M1, M2, M4). Capture-phase listeners take double-click, Enter
   and M. The line hit comes from geometry.
-  - Built in #43: the pointer listeners sit on the box Excalidraw fills, a sibling of
-    the overlay, so the field's own clicks never reach them. A double-click is math's
-    only when Excalidraw's own first click selected the anchor under the pointer (or
-    the anchor is locked and nothing was selected), so its hit-testing decides, and a
-    drawing on top keeps its double-click. A press leaves an open line before
+  - Built in #43: `src/canvas/canvasEvents.ts` (`listenToCanvas`) registers the
+    listeners and owns their event phases, per ADR 0001; the overlay's gestures only
+    decide. Pointer events are heard on the box Excalidraw fills, a sibling of the
+    overlay, so the field's own clicks never reach them. A double-click, or the click
+    that moves an edit, is math's only when Excalidraw's own press selected the anchor
+    under the pointer, or the anchor is locked and nothing above it was selected
+    (Excalidraw's hit-testing skips a locked element). So its hit-testing decides, and
+    a drawing on top keeps its double-click. A press leaves an open line before
     Excalidraw sees it, so a drag starts on the committed scene.
 - Wheel events over overlay content that takes pointer events are re-dispatched onto
   Excalidraw's canvas (`forwardWheel`), because Excalidraw only listens on its own
@@ -100,9 +103,17 @@ Engineering rules that make it work (Engineer's, found in the #2 spike and #28):
 - The overlay depends on Excalidraw details that are not public API. They are
   localised in `src/canvas/`, each with a contract test against the installed package,
   so an upgrade that breaks one fails CI. Today: layer z-indexes (`layers.test.ts`), the
-  wheel handler and the `.excalidraw` focus query (`SheetCanvas.test.tsx`), and how
-  `updateScene` compares versions before it captures (`mathAnchor.excalidraw.test.tsx`). v1 adds the rest of the list in
-  `docs/spec-v1.md` section 14.
+  wheel handler and the `.excalidraw` focus query (`SheetCanvas.test.tsx`), how
+  `updateScene` compares versions before it captures (`mathAnchor.excalidraw.test.tsx`),
+  and, from #43:
+  - `#ffffff01` counting as not transparent for hit-testing, so a press inside an
+    anchor selects it (`mathAnchor.excalidraw.test.tsx`, with a transparent control);
+  - the event phases of the gestures: Excalidraw handles `dblclick` and `keydown` in
+    React's bubble phase, so a capture listener that stops them keeps them from it, and
+    a capture `pointerdown` runs before its press (`canvasEvents.excalidraw.test.tsx`,
+    each with the control; the gestures themselves in `gestures.excalidraw.test.tsx`).
+
+  v1 adds the rest of the list in `docs/spec-v1.md` section 14.
 - Excalidraw's export isn't reachable, because it would show the anchor without the
   math. Print leaves anchors out of its `exportToSvg` call and applies their opacity to
   the math (#17, #21, #32; M5).

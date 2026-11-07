@@ -31,7 +31,10 @@ server. v1 target: one sheet, for Matheus's own use.
   with `customData.kind === "math"` and `customData.source`, ADR 0002; a solid
   `#ffffff01` fill, so clicks inside it select and drag it) and
   `writeAnchorSource`, the only way source enters the scene. `selection.ts`
-  holds `deselectAll`, the second Esc's write (`NEVER`, no undo step). `sceneFile.ts` is
+  holds `deselectAll`, the second Esc's write (`NEVER`, no undo step).
+  `canvasEvents.ts` (`listenToCanvas`) hands the canvas's double-clicks, presses,
+  clicks and keys to the gestures before Excalidraw hears them, and stops the
+  ones they take. `sceneFile.ts` is
   the Excalidraw half of the sheet file: `serializeScene`, `loadScene` (no undo
   step, clears history) and `saveKey`, the key dirty is measured by.
   `SheetCanvas` also turns off Excalidraw's own open, save and export and draws
@@ -77,9 +80,9 @@ server. v1 target: one sheet, for Matheus's own use.
   source change and every change of order, then hands each `MathElementView`
   its results. The overlay takes no pointer events except the open field:
   Excalidraw gets every click and drag. `useSheetGestures` opens, moves and
-  leaves the line edit from capture listeners (dblclick, pointerdown and click
-  on the canvas root, keydown on `document`); `gestures.ts` (pure) decides when
-  a double-click, Enter or Esc is math's, and `lineHit.ts` (pure) finds the
+  leaves the line edit from the events `listenToCanvas` hands it; `gestures.ts`
+  (pure) decides when a double-click, a click, Enter or Esc is math's, and
+  `lineHit.ts` (pure) finds the
   element and line under a point from geometry and the rows' `offsetTop` and
   `offsetHeight` (spec section 4, Gestures, section 14). Its `control` lets the
   sheet file commit the line (Ctrl+S keeps it open) or leave it (Open).
@@ -121,9 +124,11 @@ and everything downstream recalculates. Engine: math.js, client-side.
 - **Gesture** — a double-click, Enter, Esc, or a press on the canvas that opens,
   moves or leaves the line edit. A double-click is math's when Excalidraw's own
   first click selected the anchor under the pointer (on its own or through its
-  group), or the anchor is locked and nothing was selected; a drawing on top
-  keeps its double-click. A **click** on the edited element is a press and its
-  click with the anchor's `x` and `y` unchanged; otherwise the press was a drag.
+  group), or the anchor is locked and nothing above it was selected (Excalidraw
+  never selects a locked element); a drawing on top keeps its double-click. A
+  **click** on the edited element is a press and its click with the anchor's `x`
+  and `y` unchanged, on an anchor that still owns the point by the same rule;
+  otherwise the press was a drag, or a drawing on top took it.
 - **Line commit** — the moment an edit leaves a line whose text differs from the
   scene. It writes the element's whole source once, as one undo step, so a split
   or a join is one step too.
@@ -182,13 +187,18 @@ and everything downstream recalculates. Engine: math.js, client-side.
   the overlay that takes pointer events; without this, ctrl+wheel over it zooms
   the browser page.
 - **Gestures run in the capture phase, before Excalidraw's React handlers**
-  (`src/overlay/useSheetGestures.ts`), and stop an event only when math acts on
-  it. A press leaves the open line before Excalidraw sees it, so a drag starts
-  on the committed scene and the line stays one undo step. Keys from outside the
-  canvas, such as the app's own dialogs, are left alone: the second Esc once
-  stole Esc from the open-file question. `gestures.excalidraw.test.tsx` holds the
-  section 14 contracts against the installed package, each with the control of
-  what Excalidraw does without the overlay; jsdom runs Excalidraw's hit-testing.
+  (`src/canvas/canvasEvents.ts`, per ADR 0001), and stop an event only when math
+  acts on it. A press leaves the open line before Excalidraw sees it, so a drag
+  starts on the committed scene and the line stays one undo step. Keys from
+  outside the canvas, such as the app's own dialogs, are left alone: the second
+  Esc once stole Esc from the open-file question. `canvasEvents.excalidraw.test.tsx`
+  holds the phase contracts and `gestures.excalidraw.test.tsx` the gestures,
+  against the installed package, each with the control of what Excalidraw does
+  without the app; jsdom runs Excalidraw's hit-testing.
+- **The line field ignores a press that continues a double-click begun
+  elsewhere** (`mousedown` with `detail` 2 or more, before any press of its own),
+  so double-clicking another line while editing opens it with the caret at the
+  end, not a word selected.
 - **Anchors need a fill.** Excalidraw tests the inside of a shape only when its
   background isn't transparent; `#ffffff01` looks transparent and takes clicks
   (`mathAnchor.excalidraw.test.tsx`, with a transparent control). An anchor
