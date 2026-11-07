@@ -188,6 +188,54 @@ describe('double-click (section 14: stopped at the stage)', () => {
     expect(positionOf()).toEqual({ x: 100, y: 50 })
   })
 
+  // Excalidraw's hit-testing skips the locked anchor and selects what lies
+  // under it; the locked element still owns the double-click (review of #51).
+  it('a locked math element over a filled drawing edits, and the drawing gets no label', async () => {
+    const [drawing] = convertToExcalidrawElements(
+      [
+        {
+          type: 'rectangle',
+          id: 'd1',
+          x: 100,
+          y: 50,
+          width: 400,
+          height: 72,
+          backgroundColor: '#a5d8ff',
+          fillStyle: 'solid',
+        },
+      ],
+      { regenerateIds: false },
+    )
+    const [locked] = createMathAnchorElements([
+      { id: 'm1', x: 100, y: 50, width: 400, height: 72, source: 'a = 1\nb = 2', locked: true },
+    ])
+    const { selected, editingText, textElements } = await mount({ elements: [drawing, locked] })
+
+    clickOnCanvas(linePoint('m1', 2, 200))
+    expect(selected()).toEqual(['d1'])
+    doubleClickLine('m1', 2)
+
+    expect(field()!.value).toBe('b = 2')
+    expect(editingText()).toBe(false)
+    expect(textElements()).toBe(0)
+  })
+
+  it('a locked math element over another one edits its own line, and adds no text', async () => {
+    const [below, locked] = createMathAnchorElements([
+      { id: 'm2', x: 100, y: 50, width: 400, height: 72, source: 'x = 9' },
+      { id: 'm1', x: 100, y: 50, width: 400, height: 72, source: 'a = 1\nb = 2', locked: true },
+    ])
+    const { selected, editingText, textElements } = await mount({ elements: [below, locked] })
+
+    clickOnCanvas(linePoint('m1', 1, 200))
+    expect(selected()).toEqual(['m2'])
+    doubleClickLine('m1', 1)
+
+    expect(field()!.value).toBe('a = 1')
+    expect(editingText()).toBe(false)
+    expect(textElements()).toBe(0)
+  })
+
   it('a grouped math element edits straight away, without entering the group', async () => {
     const grouped = anchors.map((e) => ({ ...e, groupIds: ['g1'] }))
     const { api, selected } = await mount({ elements: grouped })

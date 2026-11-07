@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import type { MathAnchor } from '../canvas/mathAnchor.ts'
-import { doubleClickTarget, keyAction, type CanvasState, type KeyFacts } from './gestures.ts'
+import {
+  clickTarget,
+  keyAction,
+  ownerAt,
+  type CanvasState,
+  type KeyFacts,
+  type Press,
+} from './gestures.ts'
 
 const anchor = (props: Partial<MathAnchor> = {}): MathAnchor => ({
   id: 'm1',
@@ -18,62 +25,120 @@ const state = (props: Partial<CanvasState> = {}): CanvasState => ({
   tool: 'selection',
   busy: false,
   selected: {},
+  zIndex: {},
   ...props,
 })
 
 const inside = { x: 50, y: 50 }
 const onCanvas = { targetOwnsEvent: false }
 
-describe('doubleClickTarget', () => {
+describe('ownerAt (double-click, and the click that moves an edit)', () => {
   it('is the anchor under the point when Excalidraw selected it', () => {
     const m1 = anchor()
-    expect(doubleClickTarget(state({ selected: { m1: true } }), [m1], inside, onCanvas)).toBe(m1)
+    expect(ownerAt(state({ selected: { m1: true } }), [m1], inside, onCanvas)).toBe(m1)
   })
 
   // Excalidraw's first click selected the whole group, the anchor with it.
   it('is a grouped anchor, selected through its group', () => {
     const m1 = anchor()
     const selected = { m1: true, e1: true } as const
-    expect(doubleClickTarget(state({ selected }), [m1], inside, onCanvas)).toBe(m1)
+    expect(ownerAt(state({ selected }), [m1], inside, onCanvas)).toBe(m1)
   })
 
   // A drawing on top took the click, so it keeps its double-click (#43, answer 3).
-  it('is nothing when the click selected something else at the point', () => {
+  it('is nothing when the click selected a drawing on top', () => {
+    const zIndex = { m1: 0, drawing: 1 }
     expect(
-      doubleClickTarget(state({ selected: { drawing: true } }), [anchor()], inside, onCanvas),
-    ).toBeNull()
-  })
-
-  it('is a locked anchor when the click selected nothing', () => {
-    const m1 = anchor({ locked: true })
-    expect(doubleClickTarget(state(), [m1], inside, onCanvas)).toBe(m1)
-    expect(
-      doubleClickTarget(state({ selected: { drawing: true } }), [m1], inside, onCanvas),
+      ownerAt(state({ selected: { drawing: true }, zIndex }), [anchor()], inside, onCanvas),
     ).toBeNull()
   })
 
   it('is an unlocked anchor only once selected', () => {
-    expect(doubleClickTarget(state(), [anchor()], inside, onCanvas)).toBeNull()
+    expect(ownerAt(state(), [anchor()], inside, onCanvas)).toBeNull()
+  })
+
+  describe('a locked anchor, which Excalidraw never selects (#43, answer 2)', () => {
+    const m1 = anchor({ locked: true })
+
+    it('owns the point when the click selected nothing', () => {
+      expect(ownerAt(state(), [m1], inside, onCanvas)).toBe(m1)
+    })
+
+    // Excalidraw's hit-testing skips it and selects what lies under it.
+    it('owns the point when the click selected a drawing or an anchor below it', () => {
+      const zIndex = { below: 0, m1: 1 }
+      expect(ownerAt(state({ selected: { below: true }, zIndex }), [m1], inside, onCanvas)).toBe(m1)
+      const under = anchor({ id: 'below' })
+      expect(
+        ownerAt(state({ selected: { below: true }, zIndex }), [under, m1], inside, onCanvas),
+      ).toBe(m1)
+    })
+
+    it('doesn’t when the click selected something above it', () => {
+      const zIndex = { m1: 0, drawing: 1 }
+      expect(
+        ownerAt(state({ selected: { drawing: true }, zIndex }), [m1], inside, onCanvas),
+      ).toBeNull()
+    })
   })
 
   it('is the topmost anchor where two overlap', () => {
     const below = anchor({ id: 'below' })
     const above = anchor({ id: 'above' })
     const selected = { below: true, above: true } as const
-    expect(doubleClickTarget(state({ selected }), [below, above], inside, onCanvas)).toBe(above)
+    expect(ownerAt(state({ selected }), [below, above], inside, onCanvas)).toBe(above)
   })
 
   it('is nothing outside every anchor', () => {
     const selected = { m1: true } as const
-    expect(doubleClickTarget(state({ selected }), [anchor()], { x: 300, y: 50 }, onCanvas)).toBeNull()
+    expect(ownerAt(state({ selected }), [anchor()], { x: 300, y: 50 }, onCanvas)).toBeNull()
   })
 
   it('is nothing with another tool, while Excalidraw is busy, or on a control', () => {
     const selected = { m1: true } as const
     const m1 = anchor()
-    expect(doubleClickTarget(state({ selected, tool: 'rectangle' }), [m1], inside, onCanvas)).toBeNull()
-    expect(doubleClickTarget(state({ selected, busy: true }), [m1], inside, onCanvas)).toBeNull()
-    expect(doubleClickTarget(state({ selected }), [m1], inside, { targetOwnsEvent: true })).toBeNull()
+    expect(ownerAt(state({ selected, tool: 'rectangle' }), [m1], inside, onCanvas)).toBeNull()
+    expect(ownerAt(state({ selected, busy: true }), [m1], inside, onCanvas)).toBeNull()
+    expect(ownerAt(state({ selected }), [m1], inside, { targetOwnsEvent: true })).toBeNull()
+  })
+})
+
+describe('clickTarget', () => {
+  const press: Press = { anchorId: 'm1', lineIndex: 1, x: 0, y: 0 }
+  const selected = { m1: true } as const
+
+  it('is the edited anchor when it owns the point and didn’t move', () => {
+    const m1 = anchor()
+    expect(clickTarget(state({ selected }), [m1], inside, press, onCanvas)).toBe(m1)
+  })
+
+  it('is nothing after a drag: the anchor moved', () => {
+    const moved = anchor({ x: 30 })
+    expect(clickTarget(state({ selected }), [moved], inside, press, onCanvas)).toBeNull()
+  })
+
+  // The edit stays left: the drawing took the press (review of #51).
+  it('is nothing when a drawing on top of the element took the press', () => {
+    const zIndex = { m1: 0, drawing: 1 }
+    expect(
+      clickTarget(state({ selected: { drawing: true }, zIndex }), [anchor()], inside, press, onCanvas),
+    ).toBeNull()
+  })
+
+  it('is nothing on another element', () => {
+    const other = anchor({ id: 'm2' })
+    expect(clickTarget(state({ selected: { m2: true } }), [other], inside, press, onCanvas)).toBeNull()
+  })
+
+  it('is the locked edited anchor when nothing above it was selected', () => {
+    const m1 = anchor({ locked: true })
+    expect(clickTarget(state(), [m1], inside, press, onCanvas)).toBe(m1)
+  })
+
+  it('is nothing with another tool', () => {
+    expect(
+      clickTarget(state({ selected, tool: 'hand' }), [anchor()], inside, press, onCanvas),
+    ).toBeNull()
   })
 })
 
