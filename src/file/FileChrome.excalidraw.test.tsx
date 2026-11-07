@@ -1,8 +1,10 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, onTestFinished } from 'vitest'
 import App from '../App.tsx'
 import { fakeFileAccess, fakeRecovery } from '../test/files.ts'
 import { doubleClickLine } from '../test/gestures.ts'
+import { fireResizeObservers, layOutBodies } from '../test/layout.ts'
+import { linesOf } from '../test/sheetView.ts'
 import type { RecoveryCopy } from './recovery.ts'
 import { writeSheet } from './sheetFormat.ts'
 
@@ -58,7 +60,7 @@ const sheetText = (sources: string[]) =>
   )
 
 const linesOnScreen = () =>
-  screen.getAllByRole('list', { name: 'Lines' }).map((list) => list.textContent)
+  screen.getAllByRole('list', { name: 'Lines' }).map((list) => linesOf(list).join(''))
 
 describe('the ☰ menu', () => {
   it("has Open…, Save and Save as… first, and none of Excalidraw's own file items", async () => {
@@ -172,6 +174,25 @@ describe('the file name and the window title', () => {
 
     expect(name).toHaveTextContent(/^Untitled$/)
   })
+
+  // docs/spec-v1.md section 4, Size: a size write doesn't mark the sheet dirty.
+  it('stay clean while the elements are sized to their content', async () => {
+    let width = 250
+    onTestFinished(layOutBodies(() => ({ width, height: 72 })))
+    const { name } = await mount()
+    const anchorWidths = () =>
+      Array.from(document.querySelectorAll<HTMLElement>('.math-element')).map((el) => el.style.width)
+    await waitFor(() => expect(anchorWidths()).toEqual(['250px', '250px']))
+    expect(name).toHaveTextContent(/^Untitled$/)
+
+    // Fonts arrive and the content grows.
+    width = 270
+    fireResizeObservers()
+
+    await waitFor(() => expect(anchorWidths()).toEqual(['270px', '270px']))
+    expect(name).toHaveTextContent(/^Untitled$/)
+    expect(document.title).toBe('Untitled')
+  })
 })
 
 describe('leaving the page', () => {
@@ -282,6 +303,25 @@ describe('opening', () => {
     fireEvent.keyDown(canvasRoot(), { key: 'o', ctrlKey: true })
 
     await waitFor(() => expect(linesOnScreen()).toEqual(['D = 4 in', 'A = pi * D^2 / 4']))
+    expect(name).toHaveTextContent(/^pump\.excalimathpad$/)
+  })
+
+  it('measures the opened sheet again, and it stays clean', async () => {
+    onTestFinished(layOutBodies(() => ({ width: 230, height: 48 })))
+    const { files, name } = await mount()
+    files.open.mockResolvedValue({
+      name: 'pump.excalimathpad',
+      text: sheetText(['D = 4 in']),
+      handle: files.handleFor('pump.excalimathpad'),
+    })
+
+    fireEvent.keyDown(canvasRoot(), { key: 'o', ctrlKey: true })
+
+    await waitFor(() => expect(linesOnScreen()).toEqual(['D = 4 in']))
+    // The file says 300 × 60; the content measures 230 × 48.
+    await waitFor(() =>
+      expect(document.querySelector<HTMLElement>('.math-element')!.style.width).toBe('230px'),
+    )
     expect(name).toHaveTextContent(/^pump\.excalimathpad$/)
   })
 

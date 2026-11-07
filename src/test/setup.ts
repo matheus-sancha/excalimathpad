@@ -2,7 +2,9 @@ import '@testing-library/jest-dom/vitest'
 import 'vitest-canvas-mock'
 import { cleanup } from '@testing-library/react'
 import { afterEach } from 'vitest'
+import { loadKatex } from '../overlay/katex.ts'
 import { installRowLayout } from './gestures.ts'
+import { ResizeObserverStub } from './layout.ts'
 
 afterEach(cleanup)
 
@@ -21,12 +23,9 @@ if (!window.matchMedia) {
     }) as MediaQueryList
 }
 
+// Records each observer, so a test can fire them as the browser does when fonts
+// load (src/test/layout.ts).
 if (!('ResizeObserver' in globalThis)) {
-  class ResizeObserverStub {
-    observe() {}
-    unobserve() {}
-    disconnect() {}
-  }
   Object.defineProperty(globalThis, 'ResizeObserver', { value: ResizeObserverStub })
 }
 
@@ -66,3 +65,6 @@ if (!document.fonts) {
 
 // Math rows get the layout their CSS gives them, so line hits work in jsdom.
 installRowLayout()
+
+// KaTeX loads lazily in the app; tests typeset from the first render.
+await loadKatex()

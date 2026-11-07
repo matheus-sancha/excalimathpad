@@ -10,6 +10,8 @@ import {
   isSymbolNode,
   type MathNode,
 } from 'mathjs'
+import { readLine } from './lineForm.ts'
+import { lineTex, resultTex, textTex, type Names } from './typeset.ts'
 
 /**
  * The math engine: math.js with units, fully client-side.
@@ -130,6 +132,23 @@ export type LineResult =
   | { kind: 'value'; text: string }
   | { kind: 'error'; message: string }
 
+/**
+ * A line as the grid shows it (docs/spec-v1.md section 4), with its cells' TeX.
+ * A blank line or a bare `#` is a spacer row; a comment line is one text cell;
+ * a line that doesn't parse shows its raw source, its `#` part included.
+ */
+export type TypesetLine =
+  | { kind: 'blank' }
+  | { kind: 'comment'; text: string }
+  | { kind: 'math'; name: string | null; expression: string; note: string | null }
+  | { kind: 'unparsed'; source: string }
+
+/** One line of the sheet: what it computes and how it shows. */
+export interface SheetLine {
+  result: LineResult
+  typeset: TypesetLine
+}
+
 /** One math element's source, as the sheet sees it. */
 export interface SheetBlock {
   id: string
@@ -138,15 +157,17 @@ export interface SheetBlock {
 
 /** A line of the sheet, parsed once before anything is evaluated. */
 type ParsedLine =
-  | { kind: 'blank' }
+  /** A blank line or a comment line: never evaluated, so its result is empty. */
+  | { kind: 'blank'; comment: string | null }
   /** `defines` is a best guess from the raw text: the line did not parse. */
-  | { kind: 'syntax-error'; message: string; defines: readonly string[] }
+  | { kind: 'syntax-error'; message: string; defines: readonly string[]; source: string }
   | {
       kind: 'parsed'
       node: MathNode
       defines: readonly string[]
       /** The unit names of a plain input, or null for any other line. */
       plainInputUnits: readonly string[] | null
+      note: string | null
     }
 
 /**
@@ -178,12 +199,15 @@ type ParsedLine =
  * Using a name that is only assigned further down, or whose own assignment
  * failed, says so instead of math.js's bare "Undefined symbol".
  *
- * Returns exactly one result per line of each block's source, keyed by block
- * id. Ids are expected to be unique.
+ * Each line also gets its typeset form (docs/spec-v1.md section 4), from the
+ * same parse. A name shows as a sheet name from the line that assigns it down,
+ * so a variable `L` above isn't typeset as the litre, and `5 L` above it still
+ * is.
+ *
+ * Returns exactly one `SheetLine` (result and typeset form) per line of each
+ * block's source, keyed by block id. Ids are expected to be unique.
  */
-export function evaluateSheet(
-  blocks: readonly SheetBlock[],
-): ReadonlyMap<string, LineResult[]> {
+export function evaluateSheet(blocks: readonly SheetBlock[]): ReadonlyMap<string, SheetLine[]> {
   const sheet = blocks.map(({ id, source }) => ({
     id,
     lines: splitLines(source).map(parseLine),
@@ -206,42 +230,90 @@ export function evaluateSheet(
   const scope = newSheetScope()
   // Names whose latest assignment so far failed.
   const failed = new Set<string>()
-  const results = new Map<string, LineResult[]>()
+  // Names assigned on or above the line being read, for typesetting.
+  const assigned = new Set<string>()
+  const names: Names = { ...ENGINE_NAMES, isSheetName: (name) => assigned.has(name) }
+  const results = new Map<string, SheetLine[]>()
   position = 0
   for (const { id, lines } of sheet) {
     results.set(
       id,
-      lines.map((line): LineResult => {
-        const here = position++
-        if (line.kind === 'blank') return { kind: 'empty' }
-        const fail = (message: string): LineResult => {
-          for (const name of line.defines) {
-            failed.add(name)
-            forget(scope, name)
-          }
-          return { kind: 'error', message }
-        }
-        if (line.kind === 'syntax-error') return fail(line.message)
-        try {
-          // Asked before the line runs: the line itself may assign one of these names.
-          const isPlain = line.plainInputUnits?.every((name) => !scope.has(name)) ?? false
-          const value: unknown = line.node.compile().evaluate(scope)
-          line.defines.forEach((name) => failed.delete(name))
-          // Comment-only lines evaluate to nothing. A plain input and a line
-          // whose value is a function leave the result cell empty, though the
-          // value still reaches the lines below (docs/spec-v1.md section 3).
-          if (value === undefined || typeof value === 'function' || isPlain) {
-            return { kind: 'empty' }
-          }
-          return { kind: 'value', text: math.format(value, { precision: 14 }) }
-        } catch (error) {
-          const message = error instanceof Error ? error.message : String(error)
-          return fail(explain(message, here, definedAt, failed))
-        }
+      lines.map((line): SheetLine => {
+        if (line.kind !== 'blank') line.defines.forEach((name) => assigned.add(name))
+        return { result: evaluateLine(line), typeset: typesetLine(line, names) }
       }),
     )
   }
   return results
+
+  function evaluateLine(line: ParsedLine): LineResult {
+    const here = position++
+    if (line.kind === 'blank') return { kind: 'empty' }
+    const fail = (message: string): LineResult => {
+      for (const name of line.defines) {
+        failed.add(name)
+        forget(scope, name)
+      }
+      return { kind: 'error', message }
+    }
+    if (line.kind === 'syntax-error') return fail(line.message)
+    try {
+      // Asked before the line runs: the line itself may assign one of these names.
+      const isPlain = line.plainInputUnits?.every((name) => !scope.has(name)) ?? false
+      const value: unknown = line.node.compile().evaluate(scope)
+      line.defines.forEach((name) => failed.delete(name))
+      // Comment-only lines evaluate to nothing. A plain input and a line
+      // whose value is a function leave the result cell empty, though the
+      // value still reaches the lines below (docs/spec-v1.md section 3).
+      if (value === undefined || typeof value === 'function' || isPlain) {
+        return { kind: 'empty' }
+      }
+      return { kind: 'value', text: math.format(value, { precision: 14 }) }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      return fail(explain(message, here, definedAt, failed))
+    }
+  }
+}
+
+function typesetLine(line: ParsedLine, names: Names): TypesetLine {
+  switch (line.kind) {
+    case 'blank':
+      return line.comment === null ? { kind: 'blank' } : { kind: 'comment', text: line.comment }
+    case 'syntax-error':
+      return { kind: 'unparsed', source: line.source }
+    case 'parsed':
+      try {
+        return { kind: 'math', ...lineTex(line.node, names), note: line.note }
+      } catch {
+        // A typesetting bug must not hide the line: show its code as text.
+        return { kind: 'math', name: null, expression: textTex(line.node.toString()), note: line.note }
+      }
+  }
+}
+
+/** What math.js itself knows about a name, for typesetting. */
+const ENGINE_NAMES: Omit<Names, 'isSheetName'> = {
+  // math.js resolves a name in its namespace before trying it as a unit.
+  isUnit: (name) => math.Unit.isValuelessUnit(name) && !(name in math),
+  isMicro: (name) => {
+    try {
+      // Typed as a string, but math.js gives the prefix object here.
+      const prefix: unknown = math.Unit.parse(name).units[0]?.prefix
+      return (prefix as { name?: string } | undefined)?.name === 'u'
+    } catch {
+      return false
+    }
+  },
+  isBuiltIn: (name) => name in math,
+}
+
+/**
+ * A result's text (`LineResult.text`) as TeX: the number, then the unit typeset
+ * (docs/spec-v1.md section 4). Not a value's? Plain text.
+ */
+export function typesetResult(text: string): string {
+  return resultTex(text, (unit) => parse(unit), { ...ENGINE_NAMES, isSheetName: () => false })
 }
 
 /**
@@ -252,8 +324,15 @@ export function splitLines(source: string): string[] {
   return source.split(/\r?\n/)
 }
 
-function parseLine(line: string): ParsedLine {
-  if (line.trim() === '') return { kind: 'blank' }
+/**
+ * Reads the line's comment first (ADR 0005), then parses only its code: a note
+ * never reaches math.js, so it never changes a result.
+ */
+function parseLine(text: string): ParsedLine {
+  const form = readLine(text)
+  if (form.kind === 'blank') return { kind: 'blank', comment: null }
+  if (form.kind === 'comment') return { kind: 'blank', comment: form.text }
+  const line = form.code
   try {
     const node = parse(line)
     return {
@@ -261,6 +340,7 @@ function parseLine(line: string): ParsedLine {
       node,
       defines: definedNames(node),
       plainInputUnits: plainInputUnits(node),
+      note: form.note,
     }
   } catch (error) {
     const target = ASSIGNMENT_TARGET.exec(line)?.[1]
@@ -268,6 +348,7 @@ function parseLine(line: string): ParsedLine {
       kind: 'syntax-error',
       message: error instanceof Error ? error.message : String(error),
       defines: target === undefined ? [] : [target],
+      source: text,
     }
   }
 }

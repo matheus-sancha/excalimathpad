@@ -3,7 +3,7 @@
 import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { describe, expect, it } from 'vitest'
-import { ABOVE_DRAWING_BELOW_UI_Z_INDEX } from './layers.ts'
+import { ABOVE_DRAWING_BELOW_UI_Z_INDEX, DARK_THEME_FILTER } from './layers.ts'
 
 // Contract with Excalidraw's CSS internals: read the z-index variables from
 // the installed package, so an upgrade that moves its layers fails here
@@ -36,5 +36,12 @@ describe('overlay z-index vs Excalidraw layers', () => {
 
   it("is below Excalidraw's UI (toolbar, panels, menus)", () => {
     expect(z).toBeLessThan(zIndex('layerUI'))
+  })
+})
+
+describe('the dark theme', () => {
+  it("is Excalidraw's own filter, which the overlay copies (#50)", () => {
+    const filters = [...css.matchAll(/--theme-filter:\s*([^;}]+)/g)].map(([, value]) => value.trim())
+    expect(filters).toContain(DARK_THEME_FILTER)
   })
 })

@@ -3,8 +3,8 @@ import { evaluateSheet, type LineResult } from './evaluate.ts'
 
 /** Evaluates blocks (in reading order) as one sheet; results per block, in order. */
 function sheet(...sources: string[]): LineResult[][] {
-  const results = evaluateSheet(sources.map((source, i) => ({ id: `b${i}`, source })))
-  return sources.map((_, i) => results.get(`b${i}`)!)
+  const lines = evaluateSheet(sources.map((source, i) => ({ id: `b${i}`, source })))
+  return sources.map((_, i) => lines.get(`b${i}`)!.map(({ result }) => result))
 }
 
 /** A sheet of one block. */
@@ -117,6 +117,20 @@ describe('evaluateSheet', () => {
 
     it('reads a blank line and a bare # as empty', () => {
       expect(block('\n#')).toEqual([empty, empty])
+    })
+
+    // Section 2: comments and notes never change a result (#44).
+    it('never lets a note change a result', () => {
+      expect(block('x = 2 * 3 # times three\nx + 1 # 1 + x')).toEqual([value('6'), value('7')])
+      expect(block('x = 2 * 3\nx + 1')).toEqual([value('6'), value('7')])
+    })
+
+    it('reads a comment line as empty, defining nothing', () => {
+      expect(block('# x = 5\nx')).toEqual([empty, error('Undefined symbol x')])
+    })
+
+    it('keeps a # inside a string out of the note', () => {
+      expect(block('s = concat("a # b", "c") # note')).toEqual([value('"a # bc"')])
     })
   })
 
@@ -360,8 +374,8 @@ describe('evaluateSheet', () => {
       vi.resetModules()
       const fresh = await import('./evaluate.ts')
       const run = (...sources: string[]) => {
-        const results = fresh.evaluateSheet(sources.map((source, i) => ({ id: `${i}`, source })))
-        return sources.map((_, i) => results.get(`${i}`)!)
+        const lines = fresh.evaluateSheet(sources.map((source, i) => ({ id: `${i}`, source })))
+        return sources.map((_, i) => lines.get(`${i}`)!.map(({ result }) => result))
       }
 
       const [, afterwards] = run('n = simplifyCore("typed.clear()")\nn.evaluate()', '20 V to mV\nsqrt(16)\ncos(0)')

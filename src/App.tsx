@@ -85,6 +85,7 @@ export default function App({ files, recovery }: AppProps = {}) {
               forwardWheel={canvas.forwardWheel}
               focusCanvas={canvas.focusCanvas}
               control={line}
+              keepClean={file.session.keepClean}
             />
             <FileChrome session={file.session} dialogs={file.dialogs} canvasRoot={canvas.root} />
           </>

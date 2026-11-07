@@ -1,6 +1,11 @@
 .math-overlay {
   position: absolute;
   inset: 0;
+  --math-text: #1e1e1e;
+  --math-result: #1971c2;
+  --math-error: #e03131;
+  --math-quiet: #868e96;
+  --math-rule: #dee2e6;
 }
 
 /* Box in scene units at the anchor's top-left; scaled by zoom. It passes
@@ -14,74 +19,156 @@
   pointer-events: none;
 }
 
-/* The inset keeps the anchor's border grabbable around the lines. Positioned,
-   so it is each row's offsetParent: the gestures read row geometry from the
-   element's own top edge. */
+/* The content, at its own size: the overlay measures it and sizes the anchor
+   to it (docs/spec-v1.md section 4, Size). The padding keeps the anchor's
+   border grabbable around the rows. Positioned, so it is each row's
+   offsetParent: the gestures read row geometry from the element's own top
+   edge. */
 .math-element__body {
-  position: relative;
+  position: absolute;
+  left: 0;
+  top: 0;
   box-sizing: border-box;
-  width: 100%;
-  height: 100%;
+  width: max-content;
   padding: 12px 14px;
-  display: grid;
-  /* The lines keep at least half the width: a long result (an error
-     message) is cut with an ellipsis rather than squeezing the lines to
-     nothing. The full text is in the result's title. */
-  grid-template-columns: minmax(50%, 1fr) minmax(0, auto);
-  /* Rows size to content, so lines taller than the anchor overflow it. */
-  align-items: start;
-  column-gap: 16px;
-  transform-origin: center;
+  color: var(--math-text);
   font: 16px/24px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 
-.math-element__lines {
+/* The worksheet block (section 4, Typeset grid): gutter, name (right-aligned),
+   ≔, expression (left-aligned), result after a thin rule, note. Rows are
+   subgrids, so cells line up across the element's rows and each row keeps a
+   box of its own for the line hit (offsetTop, offsetHeight). The note column
+   is flexible, so a comment line, which spans the row, widens only it. */
+.math-element__grid {
+  display: grid;
+  grid-template-columns: auto auto auto auto auto minmax(auto, 1fr);
   margin: 0;
   padding: 0;
-  min-width: 0;
   list-style: none;
 }
 
-/* One line height each, empty lines too, so results stay beside their lines. */
-.math-element__line,
-.math-element__field {
-  display: block;
-  box-sizing: border-box;
-  width: 100%;
-  height: 24px;
-  margin: 0;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: #1e1e1e;
-  font: inherit;
-  outline: none;
+/* A row is as tall as its tallest cell; an empty one keeps one line. */
+.math-element__row {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: subgrid;
+  align-items: center;
+  min-height: 24px;
 }
 
-.math-element__line {
-  overflow: hidden;
+.math-element__gutter {
+  grid-column: 1;
+  width: 10px;
+  margin-right: 4px;
+  color: var(--math-error);
+  font-size: 10px;
+}
+
+.math-element__name {
+  grid-column: 2;
+  justify-self: end;
+}
+
+.math-element__defines {
+  grid-column: 3;
+  padding: 0 6px;
+}
+
+.math-element__expression {
+  grid-column: 4;
+  justify-self: start;
+}
+
+/* Source in place of the typeset cells: a line that doesn't parse, a line
+   KaTeX can't render (or before it has loaded), and the field. */
+.math-element__source,
+.math-element__raw,
+.math-element__field-cell {
+  grid-column: 2 / 5;
   white-space: pre;
+}
+
+/* Section 4, Problems: raw source in red, with a wavy underline. */
+.math-element__raw {
+  color: var(--math-error);
+  text-decoration: underline wavy var(--math-error);
+  text-underline-offset: 3px;
+}
+
+.math-element__result {
+  grid-column: 5;
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  margin-left: 12px;
+  padding-left: 10px;
+  border-left: 1px solid var(--math-rule);
+  color: var(--math-result);
+  white-space: pre;
+}
+
+/* An error's message is capped; the whole text is in its title. */
+.math-element__result.is-error {
+  display: block;
+  align-self: center;
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--math-error);
+}
+
+/* Notes and comment lines: plain literal text, in one text style. */
+.math-element__note,
+.math-element__comment {
+  color: var(--math-quiet);
+  font: italic 15px/24px system-ui, 'Segoe UI', sans-serif;
+  white-space: pre;
+}
+
+.math-element__note {
+  grid-column: 6;
+  padding-left: 12px;
+}
+
+/* From the row's left edge, ignoring the columns. */
+.math-element__comment {
+  grid-column: 2 / -1;
+}
+
+/* The field and a hidden copy of its text share one cell, so the cell is as
+   wide as what is typed. */
+.math-element__field-cell {
+  display: grid;
+}
+
+.math-element__field-cell.is-empty-element {
+  min-width: 240px;
+}
+
+.math-element__field-text,
+.math-element__field {
+  grid-area: 1 / 1;
+  box-sizing: border-box;
+  height: 24px;
+  margin: 0;
+  padding: 0 2px 0 0;
+  border: 0;
+  font: inherit;
+  white-space: pre;
+}
+
+.math-element__field-text {
+  visibility: hidden;
 }
 
 /* The only part of the overlay that takes pointer events. */
 .math-element__field {
+  width: 100%;
+  min-width: 0;
+  background: transparent;
+  color: var(--math-text);
   box-shadow: inset 0 -1px 0 #1971c2;
+  outline: none;
   pointer-events: auto;
-}
-
-.math-element__results {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  white-space: pre;
-  color: #1971c2;
-}
-
-.math-element__result {
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.math-element__result.is-error {
-  color: #e03131;
 }

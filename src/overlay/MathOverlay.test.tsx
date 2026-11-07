@@ -1,9 +1,12 @@
-import { act, fireEvent, render, screen, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import type { ExcalidrawElement } from '@excalidraw/excalidraw/element/types'
 import type { AppState } from '@excalidraw/excalidraw/types'
+import { DARK_THEME_FILTER } from '../canvas/layers.ts'
 import { createMathAnchorElements } from '../canvas/mathAnchor.ts'
 import { linePoint } from '../test/gestures.ts'
+import { fireResizeObservers, layOutBodies } from '../test/layout.ts'
+import { linesOf, resultsOf as sheetResults } from '../test/sheetView.ts'
 import { MathOverlay, type SceneApi } from './MathOverlay.tsx'
 
 /**
@@ -17,8 +20,11 @@ function fakeScene(elements: ExcalidrawElement[]) {
   let view = { scrollX: 0, scrollY: 0, zoom: 1 }
   let selectedElementIds: Record<string, true> = {}
   let tool = 'selection'
+  let theme = 'light'
+  let busy: Partial<AppState> = {}
   const changeListeners = new Set<() => void>()
   const scrollListeners = new Set<() => void>()
+  const pointerUpListeners = new Set<(...args: unknown[]) => void>()
   const sources = () => JSON.stringify(scene.map((e) => e.customData?.source))
   // A line commit takes several updates; only one of them changes a source.
   let sourceWrites = 0
@@ -43,6 +49,8 @@ function fakeScene(elements: ExcalidrawElement[]) {
         offsetTop: 0,
         activeTool: { type: tool },
         selectedElementIds,
+        theme,
+        ...busy,
       }) as unknown as AppState,
     onChange: (cb) => {
       changeListeners.add(cb as () => void)
@@ -52,6 +60,10 @@ function fakeScene(elements: ExcalidrawElement[]) {
       scrollListeners.add(cb as () => void)
       return () => scrollListeners.delete(cb as () => void)
     },
+    onPointerUp: (cb) => {
+      pointerUpListeners.add(cb as never)
+      return () => pointerUpListeners.delete(cb as never)
+    },
     updateScene: updateScene as never,
   }
   return {
@@ -59,7 +71,7 @@ function fakeScene(elements: ExcalidrawElement[]) {
     updateScene,
     sourceWrites: () => sourceWrites,
     sourceOf: (id: string) => scene.find((e) => e.id === id)?.customData?.source as string,
-    listenerCount: () => changeListeners.size + scrollListeners.size,
+    listenerCount: () => changeListeners.size + scrollListeners.size + pointerUpListeners.size,
     updateElements(next: ExcalidrawElement[]) {
       scene = next
       act(() => changeListeners.forEach((cb) => cb()))
@@ -74,6 +86,20 @@ function fakeScene(elements: ExcalidrawElement[]) {
     selected: () => Object.keys(selectedElementIds),
     setTool(next: string) {
       tool = next
+    },
+    /** Excalidraw's app state while a gesture or editor is under way, or `{}` once idle. */
+    setBusy(next: Partial<AppState>) {
+      busy = next
+      act(() => changeListeners.forEach((cb) => cb()))
+    },
+    /** Excalidraw lets go of a press, with the state it kept from the press. */
+    pointerUp(pointerDownState: unknown) {
+      act(() => pointerUpListeners.forEach((cb) => cb({ type: 'selection' }, pointerDownState)))
+    },
+    elementOf: (id: string) => scene.find((e) => e.id === id)!,
+    setTheme(next: 'light' | 'dark') {
+      theme = next
+      act(() => changeListeners.forEach((cb) => cb()))
     },
   }
 }
@@ -112,8 +138,7 @@ function renderOverlay(elements: ExcalidrawElement[]) {
   return { scene, forwardWheel, focusCanvas, unmount: view.unmount }
 }
 
-const resultsOf = (id: string) =>
-  elementOf(id)!.querySelector('.math-element__results')!.textContent!.trim()
+const resultsOf = (id: string) => sheetResults(elementOf(id))
 
 /** Excalidraw's first click selected the element; the double-click opens line `n`. */
 function openLine(n: number, id = 'm1') {
@@ -170,6 +195,8 @@ describe('MathOverlay', () => {
     expect(el.style.transform).toBe('translate(100px, 50px) scale(1)')
     const body = el.querySelector<HTMLElement>('.math-element__body')!
     expect(body.style.transform).toBe(`rotate(${Math.PI / 2}rad)`)
+    // About the anchor's centre, whatever the content measures.
+    expect(body.style.transformOrigin).toBe('200px 48px')
   })
 
   it('removes the element when its anchor is deleted', () => {
@@ -182,7 +209,7 @@ describe('MathOverlay', () => {
 
   it('evaluates the source from the anchor and re-evaluates on each keystroke', () => {
     renderOverlay([anchorWith('R = 10 kohm\nI = 2 mA\nI * R')])
-    expect(resultsOf('m1')).toBe('= 20 V')
+    expect(resultsOf('m1')).toBe('20 V')
 
     type(openLine(3), 'R + I')
 
@@ -191,21 +218,284 @@ describe('MathOverlay', () => {
 
   it('re-evaluates when the source in the scene changes, as an undo does', () => {
     const { scene } = renderOverlay([anchorWith('I = 2 mA\nI * 2')])
-    expect(resultsOf('m1')).toBe('= 4 mA')
+    expect(resultsOf('m1')).toBe('4 mA')
 
     scene.updateElements([anchorWith('I = 3 mA\nI * 2')])
 
-    expect(resultsOf('m1')).toBe('= 6 mA')
-    expect(rowOf('m1', 1)).toHaveTextContent('I = 3 mA')
+    expect(resultsOf('m1')).toBe('6 mA')
+    expect(rowOf('m1', 1)).toHaveAccessibleName('I = 3 mA')
   })
 
-  it('keeps one row per line beside one result per line', () => {
-    renderOverlay([anchorWith('a = 1\nb = 2\n\nd = 4')])
-    const lines = within(screen.getByRole('list', { name: 'Lines' })).getAllByRole('listitem')
-    const results = within(screen.getByRole('list', { name: 'Results' })).getAllByRole('listitem')
+  it('keeps each result in its own line’s row', () => {
+    renderOverlay([anchorWith('a = 1\nb = 2 * a\n\nd = 4 * b')])
 
-    expect(lines).toHaveLength(4)
-    expect(results).toHaveLength(4)
+    expect(linesOf(elementOf('m1')!)).toEqual(['a = 1', 'b = 2 * a', '', 'd = 4 * b'])
+    expect(sheetResults(rowOf('m1', 2))).toBe('2')
+    expect(sheetResults(rowOf('m1', 3))).toBe('')
+    expect(sheetResults(rowOf('m1', 4))).toBe('8')
+  })
+
+  // docs/spec-v1.md section 4: Typeset grid, Problems, While editing a line.
+  describe('typeset grid', () => {
+    const cellOf = (n: number, cell: string) =>
+      rowOf('m1', n).querySelector<HTMLElement>(`.math-element__${cell}`)
+
+    it('typesets a value with KaTeX, without a leading =', () => {
+      renderOverlay([anchorWith('x = 2 * 3 m')])
+
+      expect(cellOf(1, 'name')!.querySelector('.katex')).not.toBeNull()
+      expect(cellOf(1, 'defines')!.querySelector('.katex')).not.toBeNull()
+      expect(cellOf(1, 'expression')!.querySelector('.katex')).not.toBeNull()
+      const result = cellOf(1, 'result')!
+      expect(result.querySelector('.katex')).not.toBeNull()
+      expect(result.dataset.text).toBe('6 m')
+      expect(result.textContent).not.toContain('=')
+    })
+
+    it('leaves the name and ≔ cells empty for a bare expression', () => {
+      renderOverlay([anchorWith('2 * 4')])
+
+      expect(cellOf(1, 'name')).toBeEmptyDOMElement()
+      expect(cellOf(1, 'defines')).toBeEmptyDOMElement()
+      expect(cellOf(1, 'result')!.dataset.text).toBe('8')
+    })
+
+    it('leaves a plain input’s result cell empty and keeps its note in the note column', () => {
+      renderOverlay([anchorWith('D = 102.3 mm # 4" Sch 40')])
+
+      expect(cellOf(1, 'result')).toBeEmptyDOMElement()
+      expect(cellOf(1, 'note')).toHaveTextContent('4" Sch 40')
+    })
+
+    it('shows a comment line as one text cell, with no result cell', () => {
+      renderOverlay([anchorWith('# Water at 20 C\nx = 1')])
+
+      expect(rowOf('m1', 1)).toHaveClass('is-comment')
+      expect(cellOf(1, 'comment')).toHaveTextContent('Water at 20 C')
+      expect(cellOf(1, 'result')).toBeNull()
+    })
+
+    it('keeps a blank line and a bare # as spacer rows', () => {
+      renderOverlay([anchorWith('a = 1\n\n#\nb = 2')])
+
+      for (const n of [2, 3]) {
+        expect(rowOf('m1', n)).toHaveClass('is-blank')
+        expect(cellOf(n, 'expression')).toBeNull()
+      }
+    })
+
+    it('marks an error in the gutter, with its message in the result cell and on hover', () => {
+      renderOverlay([anchorWith('x = 1 m + 2 s')])
+
+      expect(cellOf(1, 'gutter')).toHaveTextContent('●')
+      const result = cellOf(1, 'result')!
+      expect(result).toHaveClass('is-error')
+      expect(result).toHaveTextContent('Units do not match')
+      expect(result).toHaveAttribute('title', 'Units do not match')
+    })
+
+    it('shows a line that doesn’t parse as its raw source, # part included, with no note cell', () => {
+      renderOverlay([anchorWith('x = (1 + # oops')])
+
+      expect(cellOf(1, 'gutter')).toHaveTextContent('●')
+      expect(cellOf(1, 'raw')).toHaveTextContent('x = (1 + # oops')
+      expect(cellOf(1, 'note')).toBeNull()
+    })
+
+    it('opens the field over the name, ≔ and expression cells, with the live result as text', () => {
+      renderOverlay([anchorWith('x = 2 # two\ny = x * 3 m')])
+
+      const field = openLine(2)
+      type(field, 'y = x * 4 m')
+
+      const cell = cellOf(2, 'field-cell')!
+      expect(cell).toContainElement(field)
+      // A hidden copy of the typed text widens the cell as you type.
+      expect(cellOf(2, 'field-text')).toHaveTextContent('y = x * 4 m')
+      expect(field.value).toBe('y = x * 4 m')
+      const result = cellOf(2, 'result')!
+      expect(result).toHaveTextContent('8 m')
+      expect(result.querySelector('.katex')).toBeNull()
+      expect(cellOf(2, 'note')).toBeNull()
+    })
+
+    it('keeps the note in the field while its line is edited', () => {
+      renderOverlay([anchorWith('x = 2 # two')])
+
+      expect(openLine(1).value).toBe('x = 2 # two')
+      expect(cellOf(1, 'note')).toBeNull()
+    })
+
+    it('gives the field its minimum width only in an element with no source', () => {
+      renderOverlay([anchorWith('x = 2')])
+      openLine(1)
+      expect(cellOf(1, 'field-cell')).not.toHaveClass('is-empty-element')
+      cleanup()
+
+      renderOverlay([anchorWith('')])
+      openLine(1)
+      expect(cellOf(1, 'field-cell')).toHaveClass('is-empty-element')
+    })
+
+    it('gives the field its minimum width once an element is emptied', () => {
+      const { scene } = renderOverlay([anchorWith('x = 2')])
+      const field = openLine(1)
+      // Still has source until the line is written.
+      type(field, '')
+      expect(cellOf(1, 'field-cell')).not.toHaveClass('is-empty-element')
+
+      fireEvent.keyDown(field, { key: 'Escape' })
+      expect(scene.sourceOf('m1')).toBe('')
+      openLine(1)
+
+      expect(cellOf(1, 'field-cell')).toHaveClass('is-empty-element')
+    })
+
+    it('darkens with Excalidraw’s own filter in its dark theme (#50)', () => {
+      const { scene } = renderOverlay([anchorWith('x = 2')])
+      const overlay = elementOf('m1')!.parentElement!
+      expect(overlay.style.filter).toBe('')
+
+      scene.setTheme('dark')
+      expect(overlay.style.filter).toBe(DARK_THEME_FILTER)
+
+      scene.setTheme('light')
+      expect(overlay.style.filter).toBe('')
+    })
+  })
+
+  // docs/spec-v1.md section 4, Size, and section 14: newElementWith + NEVER.
+  describe('size', () => {
+    const NEVER = 'NEVER'
+    const sizeWrites = () =>
+      current.updateScene.mock.calls.filter(([data]) => (data as { captureUpdate?: string }).captureUpdate === NEVER)
+
+    function layOut(width: number, height: number) {
+      onTestFinished(layOutBodies(() => ({ width, height })))
+    }
+
+    it('sizes the anchor to its content, top-left in place, with no undo step', () => {
+      layOut(260, 120)
+      const { scene } = renderOverlay([anchorWith('x = 1')])
+
+      expect(sizeWrites()).toHaveLength(1)
+      expect(scene.elementOf('m1')).toMatchObject({ x: 100, y: 50, width: 260, height: 120 })
+    })
+
+    it('writes once: the next render finds the anchor fits', () => {
+      layOut(260, 120)
+      const { scene } = renderOverlay([anchorWith('x = 1')])
+      scene.scrollTo({ scrollX: 5, scrollY: 0, zoom: 1 })
+
+      expect(sizeWrites()).toHaveLength(1)
+    })
+
+    it('writes nothing within half a pixel', () => {
+      layOut(400.5, 96)
+      renderOverlay([anchorWith('x = 1')])
+
+      expect(sizeWrites()).toHaveLength(0)
+    })
+
+    it('writes nothing for content that isn’t laid out (0 × 0)', () => {
+      renderOverlay([anchorWith('x = 1')])
+
+      expect(sizeWrites()).toHaveLength(0)
+    })
+
+    it('runs each size write through keepClean, so a clean sheet stays clean', () => {
+      layOut(260, 120)
+      const keepClean = vi.fn((write: () => void) => write())
+      const scene = fakeScene([anchorWith('x = 1')])
+      current = scene
+      canvasRoot = document.body.appendChild(document.createElement('div'))
+      onTestFinished(() => canvasRoot.remove())
+      render(
+        <MathOverlay
+          api={scene.api}
+          canvasRoot={canvasRoot}
+          forwardWheel={vi.fn()}
+          focusCanvas={vi.fn()}
+          keepClean={keepClean}
+        />,
+      )
+
+      expect(keepClean).toHaveBeenCalledTimes(1)
+      expect(scene.elementOf('m1').width).toBe(260)
+    })
+
+    it('waits while Excalidraw is busy, and writes at its next change once idle', () => {
+      layOut(260, 120)
+      const { scene } = renderOverlay([anchorWith('x = 1')])
+      scene.updateElements([anchorWith('x = 1')])
+      current.updateScene.mockClear()
+
+      scene.setBusy({ isResizing: true })
+      scene.updateElements([anchorWith('x = 2')])
+      expect(sizeWrites()).toHaveLength(0)
+
+      scene.setBusy({})
+      expect(sizeWrites()).toHaveLength(1)
+      expect(scene.elementOf('m1').width).toBe(260)
+    })
+
+    it('measures again when a body’s size changes, as when fonts load', () => {
+      let width = 260
+      onTestFinished(layOutBodies(() => ({ width, height: 120 })))
+      const { scene } = renderOverlay([anchorWith('x = 1')])
+      expect(scene.elementOf('m1').width).toBe(260)
+
+      width = 280
+      fireResizeObservers()
+
+      expect(scene.elementOf('m1').width).toBe(280)
+    })
+
+    it('grows while a line is typed, keeping the same field', () => {
+      let width = 260
+      onTestFinished(layOutBodies(() => ({ width, height: 48 })))
+      const { scene } = renderOverlay([anchorWith('x = 1')])
+      const field = openLine(1)
+
+      width = 340
+      type(field, 'x = 1 + 2 + 3')
+
+      expect(scene.elementOf('m1').width).toBe(340)
+      expect(openField()).toBe(field)
+      expect(document.activeElement).toBe(field)
+      expect(current.sourceWrites()).toBe(0)
+    })
+
+    it('snaps a resize handle back to where the anchor was, x and y too', () => {
+      layOut(400, 96)
+      const { scene } = renderOverlay([anchorWith('x = 1')])
+      const original = scene.elementOf('m1')
+
+      // The top-right handle: Excalidraw moved y as well as the size.
+      scene.updateElements([{ ...original, y: 5, width: 600, height: 141 }])
+      scene.pointerUp({
+        resize: { isResizing: true, handleType: 'ne' },
+        originalElements: new Map([['m1', original]]),
+      })
+
+      expect(scene.elementOf('m1')).toMatchObject({ x: 100, y: 50, width: 400, height: 96 })
+    })
+
+    it('leaves the rotate handle’s work alone', () => {
+      layOut(400, 96)
+      const { scene } = renderOverlay([anchorWith('x = 1')])
+      const original = scene.elementOf('m1')
+      scene.updateElements([{ ...original, angle: 1 } as ExcalidrawElement])
+      current.updateScene.mockClear()
+
+      scene.pointerUp({
+        resize: { isResizing: true, handleType: 'rotation' },
+        originalElements: new Map([['m1', original]]),
+      })
+
+      expect(scene.elementOf('m1').angle).toBe(1)
+      expect(sizeWrites()).toHaveLength(0)
+    })
   })
 
   describe('line edit', () => {
@@ -423,11 +713,12 @@ describe('MathOverlay', () => {
       fireEvent.click(canvasRoot, point)
     }
 
-    it('takes no pointer events: rows are plain text, not controls', () => {
+    it('takes no pointer events: rows are typeset text, not controls', () => {
       renderOverlay([anchorWith('a = 1\nb = 2')])
 
       expect(within(elementOf('m1')!).queryAllByRole('button')).toEqual([])
-      expect(rowOf('m1', 2)).toHaveTextContent('b = 2')
+      expect(within(elementOf('m1')!).queryAllByRole('textbox')).toEqual([])
+      expect(rowOf('m1', 2)).toHaveAccessibleName('b = 2')
     })
 
     it('a double-click on a selected element edits the line under it, caret at the end', () => {
@@ -665,11 +956,11 @@ describe('MathOverlay', () => {
 
     it('recalculates a later element while an earlier one is typed in', () => {
       renderOverlay([inputs, uses])
-      expect(resultsOf('uses')).toBe('= 20 V')
+      expect(resultsOf('uses')).toBe('20 V')
 
       type(openLine(2, 'inputs'), 'I = 4 mA')
 
-      expect(resultsOf('uses')).toBe('= 40 V')
+      expect(resultsOf('uses')).toBe('40 V')
     })
 
     it('re-evaluates in the new order when an anchor moves above another', () => {
@@ -682,7 +973,7 @@ describe('MathOverlay', () => {
       expect(screen.getByTitle('I is defined below')).toHaveClass('is-error')
 
       scene.updateElements([inputs, uses])
-      expect(resultsOf('uses')).toBe('= 20 V')
+      expect(resultsOf('uses')).toBe('20 V')
     })
 
     it('loses the inputs when their element is deleted, and gets them back on undo', () => {
@@ -693,13 +984,14 @@ describe('MathOverlay', () => {
 
       // Excalidraw's undo brings the anchor back, with its source in it.
       scene.updateElements([inputs, uses])
-      expect(resultsOf('uses')).toBe('= 20 V')
+      expect(resultsOf('uses')).toBe('20 V')
     })
   })
 
   it('unsubscribes from Excalidraw when unmounted', () => {
     const { scene, unmount } = renderOverlay([anchor])
-    expect(scene.listenerCount()).toBe(2)
+    // The scene and the scroll, sizes waiting on an idle change, and snap-back.
+    expect(scene.listenerCount()).toBe(4)
 
     unmount()
 

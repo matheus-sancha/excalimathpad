@@ -7,7 +7,7 @@ import {
   type Ref,
 } from 'react'
 import type { ExcalidrawImperativeAPI } from '@excalidraw/excalidraw/types'
-import { ABOVE_DRAWING_BELOW_UI_Z_INDEX } from '../canvas/layers.ts'
+import { ABOVE_DRAWING_BELOW_UI_Z_INDEX, DARK_THEME_FILTER } from '../canvas/layers.ts'
 import {
   isMathAnchor,
   sameAnchor,
@@ -27,6 +27,7 @@ import {
 import type { RowBox } from './lineHit.ts'
 import { MathElementView } from './MathElementView.tsx'
 import { readingOrder } from './readingOrder.ts'
+import { useAnchorSizes } from './useAnchorSizes.ts'
 import { useSheetGestures } from './useSheetGestures.ts'
 import type { Viewport } from './viewport.ts'
 import './MathOverlay.css'
@@ -39,6 +40,7 @@ export type SceneApi = Pick<
   | 'getAppState'
   | 'onChange'
   | 'onScrollChange'
+  | 'onPointerUp'
   | 'updateScene'
 >
 
@@ -58,11 +60,18 @@ export interface MathOverlayProps {
   /** Gives the keyboard back to Excalidraw, so its Ctrl+Z works after Esc. */
   focusCanvas: () => void
   control?: Ref<LineEditControl>
+  /**
+   * Runs a size write so it doesn't make a clean sheet dirty
+   * (`SheetSession.keepClean`, docs/spec-v1.md section 4, Size).
+   */
+  keepClean?: (write: () => void) => void
 }
 
 interface SceneSnapshot {
   viewport: Viewport
   anchors: readonly MathAnchor[]
+  /** Excalidraw's theme: in dark, math darkens with the canvas's own filter. */
+  dark: boolean
 }
 
 /**
@@ -90,10 +99,11 @@ export function MathOverlay({
   forwardWheel,
   focusCanvas,
   control,
+  keepClean = runNow,
 }: MathOverlayProps) {
   const overlayRef = useRef<HTMLDivElement>(null)
   const store = useMemo(() => createSceneStore(api), [api])
-  const { viewport, anchors } = useSyncExternalStore(store.subscribe, store.getSnapshot)
+  const { viewport, anchors, dark } = useSyncExternalStore(store.subscribe, store.getSnapshot)
 
   const [edit, setEdit] = useState<LineEdit | null>(null)
   // Events read the latest edit from here: a field being removed can report its
@@ -114,7 +124,7 @@ export function MathOverlay({
       return { id, source: anchor ? typedSourceOf(anchor) : '' }
     }),
   )
-  const results = useMemo(
+  const lines = useMemo(
     () => evaluateSheet(JSON.parse(sheetKey) as SheetBlock[]),
     [sheetKey],
   )
@@ -163,6 +173,13 @@ export function MathOverlay({
     focusCanvas,
   })
 
+  useAnchorSizes({
+    api,
+    overlay: () => overlayRef.current,
+    anchors: () => store.getSnapshot().anchors,
+    keepClean,
+  })
+
   const leaveLine = (anchorId: string, lineIndex: number) => {
     const current = editRef.current
     if (current?.anchorId === anchorId && current.lineIndex === lineIndex) {
@@ -176,7 +193,11 @@ export function MathOverlay({
     <div
       ref={overlayRef}
       className="math-overlay"
-      style={{ zIndex: ABOVE_DRAWING_BELOW_UI_Z_INDEX }}
+      // In Excalidraw's dark theme, math darkens with the canvas's own filter.
+      style={{
+        zIndex: ABOVE_DRAWING_BELOW_UI_Z_INDEX,
+        filter: dark ? DARK_THEME_FILTER : undefined,
+      }}
     >
       {anchors.map((anchor) => (
         <MathElementView
@@ -184,7 +205,7 @@ export function MathOverlay({
           anchor={anchor}
           viewport={viewport}
           source={typedSourceOf(anchor)}
-          results={results.get(anchor.id) ?? []}
+          lines={lines.get(anchor.id) ?? []}
           edit={edit?.anchorId === anchor.id ? edit : null}
           onType={(text) => {
             const current = editRef.current
@@ -202,6 +223,8 @@ export function MathOverlay({
     </div>
   )
 }
+
+const runNow = (write: () => void) => write()
 
 /**
  * An element's rows as laid out: `offsetTop` and `offsetHeight` ignore CSS
@@ -240,10 +263,11 @@ function createSceneStore(api: SceneApi) {
 }
 
 function readSnapshot(api: SceneApi): SceneSnapshot {
-  const { scrollX, scrollY, zoom } = api.getAppState()
+  const { scrollX, scrollY, zoom, theme } = api.getAppState()
   return {
     viewport: { scrollX, scrollY, zoom: zoom.value },
     anchors: api.getSceneElements().filter(isMathAnchor).map(toMathAnchor),
+    dark: theme === 'dark',
   }
 }
 
@@ -253,6 +277,7 @@ function sameSnapshot(a: SceneSnapshot, b: SceneSnapshot): boolean {
   if (va.scrollX !== vb.scrollX || va.scrollY !== vb.scrollY || va.zoom !== vb.zoom) {
     return false
   }
+  if (a.dark !== b.dark) return false
   if (a.anchors.length !== b.anchors.length) return false
   return a.anchors.every((anchor, i) => sameAnchor(anchor, b.anchors[i]))
 }

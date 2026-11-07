@@ -5,10 +5,18 @@ import {
   useState,
   type KeyboardEvent,
   type MouseEvent,
+  type ReactNode,
 } from 'react'
 import type { MathAnchor } from '../canvas/mathAnchor.ts'
 import type { ForwardWheel } from '../canvas/SheetCanvas.tsx'
-import { splitLines, type LineResult } from '../math/evaluate.ts'
+import {
+  splitLines,
+  typesetResult,
+  type LineResult,
+  type SheetLine,
+  type TypesetLine,
+} from '../math/evaluate.ts'
+import { texToHtml, useKatexReady } from './katex.ts'
 import type { LineEdit, LineMove } from './lineEdit.ts'
 import { sceneToStage, type Viewport } from './viewport.ts'
 
@@ -18,7 +26,7 @@ export interface MathElementViewProps {
   /** The element's lines, with any typed text in place. */
   source: string
   /** One per line of `source`, from the sheet's evaluation (MathOverlay). */
-  results: readonly LineResult[]
+  lines: readonly SheetLine[]
   /** The sheet's line edit, when it is in this element. */
   edit: LineEdit | null
   onType: (text: string) => void
@@ -29,22 +37,25 @@ export interface MathElementViewProps {
 }
 
 /**
- * One math element: one row per source line on the left, one result per line on
- * the right. Laid out in scene units and scaled by the zoom, so it moves and
- * scales exactly like the anchor Excalidraw draws underneath.
+ * One math element as a worksheet block (docs/spec-v1.md section 4, Typeset
+ * grid): a grid of typeset rows, *gutter · name · `≔` · expression · result ·
+ * note*, aligned across the element's rows. Laid out in scene units and scaled
+ * by the zoom, so it moves and scales exactly like the anchor Excalidraw draws
+ * underneath.
+ *
+ * The body takes its content's size (`max-content`); the overlay measures it
+ * and sizes the anchor to it (`useAnchorSizes`). It rotates about the anchor's
+ * centre, Excalidraw's rule, so it matches the drawing before a size write too.
  *
  * Takes no pointer events, except the open field: Excalidraw gets every click
  * and drag on the anchor underneath, and the overlay's gestures find the line
- * from each row's `offsetTop` and `offsetHeight` (`data-line`). The field sits
- * over the source column, with the live result beside it as plain text; #44's
- * grid gives it its final layout. Rows and results keep one line height each,
- * so they stay beside each other.
+ * from each row's `offsetTop` and `offsetHeight` (`data-line`).
  */
 export function MathElementView({
   anchor,
   viewport,
   source,
-  results,
+  lines,
   edit,
   onType,
   onMove,
@@ -53,7 +64,10 @@ export function MathElementView({
   forwardWheel,
 }: MathElementViewProps) {
   const rootRef = useRef<HTMLDivElement>(null)
+  const katexReady = useKatexReady()
   const { x, y } = sceneToStage(anchor, viewport)
+  // A new or emptied element: its field starts with room to type (section 4, Size).
+  const isEmpty = splitLines(anchor.source).every((line) => line.trim() === '')
 
   // React's onWheel is passive, so it cannot stop ctrl+wheel zooming the page.
   useEffect(() => {
@@ -76,39 +90,200 @@ export function MathElementView({
     >
       <div
         className="math-element__body"
-        style={anchor.angle ? { transform: `rotate(${anchor.angle}rad)` } : undefined}
+        style={
+          anchor.angle
+            ? {
+                transform: `rotate(${anchor.angle}rad)`,
+                transformOrigin: `${anchor.width / 2}px ${anchor.height / 2}px`,
+              }
+            : undefined
+        }
       >
-        <ol className="math-element__lines" aria-label="Lines">
-          {splitLines(source).map((line, i) => (
-            <li key={i} className="math-element__row" data-line={i}>
-              {edit?.lineIndex === i ? (
-                <LineField
-                  edit={edit}
-                  onType={onType}
-                  onMove={onMove}
-                  onEscape={onEscape}
-                  onBlur={() => onBlurLine(i)}
-                />
-              ) : (
-                <span className="math-element__line">{line}</span>
-              )}
-            </li>
-          ))}
-        </ol>
-        <ol className="math-element__results" aria-label="Results">
-          {results.map((result, i) => (
-            <li
-              key={i}
-              className={`math-element__result is-${result.kind}`}
-              // Long results are cut to fit (MathOverlay.css); this keeps the whole text.
-              title={result.kind === 'empty' ? undefined : formatResult(result)}
-            >
-              {formatResult(result)}
-            </li>
-          ))}
+        <ol className="math-element__grid" aria-label="Lines">
+          {splitLines(source).map((text, i) => {
+            const line = lines[i] ?? EMPTY_LINE
+            const editing = edit?.lineIndex === i
+            return (
+              <li
+                key={i}
+                className={`math-element__row is-${editing ? 'editing' : line.typeset.kind}`}
+                data-line={i}
+                aria-label={text}
+              >
+                {editing ? (
+                  <EditingRow
+                    edit={edit}
+                    result={line.result}
+                    isEmpty={isEmpty}
+                    onType={onType}
+                    onMove={onMove}
+                    onEscape={onEscape}
+                    onBlur={() => onBlurLine(i)}
+                  />
+                ) : (
+                  <TypesetRow text={text} line={line} katexReady={katexReady} />
+                )}
+              </li>
+            )
+          })}
         </ol>
       </div>
     </div>
+  )
+}
+
+const EMPTY_LINE: SheetLine = {
+  result: { kind: 'empty' },
+  typeset: { kind: 'blank' },
+}
+
+/** A row's cells, by line form (section 3, section 4 Problems). */
+function TypesetRow({
+  text,
+  line,
+  katexReady,
+}: {
+  text: string
+  line: SheetLine
+  katexReady: boolean
+}) {
+  const { typeset, result } = line
+  switch (typeset.kind) {
+    case 'blank':
+      return <ResultCell result={result} />
+    case 'comment':
+      return <span className="math-element__comment">{typeset.text}</span>
+    case 'unparsed':
+      return (
+        <>
+          <Gutter result={result} />
+          <span className="math-element__raw">{typeset.source}</span>
+          <ResultCell result={result} />
+        </>
+      )
+    case 'math':
+      // Until KaTeX has loaded, the line shows as its source.
+      if (!katexReady) {
+        return (
+          <>
+            <Gutter result={result} />
+            <span className="math-element__source">{text}</span>
+            <ResultCell result={result} plain />
+          </>
+        )
+      }
+      return <MathCells typeset={typeset} result={result} fallback={text} />
+  }
+}
+
+function MathCells({
+  typeset,
+  result,
+  fallback,
+}: {
+  typeset: Extract<TypesetLine, { kind: 'math' }>
+  result: LineResult
+  fallback: string
+}) {
+  const name = typeset.name === null ? null : texToHtml(typeset.name)
+  const defines = texToHtml(DEFINES)
+  const expression = texToHtml(typeset.expression)
+  // TeX KaTeX couldn't render: the line's source, as text, rather than nothing.
+  const cells =
+    expression === null || (typeset.name !== null && name === null) ? (
+      <span className="math-element__source">{fallback}</span>
+    ) : (
+      <>
+        <span className="math-element__name">{name !== null && <Html html={name} />}</span>
+        <span className="math-element__defines">
+          {name !== null && defines !== null && <Html html={defines} />}
+        </span>
+        <span className="math-element__expression">
+          <Html html={expression} />
+        </span>
+      </>
+    )
+  return (
+    <>
+      <Gutter result={result} />
+      {cells}
+      <ResultCell result={result} />
+      {typeset.note !== null && <span className="math-element__note">{typeset.note}</span>}
+    </>
+  )
+}
+
+/** `≔`, Mathcad's definition sign, in KaTeX's font (`\coloneqq`). */
+const DEFINES = '\\coloneqq'
+
+function Html({ html }: { html: string }) {
+  return <span className="math-element__tex" dangerouslySetInnerHTML={{ __html: html }} />
+}
+
+function Gutter({ result }: { result: LineResult }) {
+  return (
+    <span className="math-element__gutter" aria-hidden="true">
+      {result.kind === 'error' ? '●' : ''}
+    </span>
+  )
+}
+
+/**
+ * The result cell, after the column rule. A value shows typeset, with no
+ * leading `=`; an error shows its message, capped with an ellipsis, the whole
+ * text on hover (section 4, Problems). `data-text` holds the result as text.
+ */
+function ResultCell({ result, plain = false }: { result: LineResult; plain?: boolean }) {
+  let content: ReactNode = null
+  let text: string | undefined
+  if (result.kind === 'value') {
+    text = result.text
+    const html = plain ? null : texToHtml(typesetResult(result.text))
+    content = html === null ? result.text : <Html html={html} />
+  } else if (result.kind === 'error') {
+    text = result.message
+    content = result.message
+  }
+  return (
+    <span
+      className={`math-element__result is-${result.kind}`}
+      data-text={text}
+      title={result.kind === 'error' ? result.message : undefined}
+    >
+      {content}
+    </span>
+  )
+}
+
+interface EditingRowProps {
+  edit: LineEdit
+  result: LineResult
+  isEmpty: boolean
+  onType: (text: string) => void
+  onMove: (move: LineMove) => void
+  onEscape: () => void
+  onBlur: () => void
+}
+
+/**
+ * The line being edited (section 4, While editing a line): a source field over
+ * the name, `≔` and expression cells, the live result as plain text, and an
+ * empty note cell, since the note is in the field. A hidden copy of the typed
+ * text shares the field's cell, so the column widens as you type, and the
+ * element with it, without the field's value ever being set from code.
+ */
+function EditingRow({ edit, result, isEmpty, ...field }: EditingRowProps) {
+  return (
+    <>
+      <Gutter result={result} />
+      <span className={`math-element__field-cell${isEmpty ? ' is-empty-element' : ''}`}>
+        <span className="math-element__field-text" aria-hidden="true">
+          {edit.text}
+        </span>
+        <LineField edit={edit} {...field} />
+      </span>
+      <ResultCell result={result} plain />
+    </>
   )
 }
 
@@ -191,15 +366,4 @@ function LineField({ edit, onType, onMove, onEscape, onBlur }: LineFieldProps) {
       }}
     />
   )
-}
-
-function formatResult(result: LineResult): string {
-  switch (result.kind) {
-    case 'value':
-      return `= ${result.text}`
-    case 'error':
-      return result.message
-    case 'empty':
-      return ' '
-  }
 }
