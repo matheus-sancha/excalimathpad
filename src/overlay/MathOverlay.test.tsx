@@ -5,6 +5,7 @@ import type { AppState } from '@excalidraw/excalidraw/types'
 import { DARK_THEME_FILTER } from '../canvas/layers.ts'
 import { createMathAnchorElements } from '../canvas/mathAnchor.ts'
 import { linePoint } from '../test/gestures.ts'
+import { fireResizeObservers, layOutBodies } from '../test/layout.ts'
 import { linesOf, resultsOf as sheetResults } from '../test/sheetView.ts'
 import { MathOverlay, type SceneApi } from './MathOverlay.tsx'
 
@@ -20,8 +21,10 @@ function fakeScene(elements: ExcalidrawElement[]) {
   let selectedElementIds: Record<string, true> = {}
   let tool = 'selection'
   let theme = 'light'
+  let busy: Partial<AppState> = {}
   const changeListeners = new Set<() => void>()
   const scrollListeners = new Set<() => void>()
+  const pointerUpListeners = new Set<(...args: unknown[]) => void>()
   const sources = () => JSON.stringify(scene.map((e) => e.customData?.source))
   // A line commit takes several updates; only one of them changes a source.
   let sourceWrites = 0
@@ -47,6 +50,7 @@ function fakeScene(elements: ExcalidrawElement[]) {
         activeTool: { type: tool },
         selectedElementIds,
         theme,
+        ...busy,
       }) as unknown as AppState,
     onChange: (cb) => {
       changeListeners.add(cb as () => void)
@@ -56,6 +60,10 @@ function fakeScene(elements: ExcalidrawElement[]) {
       scrollListeners.add(cb as () => void)
       return () => scrollListeners.delete(cb as () => void)
     },
+    onPointerUp: (cb) => {
+      pointerUpListeners.add(cb as never)
+      return () => pointerUpListeners.delete(cb as never)
+    },
     updateScene: updateScene as never,
   }
   return {
@@ -63,7 +71,7 @@ function fakeScene(elements: ExcalidrawElement[]) {
     updateScene,
     sourceWrites: () => sourceWrites,
     sourceOf: (id: string) => scene.find((e) => e.id === id)?.customData?.source as string,
-    listenerCount: () => changeListeners.size + scrollListeners.size,
+    listenerCount: () => changeListeners.size + scrollListeners.size + pointerUpListeners.size,
     updateElements(next: ExcalidrawElement[]) {
       scene = next
       act(() => changeListeners.forEach((cb) => cb()))
@@ -79,6 +87,16 @@ function fakeScene(elements: ExcalidrawElement[]) {
     setTool(next: string) {
       tool = next
     },
+    /** Excalidraw's app state while a gesture or editor is under way, or `{}` once idle. */
+    setBusy(next: Partial<AppState>) {
+      busy = next
+      act(() => changeListeners.forEach((cb) => cb()))
+    },
+    /** Excalidraw lets go of a press, with the state it kept from the press. */
+    pointerUp(pointerDownState: unknown) {
+      act(() => pointerUpListeners.forEach((cb) => cb({ type: 'selection' }, pointerDownState)))
+    },
+    elementOf: (id: string) => scene.find((e) => e.id === id)!,
     setTheme(next: 'light' | 'dark') {
       theme = next
       act(() => changeListeners.forEach((cb) => cb()))
@@ -329,6 +347,140 @@ describe('MathOverlay', () => {
 
       scene.setTheme('light')
       expect(overlay.style.filter).toBe('')
+    })
+  })
+
+  // docs/spec-v1.md section 4, Size, and section 14: newElementWith + NEVER.
+  describe('size', () => {
+    const NEVER = 'NEVER'
+    const sizeWrites = () =>
+      current.updateScene.mock.calls.filter(([data]) => (data as { captureUpdate?: string }).captureUpdate === NEVER)
+
+    function layOut(width: number, height: number) {
+      onTestFinished(layOutBodies(() => ({ width, height })))
+    }
+
+    it('sizes the anchor to its content, top-left in place, with no undo step', () => {
+      layOut(260, 120)
+      const { scene } = renderOverlay([anchorWith('x = 1')])
+
+      expect(sizeWrites()).toHaveLength(1)
+      expect(scene.elementOf('m1')).toMatchObject({ x: 100, y: 50, width: 260, height: 120 })
+    })
+
+    it('writes once: the next render finds the anchor fits', () => {
+      layOut(260, 120)
+      const { scene } = renderOverlay([anchorWith('x = 1')])
+      scene.scrollTo({ scrollX: 5, scrollY: 0, zoom: 1 })
+
+      expect(sizeWrites()).toHaveLength(1)
+    })
+
+    it('writes nothing within half a pixel', () => {
+      layOut(400.5, 96)
+      renderOverlay([anchorWith('x = 1')])
+
+      expect(sizeWrites()).toHaveLength(0)
+    })
+
+    it('writes nothing for content that isn’t laid out (0 × 0)', () => {
+      renderOverlay([anchorWith('x = 1')])
+
+      expect(sizeWrites()).toHaveLength(0)
+    })
+
+    it('runs each size write through keepClean, so a clean sheet stays clean', () => {
+      layOut(260, 120)
+      const keepClean = vi.fn((write: () => void) => write())
+      const scene = fakeScene([anchorWith('x = 1')])
+      current = scene
+      canvasRoot = document.body.appendChild(document.createElement('div'))
+      onTestFinished(() => canvasRoot.remove())
+      render(
+        <MathOverlay
+          api={scene.api}
+          canvasRoot={canvasRoot}
+          forwardWheel={vi.fn()}
+          focusCanvas={vi.fn()}
+          keepClean={keepClean}
+        />,
+      )
+
+      expect(keepClean).toHaveBeenCalledTimes(1)
+      expect(scene.elementOf('m1').width).toBe(260)
+    })
+
+    it('waits while Excalidraw is busy, and writes at its next change once idle', () => {
+      layOut(260, 120)
+      const { scene } = renderOverlay([anchorWith('x = 1')])
+      scene.updateElements([anchorWith('x = 1')])
+      current.updateScene.mockClear()
+
+      scene.setBusy({ isResizing: true })
+      scene.updateElements([anchorWith('x = 2')])
+      expect(sizeWrites()).toHaveLength(0)
+
+      scene.setBusy({})
+      expect(sizeWrites()).toHaveLength(1)
+      expect(scene.elementOf('m1').width).toBe(260)
+    })
+
+    it('measures again when a body’s size changes, as when fonts load', () => {
+      let width = 260
+      onTestFinished(layOutBodies(() => ({ width, height: 120 })))
+      const { scene } = renderOverlay([anchorWith('x = 1')])
+      expect(scene.elementOf('m1').width).toBe(260)
+
+      width = 280
+      fireResizeObservers()
+
+      expect(scene.elementOf('m1').width).toBe(280)
+    })
+
+    it('grows while a line is typed, keeping the same field', () => {
+      let width = 260
+      onTestFinished(layOutBodies(() => ({ width, height: 48 })))
+      const { scene } = renderOverlay([anchorWith('x = 1')])
+      const field = openLine(1)
+
+      width = 340
+      type(field, 'x = 1 + 2 + 3')
+
+      expect(scene.elementOf('m1').width).toBe(340)
+      expect(openField()).toBe(field)
+      expect(document.activeElement).toBe(field)
+      expect(current.sourceWrites()).toBe(0)
+    })
+
+    it('snaps a resize handle back to where the anchor was, x and y too', () => {
+      layOut(400, 96)
+      const { scene } = renderOverlay([anchorWith('x = 1')])
+      const original = scene.elementOf('m1')
+
+      // The top-right handle: Excalidraw moved y as well as the size.
+      scene.updateElements([{ ...original, y: 5, width: 600, height: 141 }])
+      scene.pointerUp({
+        resize: { isResizing: true, handleType: 'ne' },
+        originalElements: new Map([['m1', original]]),
+      })
+
+      expect(scene.elementOf('m1')).toMatchObject({ x: 100, y: 50, width: 400, height: 96 })
+    })
+
+    it('leaves the rotate handle’s work alone', () => {
+      layOut(400, 96)
+      const { scene } = renderOverlay([anchorWith('x = 1')])
+      const original = scene.elementOf('m1')
+      scene.updateElements([{ ...original, angle: 1 } as ExcalidrawElement])
+      current.updateScene.mockClear()
+
+      scene.pointerUp({
+        resize: { isResizing: true, handleType: 'rotation' },
+        originalElements: new Map([['m1', original]]),
+      })
+
+      expect(scene.elementOf('m1').angle).toBe(1)
+      expect(sizeWrites()).toHaveLength(0)
     })
   })
 
@@ -824,7 +976,8 @@ describe('MathOverlay', () => {
 
   it('unsubscribes from Excalidraw when unmounted', () => {
     const { scene, unmount } = renderOverlay([anchor])
-    expect(scene.listenerCount()).toBe(2)
+    // The scene and the scroll, sizes waiting on an idle change, and snap-back.
+    expect(scene.listenerCount()).toBe(4)
 
     unmount()
 

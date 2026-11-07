@@ -14,7 +14,7 @@ export class ResizeObserverStub {
   constructor(callback: ResizeObserverCallback) {
     this.callback = callback
   }
-  observe(target: Element) {
+  observe(target: Element, _options?: ResizeObserverOptions) {
     this.targets.add(target)
     observers.add(this)
   }

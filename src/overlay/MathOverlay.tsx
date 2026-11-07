@@ -27,6 +27,7 @@ import {
 import type { RowBox } from './lineHit.ts'
 import { MathElementView } from './MathElementView.tsx'
 import { readingOrder } from './readingOrder.ts'
+import { useAnchorSizes } from './useAnchorSizes.ts'
 import { useSheetGestures } from './useSheetGestures.ts'
 import type { Viewport } from './viewport.ts'
 import './MathOverlay.css'
@@ -39,6 +40,7 @@ export type SceneApi = Pick<
   | 'getAppState'
   | 'onChange'
   | 'onScrollChange'
+  | 'onPointerUp'
   | 'updateScene'
 >
 
@@ -58,6 +60,11 @@ export interface MathOverlayProps {
   /** Gives the keyboard back to Excalidraw, so its Ctrl+Z works after Esc. */
   focusCanvas: () => void
   control?: Ref<LineEditControl>
+  /**
+   * Runs a size write so it doesn't make a clean sheet dirty
+   * (`SheetSession.keepClean`, docs/spec-v1.md section 4, Size).
+   */
+  keepClean?: (write: () => void) => void
 }
 
 interface SceneSnapshot {
@@ -92,6 +99,7 @@ export function MathOverlay({
   forwardWheel,
   focusCanvas,
   control,
+  keepClean = runNow,
 }: MathOverlayProps) {
   const overlayRef = useRef<HTMLDivElement>(null)
   const store = useMemo(() => createSceneStore(api), [api])
@@ -165,6 +173,13 @@ export function MathOverlay({
     focusCanvas,
   })
 
+  useAnchorSizes({
+    api,
+    overlay: () => overlayRef.current,
+    anchors: () => store.getSnapshot().anchors,
+    keepClean,
+  })
+
   const leaveLine = (anchorId: string, lineIndex: number) => {
     const current = editRef.current
     if (current?.anchorId === anchorId && current.lineIndex === lineIndex) {
@@ -208,6 +223,8 @@ export function MathOverlay({
     </div>
   )
 }
+
+const runNow = (write: () => void) => write()
 
 /**
  * An element's rows as laid out: `offsetTop` and `offsetHeight` ignore CSS
