@@ -1,7 +1,8 @@
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import App from './App.tsx'
 import { fakeFileAccess, fakeRecovery } from './test/files.ts'
+import { linesOf, resultsOf } from './test/sheetView.ts'
 
 const renderApp = () => render(<App files={fakeFileAccess()} recovery={fakeRecovery()} />)
 
@@ -20,13 +21,9 @@ describe('App', () => {
     renderApp()
 
     const [inputs, result] = await screen.findAllByRole('list', { name: 'Lines' })
-    expect(within(inputs).getAllByRole('listitem').map((line) => line.textContent)).toEqual([
-      'R = 10 kohm',
-      'I = 2 mA',
-    ])
-    expect(result).toHaveTextContent('U = I * R')
-    const [, results] = screen.getAllByRole('list', { name: 'Results' })
-    expect(results).toHaveTextContent('= 20 V')
+    expect(linesOf(inputs)).toEqual(['R = 10 kohm', 'I = 2 mA'])
+    expect(linesOf(result)).toEqual(['U = I * R'])
+    expect(resultsOf(result)).toBe('20 V')
   })
 
   it('starts on a clean untitled sheet', async () => {

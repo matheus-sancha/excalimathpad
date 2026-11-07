@@ -22,3 +22,12 @@
  * the installed package, so an Excalidraw upgrade that moves them fails CI.
  */
 export const ABOVE_DRAWING_BELOW_UI_Z_INDEX = 2
+
+/**
+ * Excalidraw's dark theme: a filter over its canvas (`--theme-filter` on
+ * `.excalidraw.theme--dark`), not a second palette. The overlay isn't inside
+ * that element, so in dark mode it takes the same filter, and math darkens
+ * exactly as drawings do (#50). Print builds its own views, so it stays light.
+ * `layers.test.ts` reads it from the installed package.
+ */
+export const DARK_THEME_FILTER = 'invert(93%) hue-rotate(180deg)'

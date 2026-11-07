@@ -9,6 +9,7 @@ import { AppShell } from '../shell/AppShell.tsx'
 import { sceneLoaded, undoControls } from '../test/excalidraw.ts'
 import { doubleClickLine } from '../test/gestures.ts'
 import { MathOverlay } from './MathOverlay.tsx'
+import { resultsOf as sheetResults } from '../test/sheetView.ts'
 
 /**
  * The overlay against the real Excalidraw (not the fake in
@@ -52,8 +53,7 @@ function Harness({ onReady }: { onReady: (handle: SheetCanvasHandle) => void }) 
 const elementOf = (id: string) =>
   document.querySelector<HTMLElement>(`[data-anchor-id="${id}"]`)
 const transformOf = (id: string) => elementOf(id)?.style.transform
-const resultsOf = (id: string) =>
-  elementOf(id)?.querySelector('.math-element__results')?.textContent?.trim()
+const resultsOf = (id: string) => sheetResults(elementOf(id))
 
 let api: SheetCanvasHandle['api']
 
@@ -129,11 +129,11 @@ describe('MathOverlay on real Excalidraw', () => {
   // element above the inputs, and it loses them.
   it('recalculates across elements on edit and when an anchor moves', async () => {
     const { api } = await mount()
-    expect(resultsOf('m2')).toBe('= 20 V')
+    expect(resultsOf('m2')).toBe('20 V')
 
     openLine(2)
     type('I = 4 mA')
-    expect(resultsOf('m2')).toBe('= 40 V')
+    expect(resultsOf('m2')).toBe('40 V')
 
     act(() => {
       api.updateScene({
@@ -156,7 +156,7 @@ describe('MathOverlay on real Excalidraw', () => {
       type('I = 4 mA')
       type('I = 5 mA')
 
-      expect(resultsOf('m2')).toBe('= 50 V')
+      expect(resultsOf('m2')).toBe('50 V')
       expect(sourceOf()).toBe('R = 10 kohm\nI = 2 mA')
       expect(canUndo()).toBe(false)
     })
@@ -173,27 +173,27 @@ describe('MathOverlay on real Excalidraw', () => {
       type('U = I * R * 2')
       press('Escape') // Commits a line in another element.
       expect(sourceOf()).toBe('R = 20 kohm\nI = 4 mA')
-      expect(resultsOf('m2')).toBe('= 160 V')
+      expect(resultsOf('m2')).toBe('160 V')
 
       undo()
       await waitFor(() => expect(sourceOf('m2')).toBe('U = I * R'))
-      await waitFor(() => expect(resultsOf('m2')).toBe('= 80 V'))
+      await waitFor(() => expect(resultsOf('m2')).toBe('80 V'))
       expect(sourceOf()).toBe('R = 20 kohm\nI = 4 mA')
 
       undo()
       await waitFor(() => expect(sourceOf()).toBe('R = 20 kohm\nI = 2 mA'))
-      await waitFor(() => expect(resultsOf('m2')).toBe('= 40 V'))
+      await waitFor(() => expect(resultsOf('m2')).toBe('40 V'))
 
       undo()
       await waitFor(() => expect(sourceOf()).toBe('R = 10 kohm\nI = 2 mA'))
-      await waitFor(() => expect(resultsOf('m2')).toBe('= 20 V'))
+      await waitFor(() => expect(resultsOf('m2')).toBe('20 V'))
       expect(canUndo()).toBe(false)
 
       redo()
       await waitFor(() => expect(sourceOf()).toBe('R = 20 kohm\nI = 2 mA'))
       redo()
       await waitFor(() => expect(sourceOf()).toBe('R = 20 kohm\nI = 4 mA'))
-      await waitFor(() => expect(resultsOf('m2')).toBe('= 80 V'))
+      await waitFor(() => expect(resultsOf('m2')).toBe('80 V'))
       redo()
       await waitFor(() => expect(sourceOf('m2')).toBe('U = I * R * 2'))
     })
@@ -327,7 +327,7 @@ describe('MathOverlay on real Excalidraw', () => {
     await waitFor(() => expect(sceneCount()).toBe(3))
 
     const copyId = api.getSceneElements().find((e) => !['m1', 'm2'].includes(e.id))!.id
-    await waitFor(() => expect(resultsOf(copyId)).toBe('= 20 V'))
+    await waitFor(() => expect(resultsOf(copyId)).toBe('20 V'))
 
     openLine(1, copyId)
     type('U = I * R * 2')

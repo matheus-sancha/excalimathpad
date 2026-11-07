@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import App from '../App.tsx'
 import { fakeFileAccess, fakeRecovery } from '../test/files.ts'
 import { doubleClickLine } from '../test/gestures.ts'
+import { linesOf } from '../test/sheetView.ts'
 import type { RecoveryCopy } from './recovery.ts'
 import { writeSheet } from './sheetFormat.ts'
 
@@ -58,7 +59,7 @@ const sheetText = (sources: string[]) =>
   )
 
 const linesOnScreen = () =>
-  screen.getAllByRole('list', { name: 'Lines' }).map((list) => list.textContent)
+  screen.getAllByRole('list', { name: 'Lines' }).map((list) => linesOf(list).join(''))
 
 describe('the ☰ menu', () => {
   it("has Open…, Save and Save as… first, and none of Excalidraw's own file items", async () => {

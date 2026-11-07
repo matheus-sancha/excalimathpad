@@ -7,7 +7,7 @@ import {
   type Ref,
 } from 'react'
 import type { ExcalidrawImperativeAPI } from '@excalidraw/excalidraw/types'
-import { ABOVE_DRAWING_BELOW_UI_Z_INDEX } from '../canvas/layers.ts'
+import { ABOVE_DRAWING_BELOW_UI_Z_INDEX, DARK_THEME_FILTER } from '../canvas/layers.ts'
 import {
   isMathAnchor,
   sameAnchor,
@@ -16,7 +16,7 @@ import {
   type MathAnchor,
 } from '../canvas/mathAnchor.ts'
 import type { ForwardWheel } from '../canvas/SheetCanvas.tsx'
-import { evaluateSheet, type SheetBlock } from '../math/evaluate.ts'
+import { evaluateSheetLines, type SheetBlock } from '../math/evaluate.ts'
 import {
   applyLineMove,
   startLineEdit,
@@ -63,6 +63,8 @@ export interface MathOverlayProps {
 interface SceneSnapshot {
   viewport: Viewport
   anchors: readonly MathAnchor[]
+  /** Excalidraw's theme: in dark, math darkens with the canvas's own filter. */
+  dark: boolean
 }
 
 /**
@@ -93,7 +95,7 @@ export function MathOverlay({
 }: MathOverlayProps) {
   const overlayRef = useRef<HTMLDivElement>(null)
   const store = useMemo(() => createSceneStore(api), [api])
-  const { viewport, anchors } = useSyncExternalStore(store.subscribe, store.getSnapshot)
+  const { viewport, anchors, dark } = useSyncExternalStore(store.subscribe, store.getSnapshot)
 
   const [edit, setEdit] = useState<LineEdit | null>(null)
   // Events read the latest edit from here: a field being removed can report its
@@ -114,8 +116,8 @@ export function MathOverlay({
       return { id, source: anchor ? typedSourceOf(anchor) : '' }
     }),
   )
-  const results = useMemo(
-    () => evaluateSheet(JSON.parse(sheetKey) as SheetBlock[]),
+  const lines = useMemo(
+    () => evaluateSheetLines(JSON.parse(sheetKey) as SheetBlock[]),
     [sheetKey],
   )
 
@@ -176,7 +178,11 @@ export function MathOverlay({
     <div
       ref={overlayRef}
       className="math-overlay"
-      style={{ zIndex: ABOVE_DRAWING_BELOW_UI_Z_INDEX }}
+      // In Excalidraw's dark theme, math darkens with the canvas's own filter.
+      style={{
+        zIndex: ABOVE_DRAWING_BELOW_UI_Z_INDEX,
+        filter: dark ? DARK_THEME_FILTER : undefined,
+      }}
     >
       {anchors.map((anchor) => (
         <MathElementView
@@ -184,7 +190,7 @@ export function MathOverlay({
           anchor={anchor}
           viewport={viewport}
           source={typedSourceOf(anchor)}
-          results={results.get(anchor.id) ?? []}
+          lines={lines.get(anchor.id) ?? []}
           edit={edit?.anchorId === anchor.id ? edit : null}
           onType={(text) => {
             const current = editRef.current
@@ -240,10 +246,11 @@ function createSceneStore(api: SceneApi) {
 }
 
 function readSnapshot(api: SceneApi): SceneSnapshot {
-  const { scrollX, scrollY, zoom } = api.getAppState()
+  const { scrollX, scrollY, zoom, theme } = api.getAppState()
   return {
     viewport: { scrollX, scrollY, zoom: zoom.value },
     anchors: api.getSceneElements().filter(isMathAnchor).map(toMathAnchor),
+    dark: theme === 'dark',
   }
 }
 
@@ -253,6 +260,7 @@ function sameSnapshot(a: SceneSnapshot, b: SceneSnapshot): boolean {
   if (va.scrollX !== vb.scrollX || va.scrollY !== vb.scrollY || va.zoom !== vb.zoom) {
     return false
   }
+  if (a.dark !== b.dark) return false
   if (a.anchors.length !== b.anchors.length) return false
   return a.anchors.every((anchor, i) => sameAnchor(anchor, b.anchors[i]))
 }
