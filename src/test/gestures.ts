@@ -70,12 +70,20 @@ const pointer = (point: ClientPoint) => ({
   isPrimary: true,
 })
 
-/** A press and release without moving, then the click the browser sends. */
+/**
+ * A press and release without moving, then the click the browser sends. Each
+ * is its own task in a browser, so React commits between them: each gets its
+ * own `act`.
+ */
 export function clickOnCanvas(point: ClientPoint) {
   const canvas = interactiveCanvas()
   act(() => {
     fireEvent.pointerDown(canvas, pointer(point))
+  })
+  act(() => {
     fireEvent.pointerUp(canvas, pointer(point))
+  })
+  act(() => {
     fireEvent.click(canvas, point)
   })
 }

@@ -1,9 +1,11 @@
 import { useEffect, useLayoutEffect, useRef } from 'react'
 import type { AppState } from '@excalidraw/excalidraw/types'
+import type { ExcalidrawElement } from '@excalidraw/excalidraw/element/types'
+import { listenToCanvas } from '../canvas/canvasEvents.ts'
 import { isMathAnchor, type MathAnchor } from '../canvas/mathAnchor.ts'
 import { deselectAll } from '../canvas/selection.ts'
 import { splitLines } from '../math/evaluate.ts'
-import { doubleClickTarget, keyAction, type CanvasState } from './gestures.ts'
+import { clickTarget, keyAction, ownerAt, type CanvasState, type Press } from './gestures.ts'
 import { containsPoint, lineAt, type RowBox } from './lineHit.ts'
 import type { LineEdit } from './lineEdit.ts'
 import type { SceneApi } from './MathOverlay.tsx'
@@ -12,8 +14,8 @@ import { stageToScene, type Point } from './viewport.ts'
 export interface SheetGestures {
   api: SceneApi
   /**
-   * The box Excalidraw fills. The overlay is its sibling, so the line field's
-   * own clicks never reach these listeners.
+   * The box Excalidraw fills, where the canvas's input is heard
+   * (`listenToCanvas`).
    */
   canvasRoot: HTMLElement
   /** Live anchors in Excalidraw's z-order, bottom first. */
@@ -34,9 +36,9 @@ export interface SheetGestures {
  * or moves the edit. Excalidraw keeps click, drag, select and rotate, because the
  * overlay takes no pointer events and the anchor's fill takes clicks inside it.
  *
- * Each listener runs in the capture phase, before Excalidraw's React handlers,
- * and stops the event only when math acts on it. The decisions are in
- * `gestures.ts` and `lineHit.ts`; this wires them to the DOM and the app state.
+ * `listenToCanvas` (`src/canvas/`) hands each event over before Excalidraw hears
+ * it; the decisions are in `gestures.ts` and `lineHit.ts`. This wires them to
+ * the app state and the line edit.
  */
 export function useSheetGestures(gestures: SheetGestures) {
   const latest = useRef(gestures)
@@ -47,6 +49,7 @@ export function useSheetGestures(gestures: SheetGestures) {
 
   useEffect(() => {
     const g = () => latest.current
+    const anchorById = (id: string) => g().anchors().find((anchor) => anchor.id === id)
 
     const toScene = (event: MouseEvent): Point => {
       const { offsetLeft, offsetTop, scrollX, scrollY, zoom } = api.getAppState()
@@ -56,89 +59,84 @@ export function useSheetGestures(gestures: SheetGestures) {
       )
     }
 
-    // A press on the edited element, kept until its click: if the anchor didn't
-    // move, it was a click on a line, and the edit moves there.
-    let press: { anchorId: string; lineIndex: number; x: number; y: number } | null = null
+    const facts = (event: Event) => ({ targetOwnsEvent: isTypingTarget(event.target) })
 
-    // Leaving comes before Excalidraw sees the press, so a drag starts on the
-    // committed scene: the line is one undo step and the move is its own.
-    const onPointerDown = (event: PointerEvent) => {
-      press = null
-      const edit = g().edit()
-      if (!edit) return
-      const anchor = g().anchors().find(({ id }) => id === edit.anchorId)
-      const point = toScene(event)
-      if (anchor && containsPoint(anchor, point)) {
-        const lineIndex = lineAt(anchor, point, g().rowsOf(anchor.id))
-        press = { anchorId: anchor.id, lineIndex, x: anchor.x, y: anchor.y }
-      }
-      g().leaveLine()
-      g().focusCanvas()
-    }
+    // A press on the edited element, kept until its click.
+    let press: Press | null = null
 
-    const onClick = () => {
-      const pressed = press
-      press = null
-      if (!pressed || api.getAppState().activeTool.type !== 'selection') return
-      const anchor = g().anchors().find(({ id }) => id === pressed.anchorId)
-      if (anchor && anchor.x === pressed.x && anchor.y === pressed.y) {
-        g().openLine(pressed.anchorId, pressed.lineIndex)
-      }
-    }
+    return listenToCanvas(canvasRoot, {
+      // Leaving comes before Excalidraw sees the press, so a drag starts on the
+      // committed scene: the line is one undo step and the move is its own.
+      pointerDown(event) {
+        press = null
+        const edit = g().edit()
+        if (!edit) return
+        const anchor = anchorById(edit.anchorId)
+        const point = toScene(event)
+        if (anchor && containsPoint(anchor, point)) {
+          const lineIndex = lineAt(anchor, point, g().rowsOf(anchor.id))
+          press = { anchorId: anchor.id, lineIndex, x: anchor.x, y: anchor.y }
+        }
+        g().leaveLine()
+        g().focusCanvas()
+      },
 
-    const onDoubleClick = (event: MouseEvent) => {
-      const point = toScene(event)
-      const hit = doubleClickTarget(canvasState(api.getAppState()), g().anchors(), point, {
-        targetOwnsEvent: isTypingTarget(event.target),
-      })
-      if (!hit) return
-      event.stopPropagation()
-      event.preventDefault()
-      g().openLine(hit.id, lineAt(hit, point, g().rowsOf(hit.id)))
-    }
+      click(event) {
+        const pressed = press
+        press = null
+        if (!pressed) return
+        const elements = api.getSceneElements()
+        const target = clickTarget(
+          canvasState(api.getAppState(), elements),
+          g().anchors(),
+          toScene(event),
+          pressed,
+          facts(event),
+        )
+        if (target) g().openLine(target.id, pressed.lineIndex)
+      },
 
-    // Keys come to `document` from the whole page. Only those on the canvas, or
-    // on nothing in particular (the body), are the canvas's.
-    const ownsKeys = (target: EventTarget | null) =>
-      isTypingTarget(target) ||
-      !(target === document.body || (target instanceof Node && canvasRoot.contains(target)))
+      doubleClick(event) {
+        const point = toScene(event)
+        const elements = api.getSceneElements()
+        const owner = ownerAt(
+          canvasState(api.getAppState(), elements),
+          g().anchors(),
+          point,
+          facts(event),
+        )
+        if (!owner) return false
+        g().openLine(owner.id, lineAt(owner, point, g().rowsOf(owner.id)))
+        return true
+      },
 
-    const onKeyDown = (event: KeyboardEvent) => {
-      const app = api.getAppState()
-      const elements = api.getSceneElements()
-      const math = new Set(elements.filter(isMathAnchor).map(({ id }) => id))
-      const selection = elements.filter(({ id }) => app.selectedElementIds[id]).map(({ id }) => id)
-      const action = keyAction(canvasState(app), selection, (id) => math.has(id), {
-        key: event.key,
-        modifier: event.ctrlKey || event.metaKey || event.altKey || event.shiftKey,
-        composing: event.isComposing,
-        targetOwnsEvent: ownsKeys(event.target),
-      })
-      if (!action) return
-      event.stopPropagation()
-      event.preventDefault()
-      if (action.kind === 'deselect') {
-        deselectAll(api)
-        return
-      }
-      const anchor = g().anchors().find(({ id }) => id === action.anchorId)
-      if (anchor) g().openLine(anchor.id, splitLines(anchor.source).length - 1)
-    }
-
-    canvasRoot.addEventListener('pointerdown', onPointerDown, true)
-    canvasRoot.addEventListener('click', onClick, true)
-    canvasRoot.addEventListener('dblclick', onDoubleClick, true)
-    document.addEventListener('keydown', onKeyDown, true)
-    return () => {
-      canvasRoot.removeEventListener('pointerdown', onPointerDown, true)
-      canvasRoot.removeEventListener('click', onClick, true)
-      canvasRoot.removeEventListener('dblclick', onDoubleClick, true)
-      document.removeEventListener('keydown', onKeyDown, true)
-    }
+      keyDown(event) {
+        const app = api.getAppState()
+        const elements = api.getSceneElements()
+        const math = new Set(elements.filter(isMathAnchor).map(({ id }) => id))
+        const selection = elements
+          .filter(({ id }) => app.selectedElementIds[id])
+          .map(({ id }) => id)
+        const action = keyAction(canvasState(app, elements), selection, (id) => math.has(id), {
+          key: event.key,
+          modifier: event.ctrlKey || event.metaKey || event.altKey || event.shiftKey,
+          composing: event.isComposing,
+          ...facts(event),
+        })
+        if (!action) return false
+        if (action.kind === 'deselect') {
+          deselectAll(api)
+          return true
+        }
+        const anchor = anchorById(action.anchorId)
+        if (anchor) g().openLine(anchor.id, splitLines(anchor.source).length - 1)
+        return true
+      },
+    })
   }, [api, canvasRoot])
 }
 
-function canvasState(app: AppState): CanvasState {
+function canvasState(app: AppState, elements: readonly ExcalidrawElement[]): CanvasState {
   return {
     tool: app.activeTool.type,
     busy: Boolean(
@@ -152,6 +150,7 @@ function canvasState(app: AppState): CanvasState {
         app.contextMenu,
     ),
     selected: app.selectedElementIds,
+    zIndex: Object.fromEntries(elements.map(({ id }, index) => [id, index])),
   }
 }
 
