@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import { CaptureUpdateAction, newElementWith } from '@excalidraw/excalidraw'
 import type { NormalizedZoomValue } from '@excalidraw/excalidraw/types'
@@ -7,6 +7,7 @@ import { SheetCanvas, type SheetCanvasHandle } from '../canvas/SheetCanvas.tsx'
 import { createMathAnchorElements } from '../canvas/mathAnchor.ts'
 import { AppShell } from '../shell/AppShell.tsx'
 import { sceneLoaded, undoControls } from '../test/excalidraw.ts'
+import { doubleClickLine } from '../test/gestures.ts'
 import { MathOverlay } from './MathOverlay.tsx'
 
 /**
@@ -38,6 +39,7 @@ function Harness({ onReady }: { onReady: (handle: SheetCanvasHandle) => void }) 
         canvas && (
           <MathOverlay
             api={canvas.api}
+            canvasRoot={canvas.root}
             forwardWheel={canvas.forwardWheel}
             focusCanvas={canvas.focusCanvas}
           />
@@ -53,11 +55,13 @@ const transformOf = (id: string) => elementOf(id)?.style.transform
 const resultsOf = (id: string) =>
   elementOf(id)?.querySelector('.math-element__results')?.textContent?.trim()
 
+let api: SheetCanvasHandle['api']
+
 async function mount() {
   let handle: SheetCanvasHandle | undefined
   render(<Harness onReady={(h) => (handle = h)} />)
   await screen.findAllByRole('list', { name: 'Lines' })
-  const { api } = handle!
+  api = handle!.api
   await sceneLoaded(api)
   return {
     api,
@@ -68,8 +72,20 @@ async function mount() {
   }
 }
 
+/**
+ * A person's double-click on line `n`. Selecting is Excalidraw's own undo step
+ * (docs/spec-v1.md section 6), so the element is selected first without one:
+ * these tests count line steps. `gestures.excalidraw.test.tsx` covers how the
+ * selection steps sit among them.
+ */
 function openLine(n: number, id = 'm1') {
-  fireEvent.click(within(elementOf(id)!).getByRole('button', { name: `Edit line ${n}` }))
+  act(() => {
+    api.updateScene({
+      appState: { selectedElementIds: { [id]: true } },
+      captureUpdate: CaptureUpdateAction.NEVER,
+    })
+  })
+  doubleClickLine(id, n)
   return field()
 }
 

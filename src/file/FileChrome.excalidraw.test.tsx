@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 import { describe, expect, it } from 'vitest'
 import App from '../App.tsx'
 import { fakeFileAccess, fakeRecovery } from '../test/files.ts'
+import { doubleClickLine } from '../test/gestures.ts'
 import type { RecoveryCopy } from './recovery.ts'
 import { writeSheet } from './sheetFormat.ts'
 
@@ -24,7 +25,7 @@ const canvasRoot = () => document.querySelector<HTMLElement>('.excalidraw')!
 
 /** Opens line `n` (1-based) of the first element and types over it. */
 function typeLine(n: number, text: string) {
-  fireEvent.click(screen.getAllByRole('button', { name: `Edit line ${n}` })[0])
+  doubleClickLine('math-inputs', n)
   const field = screen.getByRole('textbox', { name: 'Line source' })
   fireEvent.input(field, { target: { value: text } })
   return field
@@ -164,8 +165,9 @@ describe('the file name and the window title', () => {
   it('stay clean for a selection or a scroll', async () => {
     const { name } = await mount()
 
-    fireEvent.click(screen.getAllByRole('button', { name: 'Edit line 1' })[0])
+    doubleClickLine('math-inputs', 1)
     fireEvent.keyDown(screen.getByRole('textbox', { name: 'Line source' }), { key: 'Escape' })
+    fireEvent.keyDown(document.activeElement!, { key: 'Escape' })
     fireEvent.wheel(document.querySelector('canvas')!, { deltaY: 120 })
 
     expect(name).toHaveTextContent(/^Untitled$/)

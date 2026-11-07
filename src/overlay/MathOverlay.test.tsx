@@ -1,26 +1,33 @@
 import { act, fireEvent, render, screen, within } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import type { ExcalidrawElement } from '@excalidraw/excalidraw/element/types'
 import type { AppState } from '@excalidraw/excalidraw/types'
 import { createMathAnchorElements } from '../canvas/mathAnchor.ts'
+import { linePoint } from '../test/gestures.ts'
 import { MathOverlay, type SceneApi } from './MathOverlay.tsx'
 
 /**
- * A fake of the slice of Excalidraw's API the overlay uses: a mutable scene
- * and viewport, plus the two subscriptions. Tests change it the way
- * Excalidraw would and fire the matching callback.
+ * A fake of the slice of Excalidraw's API the overlay uses: a mutable scene,
+ * viewport and selection, plus the two subscriptions. Tests change it the way
+ * Excalidraw would and fire the matching callback. It does no hit-testing:
+ * `select` stands in for the click Excalidraw would have handled.
  */
 function fakeScene(elements: ExcalidrawElement[]) {
   let scene = elements
   let view = { scrollX: 0, scrollY: 0, zoom: 1 }
+  let selectedElementIds: Record<string, true> = {}
+  let tool = 'selection'
   const changeListeners = new Set<() => void>()
   const scrollListeners = new Set<() => void>()
   const sources = () => JSON.stringify(scene.map((e) => e.customData?.source))
   // A line commit takes several updates; only one of them changes a source.
   let sourceWrites = 0
-  const updateScene = vi.fn((data: { elements?: unknown }) => {
+  const updateScene = vi.fn((data: { elements?: unknown; appState?: Partial<AppState> }) => {
     const before = sources()
     if (data.elements) scene = data.elements as ExcalidrawElement[]
+    if (data.appState?.selectedElementIds) {
+      selectedElementIds = { ...data.appState.selectedElementIds }
+    }
     if (sources() !== before) sourceWrites++
     act(() => changeListeners.forEach((cb) => cb()))
   })
@@ -32,6 +39,10 @@ function fakeScene(elements: ExcalidrawElement[]) {
         scrollX: view.scrollX,
         scrollY: view.scrollY,
         zoom: { value: view.zoom },
+        offsetLeft: 0,
+        offsetTop: 0,
+        activeTool: { type: tool },
+        selectedElementIds,
       }) as unknown as AppState,
     onChange: (cb) => {
       changeListeners.add(cb as () => void)
@@ -57,6 +68,13 @@ function fakeScene(elements: ExcalidrawElement[]) {
       view = next
       act(() => scrollListeners.forEach((cb) => cb()))
     },
+    select(...ids: string[]) {
+      selectedElementIds = Object.fromEntries(ids.map((id) => [id, true as const]))
+    },
+    selected: () => Object.keys(selectedElementIds),
+    setTool(next: string) {
+      tool = next
+    },
   }
 }
 
@@ -72,12 +90,24 @@ const anchorWith = (source: string) =>
 const elementOf = (id: string) =>
   document.querySelector<HTMLElement>(`[data-anchor-id="${id}"]`)
 
+/** Stands in for the box Excalidraw fills, where the gestures listen. */
+let canvasRoot: HTMLElement
+let current: ReturnType<typeof fakeScene>
+
 function renderOverlay(elements: ExcalidrawElement[]) {
   const scene = fakeScene(elements)
+  current = scene
+  canvasRoot = document.body.appendChild(document.createElement('div'))
+  onTestFinished(() => canvasRoot.remove())
   const forwardWheel = vi.fn()
   const focusCanvas = vi.fn()
   const view = render(
-    <MathOverlay api={scene.api} forwardWheel={forwardWheel} focusCanvas={focusCanvas} />,
+    <MathOverlay
+      api={scene.api}
+      canvasRoot={canvasRoot}
+      forwardWheel={forwardWheel}
+      focusCanvas={focusCanvas}
+    />,
   )
   return { scene, forwardWheel, focusCanvas, unmount: view.unmount }
 }
@@ -85,10 +115,15 @@ function renderOverlay(elements: ExcalidrawElement[]) {
 const resultsOf = (id: string) =>
   elementOf(id)!.querySelector('.math-element__results')!.textContent!.trim()
 
+/** Excalidraw's first click selected the element; the double-click opens line `n`. */
 function openLine(n: number, id = 'm1') {
-  fireEvent.click(within(elementOf(id)!).getByRole('button', { name: `Edit line ${n}` }))
+  current.select(id)
+  fireEvent.doubleClick(canvasRoot, linePoint(id, n))
   return screen.getByRole<HTMLInputElement>('textbox', { name: 'Line source' })
 }
+
+const rowOf = (id: string, n: number) =>
+  elementOf(id)!.querySelector<HTMLElement>(`[data-line="${n - 1}"]`)!
 
 function type(field: HTMLInputElement, text: string) {
   fireEvent.input(field, { target: { value: text } })
@@ -161,7 +196,7 @@ describe('MathOverlay', () => {
     scene.updateElements([anchorWith('I = 3 mA\nI * 2')])
 
     expect(resultsOf('m1')).toBe('= 6 mA')
-    expect(screen.getByRole('button', { name: 'Edit line 1' })).toHaveTextContent('I = 3 mA')
+    expect(rowOf('m1', 1)).toHaveTextContent('I = 3 mA')
   })
 
   it('keeps one row per line beside one result per line', () => {
@@ -380,6 +415,211 @@ describe('MathOverlay', () => {
     })
   })
 
+  describe('gestures', () => {
+    const press = (point: { clientX: number; clientY: number }) =>
+      fireEvent.pointerDown(canvasRoot, { ...point, button: 0 })
+    const click = (point: { clientX: number; clientY: number }) => {
+      press(point)
+      fireEvent.click(canvasRoot, point)
+    }
+
+    it('takes no pointer events: rows are plain text, not controls', () => {
+      renderOverlay([anchorWith('a = 1\nb = 2')])
+
+      expect(within(elementOf('m1')!).queryAllByRole('button')).toEqual([])
+      expect(rowOf('m1', 2)).toHaveTextContent('b = 2')
+    })
+
+    it('a double-click on a selected element edits the line under it, caret at the end', () => {
+      renderOverlay([anchorWith('a = 1\nb = 22\nc = 3')])
+      current.select('m1')
+
+      const notStopped = fireEvent.doubleClick(canvasRoot, linePoint('m1', 2))
+
+      expect(notStopped).toBe(false)
+      const field = openField()!
+      expect(field.value).toBe('b = 22')
+      expect(field.selectionStart).toBe(6)
+      expect(document.activeElement).toBe(field)
+    })
+
+    it('a double-click below the last row edits the last line', () => {
+      renderOverlay([anchorWith('a = 1\nb = 2')])
+      current.select('m1')
+
+      // Past the two rows, still inside the 96-unit anchor.
+      fireEvent.doubleClick(canvasRoot, linePoint('m1', 3.5))
+
+      expect(openField()!.value).toBe('b = 2')
+    })
+
+    it('finds the line through pan and zoom', () => {
+      const { scene } = renderOverlay([anchorWith('a = 1\nb = 2\nc = 3')])
+      scene.scrollTo({ scrollX: -40, scrollY: 25, zoom: 1.5 })
+      current.select('m1')
+
+      fireEvent.doubleClick(canvasRoot, linePoint('m1', 3))
+
+      expect(openField()!.value).toBe('c = 3')
+    })
+
+    it('leaves a double-click to Excalidraw when the element is not selected', () => {
+      renderOverlay([anchorWith('a = 1')])
+
+      const notStopped = fireEvent.doubleClick(canvasRoot, linePoint('m1', 1))
+
+      expect(notStopped).toBe(true)
+      expect(openField()).toBeNull()
+    })
+
+    it('leaves a double-click to Excalidraw with another tool', () => {
+      const { scene } = renderOverlay([anchorWith('a = 1')])
+      current.select('m1')
+      scene.setTool('rectangle')
+
+      fireEvent.doubleClick(canvasRoot, linePoint('m1', 1))
+
+      expect(openField()).toBeNull()
+    })
+
+    it('a double-click on a locked element with nothing selected edits it', () => {
+      renderOverlay([{ ...anchorWith('a = 1'), locked: true }])
+
+      const notStopped = fireEvent.doubleClick(canvasRoot, linePoint('m1', 1))
+
+      expect(notStopped).toBe(false)
+      expect(openField()!.value).toBe('a = 1')
+    })
+
+    it('Enter on one selected element edits its last line, caret at the end', () => {
+      renderOverlay([anchorWith('a = 1\nb = 22')])
+      current.select('m1')
+
+      const notStopped = fireEvent.keyDown(document.body, { key: 'Enter' })
+
+      expect(notStopped).toBe(false)
+      expect(openField()!.value).toBe('b = 22')
+      expect(openField()!.selectionStart).toBe(6)
+    })
+
+    it('Enter with a modifier, or with nothing selected, stays Excalidraw’s', () => {
+      renderOverlay([anchorWith('a = 1')])
+
+      fireEvent.keyDown(document.body, { key: 'Enter' })
+      current.select('m1')
+      fireEvent.keyDown(document.body, { key: 'Enter', shiftKey: true })
+
+      expect(openField()).toBeNull()
+    })
+
+    it('Esc with a math element in the selection deselects, with no undo step', () => {
+      const { scene } = renderOverlay([anchorWith('a = 1'), plainRect])
+      current.select('m1', 'r1')
+
+      const notStopped = fireEvent.keyDown(document.body, { key: 'Escape' })
+
+      expect(notStopped).toBe(false)
+      expect(scene.selected()).toEqual([])
+      expect(scene.updateScene).toHaveBeenLastCalledWith(
+        expect.objectContaining({ captureUpdate: 'NEVER' }),
+      )
+    })
+
+    // Found in #43: the deselect stole Esc from the open-file question.
+    it('leaves keys from the app’s own UI alone, such as a dialog', () => {
+      const { scene } = renderOverlay([anchorWith('a = 1')])
+      current.select('m1')
+      const dialog = document.body.appendChild(document.createElement('div'))
+      onTestFinished(() => dialog.remove())
+
+      const notStopped = fireEvent.keyDown(dialog, { key: 'Escape' })
+
+      expect(notStopped).toBe(true)
+      expect(scene.selected()).toEqual(['m1'])
+    })
+
+    it('Esc with only drawings selected stays Excalidraw’s', () => {
+      const { scene } = renderOverlay([anchorWith('a = 1'), plainRect])
+      current.select('r1')
+
+      fireEvent.keyDown(document.body, { key: 'Escape' })
+
+      expect(scene.selected()).toEqual(['r1'])
+    })
+
+    it('the first Esc leaves the line and keeps the selection; the second deselects', () => {
+      const { scene } = renderOverlay([anchorWith('a = 1')])
+      const field = openLine(1)
+
+      fireEvent.keyDown(field, { key: 'Escape' })
+      expect(openField()).toBeNull()
+      expect(scene.selected()).toEqual(['m1'])
+
+      fireEvent.keyDown(document.body, { key: 'Escape' })
+      expect(scene.selected()).toEqual([])
+    })
+
+    it('a press outside the element writes the line once and leaves', () => {
+      const { scene, focusCanvas } = renderOverlay([anchorWith('a = 1')])
+      type(openLine(1), 'a = 2')
+
+      click({ clientX: 5, clientY: 5 })
+
+      expect(openField()).toBeNull()
+      expect(scene.sourceWrites()).toBe(1)
+      expect(scene.sourceOf('m1')).toBe('a = 2')
+      expect(focusCanvas).toHaveBeenCalled()
+    })
+
+    it('a click on another line of the element moves the edit there, one write', () => {
+      const { scene } = renderOverlay([anchorWith('a = 1\nb = 2')])
+      type(openLine(1), 'a = 9')
+
+      click(linePoint('m1', 2))
+
+      expect(scene.sourceWrites()).toBe(1)
+      expect(scene.sourceOf('m1')).toBe('a = 9\nb = 2')
+      expect(openField()!.value).toBe('b = 2')
+    })
+
+    it('a press that turns into a drag leaves the edit and opens nothing', () => {
+      const { scene } = renderOverlay([anchorWith('a = 1\nb = 2')])
+      type(openLine(1), 'a = 9')
+      const at = linePoint('m1', 2)
+
+      press(at)
+      // Excalidraw moves the anchor before the click arrives.
+      scene.updateElements([{ ...anchorWith('a = 9\nb = 2'), x: 160 }])
+      fireEvent.click(canvasRoot, at)
+
+      expect(openField()).toBeNull()
+      expect(scene.sourceOf('m1')).toBe('a = 9\nb = 2')
+    })
+
+    it('a click on another element while editing only leaves', () => {
+      const [first, second] = createMathAnchorElements([
+        { id: 'm1', x: 0, y: 0, width: 100, height: 50, source: 'a = 1' },
+        { id: 'm2', x: 0, y: 100, width: 100, height: 50, source: 'b = 2' },
+      ])
+      renderOverlay([first, second])
+      openLine(1, 'm1')
+
+      click(linePoint('m2', 1))
+
+      expect(openField()).toBeNull()
+    })
+
+    it('stops listening when unmounted', () => {
+      const { unmount } = renderOverlay([anchorWith('a = 1')])
+      current.select('m1')
+      const at = linePoint('m1', 1)
+      unmount()
+
+      expect(fireEvent.keyDown(document.body, { key: 'Enter' })).toBe(true)
+      expect(fireEvent.doubleClick(canvasRoot, at)).toBe(true)
+    })
+  })
+
   describe('across elements (one sheet, reading order)', () => {
     const [inputs, uses] = createMathAnchorElements([
       { id: 'inputs', x: 100, y: 50, width: 400, height: 72, source: 'R = 10 kohm\nI = 2 mA' },
@@ -429,12 +669,10 @@ describe('MathOverlay', () => {
     expect(scene.listenerCount()).toBe(0)
   })
 
-  it('forwards wheel events over a math element to the canvas', () => {
+  it('forwards wheel events over the line field to the canvas', () => {
     const { forwardWheel } = renderOverlay([anchor])
 
-    fireEvent.wheel(screen.getByRole('button', { name: 'Edit line 1' }), {
-      deltaY: 50,
-    })
+    fireEvent.wheel(openLine(1), { deltaY: 50 })
 
     expect(forwardWheel).toHaveBeenCalledOnce()
   })

@@ -20,7 +20,7 @@ describe('App', () => {
     renderApp()
 
     const [inputs, result] = await screen.findAllByRole('list', { name: 'Lines' })
-    expect(within(inputs).getAllByRole('button').map((line) => line.textContent)).toEqual([
+    expect(within(inputs).getAllByRole('listitem').map((line) => line.textContent)).toEqual([
       'R = 10 kohm',
       'I = 2 mA',
     ])
