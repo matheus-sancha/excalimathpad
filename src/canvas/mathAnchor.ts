@@ -14,6 +14,9 @@ import type { ExcalidrawImperativeAPI } from '@excalidraw/excalidraw/types'
  */
 export const MATH_ANCHOR_KIND = 'math'
 
+/** White at 1/255 alpha: invisible, yet not transparent to Excalidraw's hit-testing. */
+export const ANCHOR_BACKGROUND = '#ffffff01'
+
 /** What the overlay needs from an anchor, in scene coordinates. */
 export interface MathAnchor {
   id: string
@@ -25,6 +28,8 @@ export interface MathAnchor {
   angle: number
   /** The element's lines. The scene holds the only stored copy. */
   source: string
+  /** Excalidraw's lock: it holds the position only, and the lines still edit (#43). */
+  locked: boolean
 }
 
 export function isMathAnchor(element: ExcalidrawElement): boolean {
@@ -42,8 +47,8 @@ function readSource(element: ExcalidrawElement): string {
 }
 
 export function toMathAnchor(element: ExcalidrawElement): MathAnchor {
-  const { id, x, y, width, height, angle } = element
-  return { id, x, y, width, height, angle, source: readSource(element) }
+  const { id, x, y, width, height, angle, locked } = element
+  return { id, x, y, width, height, angle, locked, source: readSource(element) }
 }
 
 /** True when two anchors would be drawn and evaluated identically. */
@@ -55,16 +60,19 @@ export function sameAnchor(a: MathAnchor, b: MathAnchor): boolean {
     a.width === b.width &&
     a.height === b.height &&
     a.angle === b.angle &&
+    a.locked === b.locked &&
     a.source === b.source
   )
 }
 
 /** Builds the scene elements for new anchors (e.g. for `initialData`). */
 export function createMathAnchorElements(
-  anchors: ReadonlyArray<Omit<MathAnchor, 'angle' | 'source'> & { source?: string }>,
+  anchors: ReadonlyArray<
+    Omit<MathAnchor, 'angle' | 'source' | 'locked'> & { source?: string; locked?: boolean }
+  >,
 ) {
   return convertToExcalidrawElements(
-    anchors.map(({ id, x, y, width, height, source = '' }) => ({
+    anchors.map(({ id, x, y, width, height, source = '', locked = false }) => ({
       type: 'rectangle' as const,
       id,
       x,
@@ -73,8 +81,13 @@ export function createMathAnchorElements(
       height,
       strokeColor: '#868e96',
       strokeStyle: 'dashed' as const,
-      backgroundColor: 'transparent',
+      // Looks transparent, but Excalidraw tests the inside of a shape only when
+      // its background isn't, so a click or drag anywhere inside selects or
+      // moves the anchor (ADR 0002, #28). A contract test pins it.
+      backgroundColor: ANCHOR_BACKGROUND,
+      fillStyle: 'solid' as const,
       roughness: 0,
+      locked,
       customData: { kind: MATH_ANCHOR_KIND, source },
     })),
     // Keep our ids: callers refer to their anchors by them.

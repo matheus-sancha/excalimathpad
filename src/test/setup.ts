@@ -2,6 +2,7 @@ import '@testing-library/jest-dom/vitest'
 import 'vitest-canvas-mock'
 import { cleanup } from '@testing-library/react'
 import { afterEach } from 'vitest'
+import { installRowLayout } from './gestures.ts'
 
 afterEach(cleanup)
 
@@ -62,3 +63,6 @@ if (!document.fonts) {
     },
   })
 }
+
+// Math rows get the layout their CSS gives them, so line hits work in jsdom.
+installRowLayout()
