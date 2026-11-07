@@ -28,8 +28,10 @@ server. v1 target: one sheet, for Matheus's own use.
   is the official, unforked component; its `onReady` hands out a
   `SheetCanvasHandle`: Excalidraw's imperative API plus `forwardWheel` and
   `focusCanvas`. `mathAnchor.ts` defines a math element's anchor (a rectangle
-  with `customData.kind === "math"` and `customData.source`, ADR 0002) and
-  `writeAnchorSource`, the only way source enters the scene. `sceneFile.ts` is
+  with `customData.kind === "math"` and `customData.source`, ADR 0002; a solid
+  `#ffffff01` fill, so clicks inside it select and drag it) and
+  `writeAnchorSource`, the only way source enters the scene. `selection.ts`
+  holds `deselectAll`, the second Esc's write (`NEVER`, no undo step). `sceneFile.ts` is
   the Excalidraw half of the sheet file: `serializeScene`, `loadScene` (no undo
   step, clears history) and `saveKey`, the key dirty is measured by.
   `SheetCanvas` also turns off Excalidraw's own open, save and export and draws
@@ -73,10 +75,15 @@ server. v1 target: one sheet, for Matheus's own use.
   line writes. It owns the sheet's evaluation: it sorts anchors with
   `readingOrder.ts` (pure) and runs `evaluateSheet` on every keystroke, every
   source change and every change of order, then hands each `MathElementView`
-  its results. A row opens in a one-line field on click, until the gestures
-  arrive (#43). Its `control` lets the sheet file commit the line (Ctrl+S keeps
-  it open) or leave it (Open). Depends on: canvas (anchor and layer contracts,
-  API types), math.
+  its results. The overlay takes no pointer events except the open field:
+  Excalidraw gets every click and drag. `useSheetGestures` opens, moves and
+  leaves the line edit from capture listeners (dblclick, pointerdown and click
+  on the canvas root, keydown on `document`); `gestures.ts` (pure) decides when
+  a double-click, Enter or Esc is math's, and `lineHit.ts` (pure) finds the
+  element and line under a point from geometry and the rows' `offsetTop` and
+  `offsetHeight` (spec section 4, Gestures, section 14). Its `control` lets the
+  sheet file commit the line (Ctrl+S keeps it open) or leave it (Open).
+  Depends on: canvas (anchor, selection and layer contracts, API types), math.
 - **file** (`src/file/`) — the sheet file (ADR 0004, spec section 7).
   `sheetFormat.ts` (pure) reads and writes the `excalimathpad` block, settings
   and migrations. `sheetSession.ts` is the deep module: save, save as, open,
@@ -111,6 +118,12 @@ and everything downstream recalculates. Engine: math.js, client-side.
 - **Line edit** — the one line shown as raw source: anchor id, line index and
   the typed text. UI state, never in the scene. The sheet runs from the typed
   text on every keystroke.
+- **Gesture** — a double-click, Enter, Esc, or a press on the canvas that opens,
+  moves or leaves the line edit. A double-click is math's when Excalidraw's own
+  first click selected the anchor under the pointer (on its own or through its
+  group), or the anchor is locked and nothing was selected; a drawing on top
+  keeps its double-click. A **click** on the edited element is a press and its
+  click with the anchor's `x` and `y` unchanged; otherwise the press was a drag.
 - **Line commit** — the moment an edit leaves a line whose text differs from the
   scene. It writes the element's whole source once, as one undo step, so a split
   or a join is one step too.
@@ -163,10 +176,24 @@ and everything downstream recalculates. Engine: math.js, client-side.
   math cover Excalidraw's toolbar and take its clicks. Excalidraw's z-indexes
   are CSS internals; `layers.test.ts` reads them from the installed package,
   so an upgrade that moves them fails CI.
-- **Wheel over math is forwarded** to Excalidraw's canvas
+- **Wheel over the line field is forwarded** to Excalidraw's canvas
   (`SheetCanvasHandle.forwardWheel`): Excalidraw listens for `wheel` on its
-  own container, which the overlay is not inside. Without it, scrolling over
-  a math element does nothing and ctrl+wheel zooms the browser page.
+  own container, which the overlay is not inside. The field is the only part of
+  the overlay that takes pointer events; without this, ctrl+wheel over it zooms
+  the browser page.
+- **Gestures run in the capture phase, before Excalidraw's React handlers**
+  (`src/overlay/useSheetGestures.ts`), and stop an event only when math acts on
+  it. A press leaves the open line before Excalidraw sees it, so a drag starts
+  on the committed scene and the line stays one undo step. Keys from outside the
+  canvas, such as the app's own dialogs, are left alone: the second Esc once
+  stole Esc from the open-file question. `gestures.excalidraw.test.tsx` holds the
+  section 14 contracts against the installed package, each with the control of
+  what Excalidraw does without the overlay; jsdom runs Excalidraw's hit-testing.
+- **Anchors need a fill.** Excalidraw tests the inside of a shape only when its
+  background isn't transparent; `#ffffff01` looks transparent and takes clicks
+  (`mathAnchor.excalidraw.test.tsx`, with a transparent control). An anchor
+  given a transparent background can then be grabbed only by its border, until
+  the style restore in #46.
 - **Source writes go through `writeAnchorSource`.** A plain spread isn't recorded
   by undo, and `EVENTUALLY` or the default capture drops later updates to that
   anchor off the stack. Excalidraw's own nudge and Link leave the anchor in that
@@ -214,8 +241,12 @@ and everything downstream recalculates. Engine: math.js, client-side.
 - After an Open, Excalidraw's Undo button can stay lit: `history.clear()`
   doesn't notify it. Pressing it undoes nothing and puts it right.
 - The seeded anchor has a fixed size; source longer than three lines
-  overflows its border (spike limitation, until auto-size in #44). Rows and
-  results have one fixed line height, which keeps each result beside its line.
+  overflows its border (spike limitation, until auto-size in #44), and a line
+  outside the anchor can't be double-clicked. Rows and results have one fixed
+  line height, which keeps each result beside its line. The field sits over the
+  source column until #44's grid gives it its final layout.
+- Math text is drawn in fixed light-theme colours, so it is hard to read in
+  Excalidraw's dark mode (#50).
 
 ## Decisions
 

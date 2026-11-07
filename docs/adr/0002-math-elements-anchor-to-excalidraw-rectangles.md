@@ -6,6 +6,9 @@
   anchor, the app writes source, size and style, a solid `#ffffff01` background).
   Amended items name the milestone that builds them; until then
   [`CONTEXT.md`](../../CONTEXT.md) says what the code does.
+- **Built**: source in the anchor (#41, 2026-11-04); the `#ffffff01` fill, the
+  pointer-transparent overlay and the gesture listeners (#43, 2026-11-07). Size
+  (#44), style restore (#46) and Add math (#45) are still to come.
 
 ## Context
 
@@ -51,6 +54,12 @@ Engineering rules that make it work (Engineer's, found in the #2 spike and #28):
 - The overlay is `pointer-events: none`, except the open line editor, unit field and
   plot popover (#28, #31; M1, M2, M4). Capture-phase listeners take double-click, Enter
   and M. The line hit comes from geometry.
+  - Built in #43: the pointer listeners sit on the box Excalidraw fills, a sibling of
+    the overlay, so the field's own clicks never reach them. A double-click is math's
+    only when Excalidraw's own first click selected the anchor under the pointer (or
+    the anchor is locked and nothing was selected), so its hit-testing decides, and a
+    drawing on top keeps its double-click. A press leaves an open line before
+    Excalidraw sees it, so a drag starts on the committed scene.
 - Wheel events over overlay content that takes pointer events are re-dispatched onto
   Excalidraw's canvas (`forwardWheel`), because Excalidraw only listens on its own
   container. With the overlay pointer-transparent that should mean only the open
