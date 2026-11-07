@@ -45,7 +45,8 @@ server. v1 target: one sheet, for Matheus's own use.
   content sits among Excalidraw's DOM layers, and the dark theme's filter.
   `anchorSize.ts` writes an anchor's size (`writeAnchorSizes`: `NEVER`, top-left
   kept, the rotated top-left for a rotated anchor) and snaps resize handles back
-  (`snapBackResizes`, from `onPointerUp`'s `originalElements`). The only module that imports
+  (`snapBackResizes`, from `onPointerUp`'s `originalElements`), and says when
+  a size write waits (`sizeWritesWait`). The only module that imports
   Excalidraw at runtime; tests may too, and other modules may import its
   types. This is ADR 0001's engineering rule as amended in ADR 0002. Depends
   on: `@excalidraw/excalidraw`.
@@ -87,7 +88,7 @@ server. v1 target: one sheet, for Matheus's own use.
   loaded lazily by `katex.ts`; until it loads, a line shows as its source. Rows
   are named by their source (`aria-label`) and result cells carry their text
   (`data-text`). `useAnchorSizes` measures each body after every render and on
-  a `ResizeObserver` (fonts), waits while Excalidraw is busy, and writes the
+  a `ResizeObserver` (fonts), waits while `sizeWritesWait`, and writes the
   sizes through the session's `keepClean`. In Excalidraw's dark theme the
   overlay takes its canvas filter.
   `MathOverlay` subscribes to the scene (`onChange`, `onScrollChange`) and
@@ -241,7 +242,9 @@ and everything downstream recalculates. Engine: math.js, client-side.
   why a line commit after size writes is still one step
   (`anchorSize.excalidraw.test.tsx`, with a control). Without `keepClean`,
   every startup and Open would leave the sheet dirty. Writes wait while
-  Excalidraw is busy (drag, resize, rotation, new shape, its editors).
+  `sizeWritesWait` reads Excalidraw as mid-gesture or in one of its editors
+  (drag, resize, rotation, new shape, text or line editor); its flags are
+  contract-tested.
 - **The body is measured, not the anchor.** `.math-element__body` is
   `max-content` and rotates about the anchor's centre; `offsetWidth` and
   `offsetHeight` ignore transforms, so they are scene units. A body measuring
@@ -298,7 +301,7 @@ and everything downstream recalculates. Engine: math.js, client-side.
 - A box grows right and down, so a taller element can overlap the one below
   it. Reading order is by top, so it doesn't change.
 - Resizing an anchor by a handle snaps back but still marks the sheet dirty:
-  Excalidraw changes the scene while the handle moves.
+  Excalidraw changes the scene while the handle moves (spec section 4).
 
 ## Decisions
 

@@ -286,13 +286,14 @@ Lines typeset through math.js `toTex` with one custom handler, then KaTeX.
 - Text after the first `_` is the subscript: upright if multi-letter, italic if one
   letter or digits (`L_pipe`, `H_0`, `Q_s`).
 - A Greek word becomes its letter when it is the whole base or is followed by a
-  capital (`rho_w` → ρ_w, `DeltaP` → ΔP).
+  capital (`rho_w` → ρ_w, `DeltaP` → ΔP). A Greek word that is the whole subscript
+  becomes its letter too (`T_alpha` → T_α).
 - Other multi-letter names are one italic word (`Re`, not R·e).
 - Parameters follow the same rule as names in the body.
 - Definitions use `≔`.
 - Results typeset from the text `math.format` shows: number and unit split, unit
   typeset.
-- Micro shows as `µm`, not math.js's `um`.
+- Micro shows as `µm`, not math.js's `um`. `ohm` shows as Ω (`kohm` as kΩ), `deg` as °.
 
 ### Problems
 
@@ -328,7 +329,9 @@ none. Hover is screen-only.
   bound to the right or bottom edge stays where it was until the element next moves.
 - **Enter** on one selected math element edits its **last line**, with the caret at
   the end.
-- The rotate handle works. **Resize handles snap back** to the fit, in place.
+- The rotate handle works. **Resize handles snap back** to the fit, in place. **Known
+  limit:** the resize still marks the sheet dirty, though nothing changes: Excalidraw
+  changes the scene while the handle moves.
 
 ### While editing a line
 
@@ -1106,8 +1109,8 @@ Engineer's design gate. Tested on Excalidraw 0.18.1, math.js 15.2 and Chromium.
   - As built (#44): `src/canvas/anchorSize.ts` writes the sizes and snaps handles back from `onPointerUp`'s
     `originalElements` (not after the rotate handle). A `NEVER` write also updates Excalidraw's captured copy of
     the anchor, so `writeAnchorSource` finds nothing pending and a line commit after size writes stays one step.
-    The overlay measures in `useAnchorSizes`, waits while Excalidraw is busy, and writes through the session's
-    `keepClean`.
+    The overlay measures in `useAnchorSizes` and writes through the session's `keepClean`; a write waits while
+    `sizeWritesWait` (in `anchorSize.ts`) reads Excalidraw as mid-gesture or in one of its editors.
 - **Add math:** select the new element in the same `updateScene`, or undo takes two steps when something
   was selected before. ([gestures](https://github.com/matheus-sancha/excalimathpad/issues/28))
 - **The line field only takes what the user typed.** Setting its value while typing clears its browser
@@ -1157,6 +1160,7 @@ Evidence: [`excalidraw-gestures.md`](research/excalidraw-gestures.md).
 | `.excalidraw` takes focus | Enter works after leaving an edit | #43, `gestures.excalidraw.test.tsx` |
 | A `NEVER` write updates the captured copy | A line commit after size writes is one step (control: an uncaptured size change is a second step) | #44, `anchorSize.excalidraw.test.tsx` |
 | Resize handles can be let go of and put back | A handle drag snaps back, `x` and `y` too, and leaves undo nothing (control: without it, the anchor resizes) | #44, `anchorSize.excalidraw.test.tsx` |
+| `sizeWritesWait`'s app-state flags | Set while a shape is drawn, an element dragged, a handle held or the text editor open; clear afterwards | #44, `anchorSize.excalidraw.test.tsx` |
 | The dark theme is `--theme-filter` | The overlay's filter is one of the package's `--theme-filter` values | #44, `layers.test.ts` |
 | Order of the panel's children in `.panelColumn` | The reduced panel hides what comes before Opacity | |
 | `.HintViewer` holds the hint | The hint's replacement shows | |
@@ -1334,7 +1338,8 @@ Changes line if it changes behaviour.
   Excalidraw is busy (a drag, a resize or rotation, a new shape, its text or line editor) and go in at its next
   idle change; in Chromium a measure during a text edit waited until Esc. With the wait turned off for the probe,
   a write during a text edit kept the editor, its focus and its text, and a rectangle drawn while writes ran came
-  out whole; a write landing mid-draw wasn't confirmed. The wait stays.
+  out whole; a write landing mid-draw wasn't confirmed. The wait stays, and contract tests pin its flags: set
+  while a rectangle is drawn, an element dragged, a resize handle held or the text editor open, clear after.
 - Starting a drag while a line is being edited. **Passed (#43):** the press leaves the line before Excalidraw
   sees it, so the line is one step and the move is Excalidraw's own; Ctrl+Z takes the move, then the line. In
   Chromium with real input and as a contract test.
@@ -1454,5 +1459,7 @@ Changes line if it changes behaviour.
   doesn't move a bound arrow's end, a known limit; in Excalidraw's dark theme the math takes the canvas's own
   filter (#50); the field's 240 px minimum applies to any element with no source, new or emptied; a line that
   doesn't parse shows its raw source over the name, `≔` and expression cells, where the field opens.
-- 2026-11-07, [section 4](#problems) (#44, Engineer's, for Matheus to confirm on the PR): a line that doesn't
+- 2026-11-07, [section 4](#problems) (#44, Engineer's, confirmed by Matheus in chat on 2026-11-07): a line that doesn't
   parse also shows its message in the result cell, as any error does, so the reason is on the sheet.
+- 2026-11-07, [section 4](#typesetting-names) (#44 review, Matheus, in chat on 2026-11-07: "Greek letter
+  (T_α)"): a Greek word that is the whole subscript typesets as its letter, not as an upright word.
