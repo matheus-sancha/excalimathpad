@@ -1,6 +1,7 @@
 # 0005. The app reads its line forms before math.js sees a line
 
-- **Status**: accepted, not built yet (M2 to M4; comments in M1)
+- **Status**: accepted; step 1, the comment, built (#44, `src/math/lineForm.ts`); steps 2
+  and 3 not built yet (M2 to M4)
 - **Date**: 2026-11-03
 
 ## Context

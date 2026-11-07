@@ -7,8 +7,10 @@
   Amended items name the milestone that builds them; until then
   [`CONTEXT.md`](../../CONTEXT.md) says what the code does.
 - **Built**: source in the anchor (#41, 2026-11-04); the `#ffffff01` fill, the
-  pointer-transparent overlay and the gesture listeners (#43, 2026-11-07). Size
-  (#44), style restore (#46) and Add math (#45) are still to come.
+  pointer-transparent overlay and the gesture listeners (#43, 2026-11-07); size,
+  written with `NEVER` through `src/canvas/anchorSize.ts`, and resize handles that
+  snap back (#44, 2026-11-07). Style restore (#46) and Add math (#45) are still
+  to come.
 
 ## Context
 
@@ -38,6 +40,9 @@ Who owns what on the anchor (#10, #11, #29, #32; M1):
   - `customData.source`, the element's lines, once per line commit. This is the
     decision the first version left open.
   - Size, always equal to the content, with no undo step. Resize handles snap back.
+    A size write doesn't move a bound arrow's end: Excalidraw's binding update
+    isn't public, so the end follows when the element next moves (known limit,
+    #44).
   - Style, fixed except `opacity`, restored with no undo step if anything changes it.
 
 Engineering rules that make it work (Engineer's, found in the #2 spike and #28):

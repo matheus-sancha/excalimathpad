@@ -276,6 +276,8 @@ Built in M1. Hover details arrive with M3; the unit slot with M2.
   the equation, inside the expression cell.
 - **Range line:** `Q_s ≔ 1 L/s … 30 L/s`, with the step small and grey after it.
 - `in <unit>` and plot clauses don't show when typeset. They show in source.
+- **Dark theme:** in Excalidraw's dark theme the math takes the canvas's own filter, so it
+  darkens exactly as drawings do. Print stays light.
 
 ### Typesetting names
 
@@ -297,7 +299,7 @@ Lines typeset through math.js `toTex` with one custom handler, then KaTeX.
 | Problem | Gutter | Elsewhere |
 |---|---|---|
 | Error | Red `●` | Its message takes the result cell, in red |
-| Line that doesn't parse | Red `●` | Raw source in red with a wavy underline, in place of the typeset expression; any `#` part stays in it, so no note cell |
+| Line that doesn't parse | Red `●` | Raw source in red with a wavy underline, over the name, `≔` and expression cells (where the field opens); any `#` part stays in it, so no note cell. Its message takes the result cell, as for any error |
 | Warning | Amber `⚠` | Message on hover over the mark; the line's value still shows |
 
 **An error is capped** at about 320 px of the result column and ends in an ellipsis.
@@ -322,7 +324,8 @@ none. Hover is screen-only.
   element took that click, so it keeps Excalidraw's double-click (its label). A
   **locked** element still edits: the lock holds its position only.
 - **Arrows bind** to a math element, even when drawn from inside it, and follow it
-  when it moves.
+  when it moves. **Known limit:** a size write doesn't move a bound end, so an end
+  bound to the right or bottom edge stays where it was until the element next moves.
 - **Enter** on one selected math element edits its **last line**, with the caret at
   the end.
 - The rotate handle works. **Resize handles snap back** to the fit, in place.
@@ -365,8 +368,8 @@ the size to the anchor, live, while typing too.
   element's size change can't change reading order or re-run the sheet. A rotated
   element keeps its rotated top-left corner in place, which can change its visual top
   and so reading order.
-- **Empty content:** a new element's field has a minimum width of about 240 px. An
-  empty line elsewhere keeps its one-row height.
+- **Empty content:** the field of an element with no source, new or emptied, has a
+  minimum width of about 240 px. An empty line elsewhere keeps its one-row height.
 - A size write doesn't mark the sheet dirty. Opening a sheet measures again.
 
 ### Selected math element
@@ -1100,6 +1103,11 @@ Engineer's design gate. Tested on Excalidraw 0.18.1, math.js 15.2 and Chromium.
 - **Size:** `newElementWith` + `CaptureUpdateAction.NEVER`, only for anchors whose size changed by more
   than half a pixel. Snap-back must also restore `x` and `y`: the top-right handle moved `y` by 45 px.
   ([auto-size](https://github.com/matheus-sancha/excalimathpad/issues/29))
+  - As built (#44): `src/canvas/anchorSize.ts` writes the sizes and snaps handles back from `onPointerUp`'s
+    `originalElements` (not after the rotate handle). A `NEVER` write also updates Excalidraw's captured copy of
+    the anchor, so `writeAnchorSource` finds nothing pending and a line commit after size writes stays one step.
+    The overlay measures in `useAnchorSizes`, waits while Excalidraw is busy, and writes through the session's
+    `keepClean`.
 - **Add math:** select the new element in the same `updateScene`, or undo takes two steps when something
   was selected before. ([gestures](https://github.com/matheus-sancha/excalimathpad/issues/28))
 - **The line field only takes what the user typed.** Setting its value while typing clears its browser
@@ -1147,6 +1155,9 @@ Evidence: [`excalidraw-gestures.md`](research/excalidraw-gestures.md).
 | Key handling runs in the bubble phase, at or below the root | Enter stopped on `document` opens no editor | #43, `canvasEvents.excalidraw.test.tsx` |
 | No built-in shortcut for M | M leaves the tool unchanged when not intercepted | |
 | `.excalidraw` takes focus | Enter works after leaving an edit | #43, `gestures.excalidraw.test.tsx` |
+| A `NEVER` write updates the captured copy | A line commit after size writes is one step (control: an uncaptured size change is a second step) | #44, `anchorSize.excalidraw.test.tsx` |
+| Resize handles can be let go of and put back | A handle drag snaps back, `x` and `y` too, and leaves undo nothing (control: without it, the anchor resizes) | #44, `anchorSize.excalidraw.test.tsx` |
+| The dark theme is `--theme-filter` | The overlay's filter is one of the package's `--theme-filter` values | #44, `layers.test.ts` |
 | Order of the panel's children in `.panelColumn` | The reduced panel hides what comes before Opacity | |
 | `.HintViewer` holds the hint | The hint's replacement shows | |
 
@@ -1298,12 +1309,32 @@ Changes line if it changes behaviour.
 - The reduced panel's CSS on `.panelColumn` children, and the hint's replacement through `.HintViewer`.
 - Restoring style with `NEVER` from `onChange`: paste styles on math alone may leave an empty undo entry.
 - Restoring `x` and `y` on snap-back, resizing several selected elements or a group, and a handle on a rotated
-  element.
+  element. **Passed (#44):** in Chromium with real input, the top-right handle moved `y` from 200 to 159 while
+  dragged, and letting go restored `x`, `y`, `width` and `height`; a corner handle on an anchor rotated about 81°,
+  and the corner handle of a group of two anchors (one rotated), each snapped back the same way, angle kept. The
+  first Ctrl+Z after a snapped-back resize only re-selects: the resize step is empty. Contract tests cover a corner,
+  the top-right handle and an anchor resized with a drawing (the drawing keeps its resize). Found: the resize still
+  marks the sheet dirty, because Excalidraw changes the scene while the handle moves; the content doesn't change.
 - Measuring real KaTeX rows: `offsetWidth` and `offsetHeight`, again when a `ResizeObserver` fires as fonts load.
-- Line hit-testing on rows of different heights.
-- Rotated elements keeping their rotated top-left, and the half-pixel threshold.
-- A size write not marking the sheet dirty.
-- A size write during Excalidraw's own text edit, or while drawing a new shape.
+  **Passed (#44):** in Chromium, after `document.fonts.ready` every anchor equals its body (the seed's
+  158 × 72 and 188 × 48); rows read 24 px at `offsetTop` 12 and 36, and a fraction row 43 px. The first frame
+  shows plain source until KaTeX's chunk loads, then the grid re-renders and the box re-fits. The observer watches
+  each body's border box; with Excalidraw's text editor open, a body made wider waited and was written when the
+  editor closed.
+- Line hit-testing on rows of different heights. **Passed (#44):** with rows of 24, 24, 43 and 24 px, a double-click
+  2 px inside the top of row 1, the bottom of row 2, the top of the fraction row and 14 px above its bottom each
+  opened that line, in Chromium with real input.
+- Rotated elements keeping their rotated top-left, and the half-pixel threshold. **Passed (#44):** typing on an
+  anchor rotated about 81° widened it from 188 to 291 px, and its rotated top-left stayed at (703.60, 127.46) to
+  0.001 px, in Chromium. Body sizes are whole pixels, so a fit doesn't jitter; the 0.5 px threshold is a unit test.
+- A size write not marking the sheet dirty. **Passed (#44):** the seed's anchors shrank to their content on
+  startup and the sheet stayed "Untitled", in Chromium. Size writes go through the session's clean mark
+  (`keepClean`); App tests cover startup, a re-measure and Open, each failing without it.
+- A size write during Excalidraw's own text edit, or while drawing a new shape. **Passed (#44):** writes wait while
+  Excalidraw is busy (a drag, a resize or rotation, a new shape, its text or line editor) and go in at its next
+  idle change; in Chromium a measure during a text edit waited until Esc. With the wait turned off for the probe,
+  a write during a text edit kept the editor, its focus and its text, and a rectangle drawn while writes ran came
+  out whole; a write landing mid-draw wasn't confirmed. The wait stays.
 - Starting a drag while a line is being edited. **Passed (#43):** the press leaves the line before Excalidraw
   sees it, so the line is one step and the move is Excalidraw's own; Ctrl+Z takes the move, then the line. In
   Chromium with real input and as a contract test.
@@ -1328,7 +1359,7 @@ Changes line if it changes behaviour.
   short wait between moves. The section 14 contract tests run in CI.
 - Found in #43: double-clicking another line while editing. The first click moves the edit there, and the second
   lands in the field, where the browser would select the word under the pointer. The field ignores that press, so
-  the line opens with the caret at the end, as section 4 says (Matheus, on PR #51: "Caret at end").
+  the line opens with the caret at the end, as section 4 says (Matheus, in chat on 2026-11-07: "Caret at end").
 
 **M3, M4**
 
@@ -1418,3 +1449,10 @@ Changes line if it changes behaviour.
   Esc and M act only on keys aimed at the canvas, whose target is inside the box Excalidraw fills or is the page's
   body, besides the rule against inputs, textareas, contenteditables and buttons. Keys in the app's own dialogs
   and panels stay theirs: the second Esc had taken Esc away from the open-file question.
+- 2026-11-07, [section 4](#4-math-element-look-and-editing) (#44, agreed by Matheus, answers 1-4 on the
+  [design](https://github.com/matheus-sancha/excalimathpad/issues/44#issuecomment-6710347368)): a size write
+  doesn't move a bound arrow's end, a known limit; in Excalidraw's dark theme the math takes the canvas's own
+  filter (#50); the field's 240 px minimum applies to any element with no source, new or emptied; a line that
+  doesn't parse shows its raw source over the name, `≔` and expression cells, where the field opens.
+- 2026-11-07, [section 4](#problems) (#44, Engineer's, for Matheus to confirm on the PR): a line that doesn't
+  parse also shows its message in the result cell, as any error does, so the reason is on the sheet.

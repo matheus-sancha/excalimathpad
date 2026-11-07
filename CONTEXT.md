@@ -42,13 +42,23 @@ server. v1 target: one sheet, for Matheus's own use.
   shares with the overlay. `fileRoutes.ts` takes the file keys and scene-file
   drops from Excalidraw, and measures the space beside the ☰ button
   (`useBesideMenu`). `layers.ts` records where overlay
-  content sits among Excalidraw's DOM layers. The only module that imports
+  content sits among Excalidraw's DOM layers, and the dark theme's filter.
+  `anchorSize.ts` writes an anchor's size (`writeAnchorSizes`: `NEVER`, top-left
+  kept, the rotated top-left for a rotated anchor) and snaps resize handles back
+  (`snapBackResizes`, from `onPointerUp`'s `originalElements`). The only module that imports
   Excalidraw at runtime; tests may too, and other modules may import its
   types. This is ADR 0001's engineering rule as amended in ADR 0002. Depends
   on: `@excalidraw/excalidraw`.
 - **math** (`src/math/`) — the engine. Interface: `evaluateSheet(blocks)`,
   with blocks `{ id, source }` already in reading order → one `LineResult`
-  (value | error | empty) per line, keyed by block id; never throws. A plain
+  (value | error | empty) per line, keyed by block id; never throws.
+  `evaluateSheetLines` gives each line its `TypesetLine` too, from the same
+  parse: blank, comment, math (name, expression and note, as TeX) or unparsed
+  (raw source). `lineForm.ts` (pure) reads a line's comment before math.js sees
+  it (ADR 0005 step 1), so a note never reaches math.js. `typeset.ts` is the
+  `toTex` handler of spec section 4, Typesetting names; a name counts as the
+  sheet's from the line that assigns it down. `typesetResult` sets a result's
+  `math.format` text as number and unit. A plain
   input and any line whose value is a function are empty, and their value still
   reaches the lines below. All lines
   share one scope, fresh for every call (ADR 0003). Each line is parsed once
@@ -67,26 +77,38 @@ server. v1 target: one sheet, for Matheus's own use.
   SI prefix (`5 ft * 2 ft` is `0.9290304 m^2`, `2 cm * 3 cm` is
   `600 mm^2`); one whose units it keeps shows as written (`1 psi`,
   `60 mi / h`); `to` converts. App code must evaluate only
-  through `evaluateSheet`: math.js functions that depend on the disabled
+  through `evaluateSheet` or `evaluateSheetLines`: math.js functions that depend on the disabled
   names (`help`, `rationalize`, a `parser()`'s methods) no longer work. The
   only module that imports `mathjs`. Depends on: `mathjs`.
-- **overlay** (`src/overlay/`) — renders math elements over the canvas.
+- **overlay** (`src/overlay/`) — renders math elements over the canvas, each
+  as a typeset grid (`MathElementView`, spec section 4): rows are CSS subgrids
+  of one grid per element (gutter, name, `≔`, expression, result after a rule,
+  note), each with its own box for the line hit. Cells hold KaTeX's HTML,
+  loaded lazily by `katex.ts`; until it loads, a line shows as its source. Rows
+  are named by their source (`aria-label`) and result cells carry their text
+  (`data-text`). `useAnchorSizes` measures each body after every render and on
+  a `ResizeObserver` (fonts), waits while Excalidraw is busy, and writes the
+  sizes through the session's `keepClean`. In Excalidraw's dark theme the
+  overlay takes its canvas filter.
   `MathOverlay` subscribes to the scene (`onChange`, `onScrollChange`) and
   places each element from its anchor's scene position via `viewport.ts`
   (`sceneToStage`, pure). It reads source from the anchors and holds the sheet's
   one **line edit**; `lineEdit.ts` (pure) decides what each way of leaving a
   line writes. It owns the sheet's evaluation: it sorts anchors with
-  `readingOrder.ts` (pure) and runs `evaluateSheet` on every keystroke, every
-  source change and every change of order, then hands each `MathElementView`
-  its results. The overlay takes no pointer events except the open field:
+  `readingOrder.ts` (pure) and runs `evaluateSheetLines` on every keystroke,
+  every source change and every change of order, then hands each
+  `MathElementView` its lines. The overlay takes no pointer events except the open field:
   Excalidraw gets every click and drag. `useSheetGestures` opens, moves and
-  leaves the line edit from the events `listenToCanvas` hands it; `gestures.ts`
+  leaves the line edit from the events `listenToCanvas` hands it. The open line
+  is a field over the name, `≔` and expression cells, beside its live result as
+  plain text; a hidden copy of its text widens the cell. `gestures.ts`
   (pure) decides when a double-click, a click, Enter or Esc is math's, and
   `lineHit.ts` (pure) finds the
   element and line under a point from geometry and the rows' `offsetTop` and
   `offsetHeight` (spec section 4, Gestures, section 14). Its `control` lets the
   sheet file commit the line (Ctrl+S keeps it open) or leave it (Open).
-  Depends on: canvas (anchor, selection and layer contracts, API types), math.
+  Depends on: canvas (anchor, size, selection and layer contracts, API types),
+  math, `katex` (lazily).
 - **file** (`src/file/`) — the sheet file (ADR 0004, spec section 7).
   `sheetFormat.ts` (pure) reads and writes the `excalimathpad` block, settings
   and migrations. `sheetSession.ts` is the deep module: save, save as, open,
@@ -100,8 +122,10 @@ server. v1 target: one sheet, for Matheus's own use.
   unsaved changes: Chromium allows one picker per gesture. Depends on: canvas
   (file routes, layers).
 - **test setup** (`src/test/`) — jsdom stubs for browser APIs Excalidraw
-  touches on mount (canvas, fonts, matchMedia, ResizeObserver), and helpers for
-  tests against the real Excalidraw. Not app code.
+  touches on mount (canvas, fonts, matchMedia, ResizeObserver, which tests can
+  fire), helpers for tests against the real Excalidraw, body sizes for the
+  size tests (`layout.ts`) and readers for the grid (`sheetView.ts`). KaTeX is
+  loaded before the tests run. Not app code.
 
 Planned (not built): the Sheet panel, an "add math" tool (for now, duplicating
 an anchor makes a new math element with the same source).
@@ -114,7 +138,11 @@ and everything downstream recalculates. Engine: math.js, client-side.
 - **Math element** — a block of math.js source, one statement per line
   (assignment is plain `=`), anchored at a scene position, plus one
   **result** per line: a value with unit (`20 V`), an error (message), or
-  empty.
+  empty. It shows as a grid of **typeset rows**. A line starting with `#` is
+  a **comment line**; the text after the first `#` on a line with code is its
+  **note**; neither reaches math.js.
+- **Content size** — the grid's laid-out size in scene units. The anchor's
+  size is a copy of it, written with no undo step.
 - **Anchor** — the Excalidraw rectangle that carries a math element's
   position, size, rotation and source. Excalidraw owns it (move, select, delete,
   undo); the app writes only `customData.source`, the only stored copy.
@@ -137,7 +165,9 @@ and everything downstream recalculates. Engine: math.js, client-side.
   anchor's visual bounds, then its left, then its id (ADR 0003). Derived from
   positions every time, never stored. The sheet, not the element, is the unit
   of evaluation: one scope, lines top to bottom.
-- Invariants: a line commit's source change is one undo step, and keystrokes are
+- Invariants: after every evaluation and pointer release, an anchor's size
+  equals its content size (within 0.5 px), and a size write adds no undo step
+  and never makes a clean sheet dirty. A line commit's source change is one undo step, and keystrokes are
   none (a commit can also record a nudge or Link edit before it as its own step,
   spec section 6); sheet undo
   never runs during a line edit, because the field is outside Excalidraw's
@@ -157,6 +187,8 @@ and everything downstream recalculates. Engine: math.js, client-side.
   `s`, `i`, ...) silently shadows the unit below its definition and falls
   back to the unit above it or after it fails (ADR 0003). The seed uses `U`
   for that reason; warnings are issue #7.
+- Known limit: a size write doesn't move a bound arrow's end (Excalidraw's
+  binding update isn't public); it follows when the element next moves (#44).
 
 ## Load-bearing
 
@@ -204,6 +236,16 @@ and everything downstream recalculates. Engine: math.js, client-side.
   (`mathAnchor.excalidraw.test.tsx`, with a transparent control). An anchor
   given a transparent background can then be grabbed only by its border, until
   the style restore in #46.
+- **Size writes go through `writeAnchorSizes`, wrapped in `keepClean`.** A
+  `NEVER` write also updates Excalidraw's captured copy of the anchor, which is
+  why a line commit after size writes is still one step
+  (`anchorSize.excalidraw.test.tsx`, with a control). Without `keepClean`,
+  every startup and Open would leave the sheet dirty. Writes wait while
+  Excalidraw is busy (drag, resize, rotation, new shape, its editors).
+- **The body is measured, not the anchor.** `.math-element__body` is
+  `max-content` and rotates about the anchor's centre; `offsetWidth` and
+  `offsetHeight` ignore transforms, so they are scene units. A body measuring
+  0 × 0 isn't laid out (jsdom) and is never written.
 - **Source writes go through `writeAnchorSource`.** A plain spread isn't recorded
   by undo, and `EVENTUALLY` or the default capture drops later updates to that
   anchor off the stack. Excalidraw's own nudge and Link leave the anchor in that
@@ -250,13 +292,13 @@ and everything downstream recalculates. Engine: math.js, client-side.
   targets desktop Chrome and Edge.
 - After an Open, Excalidraw's Undo button can stay lit: `history.clear()`
   doesn't notify it. Pressing it undoes nothing and puts it right.
-- The seeded anchor has a fixed size; source longer than three lines
-  overflows its border (spike limitation, until auto-size in #44), and a line
-  outside the anchor can't be double-clicked. Rows and results have one fixed
-  line height, which keeps each result beside its line. The field sits over the
-  source column until #44's grid gives it its final layout.
-- Math text is drawn in fixed light-theme colours, so it is hard to read in
-  Excalidraw's dark mode (#50).
+- KaTeX shares the lazy `katex-*.js` chunk with Mermaid (about 77 kB gzip) and
+  brings its CSS and 59 font files, fetched only as a page uses them. The first
+  frame of a sheet shows plain source; it typesets once the chunk loads.
+- A box grows right and down, so a taller element can overlap the one below
+  it. Reading order is by top, so it doesn't change.
+- Resizing an anchor by a handle snaps back but still marks the sheet dirty:
+  Excalidraw changes the scene while the handle moves.
 
 ## Decisions
 
