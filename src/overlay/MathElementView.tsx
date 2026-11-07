@@ -1,4 +1,11 @@
-import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react'
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type MouseEvent,
+} from 'react'
 import type { MathAnchor } from '../canvas/mathAnchor.ts'
 import type { ForwardWheel } from '../canvas/SheetCanvas.tsx'
 import { splitLines, type LineResult } from '../math/evaluate.ts'
@@ -130,6 +137,17 @@ function LineField({ edit, onType, onMove, onEscape, onBlur }: LineFieldProps) {
     fieldRef.current?.setSelectionRange(opening.caret, opening.caret)
   }, [opening])
 
+  // A double-click on another line while editing: its first click moved the
+  // edit here, and its second lands in this field, where the browser would
+  // select the word under the pointer. The line opens with the caret at the end
+  // (docs/spec-v1.md section 4), so a press that continues a click begun
+  // elsewhere is ignored. A double-click made inside the field selects as usual.
+  const pressedHere = useRef(false)
+  const onMouseDown = (event: MouseEvent<HTMLInputElement>) => {
+    if (event.detail >= 2 && !pressedHere.current) event.preventDefault()
+    pressedHere.current = true
+  }
+
   const onKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
     if (event.nativeEvent.isComposing) return
     const field = event.currentTarget
@@ -166,6 +184,7 @@ function LineField({ edit, onType, onMove, onEscape, onBlur }: LineFieldProps) {
       autoComplete="off"
       onInput={(event) => onType(event.currentTarget.value)}
       onKeyDown={onKeyDown}
+      onMouseDown={onMouseDown}
       onBlur={(event) => {
         // The window lost focus, not the field: the edit hasn't left its line.
         if (document.activeElement !== event.currentTarget) onBlur()

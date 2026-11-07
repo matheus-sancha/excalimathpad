@@ -582,6 +582,43 @@ describe('MathOverlay', () => {
       expect(openField()!.value).toBe('b = 2')
     })
 
+    it('a double-click on another line while editing opens it with the caret at the end', () => {
+      renderOverlay([anchorWith('a = 1\nb = 22')])
+      openLine(1)
+
+      // The double-click's first click moves the edit; its second lands in the field.
+      click(linePoint('m1', 2))
+      const field = openField()!
+      const notPrevented = fireEvent.mouseDown(field, { detail: 2 })
+
+      expect(notPrevented).toBe(false)
+      expect(field.value).toBe('b = 22')
+      expect(field.selectionStart).toBe(6)
+      expect(field.selectionEnd).toBe(6)
+    })
+
+    it('a double-click made inside the field stays the browser’s own', () => {
+      renderOverlay([anchorWith('a = 1')])
+      const field = openLine(1)
+
+      expect(fireEvent.mouseDown(field, { detail: 1 })).toBe(true)
+      expect(fireEvent.mouseDown(field, { detail: 2 })).toBe(true)
+    })
+
+    it('a click on a drawing on top of the edited element leaves the edit left', () => {
+      const { scene } = renderOverlay([anchorWith('a = 1\nb = 2'), plainRect])
+      type(openLine(1), 'a = 9')
+      const at = linePoint('m1', 2)
+
+      press(at)
+      // Excalidraw's press selected the drawing above the anchor.
+      scene.select('r1')
+      fireEvent.click(canvasRoot, at)
+
+      expect(openField()).toBeNull()
+      expect(scene.sourceOf('m1')).toBe('a = 9\nb = 2')
+    })
+
     it('a press that turns into a drag leaves the edit and opens nothing', () => {
       const { scene } = renderOverlay([anchorWith('a = 1\nb = 2')])
       type(openLine(1), 'a = 9')
