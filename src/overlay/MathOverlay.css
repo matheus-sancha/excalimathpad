@@ -4,7 +4,8 @@
 }
 
 /* Box in scene units at the anchor's top-left; scaled by zoom. It passes
-   pointer events through, so Excalidraw still gets the anchor's border. */
+   pointer events through, so Excalidraw gets every click and drag on the
+   anchor underneath (ADR 0002). */
 .math-element {
   position: absolute;
   left: 0;
@@ -13,8 +14,11 @@
   pointer-events: none;
 }
 
-/* The inset keeps the anchor's border grabbable around the lines. */
+/* The inset keeps the anchor's border grabbable around the lines. Positioned,
+   so it is each row's offsetParent: the gestures read row geometry from the
+   element's own top edge. */
 .math-element__body {
+  position: relative;
   box-sizing: border-box;
   width: 100%;
   height: 100%;
@@ -52,18 +56,17 @@
   color: #1e1e1e;
   font: inherit;
   outline: none;
-  pointer-events: auto;
 }
 
 .math-element__line {
   overflow: hidden;
-  text-align: left;
   white-space: pre;
-  cursor: text;
 }
 
+/* The only part of the overlay that takes pointer events. */
 .math-element__field {
   box-shadow: inset 0 -1px 0 #1971c2;
+  pointer-events: auto;
 }
 
 .math-element__results {

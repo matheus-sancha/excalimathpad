@@ -81,6 +81,7 @@ export default function App({ files, recovery }: AppProps = {}) {
           <>
             <MathOverlay
               api={canvas.api}
+              canvasRoot={canvas.root}
               forwardWheel={canvas.forwardWheel}
               focusCanvas={canvas.focusCanvas}
               control={line}

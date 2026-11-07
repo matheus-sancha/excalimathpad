@@ -4,6 +4,8 @@ import { CaptureUpdateAction, newElementWith } from '@excalidraw/excalidraw'
 import { SheetCanvas, type SheetCanvasHandle } from './SheetCanvas.tsx'
 import { createMathAnchorElements, writeAnchorSource } from './mathAnchor.ts'
 import { sceneLoaded, undoControls } from '../test/excalidraw.ts'
+import { clickOnCanvas } from '../test/gestures.ts'
+import { deselectAll } from './selection.ts'
 
 /**
  * Contracts against the real, installed Excalidraw (ADR 0002): an upgrade that
@@ -297,5 +299,60 @@ describe('a copied anchor keeps its source', () => {
     await waitFor(() => expect(api.getSceneElements()).toHaveLength(2))
     const copy = api.getSceneElements().find((e) => e.id !== 'm1')!
     expect(copy.customData).toEqual({ kind: 'math', source: SOURCE })
+  })
+})
+
+// docs/spec-v1.md section 14: `#ffffff01` counts as not transparent for hit-testing.
+describe('the anchor fill takes clicks inside', () => {
+  async function mountWith(backgroundColor: string) {
+    let handle: SheetCanvasHandle | undefined
+    const [anchor] = createMathAnchorElements([{ id: 'm1', x: 100, y: 100, width: 300, height: 80 }])
+    render(
+      <SheetCanvas
+        initialElements={[{ ...anchor, backgroundColor }]}
+        onReady={(h) => (handle = h)}
+      />,
+    )
+    await waitFor(() => expect(handle).toBeDefined())
+    await sceneLoaded(handle!.api)
+    return () => Object.keys(handle!.api.getAppState().selectedElementIds)
+  }
+
+  it('creates anchors with the solid #ffffff01 fill', () => {
+    const [anchor] = createMathAnchorElements([{ id: 'm1', x: 0, y: 0, width: 10, height: 10 }])
+    expect(anchor).toMatchObject({ backgroundColor: '#ffffff01', fillStyle: 'solid' })
+  })
+
+  it('a press inside an unselected anchor selects it', async () => {
+    const selected = await mountWith('#ffffff01')
+
+    clickOnCanvas({ clientX: 250, clientY: 140 })
+
+    expect(selected()).toEqual(['m1'])
+  })
+
+  // The control: why the anchor isn't transparent (ADR 0002).
+  it('a transparent one is selected only on its stroke', async () => {
+    const selected = await mountWith('transparent')
+
+    clickOnCanvas({ clientX: 250, clientY: 140 })
+    expect(selected()).toEqual([])
+
+    clickOnCanvas({ clientX: 100, clientY: 140 })
+    expect(selected()).toEqual(['m1'])
+  })
+})
+
+describe('deselectAll on real Excalidraw', () => {
+  it('clears the selection and adds no undo step', async () => {
+    const { api, select, write, undo, sourceOf } = await mount()
+    select()
+    write('changed')
+
+    act(() => deselectAll(api))
+    expect(api.getAppState().selectedElementIds).toEqual({})
+
+    undo()
+    await waitFor(() => expect(sourceOf()).toBe(SOURCE))
   })
 })

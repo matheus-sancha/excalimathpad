@@ -54,4 +54,22 @@ describe('sameAnchor', () => {
     expect(sameAnchor(a, { ...a })).toBe(true)
     expect(sameAnchor(a, { ...a, source: 'x' })).toBe(false)
   })
+
+  // A locked element's double-click rule reads it (#43).
+  it('tells anchors apart by lock', () => {
+    const a = toMathAnchor(anchor)
+
+    expect(sameAnchor(a, { ...a, locked: true })).toBe(false)
+  })
+})
+
+describe('createMathAnchorElements', () => {
+  it('creates unlocked anchors unless asked', () => {
+    const [locked] = createMathAnchorElements([
+      { id: 'm3', x: 0, y: 0, width: 10, height: 10, locked: true },
+    ])
+
+    expect(toMathAnchor(anchor).locked).toBe(false)
+    expect(toMathAnchor(locked).locked).toBe(true)
+  })
 })

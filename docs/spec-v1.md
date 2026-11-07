@@ -316,7 +316,13 @@ none. Hover is screen-only.
 - **Single click** selects the anchor. **Dragging from anywhere** on it moves it.
   There is no grip. Both are Excalidraw's own behaviour.
 - **Double-click on a line** edits that line, with the caret at the end. A chart or
-  table counts as part of its line's row.
+  table counts as part of its line's row. Excalidraw's own first click decides whose
+  double-click it is: math's when it selected the element, on its own or through its
+  group, so a **grouped** element edits straight away. A **drawing on top** of the
+  element took that click, so it keeps Excalidraw's double-click (its label). A
+  **locked** element still edits: the lock holds its position only.
+- **Arrows bind** to a math element, even when drawn from inside it, and follow it
+  when it moves.
 - **Enter** on one selected math element edits its **last line**, with the caret at
   the end.
 - The rotate handle works. **Resize handles snap back** to the fit, in place.
@@ -337,7 +343,9 @@ none. Hover is screen-only.
 **Leaving:**
 
 - **Esc** goes back to typeset with the element still selected. A second **Esc**
-  deselects. Excalidraw doesn't do this itself, so the app does.
+  deselects everything whenever the selection includes a math element, mixed
+  selections too. Excalidraw doesn't do this itself, so the app does. A selection of
+  drawings only keeps Excalidraw's Esc.
 - A **click outside**, or starting a drag on the element, also leaves.
 - Leaving always keeps what was typed. There is no cancel.
 - An element left with no text is removed when the edit leaves it, whether new or
@@ -1104,6 +1112,22 @@ Engineer's design gate. Tested on Excalidraw 0.18.1, math.js 15.2 and Chromium.
 - **Capture `dblclick` on the stage, capture `keydown` on `document`,** for double-click, Enter and M. Stop
   them there. Act on Enter only when one math anchor is selected, the tool is the selection tool, no
   modifier is held, and the target isn't an input, textarea, contenteditable or button.
+  - As built (#43): `src/canvas/canvasEvents.ts` registers them. The pointer listeners (`dblclick`,
+    `pointerdown`, `click`) sit on the box Excalidraw fills, `SheetCanvasHandle.root`, a sibling of the
+    overlay, so the field's own clicks never reach them.
+    Keys act only when their target is inside that box or is the page's body: the app's own dialogs keep
+    theirs. Nothing acts while Excalidraw is busy (its text or line editor, a shape being drawn, a menu,
+    dialog, popup or context menu open).
+  - A press leaves the open line before Excalidraw sees it, so a drag starts on the committed scene. A
+    click is a press whose `click` follows with the anchor's `x` and `y` unchanged, on an anchor that owns
+    the point by the double-click's rule.
+  - A locked anchor is never selected: Excalidraw's hit-testing skips it and selects what lies under it. So
+    a locked anchor owns the point unless something above it is selected.
+  - The line field ignores a `mousedown` with `detail` 2 or more before any press of its own: it continues
+    a double-click begun on another line, and would select a word.
+  - Viewport to scene is `stageToScene` after taking off `offsetLeft` and `offsetTop`: the same formula,
+    pinned against `viewportCoordsToSceneCoords` (`viewport.test.ts`), with no Excalidraw import in the
+    overlay.
 - **Which line was hit comes from geometry:** viewport to scene with `viewportCoordsToSceneCoords`, undo the
   rotation, find the row by `offsetTop` and `offsetHeight`.
 - **Leaving an edit gives the keyboard back** by focusing `.excalidraw`.
@@ -1114,17 +1138,17 @@ Engineer's design gate. Tested on Excalidraw 0.18.1, math.js 15.2 and Chromium.
 
 Evidence: [`excalidraw-gestures.md`](research/excalidraw-gestures.md).
 
-**Contract tests to add,** as `layers.test.ts` does:
+**Contract tests to add,** as `layers.test.ts` does. Built names the issue that added it:
 
-| Behaviour | Test |
-|---|---|
-| `#ffffff01` counts as not transparent for hit-testing | Pointer down inside an unselected anchor selects it |
-| `onDoubleClick` runs in React's bubble phase | A double-click stopped at the stage adds no text element |
-| Key handling runs in the bubble phase, at or below the root | Enter stopped on `document` opens no editor |
-| No built-in shortcut for M | M leaves the tool unchanged when not intercepted |
-| `.excalidraw` takes focus | Enter works after leaving an edit |
-| Order of the panel's children in `.panelColumn` | The reduced panel hides what comes before Opacity |
-| `.HintViewer` holds the hint | The hint's replacement shows |
+| Behaviour | Test | Built |
+|---|---|---|
+| `#ffffff01` counts as not transparent for hit-testing | Pointer down inside an unselected anchor selects it | #43, `mathAnchor.excalidraw.test.tsx` |
+| `onDoubleClick` runs in React's bubble phase | A double-click stopped at the stage adds no text element | #43, `canvasEvents.excalidraw.test.tsx` |
+| Key handling runs in the bubble phase, at or below the root | Enter stopped on `document` opens no editor | #43, `canvasEvents.excalidraw.test.tsx` |
+| No built-in shortcut for M | M leaves the tool unchanged when not intercepted | |
+| `.excalidraw` takes focus | Enter works after leaving an edit | #43, `gestures.excalidraw.test.tsx` |
+| Order of the panel's children in `.panelColumn` | The reduced panel hides what comes before Opacity | |
+| `.HintViewer` holds the hint | The hint's replacement shows | |
 
 **File:** serialize with `serializeAsJSON(…, "local")`, then add the block. Excalidraw's own Ctrl+S and Ctrl+O
 must be taken over, because its save drops the block. `UIOptions.canvasActions` turns off `loadScene`,
@@ -1207,8 +1231,8 @@ spike is M0, done.
 
 1. Source in `customData` + undo steps + bare line field and its keys
 2. Save, open, recovery copy, ☰ items
-3. Gestures + the edit field's final layout and Esc's second press
-4. KaTeX grid, auto-size, comments
+3. Gestures and Esc's second press
+4. KaTeX grid with the edit field's final layout, auto-size, comments
 5. Add math (M), empty removal
 6. Reduced panel + hint, Normal font
 
@@ -1265,7 +1289,12 @@ Changes line if it changes behaviour.
   leaves the copy in place, and the dragged anchor keeps its id. Ctrl+D and copy and paste are
   contract tests in `src/canvas/mathAnchor.excalidraw.test.tsx`.
 - The unit slot and ⚙ open on `click` while a drag can still start on them (only the stopping form was probed;
-  needed from M2).
+  needed from M2). **Passed for the rule (#43):** with the overlay pointer-transparent, a press anywhere on an
+  element, its result column included, reaches Excalidraw, which selects and drags as usual, and a `click`
+  then reaches the canvas root. A click is that `click` with the anchor's `x` and `y` unchanged; after a drag
+  they have changed. In Chromium with real input, a click on the result column of another line moved the edit
+  there, and a drag from the same place moved the element and opened nothing. M2 builds the slot on this rule;
+  the slot itself is untried.
 - The reduced panel's CSS on `.panelColumn` children, and the hint's replacement through `.HintViewer`.
 - Restoring style with `NEVER` from `onChange`: paste styles on math alone may leave an empty undo entry.
 - Restoring `x` and `y` on snap-back, resizing several selected elements or a group, and a handle on a rotated
@@ -1275,12 +1304,31 @@ Changes line if it changes behaviour.
 - Rotated elements keeping their rotated top-left, and the half-pixel threshold.
 - A size write not marking the sheet dirty.
 - A size write during Excalidraw's own text edit, or while drawing a new shape.
-- Starting a drag while a line is being edited.
-- Grouped and locked anchors.
-- Arrows binding to a math element from inside.
-- A drawing on top of an anchor: as written, the listeners win, so a double-click there edits math.
-- `#ffffff01` in dark mode and over a drawing.
-- Whether Excalidraw's hit-testing runs in jsdom, for the first contract test.
+- Starting a drag while a line is being edited. **Passed (#43):** the press leaves the line before Excalidraw
+  sees it, so the line is one step and the move is Excalidraw's own; Ctrl+Z takes the move, then the line. In
+  Chromium with real input and as a contract test.
+- Grouped and locked anchors. **Changed (#43):** a click on a grouped anchor selects the group, and
+  Excalidraw's double-click enters the group; a locked anchor can't be selected, and Excalidraw's double-click
+  adds a text element on it, or labels what lies under it. Now a double-click edits either straight away (see
+  Changes), a locked one over a filled drawing or over another math element too. Contract tests; not tried by
+  hand.
+- Arrows binding to a math element from inside. **Passed (#43):** an arrow drawn from inside binds to the anchor
+  (`startBinding`, gap 14) and follows it when it moves, in Chromium and as a test. Kept (see Changes). #44's
+  size writes (`NEVER`) won't move a bound end; noted on #44.
+- A drawing on top of an anchor: as written, the listeners win, so a double-click there edits math. **Changed
+  (#43):** Excalidraw's click selects the drawing on top, so the drawing keeps its double-click (its label), in
+  Chromium and as a contract test.
+- `#ffffff01` in dark mode and over a drawing. **Passed (#43):** in Chromium, the canvas pixels inside an anchor
+  equal the background's (`255,255,255` over white, `255,201,201` over a pink rectangle) in light and dark mode
+  (dark is a CSS filter over the same pixels). Found on the way: the math text keeps light-theme colours and is
+  hard to read in dark mode (#50).
+- Whether Excalidraw's hit-testing runs in jsdom, for the first contract test. **Passed (#43):** a press inside an
+  unselected `#ffffff01` anchor selects it, inside a transparent one doesn't, and its stroke does. A drag runs
+  when each `pointermove` targets the canvas (Excalidraw drops moves whose target isn't an element), with a
+  short wait between moves. The section 14 contract tests run in CI.
+- Found in #43: double-clicking another line while editing. The first click moves the edit there, and the second
+  lands in the field, where the browser would select the word under the pointer. The field ignores that press, so
+  the line opens with the caret at the end, as section 4 says (Matheus, on PR #51: "Caret at end").
 
 **M3, M4**
 
@@ -1359,3 +1407,14 @@ Changes line if it changes behaviour.
 - 2026-11-05, [sections 7](#7-file-and-save) and [13](#13-messages) (#42 review, Engineer's, for Matheus to
   confirm on the PR): opening picks the file before the unsaved-changes question, because Chromium allows one
   picker per gesture; a picker or read failure has its own message, `Couldn't open the file: <reason>`.
+- 2026-11-07, [section 4](#gestures) (#43, agreed by Matheus): a drawing on top of a math element keeps
+  Excalidraw's double-click; a grouped element edits straight away; a locked element still edits, its lock
+  holding position only; the second Esc deselects whenever the selection includes math, mixed selections too;
+  arrows keep binding to math elements, even from inside.
+- 2026-11-07, [section 16](#16-milestones-and-finish-line) (#43, agreed by Matheus): the edit field's final
+  layout moves from the third issue to the fourth (#44), which builds the grid its cells live in. Until then
+  the field sits over the source column, with the live result beside it as plain text.
+- 2026-11-07, [section 14](#14-engineering-constraints) (#43, Engineer's, for Matheus to confirm on the PR): Enter,
+  Esc and M act only on keys aimed at the canvas, whose target is inside the box Excalidraw fills or is the page's
+  body, besides the rule against inputs, textareas, contenteditables and buttons. Keys in the app's own dialogs
+  and panels stay theirs: the second Esc had taken Esc away from the open-file question.

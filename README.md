@@ -7,11 +7,13 @@ you edit. Runs entirely in the browser and builds to a static site.
 Status: live recalculation across math elements (#3). The sheet opens with two
 math elements: `R = 10 kohm`, `I = 2 mA` above, and `U = I * R` (`20 V`) below.
 Edit `I` and `U` updates. Elements read top to bottom, then left to right, like
-Mathcad: each one sees only what is defined above it. Move an element by
-dragging its dashed border; duplicate one (Ctrl+D) for a copy with the same
-source. Click a line to edit it: arrows move between lines, Enter splits,
-Backspace at the start joins, and Esc or a click outside leaves. Ctrl+Z then
-undoes one line at a time, among Excalidraw's own steps such as selecting.
+Mathcad: each one sees only what is defined above it. Click an element to
+select it and drag it from anywhere; duplicate one (Ctrl+D) for a copy with the
+same source. Double-click a line, or press Enter on a selected element for its
+last line, to edit it: arrows move between lines, Enter splits, Backspace at the
+start joins, a click on another line moves there, and Esc, a click outside or a
+drag leaves. A second Esc deselects. Ctrl+Z then undoes one line at a time,
+among Excalidraw's own steps such as selecting.
 Ctrl+S saves the sheet as a `.excalimathpad` file and Ctrl+O opens one (also in
 the ☰ menu); unsaved work comes back from a recovery copy on the next launch,
 in Chrome or Edge. Assignment is plain math.js `=`; Mathcad's `:=` is

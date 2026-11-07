@@ -24,8 +24,10 @@ import {
   type LineEdit,
   type LineMove,
 } from './lineEdit.ts'
+import type { RowBox } from './lineHit.ts'
 import { MathElementView } from './MathElementView.tsx'
 import { readingOrder } from './readingOrder.ts'
+import { useSheetGestures } from './useSheetGestures.ts'
 import type { Viewport } from './viewport.ts'
 import './MathOverlay.css'
 
@@ -50,6 +52,8 @@ export interface LineEditControl {
 
 export interface MathOverlayProps {
   api: SceneApi
+  /** The box Excalidraw fills, where the gestures listen (`SheetCanvasHandle.root`). */
+  canvasRoot: HTMLElement
   forwardWheel: ForwardWheel
   /** Gives the keyboard back to Excalidraw, so its Ctrl+Z works after Esc. */
   focusCanvas: () => void
@@ -75,8 +79,19 @@ interface SceneSnapshot {
  * edit: the typed text stays in memory, the sheet runs from it, and the scene
  * gets it once, at the line commit (docs/spec-v1.md section 6). Holding a single
  * edit is what keeps at most one line across the sheet in source form.
+ *
+ * Lines open from the gestures (`useSheetGestures`): a double-click on a line,
+ * Enter on a selected element, a click on another line while editing. The
+ * overlay itself takes no pointer events except the open field.
  */
-export function MathOverlay({ api, forwardWheel, focusCanvas, control }: MathOverlayProps) {
+export function MathOverlay({
+  api,
+  canvasRoot,
+  forwardWheel,
+  focusCanvas,
+  control,
+}: MathOverlayProps) {
+  const overlayRef = useRef<HTMLDivElement>(null)
   const store = useMemo(() => createSceneStore(api), [api])
   const { viewport, anchors } = useSyncExternalStore(store.subscribe, store.getSnapshot)
 
@@ -137,6 +152,17 @@ export function MathOverlay({ api, forwardWheel, focusCanvas, control }: MathOve
     leaveLine: () => moveEdit({ kind: 'leave' }),
   }))
 
+  useSheetGestures({
+    api,
+    canvasRoot,
+    anchors: () => store.getSnapshot().anchors,
+    rowsOf: (anchorId) => rowsOf(overlayRef.current, anchorId),
+    edit: () => editRef.current,
+    openLine,
+    leaveLine: () => moveEdit({ kind: 'leave' }),
+    focusCanvas,
+  })
+
   const leaveLine = (anchorId: string, lineIndex: number) => {
     const current = editRef.current
     if (current?.anchorId === anchorId && current.lineIndex === lineIndex) {
@@ -147,7 +173,11 @@ export function MathOverlay({ api, forwardWheel, focusCanvas, control }: MathOve
   return (
     // Above the drawing, below Excalidraw's toolbar and panels, so math never
     // covers (or steals clicks from) the editor's own UI.
-    <div className="math-overlay" style={{ zIndex: ABOVE_DRAWING_BELOW_UI_Z_INDEX }}>
+    <div
+      ref={overlayRef}
+      className="math-overlay"
+      style={{ zIndex: ABOVE_DRAWING_BELOW_UI_Z_INDEX }}
+    >
       {anchors.map((anchor) => (
         <MathElementView
           key={anchor.id}
@@ -156,7 +186,6 @@ export function MathOverlay({ api, forwardWheel, focusCanvas, control }: MathOve
           source={typedSourceOf(anchor)}
           results={results.get(anchor.id) ?? []}
           edit={edit?.anchorId === anchor.id ? edit : null}
-          onOpenLine={(lineIndex) => openLine(anchor.id, lineIndex)}
           onType={(text) => {
             const current = editRef.current
             if (current) changeEdit({ ...current, text })
@@ -172,6 +201,21 @@ export function MathOverlay({ api, forwardWheel, focusCanvas, control }: MathOve
       ))}
     </div>
   )
+}
+
+/**
+ * An element's rows as laid out: `offsetTop` and `offsetHeight` ignore CSS
+ * transforms, so they are in scene units, before zoom and rotation.
+ */
+function rowsOf(overlay: HTMLElement | null, anchorId: string): RowBox[] {
+  const element = Array.from(overlay?.children ?? []).find(
+    (child) => child instanceof HTMLElement && child.dataset.anchorId === anchorId,
+  )
+  if (!element) return []
+  return Array.from(element.querySelectorAll<HTMLElement>('[data-line]')).map((row) => ({
+    top: row.offsetTop,
+    height: row.offsetHeight,
+  }))
 }
 
 function createSceneStore(api: SceneApi) {

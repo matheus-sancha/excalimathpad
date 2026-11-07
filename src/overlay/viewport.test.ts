@@ -1,4 +1,4 @@
-import { sceneCoordsToViewportCoords } from '@excalidraw/excalidraw'
+import { sceneCoordsToViewportCoords, viewportCoordsToSceneCoords } from '@excalidraw/excalidraw'
 import type { NormalizedZoomValue } from '@excalidraw/excalidraw/types'
 import { describe, expect, it } from 'vitest'
 import { sceneToStage, stageToScene, type Viewport } from './viewport.ts'
@@ -38,6 +38,28 @@ describe('sceneToStage', () => {
       },
     )
     const ours = sceneToStage(point, viewport)
+    expect(ours.x).toBeCloseTo(theirs.x)
+    expect(ours.y).toBeCloseTo(theirs.y)
+  })
+})
+
+describe('stageToScene', () => {
+  // The gestures turn a pointer's client point into scene units this way, after
+  // taking off the stage's offset (#43). Excalidraw's own helper is the contract.
+  it.each(cases)('agrees with viewportCoordsToSceneCoords at %o, with an offset', (viewport) => {
+    const offsetLeft = 37
+    const offsetTop = 64
+    const client = { clientX: 410, clientY: 233 }
+    const theirs = viewportCoordsToSceneCoords(client, {
+      ...viewport,
+      zoom: { value: viewport.zoom as NormalizedZoomValue },
+      offsetLeft,
+      offsetTop,
+    })
+    const ours = stageToScene(
+      { x: client.clientX - offsetLeft, y: client.clientY - offsetTop },
+      viewport,
+    )
     expect(ours.x).toBeCloseTo(theirs.x)
     expect(ours.y).toBeCloseTo(theirs.y)
   })

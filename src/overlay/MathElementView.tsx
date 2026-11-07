@@ -1,4 +1,11 @@
-import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react'
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type MouseEvent,
+} from 'react'
 import type { MathAnchor } from '../canvas/mathAnchor.ts'
 import type { ForwardWheel } from '../canvas/SheetCanvas.tsx'
 import { splitLines, type LineResult } from '../math/evaluate.ts'
@@ -14,7 +21,6 @@ export interface MathElementViewProps {
   results: readonly LineResult[]
   /** The sheet's line edit, when it is in this element. */
   edit: LineEdit | null
-  onOpenLine: (lineIndex: number) => void
   onType: (text: string) => void
   onMove: (move: LineMove) => void
   onEscape: () => void
@@ -27,10 +33,12 @@ export interface MathElementViewProps {
  * the right. Laid out in scene units and scaled by the zoom, so it moves and
  * scales exactly like the anchor Excalidraw draws underneath.
  *
- * Clicking a row opens it in a one-line field. That click is a stand-in until
- * the gestures arrive (#43), and rows stay plain text until the typeset grid
- * does (#44). Rows and results keep one line height each, so they stay beside
- * each other.
+ * Takes no pointer events, except the open field: Excalidraw gets every click
+ * and drag on the anchor underneath, and the overlay's gestures find the line
+ * from each row's `offsetTop` and `offsetHeight` (`data-line`). The field sits
+ * over the source column, with the live result beside it as plain text; #44's
+ * grid gives it its final layout. Rows and results keep one line height each,
+ * so they stay beside each other.
  */
 export function MathElementView({
   anchor,
@@ -38,7 +46,6 @@ export function MathElementView({
   source,
   results,
   edit,
-  onOpenLine,
   onType,
   onMove,
   onEscape,
@@ -73,7 +80,7 @@ export function MathElementView({
       >
         <ol className="math-element__lines" aria-label="Lines">
           {splitLines(source).map((line, i) => (
-            <li key={i}>
+            <li key={i} className="math-element__row" data-line={i}>
               {edit?.lineIndex === i ? (
                 <LineField
                   edit={edit}
@@ -83,14 +90,7 @@ export function MathElementView({
                   onBlur={() => onBlurLine(i)}
                 />
               ) : (
-                <button
-                  type="button"
-                  className="math-element__line"
-                  aria-label={`Edit line ${i + 1}`}
-                  onClick={() => onOpenLine(i)}
-                >
-                  {line}
-                </button>
+                <span className="math-element__line">{line}</span>
               )}
             </li>
           ))}
@@ -137,6 +137,17 @@ function LineField({ edit, onType, onMove, onEscape, onBlur }: LineFieldProps) {
     fieldRef.current?.setSelectionRange(opening.caret, opening.caret)
   }, [opening])
 
+  // A double-click on another line while editing: its first click moved the
+  // edit here, and its second lands in this field, where the browser would
+  // select the word under the pointer. The line opens with the caret at the end
+  // (docs/spec-v1.md section 4), so a press that continues a click begun
+  // elsewhere is ignored. A double-click made inside the field selects as usual.
+  const pressedHere = useRef(false)
+  const onMouseDown = (event: MouseEvent<HTMLInputElement>) => {
+    if (event.detail >= 2 && !pressedHere.current) event.preventDefault()
+    pressedHere.current = true
+  }
+
   const onKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
     if (event.nativeEvent.isComposing) return
     const field = event.currentTarget
@@ -173,6 +184,7 @@ function LineField({ edit, onType, onMove, onEscape, onBlur }: LineFieldProps) {
       autoComplete="off"
       onInput={(event) => onType(event.currentTarget.value)}
       onKeyDown={onKeyDown}
+      onMouseDown={onMouseDown}
       onBlur={(event) => {
         // The window lost focus, not the field: the edit hasn't left its line.
         if (document.activeElement !== event.currentTarget) onBlur()
