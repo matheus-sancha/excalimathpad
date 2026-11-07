@@ -1,6 +1,6 @@
 import { CaptureUpdateAction, newElementWith } from '@excalidraw/excalidraw'
 import type { ExcalidrawElement } from '@excalidraw/excalidraw/element/types'
-import type { ExcalidrawImperativeAPI } from '@excalidraw/excalidraw/types'
+import type { AppState, ExcalidrawImperativeAPI } from '@excalidraw/excalidraw/types'
 import { isMathAnchor } from './mathAnchor.ts'
 
 /**
@@ -81,6 +81,27 @@ export function writeAnchorSizes(
   })
   if (wrote) api.updateScene({ elements, captureUpdate: CaptureUpdateAction.NEVER })
   return wrote
+}
+
+/**
+ * A size write waits now: Excalidraw is in the middle of a pointer gesture (a
+ * drag, a resize or rotation, a shape or line being drawn) or one of its own
+ * editors (text, line). The content can't change then, and a write would
+ * fight the gesture. Each flag clears in an update Excalidraw reports through
+ * `onChange`, so a waiting write goes in at that change.
+ * `anchorSize.excalidraw.test.tsx` pins the flags against the installed
+ * package. (Not the gestures' `busy`, which also counts menus and dialogs.)
+ */
+export function sizeWritesWait(app: AppState): boolean {
+  return Boolean(
+    app.selectedElementsAreBeingDragged ||
+      app.isResizing ||
+      app.isRotating ||
+      app.newElement ||
+      app.multiElement ||
+      app.editingTextElement ||
+      app.editingLinearElement,
+  )
 }
 
 /** The slice of Excalidraw's API snapping back needs. */

@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef } from 'react'
-import type { AppState } from '@excalidraw/excalidraw/types'
 import {
   fitsContent,
+  sizeWritesWait,
   snapBackResizes,
   writeAnchorSizes,
   type ContentSize,
@@ -26,10 +26,9 @@ export interface AnchorSizes {
  * `offsetWidth` and `offsetHeight`, which ignore transforms, so they are scene
  * units at any zoom and rotation.
  *
- * Writes wait while Excalidraw is busy with the pointer or its own editors (a
- * drag, a resize or rotation, a shape being drawn, its text or line editor):
- * the content can't change then, and a write would fight the gesture. They go
- * in at its next change once it is idle.
+ * Writes wait while Excalidraw is mid-gesture or in one of its own editors
+ * (`sizeWritesWait`): the content can't change then, and a write would fight
+ * the gesture. They go in at its next change once it is idle.
  */
 export function useAnchorSizes(sizes: AnchorSizes) {
   const latest = useRef(sizes)
@@ -68,7 +67,7 @@ export function useAnchorSizes(sizes: AnchorSizes) {
           observed.delete(body)
         }
       }
-      waiting = fits.size > 0 && isBusy(api.getAppState())
+      waiting = fits.size > 0 && sizeWritesWait(api.getAppState())
       if (fits.size > 0 && !waiting) keepClean(() => writeAnchorSizes(api, fits))
     }
 
@@ -86,17 +85,4 @@ export function useAnchorSizes(sizes: AnchorSizes) {
 
   // After every render: the content may have changed size.
   useEffect(() => measure.current())
-}
-
-/** Excalidraw is in the middle of a pointer gesture or one of its own editors. */
-export function isBusy(app: AppState): boolean {
-  return Boolean(
-    app.selectedElementsAreBeingDragged ||
-      app.isResizing ||
-      app.isRotating ||
-      app.newElement ||
-      app.multiElement ||
-      app.editingTextElement ||
-      app.editingLinearElement,
-  )
 }

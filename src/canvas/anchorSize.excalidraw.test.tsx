@@ -1,10 +1,10 @@
-import { act, render, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, waitFor } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import { SheetCanvas, type SheetCanvasHandle } from './SheetCanvas.tsx'
-import { snapBackResizes, writeAnchorSizes } from './anchorSize.ts'
+import { sizeWritesWait, snapBackResizes, writeAnchorSizes } from './anchorSize.ts'
 import { createMathAnchorElements, writeAnchorSource } from './mathAnchor.ts'
 import { sceneLoaded, undoControls } from '../test/excalidraw.ts'
-import { clickOnCanvas, dragOnCanvas } from '../test/gestures.ts'
+import { clickOnCanvas, dragOnCanvas, interactiveCanvas, type ClientPoint } from '../test/gestures.ts'
 
 /**
  * Contracts against the real, installed Excalidraw (docs/spec-v1.md section 4,
@@ -153,5 +153,94 @@ describe('resize handles on real Excalidraw', () => {
 
     await new Promise((resolve) => setTimeout(resolve, 20))
     expect(anchor()).toMatchObject(BOX)
+  })
+})
+
+// Section 17: a size write during Excalidraw's own text edit or a new shape.
+// sizeWritesWait reads Excalidraw's app state; these pin each flag it reads
+// against the installed package: set in the middle, clear afterwards.
+describe('sizeWritesWait on real Excalidraw', () => {
+  const at = (clientX: number, clientY: number): ClientPoint => ({ clientX, clientY })
+  const pointer = (point: ClientPoint) => ({
+    ...point,
+    button: 0,
+    buttons: 1,
+    pointerId: 1,
+    pointerType: 'mouse',
+    isPrimary: true,
+  })
+
+  /** Presses at `from`, moves to `to`, checks, then lets go: a gesture held in the middle. */
+  async function holdDrag(from: ClientPoint, to: ClientPoint, whileHeld: () => void) {
+    const canvas = interactiveCanvas()
+    await act(async () => {
+      fireEvent.pointerDown(canvas, pointer(from))
+    })
+    for (const step of [0.5, 1]) {
+      await act(async () => {
+        fireEvent.pointerMove(
+          canvas,
+          pointer(at(from.clientX + (to.clientX - from.clientX) * step, from.clientY + (to.clientY - from.clientY) * step)),
+        )
+        await new Promise((resolve) => setTimeout(resolve, 20))
+      })
+    }
+    whileHeld()
+    await act(async () => {
+      fireEvent.pointerUp(canvas, pointer(to))
+    })
+  }
+
+  it('is idle on a still scene', async () => {
+    const { api } = await mount()
+
+    expect(sizeWritesWait(api.getAppState())).toBe(false)
+  })
+
+  it('waits while a new shape is drawn, and not after', async () => {
+    const { api } = await mount()
+    act(() => api.setActiveTool({ type: 'rectangle' }))
+
+    await holdDrag(at(500, 400), at(600, 480), () => {
+      expect(api.getAppState().newElement).not.toBeNull()
+      expect(sizeWritesWait(api.getAppState())).toBe(true)
+    })
+
+    expect(sizeWritesWait(api.getAppState())).toBe(false)
+    expect(api.getSceneElements()).toHaveLength(2)
+  })
+
+  it('waits while an element is dragged, and not after', async () => {
+    const { api } = await mount()
+    clickOnCanvas(at(150, 140))
+
+    await holdDrag(at(150, 140), at(250, 200), () => {
+      expect(sizeWritesWait(api.getAppState())).toBe(true)
+    })
+
+    expect(sizeWritesWait(api.getAppState())).toBe(false)
+  })
+
+  it('waits while a resize handle is held, and not after', async () => {
+    const { api } = await mount()
+    clickOnCanvas(at(150, 140))
+    const corner = at(BOX.x + BOX.width + 8, BOX.y + BOX.height + 8)
+
+    await holdDrag(corner, at(corner.clientX + 60, corner.clientY + 40), () => {
+      expect(api.getAppState().isResizing).toBe(true)
+      expect(sizeWritesWait(api.getAppState())).toBe(true)
+    })
+
+    expect(sizeWritesWait(api.getAppState())).toBe(false)
+  })
+
+  it('waits while Excalidraw’s text editor is open', async () => {
+    const { api } = await mount()
+    act(() => api.setActiveTool({ type: 'text' }))
+
+    clickOnCanvas(at(500, 400))
+
+    await waitFor(() => expect(api.getAppState().editingTextElement).not.toBeNull())
+    expect(sizeWritesWait(api.getAppState())).toBe(true)
   })
 })
