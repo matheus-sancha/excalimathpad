@@ -50,9 +50,9 @@ server. v1 target: one sheet, for Matheus's own use.
   types. This is ADR 0001's engineering rule as amended in ADR 0002. Depends
   on: `@excalidraw/excalidraw`.
 - **math** (`src/math/`) — the engine. Interface: `evaluateSheet(blocks)`,
-  with blocks `{ id, source }` already in reading order → one `LineResult`
-  (value | error | empty) per line, keyed by block id; never throws.
-  `evaluateSheetLines` gives each line its `TypesetLine` too, from the same
+  with blocks `{ id, source }` already in reading order → one `SheetLine` per
+  line, keyed by block id; never throws. A `SheetLine` is the line's
+  `LineResult` (value | error | empty) and its `TypesetLine`, from the same
   parse: blank, comment, math (name, expression and note, as TeX) or unparsed
   (raw source). `lineForm.ts` (pure) reads a line's comment before math.js sees
   it (ADR 0005 step 1), so a note never reaches math.js. `typeset.ts` is the
@@ -77,7 +77,7 @@ server. v1 target: one sheet, for Matheus's own use.
   SI prefix (`5 ft * 2 ft` is `0.9290304 m^2`, `2 cm * 3 cm` is
   `600 mm^2`); one whose units it keeps shows as written (`1 psi`,
   `60 mi / h`); `to` converts. App code must evaluate only
-  through `evaluateSheet` or `evaluateSheetLines`: math.js functions that depend on the disabled
+  through `evaluateSheet`: math.js functions that depend on the disabled
   names (`help`, `rationalize`, a `parser()`'s methods) no longer work. The
   only module that imports `mathjs`. Depends on: `mathjs`.
 - **overlay** (`src/overlay/`) — renders math elements over the canvas, each
@@ -95,7 +95,7 @@ server. v1 target: one sheet, for Matheus's own use.
   (`sceneToStage`, pure). It reads source from the anchors and holds the sheet's
   one **line edit**; `lineEdit.ts` (pure) decides what each way of leaving a
   line writes. It owns the sheet's evaluation: it sorts anchors with
-  `readingOrder.ts` (pure) and runs `evaluateSheetLines` on every keystroke,
+  `readingOrder.ts` (pure) and runs `evaluateSheet` on every keystroke,
   every source change and every change of order, then hands each
   `MathElementView` its lines. The overlay takes no pointer events except the open field:
   Excalidraw gets every click and drag. `useSheetGestures` opens, moves and

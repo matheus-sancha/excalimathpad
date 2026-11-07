@@ -3,8 +3,8 @@ import { evaluateSheet, type LineResult } from './evaluate.ts'
 
 /** Evaluates blocks (in reading order) as one sheet; results per block, in order. */
 function sheet(...sources: string[]): LineResult[][] {
-  const results = evaluateSheet(sources.map((source, i) => ({ id: `b${i}`, source })))
-  return sources.map((_, i) => results.get(`b${i}`)!)
+  const lines = evaluateSheet(sources.map((source, i) => ({ id: `b${i}`, source })))
+  return sources.map((_, i) => lines.get(`b${i}`)!.map(({ result }) => result))
 }
 
 /** A sheet of one block. */
@@ -374,8 +374,8 @@ describe('evaluateSheet', () => {
       vi.resetModules()
       const fresh = await import('./evaluate.ts')
       const run = (...sources: string[]) => {
-        const results = fresh.evaluateSheet(sources.map((source, i) => ({ id: `${i}`, source })))
-        return sources.map((_, i) => results.get(`${i}`)!)
+        const lines = fresh.evaluateSheet(sources.map((source, i) => ({ id: `${i}`, source })))
+        return sources.map((_, i) => lines.get(`${i}`)!.map(({ result }) => result))
       }
 
       const [, afterwards] = run('n = simplifyCore("typed.clear()")\nn.evaluate()', '20 V to mV\nsqrt(16)\ncos(0)')

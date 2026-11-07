@@ -199,24 +199,15 @@ type ParsedLine =
  * Using a name that is only assigned further down, or whose own assignment
  * failed, says so instead of math.js's bare "Undefined symbol".
  *
- * Returns exactly one result per line of each block's source, keyed by block
- * id. Ids are expected to be unique.
+ * Each line also gets its typeset form (docs/spec-v1.md section 4), from the
+ * same parse. A name shows as a sheet name from the line that assigns it down,
+ * so a variable `L` above isn't typeset as the litre, and `5 L` above it still
+ * is.
+ *
+ * Returns exactly one `SheetLine` (result and typeset form) per line of each
+ * block's source, keyed by block id. Ids are expected to be unique.
  */
-export function evaluateSheet(
-  blocks: readonly SheetBlock[],
-): ReadonlyMap<string, LineResult[]> {
-  const lines = evaluateSheetLines(blocks)
-  return new Map([...lines].map(([id, block]) => [id, block.map(({ result }) => result)]))
-}
-
-/**
- * `evaluateSheet`, with each line's typeset form too: one parse per line feeds
- * both. A name shows as a sheet name from the line that assigns it down, so a
- * variable `L` above isn't typeset as the litre, and `5 L` above it still is.
- */
-export function evaluateSheetLines(
-  blocks: readonly SheetBlock[],
-): ReadonlyMap<string, SheetLine[]> {
+export function evaluateSheet(blocks: readonly SheetBlock[]): ReadonlyMap<string, SheetLine[]> {
   const sheet = blocks.map(({ id, source }) => ({
     id,
     lines: splitLines(source).map(parseLine),

@@ -1,11 +1,11 @@
 import katex from 'katex'
 import { describe, expect, it } from 'vitest'
-import { evaluateSheetLines, typesetResult, type TypesetLine } from './evaluate.ts'
+import { evaluateSheet, typesetResult, type TypesetLine } from './evaluate.ts'
 import { nameTex, textTex } from './typeset.ts'
 
 /** Each line of one block, typeset in a sheet of that block. */
 function typeset(source: string): TypesetLine[] {
-  return evaluateSheetLines([{ id: 'b', source }]).get('b')!.map(({ typeset }) => typeset)
+  return evaluateSheet([{ id: 'b', source }]).get('b')!.map(({ typeset }) => typeset)
 }
 
 const math = (line: TypesetLine) => {

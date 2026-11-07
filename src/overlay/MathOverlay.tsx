@@ -16,7 +16,7 @@ import {
   type MathAnchor,
 } from '../canvas/mathAnchor.ts'
 import type { ForwardWheel } from '../canvas/SheetCanvas.tsx'
-import { evaluateSheetLines, type SheetBlock } from '../math/evaluate.ts'
+import { evaluateSheet, type SheetBlock } from '../math/evaluate.ts'
 import {
   applyLineMove,
   startLineEdit,
@@ -125,7 +125,7 @@ export function MathOverlay({
     }),
   )
   const lines = useMemo(
-    () => evaluateSheetLines(JSON.parse(sheetKey) as SheetBlock[]),
+    () => evaluateSheet(JSON.parse(sheetKey) as SheetBlock[]),
     [sheetKey],
   )
 
