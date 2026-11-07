@@ -337,6 +337,20 @@ describe('MathOverlay', () => {
       expect(cellOf(1, 'field-cell')).toHaveClass('is-empty-element')
     })
 
+    it('gives the field its minimum width once an element is emptied', () => {
+      const { scene } = renderOverlay([anchorWith('x = 2')])
+      const field = openLine(1)
+      // Still has source until the line is written.
+      type(field, '')
+      expect(cellOf(1, 'field-cell')).not.toHaveClass('is-empty-element')
+
+      fireEvent.keyDown(field, { key: 'Escape' })
+      expect(scene.sourceOf('m1')).toBe('')
+      openLine(1)
+
+      expect(cellOf(1, 'field-cell')).toHaveClass('is-empty-element')
+    })
+
     it('darkens with Excalidraw’s own filter in its dark theme (#50)', () => {
       const { scene } = renderOverlay([anchorWith('x = 2')])
       const overlay = elementOf('m1')!.parentElement!
