@@ -61,6 +61,14 @@ describe('sameAnchor', () => {
 
     expect(sameAnchor(a, { ...a, locked: true })).toBe(false)
   })
+
+  // Otherwise a change of opacity in the panel would not reach the overlay.
+  it('tells anchors apart by opacity', () => {
+    const a = toMathAnchor(anchor)
+
+    expect(a.opacity).toBe(100)
+    expect(sameAnchor(a, { ...a, opacity: 40 })).toBe(false)
+  })
 })
 
 describe('createMathAnchorElements', () => {

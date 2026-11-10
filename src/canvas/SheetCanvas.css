@@ -34,3 +34,22 @@
   line-height: 1.125rem;
   opacity: 0.85;
 }
+
+/* The reduced panel (docs/spec-v1.md section 4, Selected math element): while
+   only math is selected, the properties panel keeps Opacity, Layers, Align and
+   Actions. Opacity is the one child of `.panelColumn` with a class of its own,
+   and the style sections all come before it, so they are the children with
+   Opacity after them. `mathSelection.excalidraw.test.tsx` pins that order. */
+[data-math-selection] .App-menu__left .panelColumn > :has(~ label.control-label) {
+  display: none;
+}
+
+/* The hint for one math element (section 13), in Excalidraw's own place:
+   its text is hidden and the app's shown instead. */
+[data-math-selection='one'] .HintViewer > span {
+  display: none;
+}
+
+[data-math-selection='one'] .HintViewer::after {
+  content: var(--math-hint);
+}

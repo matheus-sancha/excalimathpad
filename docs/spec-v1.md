@@ -392,8 +392,9 @@ Actions stays whole, including Link. The panel can still cover math at the left 
 view; that's accepted.
 
 **Anchor style is fixed, except opacity:** stroke `#868e96`, dashed, thin; background
-`#ffffff01`, solid; roughness 0. If paste styles, a mixed selection or a hand-edited
-file changes these, the app writes them back with no undo step.
+`#ffffff01`, solid; roughness 0; sharp corners. If paste styles, a mixed selection or a
+hand-edited file changes these, the app writes them back with no undo step, and a
+clean sheet stays clean. Paste styles on math alone adds no undo step at all.
 
 **Opacity** is saved in the file, and the overlay and print follow it. The line being
 edited shows at full opacity. Opacity 0 is allowed: the element is invisible, still
@@ -1179,14 +1180,15 @@ Evidence: [`excalidraw-gestures.md`](research/excalidraw-gestures.md).
 | `#ffffff01` counts as not transparent for hit-testing | Pointer down inside an unselected anchor selects it | #43, `mathAnchor.excalidraw.test.tsx` |
 | `onDoubleClick` runs in React's bubble phase | A double-click stopped at the stage adds no text element | #43, `canvasEvents.excalidraw.test.tsx` |
 | Key handling runs in the bubble phase, at or below the root | Enter stopped on `document` opens no editor | #43, `canvasEvents.excalidraw.test.tsx` |
-| No built-in shortcut for M | M leaves the tool unchanged when not intercepted | |
+| No built-in shortcut for M | M leaves the tool unchanged when not intercepted | #45, `addMath.excalidraw.test.tsx` |
 | `.excalidraw` takes focus | Enter works after leaving an edit | #43, `gestures.excalidraw.test.tsx` |
 | A `NEVER` write updates the captured copy | A line commit after size writes is one step (control: an uncaptured size change is a second step) | #44, `anchorSize.excalidraw.test.tsx` |
 | Resize handles can be let go of and put back | A handle drag snaps back, `x` and `y` too, and leaves undo nothing (control: without it, the anchor resizes) | #44, `anchorSize.excalidraw.test.tsx` |
 | `sizeWritesWait`'s app-state flags | Set while a shape is drawn, an element dragged, a handle held or the text editor open; clear afterwards | #44, `anchorSize.excalidraw.test.tsx` |
 | The dark theme is `--theme-filter` | The overlay's filter is one of the package's `--theme-filter` values | #44, `layers.test.ts` |
-| Order of the panel's children in `.panelColumn` | The reduced panel hides what comes before Opacity | |
-| `.HintViewer` holds the hint | The hint's replacement shows | |
+| Order of the panel's children in `.panelColumn` | The reduced panel hides what comes before Opacity | #46, `mathSelection.excalidraw.test.tsx` |
+| `.HintViewer` holds the hint | The hint's replacement shows | #46, `mathSelection.excalidraw.test.tsx` |
+| A `NEVER` restore from `onChange` lands before the change is recorded | Paste styles on math adds no undo step (control: without the restore, it adds one) | #46, `anchorStyle.excalidraw.test.tsx` |
 
 **File:** serialize with `serializeAsJSON(…, "local")`, then add the block. Excalidraw's own Ctrl+S and Ctrl+O
 must be taken over, because its save drops the block. `UIOptions.canvasActions` turns off `loadScene`,
@@ -1335,7 +1337,18 @@ Changes line if it changes behaviour.
   there, and a drag from the same place moved the element and opened nothing. M2 builds the slot on this rule;
   the slot itself is untried.
 - The reduced panel's CSS on `.panelColumn` children, and the hint's replacement through `.HintViewer`.
+  **Passed (#46):** in Chromium, the panel's children are Stroke, Background, Fill, Stroke width, Stroke style,
+  Sloppiness, Edges, Opacity, Layers, (Align), Actions, and Opacity is the only one with a class of its own
+  (`label.control-label`). One rule hides the children that have Opacity after them: one math element showed
+  Opacity, Layers, Actions; two showed Align too; a drawing, and math with a drawing, showed the full panel.
+  `.HintViewer` holds one `<span>`; hiding it and showing the app's text in `::after` put the hint in
+  Excalidraw's own place. With several elements selected Excalidraw shows no hint, so nothing is replaced.
 - Restoring style with `NEVER` from `onChange`: paste styles on math alone may leave an empty undo entry.
+  **Passed (#46), in jsdom on the real Excalidraw:** it leaves none. Without the restore, paste styles changed
+  the anchor and added one undo step; with it, the anchor kept its style and the paste added no step, and undo
+  and redo moved only through the selection steps. On math with a drawing, the paste reached only the drawing,
+  and one undo took it back. Not tried in Chromium: paste styles couldn't be triggered headless, by shortcut
+  or context menu.
 - Restoring `x` and `y` on snap-back, resizing several selected elements or a group, and a handle on a rotated
   element. **Passed (#44):** in Chromium with real input, the top-right handle moved `y` from 200 to 159 while
   dragged, and letting go restored `x`, `y`, `width` and `height`; a corner handle on an anchor rotated about 81°,
@@ -1498,3 +1511,13 @@ Changes line if it changes behaviour.
   Esc, Ctrl+Z empties the element and a second removes it, and Ctrl+Shift+Z brings both back; an empty Add math
   left with Esc is removed, and Ctrl+Z brings back the empty box. A placed element makes the sheet dirty, and it
   stays dirty after an empty one is removed, because the undo stack still holds it.
+- 2026-11-10, [section 4](#selected-math-element) (#46, agreed by Matheus, answer 1 on the
+  [design](https://github.com/matheus-sancha/excalimathpad/issues/46#issuecomment-6764976877)): the border is thin
+  (width 1) as this spec says; until #46 anchors were drawn at Excalidraw's bold width (2), so every element's
+  border is thinner now, in saved files too once opened. The fixed style also names sharp corners, because the
+  reduced panel hides Edges.
+- 2026-11-10, [section 4](#selected-math-element) (#46, checked in Chromium with real keys and mouse): opacity set
+  in the reduced panel fades the element's math with its border, and the line being edited stays at full
+  opacity; new text opens in Nunito. Found: a changed opacity becomes Excalidraw's default for the next shape
+  drawn, as for any element; a new math element still starts at 100.
+
