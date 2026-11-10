@@ -9,8 +9,9 @@
 - **Built**: source in the anchor (#41, 2026-11-04); the `#ffffff01` fill, the
   pointer-transparent overlay and the gesture listeners (#43, 2026-11-07); size,
   written with `NEVER` through `src/canvas/anchorSize.ts`, and resize handles that
-  snap back (#44, 2026-11-07). Style restore (#46) and Add math (#45) are still
-  to come.
+  snap back (#44, 2026-11-07); Add math as a custom tool, the removal of an
+  element left empty, and the untitled sheet without its seed (#45, 2026-11-10).
+  Style restore (#46) is still to come.
 
 ## Context
 
@@ -73,7 +74,8 @@ Engineering rules that make it work (Engineer's, found in the #2 spike and #28):
   container. With the overlay pointer-transparent that should mean only the open
   editor, field and popover (inferred, not tested).
 - Add math is a public Excalidraw custom tool (`setActiveTool({ type: 'custom', … })`),
-  which the first version of this ADR said didn't exist (#28; M1).
+  which the first version of this ADR said didn't exist (#28; built in #45,
+  `src/canvas/addMath.ts`).
 
 ## Alternatives considered
 
