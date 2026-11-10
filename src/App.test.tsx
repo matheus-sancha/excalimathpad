@@ -117,4 +117,28 @@ describe('App', () => {
       expect(document.title).toBe('Untitled')
     })
   })
+
+  describe('anchor style (docs/spec-v1.md section 4)', () => {
+    // A hand-edited file, or one saved before the style was fixed.
+    it('restores a changed style, and the sheet stays clean', async () => {
+      const [changed, other] = sampleSheet()
+      const { files } = renderApp({
+        initialElements: [{ ...changed, strokeColor: '#e03131', backgroundColor: 'transparent' }, other],
+      })
+      await ready()
+      await screen.findAllByRole('list', { name: 'Lines' })
+      expect(document.title).toBe('Untitled')
+
+      act(() => {
+        document
+          .querySelector('.excalidraw')!
+          .dispatchEvent(new KeyboardEvent('keydown', { key: 's', ctrlKey: true, bubbles: true, cancelable: true }))
+      })
+      await waitFor(() => expect(files.saveAs).toHaveBeenCalledOnce())
+
+      const saved = files.disk.get('Untitled.excalimathpad')!
+      expect(saved).not.toContain('#e03131')
+      expect(saved).toContain('#ffffff01')
+    })
+  })
 })

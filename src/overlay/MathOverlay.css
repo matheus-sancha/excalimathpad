@@ -55,6 +55,13 @@
   grid-template-columns: subgrid;
   align-items: center;
   min-height: 24px;
+  /* The element's math has its anchor's opacity (section 4). */
+  opacity: var(--math-opacity, 1);
+}
+
+/* The line being edited stays readable in a faded element. */
+.math-element__row.is-editing {
+  opacity: 1;
 }
 
 .math-element__gutter {

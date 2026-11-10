@@ -6,6 +6,7 @@ import {
   writeAnchorSizes,
   type ContentSize,
 } from '../canvas/anchorSize.ts'
+import { anchorStylesChanged, restoreAnchorStyles } from '../canvas/anchorStyle.ts'
 import type { MathAnchor } from '../canvas/mathAnchor.ts'
 import type { SceneApi } from './MathOverlay.tsx'
 
@@ -15,12 +16,13 @@ export interface AnchorSizes {
   overlay: () => HTMLElement | null
   /** Live anchors, as the overlay last read them. */
   anchors: () => readonly MathAnchor[]
-  /** Runs a size write; the sheet keeps its clean mark through it (`SheetSession.keepClean`). */
+  /** Runs a size or style write; the sheet keeps its clean mark through it (`SheetSession.keepClean`). */
   keepClean: (write: () => void) => void
 }
 
 /**
- * Keeps every anchor the size of its content (docs/spec-v1.md section 4, Size):
+ * Keeps every anchor the size of its content (docs/spec-v1.md section 4, Size),
+ * and in the fixed style (`restoreAnchorStyles`):
  * after each render, whenever a body's size changes (fonts arriving, KaTeX
  * loading), and when a resize handle is let go. A body is measured with
  * `offsetWidth` and `offsetHeight`, which ignore transforms, so they are scene
@@ -71,7 +73,14 @@ export function useAnchorSizes(sizes: AnchorSizes) {
       if (fits.size > 0 && !waiting) keepClean(() => writeAnchorSizes(api, fits))
     }
 
+    // The fixed style, written back at the change that broke it (section 4,
+    // Selected math element). An opened file is restored the same way.
+    const restoreStyles = () => {
+      if (anchorStylesChanged(api)) latest.current.keepClean(() => restoreAnchorStyles(api))
+    }
+    restoreStyles()
     const offChange = api.onChange(() => {
+      restoreStyles()
       if (waiting) measure.current()
     })
     const offPointerUp = snapBackResizes(api, (write) => latest.current.keepClean(write))

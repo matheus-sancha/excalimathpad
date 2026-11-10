@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { Excalidraw, MainMenu, WelcomeScreen } from '@excalidraw/excalidraw'
+import { Excalidraw, FONT_FAMILY, MainMenu, WelcomeScreen } from '@excalidraw/excalidraw'
 import type { ExcalidrawElement } from '@excalidraw/excalidraw/element/types'
 import type { ExcalidrawImperativeAPI, UIOptions } from '@excalidraw/excalidraw/types'
 import '@excalidraw/excalidraw/index.css'
 import { isPlacing, startPlacing } from './addMath.ts'
+import { markMathSelection } from './mathSelection.ts'
 import './SheetCanvas.css'
 
 /**
@@ -51,6 +52,13 @@ const UI_OPTIONS: Partial<UIOptions> = {
 }
 
 /**
+ * New text starts in the Normal font, for headings and prose beside the math,
+ * and can still switch to hand-drawn (docs/spec-v1.md section 4, Text on the
+ * sheet). New shapes keep Excalidraw's defaults.
+ */
+const INITIAL_APP_STATE = { currentItemFontFamily: FONT_FAMILY.Nunito }
+
+/**
  * The drawing surface: the official, unforked Excalidraw component.
  * The `src/canvas/` modules are the only ones that import
  * `@excalidraw/excalidraw` at runtime (ADR 0001).
@@ -83,11 +91,17 @@ export function SheetCanvas({ onReady, initialElements, fileMenu }: SheetCanvasP
     if (api && root) onReadyRef.current?.({ api, forwardWheel, focusCanvas, root })
   }, [api, forwardWheel, focusCanvas])
 
+  // The reduced panel and the hint, while only math is selected.
+  useEffect(() => {
+    const root = containerRef.current
+    if (api && root) return markMathSelection(api, root)
+  }, [api])
+
   return (
     <div ref={containerRef} style={{ width: '100%', height: '100%' }}>
       <Excalidraw
         excalidrawAPI={setApi}
-        initialData={initialElements ? { elements: initialElements } : null}
+        initialData={{ elements: initialElements ?? [], appState: INITIAL_APP_STATE }}
         UIOptions={UI_OPTIONS}
         renderTopRightUI={(_isMobile, appState) =>
           api && (

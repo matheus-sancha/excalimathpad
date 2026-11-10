@@ -357,6 +357,24 @@ describe('MathOverlay', () => {
       expect(cellOf(2, 'field-cell')).toHaveClass('is-empty-element')
     })
 
+    it('draws its rows at the anchor’s opacity, the edited row at full (section 4)', () => {
+      renderOverlay([{ ...anchorWith('x = 2\ny = 3'), opacity: 40 }])
+
+      expect(elementOf('m1')!.style.getPropertyValue('--math-opacity')).toBe('0.4')
+
+      // The stylesheet lifts the editing row back to full opacity by this class.
+      openLine(1)
+      expect(rowOf('m1', 1)).toHaveClass('is-editing')
+      expect(rowOf('m1', 2)).not.toHaveClass('is-editing')
+    })
+
+    it('still evaluates an element at opacity 0', () => {
+      renderOverlay([{ ...anchorWith('x = 2 m * 3'), opacity: 0 }])
+
+      expect(elementOf('m1')!.style.getPropertyValue('--math-opacity')).toBe('0')
+      expect(resultsOf('m1')).toBe('6 m')
+    })
+
     it('darkens with Excalidraw’s own filter in its dark theme (#50)', () => {
       const { scene } = renderOverlay([anchorWith('x = 2')])
       const overlay = elementOf('m1')!.parentElement!

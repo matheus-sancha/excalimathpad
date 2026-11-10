@@ -85,6 +85,8 @@ export function MathElementView({
       style={{
         width: anchor.width,
         height: anchor.height,
+        // The anchor's opacity, on every row but the one being edited.
+        ['--math-opacity' as string]: anchor.opacity / 100,
         transform: `translate(${x}px, ${y}px) scale(${viewport.zoom})`,
       }}
     >
