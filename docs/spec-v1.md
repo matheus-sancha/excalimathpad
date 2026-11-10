@@ -1276,6 +1276,20 @@ spike is M0, done.
 5. Add math (M), empty removal
 6. Reduced panel + hint, Normal font
 
+**M2's issue order** (M1's six are built, #41 to #46):
+
+1. App units and number format, with the pump sheet's CI test (#55)
+2. Display unit (`in <unit>`) and unit systems (#56)
+3. Warnings: a name that shadows a unit, a fallback to the unit, a body name not defined above (#7)
+4. Function and reserved-name messages (#57)
+5. Sheet button and panel, with Variables and Problems (#58)
+6. Settings tab: unit system, Custom, Digits (#59)
+7. Unit slot (#60)
+
+The first four change only what the sheet computes and shows, so the panel and the slot are built on values
+that are already right. The slot is last: its list needs the unit systems, and its Sheet units entry the
+Settings tab.
+
 **Dates:** set a date for M1 when this spec is agreed. Date each later milestone when the previous one lands,
 from how long it really took. The v1 end is a forecast only.
 
@@ -1520,4 +1534,6 @@ Changes line if it changes behaviour.
   in the reduced panel fades the element's math with its border, and the line being edited stays at full
   opacity; new text opens in Nunito. Found: a changed opacity becomes Excalidraw's default for the next shape
   drawn, as for any element; a new math element still starts at 100.
+- 2026-11-10, [section 16](#16-milestones-and-finish-line) (agreed by Matheus, in chat): M2 is seven issues, in the
+  order listed there. #7 keeps its number as the third.
 
