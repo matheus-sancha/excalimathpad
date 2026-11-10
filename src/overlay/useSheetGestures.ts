@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef } from 'react'
 import type { AppState } from '@excalidraw/excalidraw/types'
 import type { ExcalidrawElement } from '@excalidraw/excalidraw/element/types'
+import { cancelPlacing, isPlacing, startPlacing, watchPlacing } from '../canvas/addMath.ts'
 import { listenToCanvas } from '../canvas/canvasEvents.ts'
 import { isMathAnchor, type MathAnchor } from '../canvas/mathAnchor.ts'
 import { deselectAll } from '../canvas/selection.ts'
@@ -32,8 +33,9 @@ export interface SheetGestures {
 
 /**
  * The stage's math gestures (docs/spec-v1.md section 4, section 14): double-click
- * on a line, Enter on a selected element, the second Esc, and a press that leaves
- * or moves the edit. Excalidraw keeps click, drag, select and rotate, because the
+ * on a line, Enter on a selected element, the second Esc, a press that leaves
+ * or moves the edit, and Add math: M starts placing, Esc cancels it, and the
+ * placing click opens the new element's first line (section 8). Excalidraw keeps click, drag, select and rotate, because the
  * overlay takes no pointer events and the anchor's fill takes clicks inside it.
  *
  * `listenToCanvas` (`src/canvas/`) hands each event over before Excalidraw hears
@@ -64,7 +66,9 @@ export function useSheetGestures(gestures: SheetGestures) {
     // A press on the edited element, kept until its click.
     let press: Press | null = null
 
-    return listenToCanvas(canvasRoot, {
+    const stopPlacing = watchPlacing(api, canvasRoot, (anchorId) => g().openLine(anchorId, 0))
+
+    const stopListening = listenToCanvas(canvasRoot, {
       // Leaving comes before Excalidraw sees the press, so a drag starts on the
       // committed scene: the line is one undo step and the move is its own.
       pointerDown(event) {
@@ -128,17 +132,31 @@ export function useSheetGestures(gestures: SheetGestures) {
           deselectAll(api)
           return true
         }
+        if (action.kind === 'add-math') {
+          startPlacing(api)
+          return true
+        }
+        if (action.kind === 'cancel-placing') {
+          cancelPlacing(api)
+          return true
+        }
         const anchor = anchorById(action.anchorId)
         if (anchor) g().openLine(anchor.id, splitLines(anchor.source).length - 1)
         return true
       },
     })
+
+    return () => {
+      stopPlacing()
+      stopListening()
+    }
   }, [api, canvasRoot])
 }
 
 function canvasState(app: AppState, elements: readonly ExcalidrawElement[]): CanvasState {
   return {
     tool: app.activeTool.type,
+    placing: isPlacing(app),
     busy: Boolean(
       app.editingTextElement ||
         app.editingLinearElement ||

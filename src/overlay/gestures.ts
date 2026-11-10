@@ -14,6 +14,8 @@ import type { Point } from './viewport.ts'
 export interface CanvasState {
   /** The active tool. Math gestures act only with the selection tool. */
   tool: AppState['activeTool']['type']
+  /** Placing: Add math's tool is active, and the next click creates the anchor. */
+  placing: boolean
   /**
    * Excalidraw is in the middle of something Esc or a double-click belongs to:
    * its text editor, a line editor, a shape being drawn, or a menu, dialog,
@@ -44,6 +46,8 @@ export interface KeyFacts extends EventFacts {
 export type KeyAction =
   | { kind: 'open-last'; anchorId: string }
   | { kind: 'deselect' }
+  | { kind: 'add-math' }
+  | { kind: 'cancel-placing' }
 
 /**
  * A press on the line edit's element, before Excalidraw handles it: where the
@@ -116,6 +120,9 @@ export function clickTarget(
  * - Esc with a math element in the selection, alone or mixed, deselects
  *   everything: Excalidraw keeps a selection on Esc. A selection of drawings
  *   only stays Excalidraw's.
+ * - M starts placing, from any tool, like Excalidraw's own letter shortcuts.
+ *   Pressed again while placing, it keeps placing (and stays the app's).
+ * - Esc while placing cancels it.
  */
 export function keyAction(
   state: CanvasState,
@@ -123,8 +130,10 @@ export function keyAction(
   isMath: (id: string) => boolean,
   key: KeyFacts,
 ): KeyAction | null {
-  if (key.targetOwnsEvent || key.composing || key.modifier) return null
-  if (state.tool !== 'selection' || state.busy) return null
+  if (key.targetOwnsEvent || key.composing || key.modifier || state.busy) return null
+  if (key.key.toLowerCase() === 'm') return { kind: 'add-math' }
+  if (state.placing) return key.key === 'Escape' ? { kind: 'cancel-placing' } : null
+  if (state.tool !== 'selection') return null
   if (key.key === 'Enter' && selection.length === 1 && isMath(selection[0])) {
     return { kind: 'open-last', anchorId: selection[0] }
   }

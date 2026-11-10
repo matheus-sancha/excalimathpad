@@ -27,6 +27,19 @@ export type LineMove =
 export interface LineMoveResult {
   source: string
   edit: LineEdit | null
+  /**
+   * The edit left an element with no text, new or emptied: the element is
+   * removed, and `source` isn't written (docs/spec-v1.md section 4).
+   */
+  remove: boolean
+}
+
+/**
+ * False for an empty element: no line holds anything but spaces. A comment is
+ * text, so an element holding only comments isn't empty.
+ */
+export function hasText(source: string): boolean {
+  return splitLines(source).some((line) => line.trim() !== '')
 }
 
 export function startLineEdit(
@@ -51,7 +64,8 @@ export function withTypedLine(source: string, edit: LineEdit): string {
  * the scene's. The returned source is the same string when the move commits
  * nothing, so a line left unchanged writes nothing. A move with nowhere to go
  * (up from the first line, down from the last, join on the first) keeps the
- * edit open and commits nothing, because the edit hasn't left its line.
+ * edit open and commits nothing, because the edit hasn't left its line. Only a
+ * leave can remove the element: the other moves stay inside it.
  */
 export function applyLineMove(
   source: string,
@@ -60,11 +74,13 @@ export function applyLineMove(
 ): LineMoveResult {
   const lines = splitLines(source)
   const { anchorId, lineIndex, text } = edit
-  const stay = { source, edit }
+  const stay = { source, edit, remove: false }
 
   switch (move.kind) {
-    case 'leave':
-      return { source: withTypedLine(source, edit), edit: null }
+    case 'leave': {
+      const typed = withTypedLine(source, edit)
+      return { source: typed, edit: null, remove: !hasText(typed) }
+    }
 
     case 'up':
     case 'down': {
@@ -73,6 +89,7 @@ export function applyLineMove(
       return {
         source: withTypedLine(source, edit),
         edit: startLineEdit(source, anchorId, target),
+        remove: false,
       }
     }
 
@@ -83,6 +100,7 @@ export function applyLineMove(
       return {
         source: lines.join('\n'),
         edit: { anchorId, lineIndex: lineIndex + 1, text: after, caret: 0 },
+        remove: false,
       }
     }
 
@@ -94,6 +112,7 @@ export function applyLineMove(
       return {
         source: lines.join('\n'),
         edit: { anchorId, lineIndex: lineIndex - 1, text: joined, caret: above.length },
+        remove: false,
       }
     }
   }

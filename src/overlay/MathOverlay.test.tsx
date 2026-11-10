@@ -19,7 +19,7 @@ function fakeScene(elements: ExcalidrawElement[]) {
   let scene = elements
   let view = { scrollX: 0, scrollY: 0, zoom: 1 }
   let selectedElementIds: Record<string, true> = {}
-  let tool = 'selection'
+  let tool: { type: string; customType?: string | null } = { type: 'selection' }
   let theme = 'light'
   let busy: Partial<AppState> = {}
   const changeListeners = new Set<() => void>()
@@ -47,7 +47,7 @@ function fakeScene(elements: ExcalidrawElement[]) {
         zoom: { value: view.zoom },
         offsetLeft: 0,
         offsetTop: 0,
-        activeTool: { type: tool },
+        activeTool: tool,
         selectedElementIds,
         theme,
         ...busy,
@@ -65,6 +65,11 @@ function fakeScene(elements: ExcalidrawElement[]) {
       return () => pointerUpListeners.delete(cb as never)
     },
     updateScene: updateScene as never,
+    setActiveTool: ((next: typeof tool) => {
+      tool = next
+      act(() => changeListeners.forEach((cb) => cb()))
+    }) as never,
+    setCursor: () => {},
   }
   return {
     api,
@@ -85,8 +90,9 @@ function fakeScene(elements: ExcalidrawElement[]) {
     },
     selected: () => Object.keys(selectedElementIds),
     setTool(next: string) {
-      tool = next
+      tool = { type: next }
     },
+    tool: () => tool,
     /** Excalidraw's app state while a gesture or editor is under way, or `{}` once idle. */
     setBusy(next: Partial<AppState>) {
       busy = next
@@ -94,7 +100,7 @@ function fakeScene(elements: ExcalidrawElement[]) {
     },
     /** Excalidraw lets go of a press, with the state it kept from the press. */
     pointerUp(pointerDownState: unknown) {
-      act(() => pointerUpListeners.forEach((cb) => cb({ type: 'selection' }, pointerDownState)))
+      act(() => pointerUpListeners.forEach((cb) => cb(tool, pointerDownState)))
     },
     elementOf: (id: string) => scene.find((e) => e.id === id)!,
     setTheme(next: 'light' | 'dark') {
@@ -338,17 +344,17 @@ describe('MathOverlay', () => {
     })
 
     it('gives the field its minimum width once an element is emptied', () => {
-      const { scene } = renderOverlay([anchorWith('x = 2')])
+      const { scene } = renderOverlay([anchorWith('x = 2\n')])
       const field = openLine(1)
       // Still has source until the line is written.
       type(field, '')
       expect(cellOf(1, 'field-cell')).not.toHaveClass('is-empty-element')
 
-      fireEvent.keyDown(field, { key: 'Escape' })
-      expect(scene.sourceOf('m1')).toBe('')
-      openLine(1)
+      // Down commits the line; the edit is still inside the element.
+      fireEvent.keyDown(field, { key: 'ArrowDown' })
+      expect(scene.sourceOf('m1')).toBe('\n')
 
-      expect(cellOf(1, 'field-cell')).toHaveClass('is-empty-element')
+      expect(cellOf(2, 'field-cell')).toHaveClass('is-empty-element')
     })
 
     it('darkens with Excalidraw’s own filter in its dark theme (#50)', () => {
@@ -990,8 +996,9 @@ describe('MathOverlay', () => {
 
   it('unsubscribes from Excalidraw when unmounted', () => {
     const { scene, unmount } = renderOverlay([anchor])
-    // The scene and the scroll, sizes waiting on an idle change, and snap-back.
-    expect(scene.listenerCount()).toBe(4)
+    // The scene and the scroll, sizes waiting on an idle change, snap-back, and
+    // the placing click.
+    expect(scene.listenerCount()).toBe(5)
 
     unmount()
 
@@ -1004,5 +1011,159 @@ describe('MathOverlay', () => {
     fireEvent.wheel(openLine(1), { deltaY: 50 })
 
     expect(forwardWheel).toHaveBeenCalledOnce()
+  })
+})
+
+describe('Add math and empty removal (docs/spec-v1.md sections 4 and 8)', () => {
+  const pressOnCanvas = (key: string) => fireEvent.keyDown(canvasRoot, { key })
+  const placeAt = (x: number, y: number) => current.pointerUp({ origin: { x, y }, resize: { isResizing: false }, originalElements: new Map() })
+  const newAnchor = () => current.api.getSceneElementsIncludingDeleted().find(({ id }) => id !== 'm1')!
+  const ghost = () => screen.queryByTestId('placing-ghost')
+  /** The pointer over Excalidraw's canvas, inside the box it fills. */
+  const moveOverCanvas = (clientX: number, clientY: number) => {
+    const canvas = canvasRoot.querySelector('canvas') ?? canvasRoot.appendChild(document.createElement('canvas'))
+    fireEvent.pointerMove(canvas, { clientX, clientY })
+  }
+
+  it('M starts placing, and the click places a selected element with its first line open', () => {
+    const { scene } = renderOverlay([anchor])
+    scene.select('m1')
+
+    pressOnCanvas('m')
+    expect(scene.tool()).toEqual({ type: 'custom', customType: 'add-math' })
+    // Placing isn't in the scene.
+    expect(scene.api.getSceneElementsIncludingDeleted()).toHaveLength(1)
+
+    placeAt(300, 400)
+
+    const placed = newAnchor()
+    expect(placed).toMatchObject({ x: 300, y: 400, customData: { kind: 'math', source: '' } })
+    expect(scene.tool()).toEqual({ type: 'selection' })
+    expect(scene.selected()).toEqual([placed.id])
+    const field = openField()!
+    expect(field).toHaveFocus()
+    expect(field.value).toBe('')
+    expect(field.closest('[data-anchor-id]')).toHaveAttribute('data-anchor-id', placed.id)
+  })
+
+  it('writes the element and its selection in one update, so Add math is one undo step', () => {
+    const { scene } = renderOverlay([anchor])
+    pressOnCanvas('m')
+    scene.updateScene.mockClear()
+
+    placeAt(300, 400)
+
+    expect(scene.updateScene).toHaveBeenCalledTimes(1)
+    expect(scene.updateScene.mock.calls[0][0]).toMatchObject({
+      appState: { selectedElementIds: { [newAnchor().id]: true } },
+      captureUpdate: 'IMMEDIATELY',
+    })
+  })
+
+  it('Esc while placing cancels, and adds nothing', () => {
+    const { scene } = renderOverlay([anchor])
+    pressOnCanvas('m')
+
+    pressOnCanvas('Escape')
+
+    expect(scene.tool()).toEqual({ type: 'selection' })
+    expect(scene.updateScene).not.toHaveBeenCalled()
+  })
+
+  it('a click with another tool places nothing', () => {
+    const { scene } = renderOverlay([anchor])
+    scene.setTool('rectangle')
+
+    placeAt(300, 400)
+
+    expect(scene.api.getSceneElementsIncludingDeleted()).toHaveLength(1)
+  })
+
+  it('shows the ghost box at the pointer only while placing', () => {
+    renderOverlay([anchor])
+    moveOverCanvas(40, 60)
+    expect(ghost()).toBeNull()
+
+    pressOnCanvas('m')
+    moveOverCanvas(40, 60)
+    expect(ghost()).toHaveStyle({ transform: 'translate(40px, 60px) scale(1)', width: '305px' })
+
+    placeAt(40, 60)
+    expect(ghost()).toBeNull()
+  })
+
+  it('keeps a new element once its line has text', () => {
+    const { scene } = renderOverlay([anchor])
+    pressOnCanvas('m')
+    placeAt(300, 400)
+
+    type(openField()!, 'a = 1')
+    fireEvent.keyDown(openField()!, { key: 'Escape' })
+
+    expect(newAnchor()).toMatchObject({ isDeleted: false, customData: { source: 'a = 1' } })
+    expect(scene.selected()).toEqual([newAnchor().id])
+  })
+
+  it.each([
+    ['nothing', ''],
+    ['only spaces', '   '],
+  ])('removes a new element left with %s, and deselects it', (_, text) => {
+    const { scene } = renderOverlay([anchor])
+    pressOnCanvas('m')
+    placeAt(300, 400)
+
+    type(openField()!, text)
+    fireEvent.keyDown(openField()!, { key: 'Escape' })
+
+    expect(newAnchor().isDeleted).toBe(true)
+    expect(scene.selected()).toEqual([])
+    expect(openField()).toBeNull()
+  })
+
+  // Undo then brings it back with its text: the removal is the only step (#45, answer 2).
+  it('removes an emptied element without touching its source', () => {
+    const { scene } = renderOverlay([anchorWith('x = 2')])
+    const field = openLine(1)
+    type(field, '')
+    scene.updateScene.mockClear()
+
+    fireEvent.keyDown(field, { key: 'Escape' })
+
+    expect(scene.elementOf('m1').isDeleted).toBe(true)
+    expect(scene.sourceOf('m1')).toBe('x = 2')
+    expect(scene.sourceWrites()).toBe(0)
+    expect(elementOf('m1')).toBeNull()
+  })
+
+  it('removes an empty element when the edit leaves it for another element', () => {
+    const [other] = createMathAnchorElements([{ id: 'm2', ...box, y: 300, source: 'y = 1' }])
+    const { scene } = renderOverlay([anchorWith(''), other])
+    openLine(1)
+
+    openLine(1, 'm2')
+
+    expect(scene.elementOf('m1').isDeleted).toBe(true)
+    expect(openField()!.value).toBe('y = 1')
+  })
+
+  it('keeps an element that holds only a comment', () => {
+    const { scene } = renderOverlay([anchorWith('')])
+    const field = openLine(1)
+    type(field, '# inputs')
+
+    fireEvent.keyDown(field, { key: 'Escape' })
+
+    expect(scene.elementOf('m1').isDeleted).toBe(false)
+    expect(scene.sourceOf('m1')).toBe('# inputs')
+  })
+
+  it('keeps an empty element while the edit moves between its lines', () => {
+    const { scene } = renderOverlay([anchorWith('\n')])
+    const field = openLine(1)
+
+    fireEvent.keyDown(field, { key: 'ArrowDown' })
+
+    expect(scene.elementOf('m1').isDeleted).toBe(false)
+    expect(openField()).not.toBeNull()
   })
 })

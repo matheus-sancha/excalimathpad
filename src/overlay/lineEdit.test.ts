@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   applyLineMove,
+  hasText,
   startLineEdit,
   withTypedLine,
   type LineEdit,
@@ -44,7 +45,7 @@ describe('applyLineMove', () => {
   })
 
   it('leave commits the typed text and ends the edit', () => {
-    expect(applyLineMove(SOURCE, editing(1, 'b = 9'), { kind: 'leave' })).toEqual({
+    expect(applyLineMove(SOURCE, editing(1, 'b = 9'), { kind: 'leave' })).toMatchObject({
       source: 'a = 1\nb = 9\nc = 3',
       edit: null,
     })
@@ -67,7 +68,7 @@ describe('applyLineMove', () => {
       ['join on the first line', 0, { kind: 'join' }],
     ] as const)('%s', (_, lineIndex, move) => {
       const edit = editing(lineIndex, 'typed')
-      expect(applyLineMove(SOURCE, edit, move)).toEqual({ source: SOURCE, edit })
+      expect(applyLineMove(SOURCE, edit, move)).toMatchObject({ source: SOURCE, edit })
     })
   })
 
@@ -114,5 +115,36 @@ describe('applyLineMove', () => {
     const split = applyLineMove(SOURCE, editing(1), { kind: 'split', from: 2, to: 2 })
     const joined = applyLineMove(split.source, split.edit!, { kind: 'join' })
     expect(joined.source).toBe(SOURCE)
+  })
+})
+
+describe('an element left with no text is removed (section 4)', () => {
+  it('has no text when every line is blank or spaces', () => {
+    expect(hasText('')).toBe(false)
+    expect(hasText('  \n\t\n')).toBe(false)
+    expect(hasText('a = 1')).toBe(true)
+  })
+
+  it('counts a comment as text', () => {
+    expect(hasText('# pump inputs')).toBe(true)
+  })
+
+  it('a leave removes a new element left empty, and one emptied', () => {
+    expect(applyLineMove('', editing(0, '', ''), { kind: 'leave' }).remove).toBe(true)
+    expect(applyLineMove('a = 1', editing(0, '  ', 'a = 1'), { kind: 'leave' }).remove).toBe(true)
+  })
+
+  it('a leave keeps an element with text on any line', () => {
+    expect(applyLineMove(SOURCE, editing(1, ''), { kind: 'leave' }).remove).toBe(false)
+    expect(applyLineMove('', editing(0, 'a = 1', ''), { kind: 'leave' }).remove).toBe(false)
+  })
+
+  // The edit is still inside the element, so it isn't left yet.
+  it('moves inside an empty element never remove it', () => {
+    const source = '\n'
+    expect(applyLineMove(source, editing(0, '', source), { kind: 'down' }).remove).toBe(false)
+    expect(applyLineMove(source, editing(1, '', source), { kind: 'up' }).remove).toBe(false)
+    expect(applyLineMove(source, editing(1, '', source), { kind: 'join' }).remove).toBe(false)
+    expect(applyLineMove('', editing(0, '', ''), { kind: 'split', from: 0, to: 0 }).remove).toBe(false)
   })
 })

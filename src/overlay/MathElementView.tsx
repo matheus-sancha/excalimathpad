@@ -17,7 +17,7 @@ import {
   type TypesetLine,
 } from '../math/evaluate.ts'
 import { texToHtml, useKatexReady } from './katex.ts'
-import type { LineEdit, LineMove } from './lineEdit.ts'
+import { hasText, type LineEdit, type LineMove } from './lineEdit.ts'
 import { sceneToStage, type Viewport } from './viewport.ts'
 
 export interface MathElementViewProps {
@@ -67,7 +67,7 @@ export function MathElementView({
   const katexReady = useKatexReady()
   const { x, y } = sceneToStage(anchor, viewport)
   // A new or emptied element: its field starts with room to type (section 4, Size).
-  const isEmpty = splitLines(anchor.source).every((line) => line.trim() === '')
+  const isEmpty = !hasText(anchor.source)
 
   // React's onWheel is passive, so it cannot stop ctrl+wheel zooming the page.
   useEffect(() => {

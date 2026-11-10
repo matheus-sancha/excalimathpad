@@ -134,6 +134,29 @@ export function writeAnchorSource(
   return true
 }
 
+/** The slice of Excalidraw's API a removal needs. */
+export type RemoveApi = SourceWriteApi & Pick<ExcalidrawImperativeAPI, 'getAppState'>
+
+/**
+ * Removes a math element left with no text (docs/spec-v1.md section 4), as
+ * exactly one undo step. Its source isn't touched, so undo brings the element
+ * back as the scene last held it: an emptied element with its text, a new one
+ * as an empty box. It leaves the selection in the same write, so the removal
+ * and the deselect are one step. Returns whether it removed.
+ */
+export function removeAnchor(api: RemoveApi, anchorId: string): boolean {
+  const anchor = api.getSceneElementsIncludingDeleted().find(({ id }) => id === anchorId)
+  if (!anchor || !isMathAnchor(anchor)) return false
+  const committed = recordPendingChange(api, anchor)
+  const { [anchorId]: _removed, ...selectedElementIds } = api.getAppState().selectedElementIds
+  api.updateScene({
+    elements: withElement(api, newElementWith(committed, { isDeleted: true })),
+    appState: { selectedElementIds },
+    captureUpdate: CaptureUpdateAction.IMMEDIATELY,
+  })
+  return true
+}
+
 /**
  * Records, as its own undo step, any change Excalidraw made to the anchor
  * without capturing it: its arrow-key nudge and its Link editor do this. Adds no
