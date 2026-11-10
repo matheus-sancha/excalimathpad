@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { Excalidraw, MainMenu } from '@excalidraw/excalidraw'
+import { Excalidraw, MainMenu, WelcomeScreen } from '@excalidraw/excalidraw'
 import type { ExcalidrawElement } from '@excalidraw/excalidraw/element/types'
 import type { ExcalidrawImperativeAPI, UIOptions } from '@excalidraw/excalidraw/types'
 import '@excalidraw/excalidraw/index.css'
+import { isPlacing, startPlacing } from './addMath.ts'
+import './SheetCanvas.css'
 
 /**
  * Re-dispatches a wheel event that landed on something outside Excalidraw
@@ -87,12 +89,68 @@ export function SheetCanvas({ onReady, initialElements, fileMenu }: SheetCanvasP
         excalidrawAPI={setApi}
         initialData={initialElements ? { elements: initialElements } : null}
         UIOptions={UI_OPTIONS}
+        renderTopRightUI={(_isMobile, appState) =>
+          api && (
+            <AddMathButton
+              placing={isPlacing(appState)}
+              onPress={() => {
+                startPlacing(api)
+                // The button would keep the keyboard: Esc and M go to the canvas.
+                focusCanvas()
+              }}
+            />
+          )
+        }
       >
         <SheetMenu fileMenu={fileMenu} />
+        <SheetWelcome fileMenu={fileMenu} />
       </Excalidraw>
     </div>
   )
 }
+
+/**
+ * ∑ Add math, the primary button, top right (docs/spec-v1.md section 8). It
+ * starts placing, the same as M; pressed again while placing, it keeps placing.
+ */
+function AddMathButton({ placing, onPress }: { placing: boolean; onPress: () => void }) {
+  return (
+    <button
+      type="button"
+      className="add-math-button"
+      aria-pressed={placing}
+      title="Add math — M"
+      onClick={onPress}
+    >
+      <span aria-hidden="true">∑</span> Add math <kbd>M</kbd>
+    </button>
+  )
+}
+
+/**
+ * Excalidraw's welcome screen, shown on an empty sheet: the app's name, the
+ * hint for Add math, and Open… (docs/spec-v1.md section 8). Excalidraw's own
+ * logo and collaboration items are left out.
+ */
+function SheetWelcome({ fileMenu }: { fileMenu?: FileMenu }) {
+  return (
+    <WelcomeScreen>
+      <WelcomeScreen.Center>
+        <WelcomeScreen.Center.Logo>Excalimathpad</WelcomeScreen.Center.Logo>
+        <WelcomeScreen.Center.Heading>{WELCOME_HINT}</WelcomeScreen.Center.Heading>
+        {fileMenu && (
+          <WelcomeScreen.Center.Menu>
+            <WelcomeScreen.Center.MenuItem onSelect={fileMenu.open} shortcut="Ctrl+O">
+              Open…
+            </WelcomeScreen.Center.MenuItem>
+          </WelcomeScreen.Center.Menu>
+        )}
+      </WelcomeScreen.Center>
+    </WelcomeScreen>
+  )
+}
+
+export const WELCOME_HINT = 'Press M or click Add math, then click the sheet to place math'
 
 /**
  * The ☰ menu: the app's file items first, then the Excalidraw items v1 keeps.

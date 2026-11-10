@@ -355,7 +355,12 @@ none. Hover is screen-only.
 - A **click outside**, or starting a drag on the element, also leaves.
 - Leaving always keeps what was typed. There is no cancel.
 - An element left with no text is removed when the edit leaves it, whether new or
-  emptied. An element holding only comments isn't empty.
+  emptied. An element holding only comments isn't empty; one holding only spaces and
+  blank lines is. The edit leaves the element on Esc, a click outside, a drag, or a
+  line opened in another element; moving between its own lines never removes it.
+- The removal is the only undo step, and it doesn't write the line. So Ctrl+Z brings
+  an emptied element back with the text the sheet last held, and a new one back as an
+  empty box.
 
 ### Size
 
@@ -706,10 +711,13 @@ screen. There is no app bar: the chrome lives inside Excalidraw's own UI slots.
 - **Window title:** the name without its extension, with `●` while dirty: `● pump-sizing`.
   An unsaved sheet reads `● Untitled`. While printing, the title drops the mark, so the PDF is
   named `pump-sizing.pdf`, because Save as PDF names the file from the title.
-- **∑ Add math** is the primary button, labelled with its shortcut **M**.
+- **∑ Add math** is the primary button, labelled with its shortcut **M**. It reads as
+  pressed while placing.
 - **Sheet** opens and closes the panel, with a red badge counting errors and warnings
   while the sheet has problems.
-- An empty untitled sheet shows Excalidraw's welcome screen, with a hint for M / Add math.
+- An empty untitled sheet shows Excalidraw's welcome screen: the app's name, the hint
+  "Press M or click Add math, then click the sheet to place math", and Open… (Ctrl+O).
+  Excalidraw's own logo and collaboration items are left out.
 
 ### Add math
 
@@ -717,6 +725,14 @@ Pressing Add math or **M** turns the cursor into a crosshair with a ghost box. T
 click on the canvas places the element there, selected, with its first line open for
 typing. It can be placed on top of an existing element. **Esc** before clicking cancels.
 Placing isn't in the scene and isn't an undo step until the click.
+
+- The ghost box is the new element's box, with its top-left at the pointer, where the
+  click puts it.
+- **M works from any tool,** like Excalidraw's own letter shortcuts, unless Excalidraw is
+  busy (its text or line editor, a shape being drawn, a menu or dialog open) or a field
+  has the keyboard, where "m" is typed.
+- **M or the button pressed again while placing keeps placing.** Only Esc cancels.
+- **Each Add math places one element.** The tool then returns to selection.
 
 ### Sheet panel
 
@@ -1144,6 +1160,13 @@ Engineer's design gate. Tested on Excalidraw 0.18.1, math.js 15.2 and Chromium.
 - **Leaving an edit gives the keyboard back** by focusing `.excalidraw`.
 - **Add math is a custom tool:** `setActiveTool({ type: 'custom', customType })`, with the placing click
   from `onPointerUp`. Re-apply the crosshair two animation frames after each `pointermove`.
+  - As built (#45): `src/canvas/addMath.ts` holds the tool, the placing click (`watchPlacing`) and the
+    crosshair. The anchor goes at `pointerDownState.origin`, selected in the same `updateScene`, after the
+    tool returns to selection. The button is in `renderTopRightUI` and gives the keyboard back to
+    `.excalidraw`, or Esc and M would stay on the button. The ghost is the overlay's, from a capture
+    `pointermove` on the box Excalidraw fills.
+  - An element left with no text is removed by `removeAnchor` (`src/canvas/mathAnchor.ts`): `isDeleted`
+    and the deselect in one `IMMEDIATELY` write, after the same pending-change record a source write makes.
 - **Anything in `src/canvas/` only:** runtime imports of Excalidraw, `exportToSvg`, and the `.excalidraw`
   focus query.
 
@@ -1272,8 +1295,9 @@ lines through `evaluateSheet` and compares with the reference at 4 s.f. It grows
   today's formatting until M2. M1's check doesn't judge values, so neither blocks it.
 - **Line 6's warning** is checked at M2, when the shadow warning lands.
 - **Settings:** the Settings tab arrives in M2, its Page row in M5. The Print… menu item arrives in M5.
-- **The seed:** until Add math (the fifth issue), the untitled sheet starts with the two seeded elements,
-  loaded clean, because an empty sheet has no other way to get a math element. Add math removes them.
+- **The seed:** until Add math (the fifth issue), the untitled sheet started with two seeded elements,
+  loaded clean, because an empty sheet had no other way to get a math element. Add math removed them (#45):
+  the untitled sheet starts empty, on the welcome screen.
 
 ### The finish line
 
@@ -1463,3 +1487,14 @@ Changes line if it changes behaviour.
   parse also shows its message in the result cell, as any error does, so the reason is on the sheet.
 - 2026-11-07, [section 4](#typesetting-names) (#44 review, Matheus, in chat on 2026-11-07: "Greek letter
   (T_α)"): a Greek word that is the whole subscript typesets as its letter, not as an upright word.
+- 2026-11-10, [sections 4](#while-editing-a-line) and [8](#8-app-chrome) (#45, agreed by Matheus, answers 1-4 on the
+  [design](https://github.com/matheus-sancha/excalimathpad/issues/45#issuecomment-6764076286)): an element holding only
+  spaces and blank lines is empty; removing an emptied element is the only undo step, so Ctrl+Z brings it back with
+  its last text; M works from any tool, pressing M or the button again keeps placing, and each Add math places one
+  element; the welcome screen shows the app's name, the hint and Open….
+- 2026-11-10, [section 8](#add-math) (#45, checked in Chromium with real keys and mouse): the crosshair holds while
+  the pointer moves, the ghost follows it at any zoom and the click places the element at the ghost; M, the button
+  and Esc work; an element placed on top of another leaves it unselected and unmoved; after Add math, a line and
+  Esc, Ctrl+Z empties the element and a second removes it, and Ctrl+Shift+Z brings both back; an empty Add math
+  left with Esc is removed, and Ctrl+Z brings back the empty box. A placed element makes the sheet dirty, and it
+  stays dirty after an empty one is removed, because the undo stack still holds it.

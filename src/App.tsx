@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
+import type { ExcalidrawElement } from '@excalidraw/excalidraw/element/types'
 import { AppShell } from './shell/AppShell.tsx'
 import { SheetCanvas, type SheetCanvasHandle } from './canvas/SheetCanvas.tsx'
-import { createMathAnchorElements } from './canvas/mathAnchor.ts'
 import { sceneFileFor } from './canvas/sceneFile.ts'
 import { MathOverlay } from './overlay/MathOverlay.tsx'
 import { createDialogHost } from './file/dialogs.ts'
@@ -10,26 +10,15 @@ import { FileChrome } from './file/FileChrome.tsx'
 import { indexedDbRecovery, type RecoveryStore } from './file/recovery.ts'
 import { createLineRelay, createSheetSession } from './file/sheetSession.ts'
 
-// The untitled sheet starts with two math elements: inputs above, and a result
-// below that uses them (#3). They load clean, so they never make the sheet
-// dirty. Until Add math (#45), which removes them, duplicating an anchor
-// (Ctrl+D) is the way to make a new one (#42, question 1).
-const initialElements = createMathAnchorElements([
-  {
-    id: 'math-inputs',
-    x: 100,
-    y: 100,
-    width: 420,
-    height: 72,
-    source: 'R = 10 kohm\nI = 2 mA',
-  },
-  { id: 'math-result', x: 100, y: 200, width: 420, height: 48, source: 'U = I * R' },
-])
-
 export interface AppProps {
   /** The disk and the browser store; tests pass fakes. */
   files?: FileAccess
   recovery?: RecoveryStore
+  /**
+   * The untitled sheet's scene. The app starts empty, on the welcome screen
+   * (docs/spec-v1.md section 8); tests pass a sheet to work on.
+   */
+  initialElements?: readonly ExcalidrawElement[]
 }
 
 /**
@@ -37,7 +26,7 @@ export interface AppProps {
  * sheet file to the canvas and the line edit. The side panel is not built yet,
  * so its slot is left empty.
  */
-export default function App({ files, recovery }: AppProps = {}) {
+export default function App({ files, recovery, initialElements }: AppProps = {}) {
   const [canvas, setCanvas] = useState<SheetCanvasHandle | null>(null)
   const [line] = useState(createLineRelay)
 

@@ -4,6 +4,7 @@ import App from '../App.tsx'
 import { fakeFileAccess, fakeRecovery } from '../test/files.ts'
 import { doubleClickLine } from '../test/gestures.ts'
 import { fireResizeObservers, layOutBodies } from '../test/layout.ts'
+import { sampleSheet } from '../test/sheets.ts'
 import { linesOf } from '../test/sheetView.ts'
 import type { RecoveryCopy } from './recovery.ts'
 import { writeSheet } from './sheetFormat.ts'
@@ -15,10 +16,10 @@ import { writeSheet } from './sheetFormat.ts'
 async function mount(copy: RecoveryCopy | null = null) {
   const files = fakeFileAccess()
   const recovery = fakeRecovery(copy)
-  const view = render(<App files={files} recovery={recovery} />)
+  const view = render(<App files={files} recovery={recovery} initialElements={sampleSheet()} />)
   await screen.findAllByRole('list', { name: 'Lines' })
   const name = await screen.findByTestId('file-name')
-  // The session takes the clean mark once Excalidraw has loaded the seed.
+  // The session takes the clean mark once Excalidraw has loaded the sheet.
   if (!copy) await waitFor(() => expect(document.title).toBe('Untitled'))
   return { files, recovery, name, container: view.container }
 }

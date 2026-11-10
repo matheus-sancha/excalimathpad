@@ -4,12 +4,13 @@ A Mathcad-style live-calculation canvas built on [Excalidraw](https://github.com
 sketch freely, and put unit-aware math on the sheet that recalculates as
 you edit. Runs entirely in the browser and builds to a static site.
 
-Status: live recalculation across math elements (#3). The sheet opens with two
-math elements: `R = 10 kohm`, `I = 2 mA` above, and `U = I * R` (`20 V`) below.
-Edit `I` and `U` updates. Elements read top to bottom, then left to right, like
-Mathcad: each one sees only what is defined above it. Click an element to
-select it and drag it from anywhere; duplicate one (Ctrl+D) for a copy with the
-same source. Double-click a line, or press Enter on a selected element for its
+Status: live recalculation across math elements (#3). The sheet opens empty.
+Press M or click ∑ Add math, then click the sheet to place a math element and
+type: `R = 10 kohm`, Enter, `I = 2 mA`, then `U = I * R` (`20 V`) in an element
+below. Edit `I` and `U` updates. Elements read top to bottom, then left to
+right, like Mathcad: each one sees only what is defined above it. An element
+left with no text is removed. Click an element to select it and drag it from
+anywhere; duplicate one (Ctrl+D) for a copy with the same source. Double-click a line, or press Enter on a selected element for its
 last line, to edit it: arrows move between lines, Enter splits, Backspace at the
 start joins, a click on another line moves there, and Esc, a click outside or a
 drag leaves. A second Esc deselects. Ctrl+Z then undoes one line at a time,

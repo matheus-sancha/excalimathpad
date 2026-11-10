@@ -15,10 +15,10 @@ server. v1 target: one sheet, for Matheus's own use.
 ## Modules
 
 - **App** (`src/App.tsx`) — composition root. Decides what fills each shell
-  slot, seeds the untitled sheet (two anchors with their source: inputs above,
-  `U = I * R` below, loaded clean, until Add math in #45) and wires the sheet
-  file to the canvas and the line edit. Takes `files` and `recovery` so tests
-  pass fakes. Depends on: shell, canvas, overlay, file.
+  slot and wires the sheet file to the canvas and the line edit. The untitled
+  sheet starts empty, on the welcome screen. Takes `files`, `recovery` and
+  `initialElements` so tests pass fakes and a sheet to work on. Depends on:
+  shell, canvas, overlay, file.
 - **shell** (`src/shell/`) — full-viewport layout with three slots: `canvas`,
   `overlay` (stacked exactly over the canvas, pointer-transparent by default)
   and `sidePanel` (docked right). Empty (falsy) slots render nothing. Neither
@@ -43,6 +43,12 @@ server. v1 target: one sheet, for Matheus's own use.
   drops from Excalidraw, and measures the space beside the ☰ button
   (`useBesideMenu`). `layers.ts` records where overlay
   content sits among Excalidraw's DOM layers, and the dark theme's filter.
+  `addMath.ts` is Add math: a public custom tool (`startPlacing`,
+  `cancelPlacing`, `isPlacing`) and `watchPlacing`, which turns the placing
+  click into a new anchor, selected in the same write, and holds the crosshair.
+  `mathAnchor.ts` also has `removeAnchor`, the one-step removal of an element
+  left empty. `SheetCanvas` draws the ∑ Add math button in Excalidraw's
+  top-right slot and the welcome screen.
   `anchorSize.ts` writes an anchor's size (`writeAnchorSizes`: `NEVER`, top-left
   kept, the rotated top-left for a rotated anchor) and snaps resize handles back
   (`snapBackResizes`, from `onPointerUp`'s `originalElements`), and says when
@@ -100,7 +106,11 @@ server. v1 target: one sheet, for Matheus's own use.
   every source change and every change of order, then hands each
   `MathElementView` its lines. The overlay takes no pointer events except the open field:
   Excalidraw gets every click and drag. `useSheetGestures` opens, moves and
-  leaves the line edit from the events `listenToCanvas` hands it. The open line
+  leaves the line edit from the events `listenToCanvas` hands it, starts and
+  cancels placing (M, Esc) and opens the first line of a placed element.
+  `PlacingGhost` draws the new element's box at the pointer while placing. A
+  leave that finds the element with no text (`hasText`, in `lineEdit.ts`)
+  removes it instead of writing the line. The open line
   is a field over the name, `≔` and expression cells, beside its live result as
   plain text; a hidden copy of its text widens the cell. `gestures.ts`
   (pure) decides when a double-click, a click, Enter or Esc is math's, and
@@ -128,8 +138,7 @@ server. v1 target: one sheet, for Matheus's own use.
   size tests (`layout.ts`) and readers for the grid (`sheetView.ts`). KaTeX is
   loaded before the tests run. Not app code.
 
-Planned (not built): the Sheet panel, an "add math" tool (for now, duplicating
-an anchor makes a new math element with the same source).
+Planned (not built): the Sheet panel.
 
 ## Domain
 
@@ -147,6 +156,11 @@ and everything downstream recalculates. Engine: math.js, client-side.
 - **Anchor** — the Excalidraw rectangle that carries a math element's
   position, size, rotation and source. Excalidraw owns it (move, select, delete,
   undo); the app writes only `customData.source`, the only stored copy.
+- **Placing** — the UI mode between Add math (M or the button) and the click
+  that creates the anchor. It is Excalidraw's active tool, never in the scene,
+  and no undo step. Esc cancels it.
+- **Empty element** — one whose source has no text: every line is blank or
+  spaces. A comment is text.
 - **Line edit** — the one line shown as raw source: anchor id, line index and
   the typed text. UI state, never in the scene. The sheet runs from the typed
   text on every keystroke.
@@ -173,7 +187,10 @@ and everything downstream recalculates. Engine: math.js, client-side.
   spec section 6); sheet undo
   never runs during a line edit, because the field is outside Excalidraw's
   container; results are never in a step. Selecting and deselecting are
-  Excalidraw's own steps on the same stack (spec section 6). Scene coordinates
+  Excalidraw's own steps on the same stack (spec section 6). Add math is one
+  step, the new element selected in the same write. No element is left empty
+  when the edit leaves it: its removal is one step that doesn't write the line,
+  so undo brings an emptied element back with its text. Scene coordinates
   are the only stored position, and the screen
   position is always derived as `(scene + scroll) * zoom`. Evaluation never
   throws, and a failed line does not stop the lines after it. A line sees only
@@ -186,8 +203,7 @@ and everything downstream recalculates. Engine: math.js, client-side.
   results format in (see **math**).
 - Known limit: a variable named like a math.js unit or built-in (`V`, `m`,
   `s`, `i`, ...) silently shadows the unit below its definition and falls
-  back to the unit above it or after it fails (ADR 0003). The seed uses `U`
-  for that reason; warnings are issue #7.
+  back to the unit above it or after it fails (ADR 0003). Warnings are issue #7.
 - Known limit: a size write doesn't move a bound arrow's end (Excalidraw's
   binding update isn't public); it follows when the element next moves (#44).
 
@@ -249,6 +265,12 @@ and everything downstream recalculates. Engine: math.js, client-side.
   `max-content` and rotates about the anchor's centre; `offsetWidth` and
   `offsetHeight` ignore transforms, so they are scene units. A body measuring
   0 × 0 isn't laid out (jsdom) and is never written.
+- **The Add math button hands the keyboard to `.excalidraw`.** A clicked button
+  keeps focus, and keys aimed at a button are left alone, so Esc wouldn't cancel
+  placing and M would do nothing (`App.test.tsx`).
+- **Add math selects the new element in its own write.** Starting the tool
+  clears the selection, which Excalidraw records; a separate select makes undo
+  take two steps when something was selected (`addMath.excalidraw.test.tsx`).
 - **Source writes go through `writeAnchorSource`.** A plain spread isn't recorded
   by undo, and `EVENTUALLY` or the default capture drops later updates to that
   anchor off the stack. Excalidraw's own nudge and Link leave the anchor in that
@@ -298,6 +320,11 @@ and everything downstream recalculates. Engine: math.js, client-side.
 - KaTeX shares the lazy `katex-*.js` chunk with Mermaid (about 77 kB gzip) and
   brings its CSS and 59 font files, fetched only as a page uses them. The first
   frame of a sheet shows plain source; it typesets once the chunk loads.
+- A placed element makes the sheet dirty, and it stays dirty after an empty one
+  is removed: the save key counts deleted elements, and undo can bring it back.
+- The welcome screen doesn't come back once an element has been placed, even
+  if it is then removed: Excalidraw shows it only for a scene that never held
+  an element.
 - A box grows right and down, so a taller element can overlap the one below
   it. Reading order is by top, so it doesn't change.
 - Resizing an anchor by a handle snaps back but still marks the sheet dirty:

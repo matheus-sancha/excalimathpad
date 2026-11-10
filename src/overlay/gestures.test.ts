@@ -23,6 +23,7 @@ const anchor = (props: Partial<MathAnchor> = {}): MathAnchor => ({
 
 const state = (props: Partial<CanvasState> = {}): CanvasState => ({
   tool: 'selection',
+  placing: false,
   busy: false,
   selected: {},
   zIndex: {},
@@ -200,8 +201,51 @@ describe('keyAction', () => {
     })
   })
 
+  describe('M (Add math, section 8)', () => {
+    const m = (props: Partial<KeyFacts> = {}): KeyFacts => (key({ key: 'm', ...props }))
+
+    it('starts placing, in either case, from any tool', () => {
+      expect(keyAction(state(), [], isMath, m())).toEqual({ kind: 'add-math' })
+      expect(keyAction(state(), [], isMath, m({ key: 'M' }))).toEqual({ kind: 'add-math' })
+      expect(keyAction(state({ tool: 'rectangle' }), [], isMath, m())).toEqual({ kind: 'add-math' })
+    })
+
+    // Pressed again it keeps placing; the key stays the app's (#45, answer 3).
+    it('keeps placing while placing', () => {
+      const placing = state({ tool: 'custom', placing: true })
+      expect(keyAction(placing, [], isMath, m())).toEqual({ kind: 'add-math' })
+    })
+
+    it('stays Excalidraw’s with a modifier, during composition, from a control or while it is busy', () => {
+      expect(keyAction(state(), [], isMath, m({ modifier: true }))).toBeNull()
+      expect(keyAction(state(), [], isMath, m({ composing: true }))).toBeNull()
+      expect(keyAction(state(), [], isMath, m({ targetOwnsEvent: true }))).toBeNull()
+      expect(keyAction(state({ busy: true }), [], isMath, m())).toBeNull()
+    })
+  })
+
+  describe('while placing', () => {
+    const placing = state({ tool: 'custom', placing: true })
+
+    it('Esc cancels', () => {
+      expect(keyAction(placing, [], isMath, key({ key: 'Escape' }))).toEqual({
+        kind: 'cancel-placing',
+      })
+    })
+
+    it('Esc with another custom tool stays Excalidraw’s', () => {
+      expect(
+        keyAction(state({ tool: 'custom' }), ['m1'], isMath, key({ key: 'Escape' })),
+      ).toBeNull()
+    })
+
+    it('Enter does nothing to math', () => {
+      expect(keyAction(placing, ['m1'], isMath, key({}))).toBeNull()
+    })
+  })
+
   it('ignores other keys', () => {
-    expect(act(['m1'], { key: 'm' })).toBeNull()
+    expect(act(['m1'], { key: 'a' })).toBeNull()
     expect(act(['m1'], { key: 'Delete' })).toBeNull()
   })
 })

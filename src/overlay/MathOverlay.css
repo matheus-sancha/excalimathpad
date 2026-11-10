@@ -172,3 +172,16 @@
   outline: none;
   pointer-events: auto;
 }
+
+/* The ghost box while placing (section 8, Add math): the new element's box at
+   the pointer, drawn like an anchor's border. */
+.math-ghost {
+  position: absolute;
+  left: 0;
+  top: 0;
+  box-sizing: border-box;
+  transform-origin: 0 0;
+  border: 1px dashed var(--math-quiet);
+  border-radius: 2px;
+  pointer-events: none;
+}

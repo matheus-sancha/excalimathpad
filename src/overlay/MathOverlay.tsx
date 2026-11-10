@@ -8,8 +8,10 @@ import {
 } from 'react'
 import type { ExcalidrawImperativeAPI } from '@excalidraw/excalidraw/types'
 import { ABOVE_DRAWING_BELOW_UI_Z_INDEX, DARK_THEME_FILTER } from '../canvas/layers.ts'
+import { isPlacing } from '../canvas/addMath.ts'
 import {
   isMathAnchor,
+  removeAnchor,
   sameAnchor,
   toMathAnchor,
   writeAnchorSource,
@@ -26,6 +28,7 @@ import {
 } from './lineEdit.ts'
 import type { RowBox } from './lineHit.ts'
 import { MathElementView } from './MathElementView.tsx'
+import { PlacingGhost } from './PlacingGhost.tsx'
 import { readingOrder } from './readingOrder.ts'
 import { useAnchorSizes } from './useAnchorSizes.ts'
 import { useSheetGestures } from './useSheetGestures.ts'
@@ -42,6 +45,8 @@ export type SceneApi = Pick<
   | 'onScrollChange'
   | 'onPointerUp'
   | 'updateScene'
+  | 'setActiveTool'
+  | 'setCursor'
 >
 
 /** What the app outside the overlay may do to the line edit: the sheet file saves with it. */
@@ -72,6 +77,8 @@ interface SceneSnapshot {
   anchors: readonly MathAnchor[]
   /** Excalidraw's theme: in dark, math darkens with the canvas's own filter. */
   dark: boolean
+  /** Add math is waiting for its click (docs/spec-v1.md section 8). */
+  placing: boolean
 }
 
 /**
@@ -90,7 +97,8 @@ interface SceneSnapshot {
  * edit is what keeps at most one line across the sheet in source form.
  *
  * Lines open from the gestures (`useSheetGestures`): a double-click on a line,
- * Enter on a selected element, a click on another line while editing. The
+ * Enter on a selected element, a click on another line while editing, and the
+ * click that places a new element. An element left with no text is removed. The
  * overlay itself takes no pointer events except the open field.
  */
 export function MathOverlay({
@@ -103,7 +111,7 @@ export function MathOverlay({
 }: MathOverlayProps) {
   const overlayRef = useRef<HTMLDivElement>(null)
   const store = useMemo(() => createSceneStore(api), [api])
-  const { viewport, anchors, dark } = useSyncExternalStore(store.subscribe, store.getSnapshot)
+  const { viewport, anchors, dark, placing } = useSyncExternalStore(store.subscribe, store.getSnapshot)
 
   const [edit, setEdit] = useState<LineEdit | null>(null)
   // Events read the latest edit from here: a field being removed can report its
@@ -132,7 +140,10 @@ export function MathOverlay({
   const findAnchor = (anchorId: string) =>
     store.getSnapshot().anchors.find(({ id }) => id === anchorId)
 
-  /** Every line commit goes through here, so each one is written exactly once. */
+  /**
+   * Every line commit goes through here, so each one is written exactly once.
+   * An element left with no text is removed instead, as its own one step.
+   */
   const moveEdit = (move: LineMove) => {
     const current = editRef.current
     if (!current) return
@@ -142,7 +153,8 @@ export function MathOverlay({
       return
     }
     const next = applyLineMove(anchor.source, current, move)
-    writeAnchorSource(api, current.anchorId, next.source)
+    if (next.remove) removeAnchor(api, current.anchorId)
+    else writeAnchorSource(api, current.anchorId, next.source)
     changeEdit(next.edit)
   }
 
@@ -220,6 +232,7 @@ export function MathOverlay({
           forwardWheel={forwardWheel}
         />
       ))}
+      {placing && <PlacingGhost canvasRoot={canvasRoot} zoom={viewport.zoom} />}
     </div>
   )
 }
@@ -263,11 +276,13 @@ function createSceneStore(api: SceneApi) {
 }
 
 function readSnapshot(api: SceneApi): SceneSnapshot {
-  const { scrollX, scrollY, zoom, theme } = api.getAppState()
+  const app = api.getAppState()
+  const { scrollX, scrollY, zoom, theme } = app
   return {
     viewport: { scrollX, scrollY, zoom: zoom.value },
     anchors: api.getSceneElements().filter(isMathAnchor).map(toMathAnchor),
     dark: theme === 'dark',
+    placing: isPlacing(app),
   }
 }
 
@@ -277,7 +292,7 @@ function sameSnapshot(a: SceneSnapshot, b: SceneSnapshot): boolean {
   if (va.scrollX !== vb.scrollX || va.scrollY !== vb.scrollY || va.zoom !== vb.zoom) {
     return false
   }
-  if (a.dark !== b.dark) return false
+  if (a.dark !== b.dark || a.placing !== b.placing) return false
   if (a.anchors.length !== b.anchors.length) return false
   return a.anchors.every((anchor, i) => sameAnchor(anchor, b.anchors[i]))
 }
