@@ -10,8 +10,9 @@
   pointer-transparent overlay and the gesture listeners (#43, 2026-11-07); size,
   written with `NEVER` through `src/canvas/anchorSize.ts`, and resize handles that
   snap back (#44, 2026-11-07); Add math as a custom tool, the removal of an
-  element left empty, and the untitled sheet without its seed (#45, 2026-11-10).
-  Style restore (#46) is still to come.
+  element left empty, and the untitled sheet without its seed (#45, 2026-11-10);
+  the fixed style, restored with `NEVER` through `src/canvas/anchorStyle.ts`, and
+  opacity followed by the overlay (#46, 2026-11-10).
 
 ## Context
 

@@ -32,6 +32,12 @@ server. v1 target: one sheet, for Matheus's own use.
   `#ffffff01` fill, so clicks inside it select and drag it) and
   `writeAnchorSource`, the only way source enters the scene. `selection.ts`
   holds `deselectAll`, the second Esc's write (`NEVER`, no undo step).
+  `anchorStyle.ts` keeps anchors in the fixed style (`ANCHOR_STYLE`, in
+  `mathAnchor.ts`): `restoreAnchorStyles` writes it back with `NEVER`.
+  `mathSelection.ts` marks the box Excalidraw fills with
+  `data-math-selection` (`one`, `several`) while only math is selected;
+  `SheetCanvas.css` uses the mark for the reduced panel and the hint.
+  `SheetCanvas` starts new text in the Normal font (Nunito).
   `canvasEvents.ts` (`listenToCanvas`) hands the canvas's double-clicks, presses,
   clicks and keys to the gestures before Excalidraw hears them, and stops the
   ones they take. `sceneFile.ts` is
@@ -95,7 +101,10 @@ server. v1 target: one sheet, for Matheus's own use.
   are named by their source (`aria-label`) and result cells carry their text
   (`data-text`). `useAnchorSizes` measures each body after every render and on
   a `ResizeObserver` (fonts), waits while `sizeWritesWait`, and writes the
-  sizes through the session's `keepClean`. In Excalidraw's dark theme the
+  sizes through the session's `keepClean`. The same hook restores the fixed
+  anchor style at every scene change that broke it, also through `keepClean`.
+  Each row is drawn at its anchor's opacity (`--math-opacity`), the edited row
+  at full. In Excalidraw's dark theme the
   overlay takes its canvas filter.
   `MathOverlay` subscribes to the scene (`onChange`, `onScrollChange`) and
   places each element from its anchor's scene position via `viewport.ts`
@@ -175,12 +184,17 @@ and everything downstream recalculates. Engine: math.js, client-side.
 - **Line commit** — the moment an edit leaves a line whose text differs from the
   scene. It writes the element's whole source once, as one undo step, so a split
   or a join is one step too.
+- **Anchor style** — fixed, except opacity: a thin, dashed grey border with
+  sharp corners, and the `#ffffff01` fill. The element's math is drawn at the
+  anchor's opacity.
 - **Viewport** — `scrollX`, `scrollY`, `zoom` from Excalidraw's app state.
 - **Sheet** — all live math elements, in **reading order**: by the top of each
   anchor's visual bounds, then its left, then its id (ADR 0003). Derived from
   positions every time, never stored. The sheet, not the element, is the unit
   of evaluation: one scope, lines top to bottom.
-- Invariants: after every evaluation and pointer release, an anchor's size
+- Invariants: after every scene change, every anchor has the fixed style, and
+  restoring it adds no undo step and never makes a clean sheet dirty. After
+  every evaluation and pointer release, an anchor's size
   equals its content size (within 0.5 px), and a size write adds no undo step
   and never makes a clean sheet dirty. A line commit's source change is one undo step, and keystrokes are
   none (a commit can also record a nudge or Link edit before it as its own step,
@@ -250,9 +264,19 @@ and everything downstream recalculates. Engine: math.js, client-side.
   end, not a word selected.
 - **Anchors need a fill.** Excalidraw tests the inside of a shape only when its
   background isn't transparent; `#ffffff01` looks transparent and takes clicks
-  (`mathAnchor.excalidraw.test.tsx`, with a transparent control). An anchor
-  given a transparent background can then be grabbed only by its border, until
-  the style restore in #46.
+  (`mathAnchor.excalidraw.test.tsx`, with a transparent control). The style
+  restore keeps it there, so an anchor can always be grabbed from inside.
+- **The style restore runs from `onChange`, with `NEVER`.** It lands before
+  Excalidraw records the change that broke the style, so paste styles on math
+  adds no undo step (`anchorStyle.excalidraw.test.tsx`, with the control).
+  Moved later, it would leave an entry that undoes nothing visible.
+- **The reduced panel and the hint are CSS on Excalidraw's DOM**
+  (`SheetCanvas.css`): the panel's children that have Opacity
+  (`label.control-label`) after them are hidden, and `.HintViewer`'s span is
+  replaced through `::after`. Neither is public API;
+  `mathSelection.excalidraw.test.tsx` pins the order, the class and the span,
+  with a desktop-sized container, since jsdom's 0-wide one gets the phone
+  layout.
 - **Size writes go through `writeAnchorSizes`, wrapped in `keepClean`.** A
   `NEVER` write also updates Excalidraw's captured copy of the anchor, which is
   why a line commit after size writes is still one step
@@ -327,6 +351,8 @@ and everything downstream recalculates. Engine: math.js, client-side.
   an element.
 - A box grows right and down, so a taller element can overlap the one below
   it. Reading order is by top, so it doesn't change.
+- Opacity set on a math element becomes Excalidraw's default for the next
+  shape drawn, as for any element. A new math element starts at 100.
 - Resizing an anchor by a handle snaps back but still marks the sheet dirty:
   Excalidraw changes the scene while the handle moves (spec section 4).
 
