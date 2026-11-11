@@ -112,14 +112,14 @@ Engineering rules (Engineer's):
   unit: after `V = I * R` (20 V), `U = 5 V` gives `100 V`. Above it, or after it fails,
   lines read the unit: `V * 2` gives `2 V`. The variable still wins, but such a name
   warns on its line, as do function names, parameters and a solve's unknown (#7, #27;
-  M2). Plain redefinition of any other name stays silent, as Matheus chose. A test
+  built in M2 by #7, `src/math/warnings.ts`; the solve's unknown joins in M3). Plain redefinition of any other name stays silent, as Matheus chose. A test
   records the fallback.
 - How results display (a product decision, #16 and #30; M2, replacing what #25 chose). A
   result shows in its display unit, a trailing `in <unit>` on its line, else in the
   sheet's unit system (SI with prefixes by default), at the sheet's Digits. A trailing
   `in` or `to` with a pure unit comes off the line as its display unit, and a unit of
   the wrong kind is balanced rather than an error. A conversion inside an expression
-  stays math.js's own. Until M2, results show as #25 left them: `5 ft * 2 ft` is
-  `0.9290304 m^2`, `1 psi` stays `1 psi`, and `to` converts.
+  stays math.js's own. Built in #56: the formatter is `src/math/display.ts`, its
+  tables `src/math/unitSystems.ts`, and math.js's own system stays SI underneath.
 - Excalidraw does not know the order; nothing in the scene stores it, so the sheet file
   (ADR 0004) does not need to either.

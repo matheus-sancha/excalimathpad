@@ -15,7 +15,8 @@ server. v1 target: one sheet, for Matheus's own use.
 ## Modules
 
 - **App** (`src/App.tsx`) — composition root. Decides what fills each shell
-  slot and wires the sheet file to the canvas and the line edit. The untitled
+  slot and wires the sheet file to the canvas and the line edit, and the
+  sheet's evaluation to the Sheet panel (opened at launch on a wide window). The untitled
   sheet starts empty, on the welcome screen. Takes `files`, `recovery` and
   `initialElements` so tests pass fakes and a sheet to work on. Depends on:
   shell, canvas, overlay, file.
@@ -40,8 +41,8 @@ server. v1 target: one sheet, for Matheus's own use.
   `SheetCanvas.css` uses the mark for the reduced panel and the hint.
   `SheetCanvas` starts new text in the Normal font (Nunito).
   `canvasEvents.ts` (`listenToCanvas`) hands the canvas's double-clicks, presses,
-  clicks and keys to the gestures before Excalidraw hears them, and stops the
-  ones they take. `sceneFile.ts` is
+  clicks, pointer moves and keys to the gestures before Excalidraw hears them,
+  and stops the ones they take. `sceneFile.ts` is
   the Excalidraw half of the sheet file: `serializeScene`, `loadScene` (no undo
   step, clears history) and `saveKey`, the key dirty is measured by.
   `SheetCanvas` also turns off Excalidraw's own open, save and export and draws
@@ -88,12 +89,34 @@ server. v1 target: one sheet, for Matheus's own use.
   the namespace without breaking math.js). Parsed Nodes from `simplifyCore`
   / `simplifyConstant` evaluate against the namespace, where `typed` is the
   real registry, so its mutators (`clear`, `addConversion`, ...) are also
-  disabled in place on `math.typed`. Results format in a fixed unit
-  system, SI, so units read elsewhere never change how a result shows
-  (#25, ADR 0003). A result math.js simplifies shows in SI units with an
-  SI prefix (`5 ft * 2 ft` is `0.9290304 m^2`, `2 cm * 3 cm` is
-  `600 mm^2`); one whose units it keeps shows as written (`1 psi`,
-  `60 mi / h`); `to` converts. App code must evaluate only
+  disabled in place on `math.typed`. The app units (`appUnits.ts`: `cP`,
+  `gpm`, ...) are registered once at setup, before `createUnit` is disabled,
+  and every unit system is then put back as it was, so they show only where
+  written (spec section 14; a test compares with an engine without them).
+  A result's `text` is its plain form at 4 significant digits
+  (`numbers.ts`, pure: `math.format` with `formatOptions`, then `1.235·10⁴`,
+  `∞`); `resultTex` typesets it (`1.235 \cdot 10^{4}`). Source numbers are
+  never reformatted. `pump-sizing.test.ts` runs the acceptance sheet's lines,
+  read from `docs/acceptance/pump-sizing.md`, against the reference at 4 s.f.
+  (spec section 16). math.js's own unit system stays fixed at SI, so
+  units read elsewhere never change a result (#25, ADR 0003). How a result
+  shows is the app's formatter, `display.ts` (`createDisplay`, given the
+  instance and the captured `parse`, spec section 5): a trailing `in <unit>`
+  (`lineForm.ts` takes it off the text, the formatter checks it is a pure
+  unit, read outside the sheet's scope) shows the value in that unit,
+  balanced if the kind differs; else the kind's unit in the sheet's system
+  (`unitSystems.ts`: SI with prefixes by default, SI base, USCS, Custom),
+  else a named SI unit (`V`, `ohm`), else composed base units.
+  `evaluateSheet(blocks, settings)` takes the system and Digits. An unknown
+  display unit is the line's error after it ran. Each `SheetLine` also
+  carries its `warnings` (`warnings.ts`, pure, read before the line runs).
+  Each function the sheet defines is wrapped once its line has run
+  (`functions.ts`, `createCalls`): the wrapper checks the argument count,
+  stops recursion at a fixed depth, prefixes an error from its body with
+  `in k(1 s): `, and carries `sheetFunction` (name, parameters); `messageOf`
+  rewords math.js's errors (a value called, a function used as a number) in
+  section 13's words. `table`, `plot` and `solve` can't be assigned.
+  App code must evaluate only
   through `evaluateSheet`: math.js functions that depend on the disabled
   names (`help`, `rationalize`, a `parser()`'s methods) no longer work. The
   only module that imports `mathjs`. Depends on: `mathjs`.
@@ -112,6 +135,23 @@ server. v1 target: one sheet, for Matheus's own use.
   Each row is drawn at its anchor's opacity (`--math-opacity`), the edited row
   at full. In Excalidraw's dark theme the
   overlay takes its canvas filter.
+  The **unit slot** (spec section 5): a result's unit is drawn in its own
+  `[data-unit-slot]` span, tinted when the line has `in <unit>`, outlined on
+  its hovered row (an empty one for a plain input or a dimensionless value).
+  The gestures find a slot from the slots' screen boxes (`slotAt`), open its
+  field on the canvas's click when the element hasn't moved, and follow hover
+  from `pointerMove`; `UnitField` (the field and list, one of the overlay's
+  controls that take pointer events) hands back a unit, and `MathOverlay`
+  writes it with `writeDisplayUnit` as one line commit. The engine gives each
+  line its `unitSlot` (kind, chosen unit, value in the system and in each
+  unit of the kind).
+  A **problem's message on hover** (spec section 4, Problems): the gutter mark
+  and an error's result cell carry it as `data-tip`, never a `title` (the
+  overlay takes no pointer events, so a title never shows). The gestures find
+  the mark under the pointer from its screen box (`tipAt`, the error cell only
+  while it is cut short) on each `pointerMove` over the canvas, and `HoverTip`
+  shows it after a rest, short of the Sheet panel; a press, a drag, leaving the
+  canvas or a scene or viewport change hides it. Screen only.
   `MathOverlay` subscribes to the scene (`onChange`, `onScrollChange`) and
   places each element from its anchor's scene position via `viewport.ts`
   (`sceneToStage`, pure). It reads source from the anchors and holds the sheet's
@@ -140,7 +180,8 @@ server. v1 target: one sheet, for Matheus's own use.
   math, `katex` (lazily).
 - **file** (`src/file/`) — the sheet file (ADR 0004, spec section 7).
   `sheetFormat.ts` (pure) reads and writes the `excalimathpad` block, settings
-  and migrations. `sheetSession.ts` is the deep module: save, save as, open,
+  and migrations. The session's state carries the settings, and
+  `setSettings` changes them. `sheetSession.ts` is the deep module: save, save as, open,
   startup with the recovery offer, the clean mark and the recovery copy, over
   ports (scene, file access, recovery store, dialogs, line), so it knows no
   Excalidraw, React or DOM. `fileAccess.ts` wraps the File System Access API,
@@ -156,7 +197,19 @@ server. v1 target: one sheet, for Matheus's own use.
   size tests (`layout.ts`) and readers for the grid (`sheetView.ts`). KaTeX is
   loaded before the tests run. Not app code.
 
-Planned (not built): the Sheet panel.
+- **panel** (`src/panel/`) — the Sheet panel's tabs (spec section 8), drawn
+  inside Excalidraw's sidebar, which `SheetCanvas` frames (`SheetPanelSlot`:
+  the badge count, the tabs' content, `onChange`). `sheetPanel.ts` (pure)
+  turns the evaluated sheet (`EvaluatedElement`s, which `MathOverlay` hands
+  out through `onEvaluated`) into Variables groups and Problems rows;
+  `SheetPanel.tsx` renders them, and a click asks App to jump.
+  `panelMemory.ts` keeps open/closed in `localStorage`. `SettingsTab.tsx`
+  edits the unit system, Custom's kind → unit table and Digits through the
+  session's `setSettings` (saved with the sheet, dirty, not in undo); App
+  hands the session's settings to `MathOverlay`, which evaluates with them. App does the jump
+  (`jumpToAnchor` in `canvas/selection.ts`: scroll, select with `NEVER`) and
+  the flash (`MathOverlay`'s `flash`, a row class). Depends on: math, overlay
+  (KaTeX).
 
 ## Domain
 
@@ -228,9 +281,11 @@ and everything downstream recalculates. Engine: math.js, client-side.
   starts from a fresh scope, and every known route for a line to change the
   engine is closed, including through parsed Nodes and the unit system
   results format in (see **math**).
-- Known limit: a variable named like a math.js unit or built-in (`V`, `m`,
-  `s`, `i`, ...) silently shadows the unit below its definition and falls
-  back to the unit above it or after it fails (ADR 0003). Warnings are issue #7.
+- A variable named like a math.js unit or built-in (`V`, `m`, `s`, `i`, ...)
+  shadows the unit below its definition and falls back to the unit above it
+  or after it fails (ADR 0003). Both are **warnings** (`warnings.ts`, spec
+  section 5): an amber `⚠` in the gutter, its message on hover. So is a
+  function body name not defined above. A warning never changes a result.
 - Known limit: a size write doesn't move a bound arrow's end (Excalidraw's
   binding update isn't public); it follows when the element next moves (#44).
 

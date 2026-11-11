@@ -1189,6 +1189,9 @@ Engineer's design gate. Tested on Excalidraw 0.18.1, math.js 15.2 and Chromium.
   the plot popover. The bar's buttons never take focus (`mousedown` is prevented, `tabIndex` -1): a blur
   would leave the line. The bar is absolutely placed, so it never counts toward the element's size. The
   unit slot and ⚙ let pointer-down through and open on `click`.
+  - As built (#7 and #58 follow-up): an overlay hover is found from geometry on the canvas's `pointermove`
+    (`slotAt`, `tipAt`), never from the overlay's own events; a `title` attribute there never shows. The
+    root's `pointerleave` (not in capture) hides a problem's tip.
 - **Capture `dblclick` on the stage, capture `keydown` on `document`,** for double-click, Enter and M. Stop
   them there. Act on Enter only when one math anchor is selected, the tool is the selection tool, no
   modifier is held, and the target isn't an input, textarea, contenteditable or button.
@@ -1405,7 +1408,10 @@ Changes line if it changes behaviour.
   then reaches the canvas root. A click is that `click` with the anchor's `x` and `y` unchanged; after a drag
   they have changed. In Chromium with real input, a click on the result column of another line moved the edit
   there, and a drag from the same place moved the element and opened nothing. M2 builds the slot on this rule;
-  the slot itself is untried.
+  the slot itself is untried. **Passed for the slot (#60):** in Chromium with real mouse input, a click on a
+  result's unit opened its field and list, and choosing `bar` wrote `in bar` before the note as one undo step; a
+  drag started on the same slot moved the element and opened nothing; Ctrl+Z took back the drag, then the unit.
+  `unitSlot.excalidraw.test.tsx` holds both against the installed package, with the slots' boxes stubbed.
 - The reduced panel's CSS on `.panelColumn` children, and the hint's replacement through `.HintViewer`.
   **Passed (#46):** in Chromium, the panel's children are Stroke, Background, Fill, Stroke width, Stroke style,
   Sloppiness, Edges, Opacity, Layers, (Align), Actions, and Opacity is the only one with a class of its own
@@ -1626,4 +1632,43 @@ Changes line if it changes behaviour.
   ↑ twice from line 2 reached the title; two Ctrl+Z took back the change and then the title, and redo brought both back;
   the title was in the saved file and showed again when it was reopened, clean; emptying it removed the header and kept
   the element.
+- 2026-11-11, [section 5](#unit-systems) (#56, Engineer's, for Matheus to confirm on the PR): the kinds list has
+  no electrical kinds, so `I * R` would have shown as `20 (kg m^2) / (s^3 A)`. A dimension off the list now shows
+  in its named SI unit when there is one (A, C, V, Ω, F, H, S, Wb, T), with a prefix in SI with prefixes (`20 mV`),
+  in every system, before composed base units. SI with prefixes steps through these units per kind: length µm,
+  mm, m, km; area mm², cm², m², km²; volume mm³, cm³, L, m³; volume flow mL/s, L/s, m³/s; mass flow g/s, kg/s;
+  velocity mm/s, m/s, km/s; force mN to MN; pressure Pa to GPa; energy mJ to GJ; power mW to GW; dynamic viscosity
+  µPa·s, mPa·s, Pa·s; kinematic viscosity mm²/s, m²/s; frequency Hz to GHz; mass mg, g, kg, t; time µs, ms, s;
+  acceleration, density and temperature have one unit. A result shows in the largest one that keeps its number at
+  1 or above, so a few read above 1000 (`9290 cm²`). USCS uses BTU for energy, lbf·s/ft² for dynamic viscosity
+  and °R for temperature. A result's plain text writes units as math.js does (`1.002 mPa s`, `18.81 L / s`,
+  `2 (kg m) / s`); typeset, they read `mPa·s`, `L/s`.
+- 2026-11-11, [section 8](#sheet-panel) (#58, checked in Chromium at 1440 and 1000 px wide): Excalidraw docks its
+  sidebar only when the editor is wider than 1229 px (`MQ_RIGHT_SIDEBAR_MIN_WIDTH`); narrower, the panel floats over
+  the canvas, and a click on the canvas or Esc closes it. At launch on a 1440 px window the panel opened docked on
+  Variables; a jump from Problems scrolled to the element, selected it, flashed the line and left the sheet as it was.
+- 2026-11-11, [section 8](#sheet-panel) (#58, Engineer's, for Matheus to confirm on the PR): an element without a title
+  is labelled by its place in reading order, `Element 2`. A jump's select adds no undo step (`NEVER`, like the second
+  Esc's deselect) and gives the keyboard to the canvas, so Enter opens the line. Open or closed is remembered only from
+  a wide window, since the floating panel closes by itself after a jump or a click. The Sheet button is the app's own,
+  so it can carry the badge and reopen the last tab. Values in Variables read as the result's plain text, with the unit
+  typeset.
+- 2026-11-11, [section 4](#problems) (#7 and #58, found while building; fixed in the follow-up, checked in Chromium with
+  a real mouse): the overlay takes no pointer events, so a hover title on the gutter mark or an error cell never showed
+  on screen (true of errors since M1). The gestures now find the mark under the pointer from its screen box, as the
+  unit slot does (#60), and the overlay draws the message as a tip: a `⚠`'s warnings, a `●`'s error, and a capped
+  error's whole text (only while the cell is cut short). It shows after the pointer rests 500 ms, moves straight to the
+  next mark while one shows, and hides when the pointer leaves the mark or the canvas, on a press, and on a scroll,
+  zoom or scene change. The press still reaches Excalidraw, which selects and drags as before. The tip stays clear of
+  the Sheet panel, and is screen only: never in the scene, the file or print. No `title` is set on overlay content.
+- 2026-11-11, [section 14](#14-engineering-constraints) (#60, verify first, measured in Chromium): the slot's
+  pointer cursor set two frames after a move, as the crosshair is, flickered while the pointer moved: about half the
+  painted frames showed Excalidraw's `move`. Excalidraw sets its cursor in its own move handler and again from a frame
+  callback it queues there. The slot now sets the pointer in a microtask after the event and from a frame callback
+  queued after Excalidraw's: every painted frame showed the pointer, still or moving.
+- 2026-11-11, [section 5](#unit-slot) (#60, Engineer's, for Matheus to confirm on the PR): each kind's list in the slot
+  and in Custom is in `src/math/unitSystems.ts` (`SLOT_UNITS`), the app units included; pressure is section 5's own.
+  A typed text that matches a unit exactly is highlighted first (`bar` before `mbar`), and the highlight returns to the
+  top as you type. `%` is a display unit the app reads itself (`in %` shows the value times 100), since math.js has
+  none. A row's slot outline follows the pointer by geometry, selected or not.
 

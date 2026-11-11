@@ -7,6 +7,11 @@ function sheet(...sources: string[]): LineResult[][] {
   return sources.map((_, i) => lines.get(`b${i}`)!.map(({ result }) => result))
 }
 
+/** The warnings of each line of a one-block sheet. */
+function warnings(source: string): (readonly string[])[] {
+  return evaluateSheet([{ id: 'b', source }]).get('b')!.map((line) => line.warnings)
+}
+
 /** A sheet of one block. */
 const block = (source: string) => sheet(source)[0]
 
@@ -92,8 +97,8 @@ describe('evaluateSheet', () => {
 
     it.each([
       ['arithmetic', 'x = 2 * 3', '6'],
-      ['a constant', 'x = 2 pi', '6.2831853071796'],
-      ['another name', 'x = pi', '3.1415926535898'],
+      ['a constant', 'x = 2 pi', '6.283'],
+      ['another name', 'x = pi', '3.142'],
     ])('shows a value when the right side is not a literal: %s', (_, line, shown) => {
       expect(block(line)).toEqual([value(shown)])
     })
@@ -190,8 +195,11 @@ describe('evaluateSheet', () => {
     // Known limit, follow-up #7: a name that is also a unit (V, A, m, ...)
     // is never undefined. If its definition fails, lines below silently read
     // the unit instead.
-    it('falls back to the unit when a unit-named definition fails', () => {
+    it('falls back to the unit when a unit-named definition fails, with a warning (#7)', () => {
       expect(sheet('V = 1 mA + 1 V', 'V * 2')[1]).toEqual([value('2 V')])
+      expect(warnings('V = 1 mA + 1 V\nV * 2')[1]).toEqual([
+        'V reads as the unit V here: its definition failed',
+      ])
     })
 
     it('clears the error once the name is defined again', () => {
@@ -266,7 +274,7 @@ describe('evaluateSheet', () => {
       const expected = [
         error('Undefined symbol knot'),
         value('"number"'),
-        value('3.1415926535898'),
+        value('3.142'),
       ]
 
       // In the same run, below the attack...
@@ -278,7 +286,7 @@ describe('evaluateSheet', () => {
     // Regression (#25): a result showed in whichever unit of its dimension
     // an earlier line or run had read last: after `1 psi`, pressure showed
     // as `9.6691825159135e-5 psi`; after `h`, speed as `m / h`.
-    describe('formats results in SI, whatever units were read before', () => {
+    describe('formats results in the sheet system, whatever units were read before', () => {
       // Each line reads units that, under `auto`, took over a dimension.
       const otherUnits = [
         'p = 1 psi',
@@ -288,12 +296,12 @@ describe('evaluateSheet', () => {
       ].join('\n')
       const check = 'F = (2 kg) / (3 m * s^2)\nQ = 10 m^3 / h\nA = 2 m^2\nQ\nA\nQ / A'
       const expected = [
-        value('0.66666666666667 Pa'),
+        value('0.6667 Pa'),
         empty,
         empty,
-        value('10 m^3 / h'),
+        value('2.778 L / s'),
         value('2 m^2'),
-        value('0.0013888888888889 m / s'),
+        value('1.389 mm / s'),
       ]
 
       it('in a run that reads only these units', () => {
@@ -316,11 +324,11 @@ describe('evaluateSheet', () => {
         expect(block(check)).toEqual(expected)
       })
 
-      // The display trade-off of a fixed system (ADR 0003): a result math.js
-      // simplifies shows in SI with an SI prefix, even from SI-prefixed or
-      // non-SI inputs (`auto` showed `10 ft^2`, `6 cm^2`, `4 cm^2`). A
-      // result whose units it keeps shows as written. `to` converts.
-      it('simplifies to SI with a prefix, keeps units it does not simplify', () => {
+      // Section 5, Shown result: every result shows in the sheet's system for
+      // its kind, whatever units it was written in; SI with prefixes keeps
+      // the number at 1 or above in the largest unit the steps allow. A
+      // display unit (`in`, or `to` at the end) shows it in that unit.
+      it('shows each kind in the sheet system, a display unit as chosen', () => {
         const lines = [
           '5 ft * 2 ft',
           '2 cm * 3 cm',
@@ -331,12 +339,12 @@ describe('evaluateSheet', () => {
         ]
 
         expect(block(lines.join('\n'))).toEqual([
-          value('0.9290304 m^2'),
-          value('600 mm^2'),
+          value('9290 cm^2'),
+          value('6 cm^2'),
           empty,
-          value('400 mm^2'),
-          value('1 psi'),
-          value('60 mi / h'),
+          value('4 cm^2'),
+          value('6.895 kPa'),
+          value('26.82 m / s'),
           value('10 ft^2'),
         ])
       })
@@ -378,11 +386,11 @@ describe('evaluateSheet', () => {
         return sources.map((_, i) => lines.get(`${i}`)!.map(({ result }) => result))
       }
 
-      const [, afterwards] = run('n = simplifyCore("typed.clear()")\nn.evaluate()', '20 V to mV\nsqrt(16)\ncos(0)')
+      const [, afterwards] = run('n = simplifyCore("typed.clear()")\nn.evaluate()', '2 V to mV\nsqrt(16)\ncos(0)')
 
-      const expected = [value('20000 mV'), value('4'), value('1')]
+      const expected = [value('2000 mV'), value('4'), value('1')]
       expect(afterwards).toEqual(expected)
-      expect(run('20 V to mV\nsqrt(16)\ncos(0)')[0]).toEqual(expected)
+      expect(run('2 V to mV\nsqrt(16)\ncos(0)')[0]).toEqual(expected)
     })
 
     // Regression (PR #5 review, round 2): math.js exposes its `typed` registry
@@ -395,8 +403,8 @@ describe('evaluateSheet', () => {
         'g(x) = 0\ntyped.addConversion({from: "boolean", to: "Unit", convert: g})',
       ]
       // Functions this file has not used yet, so they are built after clear().
-      const check = '20 V to mV\nsqrt(16)\ncos(0)\nmean(1, 2, 3)'
-      const expected = [value('20000 mV'), value('4'), value('1'), value('2')]
+      const check = '2 V to mV\nsqrt(16)\ncos(0)\nmean(1, 2, 3)'
+      const expected = [value('2000 mV'), value('4'), value('1'), value('2')]
 
       expect(sheet(...attack, check)[2]).toEqual(expected)
       expect(block(check)).toEqual(expected)
@@ -471,5 +479,418 @@ describe('the format clause (docs/spec-v1.md section 3)', () => {
 
   it('leaves an @ in the middle of the code to math.js, as a syntax error', () => {
     expect(block('a = 2 @bold + 1')[0].kind).toBe('error')
+  })
+})
+
+describe('numbers (docs/spec-v1.md section 5)', () => {
+  it.each([
+    ['1234', '1234'],
+    ['12345', '1.235·10⁴'],
+    ['185997', '1.86·10⁵'],
+    ['0.01864', '0.01864'],
+    ['0.0004399', '4.399·10⁻⁴'],
+    ['5.400', '5.4'],
+    ['25 m', '25 m'],
+    ['n = 123456\nn', '1.235·10⁵'],
+    ['1/0', '∞'],
+    ['-1/0', '-∞'],
+    ['0/0', 'NaN'],
+    ['-0', '0'],
+    ['2 + 3i', '2 + 3i'],
+  ])('%s shows %s at the default 4 digits', (source, shown) => {
+    expect(block(source).at(-1)).toEqual(value(shown))
+  })
+
+  it('never reformats source: a plain input stays as typed', () => {
+    expect(block('D = 102.30 mm\nD')).toEqual([empty, value('102.3 mm')])
+  })
+})
+
+describe('app units (docs/spec-v1.md section 5)', () => {
+  it.each([
+    ['1.002 cP', '1.002 mPa s'],
+    ['1.002 cP to Pa s', '0.001002 Pa s'],
+    ['2 poise to Pa s', '0.2 Pa s'],
+    ['1 cSt to m^2/s', '1·10⁻⁶ m^2 / s'],
+    ['3 St to cSt', '300 cSt'],
+    ['1500 rpm to Hz', '25 Hz'],
+    ['1 gpm to L/minute', '3.785 L / minute'],
+    ['1 cfm to L/s', '0.4719 L / s'],
+    ['1 kcal to J', '4184 J'],
+    ['1 tonf to lbf', '2000 lbf'],
+    ['1 tf to kgf', '1000 kgf'],
+  ])('%s is %s', (source, shown) => {
+    expect(block(source)).toEqual([value(shown)])
+  })
+
+  it('registers each name with no prefixes, and no bare P', () => {
+    expect(block('1 mcP')).toEqual([error('Undefined symbol mcP')])
+    expect(block('1 P')).toEqual([error('Undefined symbol P')])
+    expect(block('P = 5 kW\nP * 2')).toEqual([empty, value('10 kW')])
+  })
+
+  it('leaves a name free for a variable', () => {
+    expect(block('St = 3\nSt * 2')).toEqual([empty, value('6')])
+  })
+
+  // Section 14, setup order: a plain createUnit made each app unit a display
+  // unit (`0.01 m^2 * 1.8 m/s` showed `285.3 gpm`). The app's formatter
+  // converts each unit result itself; a matrix still goes through math.js's
+  // own format, which a leak would reach.
+  it('shows results as an engine without them does', async () => {
+    const { all, create } = await import('mathjs')
+    const { createDisplay } = await import('./display.ts')
+    const { DEFAULT_DISPLAY } = await import('./evaluate.ts')
+    const bare = create(all)
+    bare.Unit.setUnitSystem('si')
+    const bareDisplay = createDisplay(bare, bare.parse)
+    const expressions = [
+      '0.01 m^2 * 1.8 m/s',
+      '[0.01 m^2 * 1.8 m/s, 2 Pa * 3 s]',
+      '2 Pa * 3 s',
+      '4 m^2 / (2 s)',
+      '5 m^3 / s * 2',
+      '6 kg m^2 / s^2',
+      '7 kg m^2 / s^3',
+      '8 kg m / s^2',
+      '9 / s * 2',
+      '10 kg / s * 2',
+      '1 gal * 2 / (3 minute)',
+      '1 lbf * 3',
+      '1 BTU * 2',
+    ]
+
+    expect(block(expressions.join('\n'))).toEqual(
+      expressions.map((source) =>
+        value(bareDisplay.show(bare.evaluate(source), null, DEFAULT_DISPLAY)),
+      ),
+    )
+  })
+})
+
+describe('display unit, `in <unit>` (docs/spec-v1.md sections 3 and 5)', () => {
+  it('shows the result in the chosen unit', () => {
+    expect(block('dP = 45430 Pa in kPa\nQ = 0.5 L/s in L/minute\nv = 2 m/s to km/h')).toEqual([
+      value('45.43 kPa'),
+      value('30 L / minute'),
+      value('7.2 km / h'),
+    ])
+  })
+
+  it('reads the whole unit after `in`, as math.js would not: `L/minute`, `kN/m^2`, `m^-1`', () => {
+    expect(block('a = 3 L/s in L/minute\nb = 2 kPa in kN/m^2\nc = 4 / mm in m^-1')).toEqual([
+      value('180 L / minute'),
+      value('2 kN / m^2'),
+      value('4000 m^-1'),
+    ])
+  })
+
+  it('shows a plain input converted, and still passes its value below', () => {
+    expect(block('D = 102.3 mm in in\nD2 = D * 2')).toEqual([value('4.028 in'), value('204.6 mm')])
+  })
+
+  it('balances a unit of the wrong kind, as in Mathcad', () => {
+    expect(block('dP = 45430 Pa in m')).toEqual([value('4.543·10⁴ m kg / (m^2 s^2)')])
+  })
+
+  it('reads the unit outside the sheet: a variable named like a unit changes nothing', () => {
+    expect(block('m = 3\nd = 2 km in m')).toEqual([empty, value('2000 m')])
+  })
+
+  it('reports an unknown unit, and the value still reaches the lines below', () => {
+    expect(block('x = 2 m * 1 in xyz\ny = x * 2')).toEqual([error('Unknown unit xyz'), value('4 m')])
+    expect(block('k = 3\nx = 2 m * 1 in k')).toEqual([empty, error('Unknown unit k')])
+  })
+
+  it('leaves a conversion inside the expression to math.js', () => {
+    expect(block('(2 bar in kPa) + 1 kPa')).toEqual([value('201 kPa')])
+  })
+
+  it('is an error on a function definition, which removes the function', () => {
+    expect(block('p(x) = x * 2 in kPa\np(1 kPa)')).toEqual([
+      error("Set a function's display unit on the line that calls it"),
+      error('p has an error above'),
+    ])
+  })
+
+  it('works on the line that calls a function', () => {
+    expect(block('p(x) = x * 2\ndP = p(100 kPa) in bar')).toEqual([empty, value('2 bar')])
+  })
+
+  it('comes before the format clause and the note', () => {
+    expect(block('U = 2 A * 3 ohm in mV @bold # check')).toEqual([value('6000 mV')])
+  })
+})
+
+describe('unit systems (docs/spec-v1.md section 5)', () => {
+  const inSystem = (source: string, units: Parameters<typeof evaluateSheet>[1]) =>
+    evaluateSheet([{ id: 'b', source }], units).get('b')!.map(({ result }) => result)
+  const lines = '45430 Pa\n5412 W\n0.001002 Pa s\n1 m\n0.008219 m^2\n0.01881 m^3/s\n2 kg m / s'
+
+  it('SI with prefixes is the default: the number between 1 and 1000 where the kind has steps', () => {
+    expect(block(lines)).toEqual([
+      value('45.43 kPa'),
+      value('5.412 kW'),
+      value('1.002 mPa s'),
+      value('1 m'),
+      value('82.19 cm^2'),
+      value('18.81 L / s'),
+      value('2 (kg m) / s'),
+    ])
+  })
+
+  it('SI base units: no prefixes', () => {
+    expect(inSystem(lines, { units: { system: 'si-base', custom: {} }, digits: 4 })).toEqual([
+      value('4.543·10⁴ Pa'),
+      value('5412 W'),
+      value('0.001002 Pa s'),
+      value('1 m'),
+      value('0.008219 m^2'),
+      value('0.01881 m^3 / s'),
+      value('2 (kg m) / s'),
+    ])
+  })
+
+  it('USCS: ft, psi, hp and so on, other kinds in its base units', () => {
+    expect(inSystem(lines, { units: { system: 'uscs', custom: {} }, digits: 4 })).toEqual([
+      value('6.589 psi'),
+      value('7.258 hp'),
+      value('2.093·10⁻⁵ (lbf s) / ft^2'),
+      value('3.281 ft'),
+      value('0.08847 ft^2'),
+      value('0.6643 ft^3 / s'),
+      value('14.47 (lbm ft) / s'),
+    ])
+  })
+
+  it('Custom changes the unit for chosen kinds, and the rest follow the system', () => {
+    const custom = { units: { system: 'si-prefixed', custom: { pressure: 'bar' } }, digits: 4 } as const
+    expect(inSystem('45430 Pa\n5412 W', custom)).toEqual([value('0.4543 bar'), value('5.412 kW')])
+  })
+
+  it('shows electrical units by name, with a prefix', () => {
+    expect(block('R = 10 kohm\nI = 2 mA\nI * R\nI * R / 1000')).toEqual([
+      empty,
+      empty,
+      value('20 V'),
+      value('20 mV'),
+    ])
+  })
+
+  it('shows a dimensionless result as a plain number', () => {
+    expect(block('2 m / (4 mm)')).toEqual([value('500')])
+  })
+
+  it('takes the sheet digits', () => {
+    expect(inSystem('45430.12 Pa', { units: { system: 'si-base', custom: {} }, digits: 6 })).toEqual([
+      value('45430.1 Pa'),
+    ])
+  })
+})
+
+describe('warnings (docs/spec-v1.md section 5, #7)', () => {
+  it('warns when a variable shadows a unit; the name wins and the result is unchanged', () => {
+    expect(warnings('K = 5.4\nx = 2 K')).toEqual([['K shadows the unit K'], []])
+    expect(block('K = 5.4\nx = 2 K')).toEqual([empty, value('10.8')])
+  })
+
+  it('covers function names, parameters, built-ins and the app units', () => {
+    expect(warnings('g(x) = x^2')).toEqual([['g shadows the unit g']])
+    expect(warnings('u(s) = s + 5 s')).toEqual([['s shadows the unit s']])
+    expect(warnings('pi = 3')).toEqual([['pi shadows the built-in pi']])
+    expect(warnings('cP = 2')).toEqual([['cP shadows the unit cP']])
+  })
+
+  it('does not warn for a parameter that hides a sheet function', () => {
+    expect(warnings('h(Q) = Q * 2\nf(h, r) = h * r')).toEqual([['h shadows the unit h'], []])
+  })
+
+  it('flags a use that falls back to the unit because the variable is defined below', () => {
+    expect(warnings('P = V * 2\nV = 3 A * 2 ohm')).toEqual([
+      ['V reads as the unit V here: the variable is defined below'],
+      ['V shadows the unit V'],
+    ])
+    expect(block('P = V * 2\nV = 3 A * 2 ohm')[0]).toEqual(value('2 V'))
+  })
+
+  it('keeps 5 V meaning volts above any V = ... without a fallback warning when V is not defined', () => {
+    expect(warnings('U = 5 V\nI = 2 A')).toEqual([[], []])
+  })
+
+  it('warns on a function body name not defined above this line', () => {
+    expect(warnings('f(x) = k * x\nk = 2\nf(3)')).toEqual([["k isn't defined above this line"], [], []])
+    expect(block('f(x) = k * x\nk = 2\nf(3)')[2]).toEqual(value('6'))
+  })
+
+  it('skips the function itself, its parameters, units and math.js functions in a body', () => {
+    expect(warnings('fact(n) = n <= 1 ? 1 : n * fact(n - 1)')).toEqual([[]])
+    expect(warnings('w(x) = sqrt(x) * 2 m + pi')).toEqual([[]])
+  })
+
+  it('stays silent for a body name defined above and redefined later', () => {
+    expect(warnings('k = 1\nf(x) = k * x\nk = 2')).toEqual([[], [], []])
+  })
+
+  it('leaves names that are not units or built-ins alone', () => {
+    expect(warnings('rho = 998.2 kg/m^3\nD = 2 m\nx = rho * D')).toEqual([[], [], []])
+  })
+
+  it('keeps the warnings of a line that fails', () => {
+    expect(warnings('K = 1 m + 1 s')).toEqual([['K shadows the unit K']])
+  })
+})
+
+describe('function and reserved-name messages (docs/spec-v1.md section 13, #57)', () => {
+  it('a value called like a function', () => {
+    expect(block('f_d = 0.02\nx = f_d (2)')[1]).toEqual(
+      error('f_d is a value, not a function: write f_d * (...) to multiply'),
+    )
+  })
+
+  it('a function used as a number', () => {
+    expect(block('q(x) = x * 2\nq + 1')[1]).toEqual(error('q is a function: call it with q(...)'))
+  })
+
+  it('the wrong number of arguments', () => {
+    expect(block('h(a, b) = a + b\nh(1)\nh(1, 2, 3)')).toEqual([
+      empty,
+      error('h needs 2 arguments, got 1'),
+      error('h needs 2 arguments, got 3'),
+    ])
+    expect(block('k(a) = a\nk(1, 2)')[1]).toEqual(error('k needs 1 argument, got 2'))
+  })
+
+  it('recursion with no end, and recursion with an end still works', () => {
+    expect(block('loop(x) = loop(x)\nloop(1)')[1]).toEqual(error('loop calls itself without end'))
+    expect(block('fact(n) = n <= 1 ? 1 : n * fact(n - 1)\nfact(5)')[1]).toEqual(value('120'))
+  })
+
+  it('an error inside a body, on the calling line, with the arguments as the sheet shows them', () => {
+    expect(block('k(t) = t + 1 m\nk(1 s)')[1]).toEqual(error('in k(1 s): Units do not match'))
+    expect(block('k(t) = t + 1 m\nk(12345 s)')[1]).toEqual(
+      error('in k(1.235·10⁴ s): Units do not match'),
+    )
+  })
+
+  it('names each function an error passes through', () => {
+    expect(block('h(x) = x + 1 m\ng(x) = h(x * 2)\ng(1 s)')[2]).toEqual(
+      error('in g(1 s): in h(2 s): Units do not match'),
+    )
+  })
+
+  it('words a misuse inside a body too', () => {
+    expect(block('c = 3\nw(x) = c (x)\nw(2)')[2]).toEqual(
+      error('in w(2): c is a value, not a function: write c * (...) to multiply'),
+    )
+  })
+
+  it('table, plot and solve are reserved names', () => {
+    expect(block('table = 3\nplot(x) = x\nsolve = 1\ny = 2')).toEqual([
+      error('table is a line form: choose another name'),
+      error('plot is a line form: choose another name'),
+      error('solve is a line form: choose another name'),
+      empty,
+    ])
+  })
+
+  it('a failed line still removes its name, and the lines below run', () => {
+    expect(block('a = 2\na = a (3)\nb = 4\nb * 2\na')).toEqual([
+      empty,
+      error('a is a value, not a function: write a * (...) to multiply'),
+      empty,
+      value('8'),
+      error('a has an error above'),
+    ])
+  })
+
+  it('keeps functions as values and late binding', () => {
+    expect(block('q(x) = x * k\nr = q\nk = 3\nr(2)')).toEqual([empty, empty, empty, value('6')])
+  })
+})
+
+describe('variables (docs/spec-v1.md section 8, Variables tab)', () => {
+  const variables = (source: string) =>
+    evaluateSheet([{ id: 'b', source }]).get('b')!.map((line) => line.variables)
+
+  it('gives each defined name its value in the sheet system, plain inputs included', () => {
+    expect(variables('D = 102.3 mm\nP = 5412 W\n2 * D\n# note')).toEqual([
+      [{ name: 'D', kind: 'value', text: '102.3 mm' }],
+      [{ name: 'P', kind: 'value', text: '5.412 kW' }],
+      [],
+      [],
+    ])
+  })
+
+  it('gives a function its parameters, and a failed line error', () => {
+    expect(variables('Hs(Q, k) = Q * k\nx = 1 m + 1 s\ny = (')).toEqual([
+      [{ name: 'Hs', kind: 'function', params: ['Q', 'k'] }],
+      [{ name: 'x', kind: 'error' }],
+      [{ name: 'y', kind: 'error' }],
+    ])
+  })
+})
+
+describe('the unit lists per kind (docs/spec-v1.md section 5)', () => {
+  it('offers only units math.js knows, each of its own kind', async () => {
+    const { all, create } = await import('mathjs')
+    const { KIND_REFERENCE, SLOT_UNITS, SI_PREFIXED, USCS } = await import('./unitSystems.ts')
+    const check = create(all)
+    for (const name of ['cP', 'poise', 'cSt', 'St', 'rpm', 'gpm', 'cfm', 'kcal', 'tonf', 'tf']) {
+      // The app units, as the engine registers them.
+      if (!check.Unit.isValuelessUnit(name)) {
+        const { APP_UNITS } = await import('./appUnits.ts')
+        const unit = APP_UNITS.find((entry) => entry.name === name)!
+        check.createUnit(name, { definition: unit.definition, prefixes: 'none' })
+      }
+    }
+    for (const [kind, reference] of Object.entries(KIND_REFERENCE)) {
+      const units = [
+        ...SLOT_UNITS[kind as keyof typeof SLOT_UNITS],
+        ...SI_PREFIXED[kind as keyof typeof SI_PREFIXED],
+        USCS[kind as keyof typeof USCS],
+      ]
+      for (const unit of units) {
+        expect(check.unit(unit).equalBase(check.unit(reference)), `${kind}: ${unit}`).toBe(true)
+      }
+    }
+  })
+})
+
+describe('unit slot (docs/spec-v1.md section 5)', () => {
+  const slots = (source: string) =>
+    evaluateSheet([{ id: 'b', source }]).get('b')!.map((line) => line.unitSlot)
+
+  it('offers the units of the result’s kind, each with the value in it, and Sheet units', () => {
+    const [slot] = slots('dP = 45430 Pa * 1')
+    expect(slot).toMatchObject({ kind: 'pressure', system: '45.43 kPa', chosen: null })
+    expect(slot!.options).toEqual([
+      { unit: 'Pa', text: '4.543·10⁴ Pa' },
+      { unit: 'kPa', text: '45.43 kPa' },
+      { unit: 'MPa', text: '0.04543 MPa' },
+      { unit: 'mbar', text: '454.3 mbar' },
+      { unit: 'bar', text: '0.4543 bar' },
+      { unit: 'psi', text: '6.589 psi' },
+      { unit: 'atm', text: '0.4484 atm' },
+    ])
+  })
+
+  it('knows the chosen unit as typed, and a plain input has a slot too', () => {
+    expect(slots('D = 102.3 mm in in\nL = 2 m')).toMatchObject([
+      { kind: 'length', chosen: 'in' },
+      { kind: 'length', chosen: null, system: '2 m' },
+    ])
+  })
+
+  it('offers % for a dimensionless result, and in % shows it in percent', () => {
+    expect(slots('eta = 0.7 * 1')[0]).toMatchObject({
+      kind: 'dimensionless',
+      options: [{ unit: '%', text: '70 %' }],
+    })
+    expect(block('eta = 0.7 * 1 in %')).toEqual([value('70 %')])
+  })
+
+  it('has no slot on a function, an error or a matrix; the app units join their kinds', () => {
+    expect(slots('f(x) = x\n1 m + 1 s\n[1, 2]')).toEqual([null, null, null])
+    expect(slots('mu = 0.001002 Pa s * 1')[0]!.options.map((o) => o.unit)).toContain('cP')
   })
 })

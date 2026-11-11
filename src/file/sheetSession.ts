@@ -48,6 +48,8 @@ export interface SessionState {
   /** The file name, extension included, or null while untitled. */
   name: string | null
   dirty: boolean
+  /** The sheet's settings (section 7): the file's, or the defaults. */
+  settings: SheetSettings
 }
 
 export interface SheetSession {
@@ -71,6 +73,11 @@ export interface SheetSession {
   /** Writes a pending recovery copy now, as the page goes away. */
   flushRecovery(): void
   readonly settings: SheetSettings
+  /**
+   * Changes the sheet's settings (section 8, Settings tab): saved with the
+   * sheet, so the sheet turns dirty; not part of undo.
+   */
+  setSettings(next: SheetSettings): void
 }
 
 export interface SessionPorts {
@@ -113,12 +120,14 @@ export function createSheetSession({
   let pendingCopy: ReturnType<typeof setTimeout> | null = null
   let recoveryQueue: Promise<unknown> = Promise.resolve()
 
-  let state: SessionState = { name, dirty: false }
+  let state: SessionState = { name, dirty: false, settings }
   const listeners = new Set<() => void>()
   const isDirty = () => cleanKey === null || lastKey !== cleanKey
   const publish = () => {
-    const next = { name, dirty: started && isDirty() }
-    if (next.name === state.name && next.dirty === state.dirty) return
+    const next = { name, dirty: started && isDirty(), settings }
+    if (next.name === state.name && next.dirty === state.dirty && next.settings === state.settings) {
+      return
+    }
     state = next
     listeners.forEach((listener) => listener())
   }
@@ -243,6 +252,12 @@ export function createSheetSession({
   return {
     get settings() {
       return settings
+    },
+    setSettings(next) {
+      if (JSON.stringify(next) === JSON.stringify(settings)) return
+      settings = next
+      onSceneChange()
+      publish()
     },
     getState: () => state,
     subscribe(listener) {

@@ -317,7 +317,30 @@ describe('MathOverlay', () => {
       const result = cellOf(1, 'result')!
       expect(result).toHaveClass('is-error')
       expect(result).toHaveTextContent('Units do not match')
-      expect(result).toHaveAttribute('title', 'Units do not match')
+      expect(result).toHaveAttribute('data-tip', 'Units do not match')
+      expect(result).toHaveAttribute('data-tip-when', 'capped')
+      expect(cellOf(1, 'gutter')).toHaveAttribute('data-tip', 'Units do not match')
+    })
+
+    it('marks a warning with an amber ⚠ and its message on the mark; the value still shows', () => {
+      renderOverlay([anchorWith('K = 2 * 2.7\nP = V * 2\nV = 1 A * 2 ohm')])
+
+      const gutter = cellOf(1, 'gutter')!
+      expect(gutter).toHaveTextContent('⚠')
+      expect(gutter).toHaveClass('is-warning')
+      expect(gutter).toHaveAttribute('data-tip', 'K shadows the unit K')
+      expect(cellOf(1, 'result')).toHaveAttribute('data-text', '5.4')
+      expect(cellOf(2, 'gutter')).toHaveAttribute(
+        'data-tip',
+        'V reads as the unit V here: the variable is defined below',
+      )
+    })
+
+    it('shows the error mark, not the warning, on a line with both', () => {
+      renderOverlay([anchorWith('K = 1 m + 1 s')])
+
+      expect(cellOf(1, 'gutter')).toHaveTextContent('●')
+      expect(cellOf(1, 'gutter')).not.toHaveClass('is-warning')
     })
 
     it('shows a line that doesn’t parse as its raw source, # part included, with no note cell', () => {
@@ -1013,8 +1036,10 @@ describe('MathOverlay', () => {
       scene.updateElements([inputs, { ...uses, y: 0 }])
 
       expect(resultsOf('uses')).toBe('I is defined below')
-      // Long results are cut to fit; the full text stays in the title.
-      expect(screen.getByTitle('I is defined below')).toHaveClass('is-error')
+      // Long results are cut to fit; the full text shows on hover (data-tip).
+      expect(document.querySelector('[data-tip="I is defined below"].math-element__result')).toHaveClass(
+        'is-error',
+      )
 
       scene.updateElements([inputs, uses])
       expect(resultsOf('uses')).toBe('20 V')

@@ -8,6 +8,7 @@ import {
   isSymbolNode,
   type MathNode,
 } from 'mathjs'
+import { leadingNumber, numberTex } from './numbers.ts'
 
 /**
  * Sheet lines as TeX, for KaTeX (docs/spec-v1.md section 4, Typesetting names;
@@ -144,7 +145,7 @@ function quantityTex(node: MathNode, names: Names): string | null {
   const unit = unitTex(right, names)
   if (unit === null) return null
   if (isConstantNode(left) && typeof left.value === 'number' && node.fn === 'multiply') {
-    return `${numberTex(String(left.value))}\\,${unit}`
+    return `${sourceNumberTex(String(left.value))}\\,${unit}`
   }
   const quantity = quantityTex(left, names)
   if (quantity === null) return null
@@ -199,27 +200,28 @@ function prefixTex(prefix: string, names: Names): string {
   return prefix === 'u' && names.isMicro(`${prefix}ohm`) ? '\\mu ' : prefix
 }
 
-/** A number as `math.format` wrote it. Notation is M2's: `1.2e-5` stays as written. */
-function numberTex(text: string): string {
+/** A number in source: never reformatted (section 5), so `1.2e-5` stays as written. */
+function sourceNumberTex(text: string): string {
   return /^-?[\d.]+$/.test(text) ? text : `\\text{${text}}`
 }
 
 /**
- * A result's text, `math.format`'s, typeset (section 4): the number, then the
- * unit typeset as a unit. `parseUnit` reads the unit text; anything that isn't
- * a number with an optional unit shows as plain text.
+ * A result's plain text (section 5, Numbers) typeset (section 4): the number
+ * in KaTeX's form (`1.235 \cdot 10^{4}`), then the unit typeset as a unit.
+ * `parseUnit` reads the unit text; anything that isn't a number with an
+ * optional unit, such as a complex number, shows as plain text.
  */
 export function resultTex(
   text: string,
   parseUnit: (text: string) => MathNode,
   names: Names,
 ): string {
-  const match = /^(-?\d[\d.]*(?:e[+-]?\d+)?)(?: (.+))?$/.exec(text)
-  if (match) {
-    const number = numberTex(match[1])
-    if (match[2] === undefined) return number
+  const split = leadingNumber(text)
+  if (split && (split.rest === '' || split.rest.startsWith(' '))) {
+    const number = numberTex(split.number)
+    if (split.rest === '') return number
     try {
-      const unit = unitTex(parseUnit(match[2]), names)
+      const unit = unitTex(parseUnit(split.rest.slice(1)), names)
       if (unit !== null) return `${number}\\,${unit}`
     } catch {
       // Not a unit: shown as text below.

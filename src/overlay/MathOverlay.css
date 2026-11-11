@@ -4,6 +4,7 @@
   --math-text: #1e1e1e;
   --math-result: #1971c2;
   --math-error: #e03131;
+  --math-warning: #e8590c;
   --math-quiet: #868e96;
   --math-rule: #dee2e6;
 }
@@ -94,6 +95,11 @@
   font-size: 10px;
 }
 
+/* Section 4, Problems: a warning's mark is amber; its message shows on hover. */
+.math-element__gutter.is-warning {
+  color: var(--math-warning);
+}
+
 /* Each line is its own display, flush left: ≔ doesn't line up between lines. */
 .math-element__equation {
   grid-column: 2 / 5;
@@ -123,6 +129,7 @@
 }
 
 .math-element__result {
+  position: relative;
   grid-column: 5;
   align-self: stretch;
   display: flex;
@@ -134,7 +141,7 @@
   white-space: pre;
 }
 
-/* An error's message is capped; the whole text is in its title. */
+/* An error's message is capped; the whole text shows on hover. */
 .math-element__result.is-error {
   display: block;
   align-self: center;
@@ -309,4 +316,142 @@
   border: 1px dashed var(--math-quiet);
   border-radius: 2px;
   pointer-events: none;
+}
+
+/* Section 8: a jump from the Sheet panel flashes its line for about 1.5 s;
+   with reduced motion, a static outline that clears on the next click. */
+.math-element__row.is-flash {
+  animation: math-flash 1.5s ease-out;
+  border-radius: 3px;
+}
+
+@keyframes math-flash {
+  0%,
+  40% {
+    background-color: rgba(250, 176, 5, 0.45);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .math-element__row.is-flash {
+    animation: none;
+    outline: 2px solid #fab005;
+    outline-offset: 1px;
+  }
+}
+
+/* Section 5, Unit slot: the result's unit, outlined while its row is hovered,
+   tinted once chosen. An empty slot (a dimensionless result, a plain input)
+   only shows on hover. */
+.math-element__unit {
+  display: inline-block;
+  min-width: 14px;
+  min-height: 18px;
+  margin-left: 2px;
+  padding: 0 2px;
+  border-radius: 3px;
+  vertical-align: middle;
+  outline: 1px solid transparent;
+}
+
+.math-element__unit.is-hovered {
+  outline-color: var(--math-rule);
+  outline-style: dashed;
+}
+
+.math-element__unit.is-chosen {
+  color: #0c8599;
+}
+
+/* The unit field and its list (section 14: it takes pointer events). */
+.math-unit-field {
+  position: absolute;
+  z-index: 1;
+  display: block;
+  margin-top: 2px;
+  font: 14px/20px system-ui, 'Segoe UI', sans-serif;
+  pointer-events: auto;
+}
+
+.math-element__result .math-unit-field {
+  top: 100%;
+  left: 10px;
+}
+
+.math-unit-field__input {
+  box-sizing: border-box;
+  width: 180px;
+  padding: 3px 6px;
+  border: 1px solid #1971c2;
+  border-radius: 6px;
+  background: #fff;
+  color: var(--math-text);
+  font: inherit;
+  outline: none;
+}
+
+.math-unit-field__input[aria-invalid='true'] {
+  border-color: var(--math-error);
+  color: var(--math-error);
+}
+
+.math-unit-field__list {
+  box-sizing: border-box;
+  min-width: 180px;
+  max-height: 240px;
+  margin: 2px 0 0;
+  padding: 3px;
+  overflow-y: auto;
+  border: 1px solid var(--math-rule);
+  border-radius: 6px;
+  background: #fff;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 14%);
+  list-style: none;
+}
+
+.math-unit-field__option {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.math-unit-field__option.is-highlighted {
+  background: #e7f5ff;
+}
+
+.math-unit-field__value {
+  color: var(--math-result);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Section 4, Problems: a mark's message, or a capped error's whole text, on
+   hover. The gestures find the mark from its box, so the tip takes no pointer
+   events either. Screen only: never printed (section 11). */
+.math-hover-tip {
+  position: absolute;
+  z-index: 2;
+  box-sizing: border-box;
+  max-width: 360px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: #343a40;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 18%);
+  color: #f8f9fa;
+  font: 13px/18px system-ui, 'Segoe UI', sans-serif;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+  pointer-events: none;
+}
+
+@media print {
+  .math-hover-tip {
+    display: none;
+  }
 }

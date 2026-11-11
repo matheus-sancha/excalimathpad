@@ -24,6 +24,10 @@ export interface CanvasEventHandlers {
   pointerDown: (event: PointerEvent) => void
   /** Every click, after Excalidraw has handled its press and release. Never stopped. */
   click: (event: MouseEvent) => void
+  /** Every pointer move over the canvas, for the hovers: unit slots and problem tips. Never stopped. */
+  pointerMove?: (event: PointerEvent) => void
+  /** The pointer left the canvas (onto the overlay's field, or off the page). Never stopped. */
+  pointerLeave?: (event: PointerEvent) => void
   /** Returns true when the app took it: it is then stopped before Excalidraw. */
   keyDown: (event: KeyboardEvent) => boolean
 }
@@ -39,6 +43,9 @@ export function listenToCanvas(root: HTMLElement, handlers: CanvasEventHandlers)
   }
   const onPointerDown = (event: PointerEvent) => handlers.pointerDown(event)
   const onClick = (event: MouseEvent) => handlers.click(event)
+  const onPointerMove = (event: PointerEvent) => handlers.pointerMove?.(event)
+  // Not in capture: each child's own leave would reach it there too.
+  const onPointerLeave = (event: PointerEvent) => handlers.pointerLeave?.(event)
   const onKeyDown = (event: KeyboardEvent) => {
     const target = event.target
     const onCanvas =
@@ -49,8 +56,12 @@ export function listenToCanvas(root: HTMLElement, handlers: CanvasEventHandlers)
   root.addEventListener('dblclick', onDoubleClick, true)
   root.addEventListener('pointerdown', onPointerDown, true)
   root.addEventListener('click', onClick, true)
+  root.addEventListener('pointermove', onPointerMove, true)
+  root.addEventListener('pointerleave', onPointerLeave)
   document.addEventListener('keydown', onKeyDown, true)
   return () => {
+    root.removeEventListener('pointermove', onPointerMove, true)
+    root.removeEventListener('pointerleave', onPointerLeave)
     root.removeEventListener('dblclick', onDoubleClick, true)
     root.removeEventListener('pointerdown', onPointerDown, true)
     root.removeEventListener('click', onClick, true)

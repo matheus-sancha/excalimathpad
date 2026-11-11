@@ -1,4 +1,5 @@
 import {
+  useEffect,
   useImperativeHandle,
   useMemo,
   useRef,
@@ -18,8 +19,17 @@ import {
   writeAnchorTitle,
   type MathAnchor,
 } from '../canvas/mathAnchor.ts'
-import type { ForwardWheel } from '../canvas/SheetCanvas.tsx'
-import { evaluateSheet, type SheetBlock } from '../math/evaluate.ts'
+import { SHEET_SIDEBAR_CLASS, type ForwardWheel } from '../canvas/SheetCanvas.tsx'
+import {
+  DEFAULT_DISPLAY,
+  evaluateSheet,
+  isDisplayUnit,
+  splitLines,
+  type SheetBlock,
+  type SheetLine,
+} from '../math/evaluate.ts'
+import { writeDisplayUnit } from '../math/lineForm.ts'
+import type { DisplaySettings } from '../math/display.ts'
 import {
   applyLineMove,
   startLineEdit,
@@ -29,11 +39,12 @@ import {
   type LineMove,
 } from './lineEdit.ts'
 import type { RowBox } from './lineHit.ts'
+import { HoverTip, useHoverTip, type TipTarget } from './HoverTip.tsx'
 import { MathElementView } from './MathElementView.tsx'
 import { PlacingGhost } from './PlacingGhost.tsx'
 import { readingOrder } from './readingOrder.ts'
 import { useAnchorSizes } from './useAnchorSizes.ts'
-import { useSheetGestures } from './useSheetGestures.ts'
+import { useSheetGestures, type SlotTarget } from './useSheetGestures.ts'
 import type { Viewport } from './viewport.ts'
 import './MathOverlay.css'
 
@@ -72,6 +83,26 @@ export interface MathOverlayProps {
    * (`SheetSession.keepClean`, docs/spec-v1.md section 4, Size).
    */
   keepClean?: (write: () => void) => void
+  /** Each evaluation of the sheet, in reading order, for the Sheet panel (section 8). */
+  onEvaluated?: (sheet: readonly EvaluatedElement[]) => void
+  /** The line a jump from the panel flashes. */
+  flash?: FlashLine | null
+  /** How results show: the sheet's unit system and Digits (section 5). */
+  settings?: DisplaySettings
+}
+
+/** One math element as evaluated: what the Sheet panel lists. */
+export interface EvaluatedElement {
+  anchorId: string
+  title: string | null
+  lines: readonly SheetLine[]
+}
+
+/** A line to flash; a new `key` flashes it again. */
+export interface FlashLine {
+  anchorId: string
+  line: number
+  key: number
 }
 
 interface SceneSnapshot {
@@ -101,7 +132,8 @@ interface SceneSnapshot {
  * Lines open from the gestures (`useSheetGestures`): a double-click on a line,
  * Enter on a selected element, a click on another line while editing, and the
  * click that places a new element. An element left with no text is removed. The
- * overlay itself takes no pointer events except the open field.
+ * overlay itself takes no pointer events except the open field, so its hovers
+ * (the unit slots, a problem's message) are found from the pointer's moves.
  */
 export function MathOverlay({
   api,
@@ -110,6 +142,9 @@ export function MathOverlay({
   focusCanvas,
   control,
   keepClean = runNow,
+  onEvaluated,
+  flash = null,
+  settings = DEFAULT_DISPLAY,
 }: MathOverlayProps) {
   const overlayRef = useRef<HTMLDivElement>(null)
   const store = useMemo(() => createSceneStore(api), [api])
@@ -135,12 +170,59 @@ export function MathOverlay({
     }),
   )
   const lines = useMemo(
-    () => evaluateSheet(JSON.parse(sheetKey) as SheetBlock[]),
-    [sheetKey],
+    () => evaluateSheet(JSON.parse(sheetKey) as SheetBlock[], settings),
+    [sheetKey, settings],
   )
+
+  // The panel's view of the same run: titles name elements, so they count too.
+  const titlesKey = JSON.stringify(anchors.map(({ id, title }) => [id, title]))
+  const onEvaluatedRef = useRef(onEvaluated)
+  useEffect(() => {
+    onEvaluatedRef.current = onEvaluated
+  })
+  useEffect(() => {
+    const titles = new Map(JSON.parse(titlesKey) as [string, string][])
+    const order = (JSON.parse(sheetKey) as SheetBlock[]).map(({ id }) => id)
+    onEvaluatedRef.current?.(
+      order.map((anchorId) => ({
+        anchorId,
+        title: titles.get(anchorId) || null,
+        lines: lines.get(anchorId) ?? [],
+      })),
+    )
+  }, [lines, sheetKey, titlesKey])
 
   const findAnchor = (anchorId: string) =>
     store.getSnapshot().anchors.find(({ id }) => id === anchorId)
+
+  // The unit slots (section 5): the hovered row, and the slot whose field is open.
+  const [slotHover, setSlotHover] = useState<SlotTarget | null>(null)
+  const [unitEdit, setUnitEdit] = useState<SlotTarget | null>(null)
+  const hoverRow = (target: SlotTarget | null) =>
+    setSlotHover((current) =>
+      current?.anchorId === target?.anchorId && current?.line === target?.line ? current : target,
+    )
+
+  // A problem's message under the pointer (section 4, Problems). It is placed
+  // where its mark was, so a scroll, zoom or scene change takes it away.
+  const { tip, hover: hoverTip } = useHoverTip()
+  useEffect(() => {
+    hoverTip(null)
+  }, [viewport, anchors, hoverTip])
+
+  /** Writes the slot's choice into the line's source, as one line commit; the line stays typeset. */
+  const applyUnit = (anchorId: string, lineIndex: number, unit: string | null) => {
+    setUnitEdit(null)
+    focusCanvas()
+    const anchor = findAnchor(anchorId)
+    if (!anchor) return
+    const sourceLines = splitLines(anchor.source)
+    if (lineIndex >= sourceLines.length) return
+    const written = writeDisplayUnit(sourceLines[lineIndex], unit)
+    if (written === sourceLines[lineIndex]) return
+    sourceLines[lineIndex] = written
+    writeAnchorSource(api, anchorId, sourceLines.join('\n'))
+  }
 
   /**
    * Every line commit goes through here, so each one is written exactly once.
@@ -192,6 +274,14 @@ export function MathOverlay({
     openLine,
     leaveLine: () => moveEdit({ kind: 'leave' }),
     focusCanvas,
+    slotAt: (clientX, clientY) => slotAt(overlayRef.current, clientX, clientY),
+    hoverRow,
+    tipAt: (clientX, clientY) => tipAt(overlayRef.current, clientX, clientY),
+    hoverTip,
+    openUnit: (target) => {
+      moveEdit({ kind: 'leave' })
+      setUnitEdit(target)
+    },
   })
 
   useAnchorSizes({
@@ -249,8 +339,17 @@ export function MathOverlay({
           }}
           onBlurLine={(lineIndex) => leaveLine(anchor.id, lineIndex)}
           forwardWheel={forwardWheel}
+          flash={flash?.anchorId === anchor.id ? flash : null}
+          unitSlots={{
+            hovered: slotHover?.anchorId === anchor.id ? slotHover.line : null,
+            open: unitEdit?.anchorId === anchor.id ? unitEdit.line : null,
+            apply: (lineIndex, unit) => applyUnit(anchor.id, lineIndex, unit),
+            cancel: () => setUnitEdit(null),
+            isUnit: isDisplayUnit,
+          }}
         />
       ))}
+      {tip && <HoverTip key={tip.key} tip={tip} room={() => tipRoom(overlayRef.current, canvasRoot)} />}
       {placing && <PlacingGhost canvasRoot={canvasRoot} zoom={viewport.zoom} />}
     </div>
   )
@@ -271,6 +370,69 @@ function rowsOf(overlay: HTMLElement | null, anchorId: string): RowBox[] {
     top: row.offsetTop,
     height: row.offsetHeight,
   }))
+}
+
+/**
+ * The unit slot drawn under a point on screen, from the slots' boxes: the
+ * topmost element first (later in the DOM paints above).
+ */
+function slotAt(overlay: HTMLElement | null, clientX: number, clientY: number): SlotTarget | null {
+  const elements = Array.from(overlay?.children ?? []).reverse()
+  for (const element of elements) {
+    if (!(element instanceof HTMLElement) || !element.dataset.anchorId) continue
+    for (const slot of element.querySelectorAll<HTMLElement>('[data-unit-slot]')) {
+      const box = slot.getBoundingClientRect()
+      if (box.width === 0 && box.height === 0) continue
+      if (clientX >= box.left && clientX <= box.right && clientY >= box.top && clientY <= box.bottom) {
+        return { anchorId: element.dataset.anchorId, line: Number(slot.dataset.unitSlot) }
+      }
+    }
+  }
+  return null
+}
+
+/**
+ * The problem message under a point on screen (section 4, Problems): a gutter
+ * mark, or an error cell while its text is cut short, found from their boxes
+ * (`data-tip`), the topmost element first. The box comes back relative to the
+ * overlay, where the tip is drawn.
+ */
+function tipAt(overlay: HTMLElement | null, clientX: number, clientY: number): TipTarget | null {
+  if (!overlay) return null
+  const elements = Array.from(overlay.children).reverse()
+  for (const element of elements) {
+    if (!(element instanceof HTMLElement) || !element.dataset.anchorId) continue
+    for (const mark of element.querySelectorAll<HTMLElement>('[data-tip]')) {
+      const box = mark.getBoundingClientRect()
+      if (box.width === 0 && box.height === 0) continue
+      if (clientX < box.left || clientX > box.right || clientY < box.top || clientY > box.bottom) continue
+      // An error that fits shows whole already: nothing to add on hover.
+      if (mark.dataset.tipWhen === 'capped' && mark.scrollWidth <= mark.clientWidth) continue
+      const origin = overlay.getBoundingClientRect()
+      const row = mark.closest<HTMLElement>('[data-line]')?.dataset.line ?? ''
+      const kind = mark.dataset.tipWhen ?? 'mark'
+      return {
+        key: `${element.dataset.anchorId}:${row}:${kind}:${mark.dataset.tip}`,
+        message: mark.dataset.tip ?? '',
+        left: box.left - origin.left,
+        top: box.top - origin.top,
+        bottom: box.bottom - origin.top,
+      }
+    }
+  }
+  return null
+}
+
+/**
+ * Where a tip can show, in the overlay's coordinates: the overlay's box, short
+ * of the Sheet panel where the panel covers its right edge.
+ */
+function tipRoom(overlay: HTMLElement | null, canvasRoot: HTMLElement) {
+  if (!overlay) return { width: 0, height: 0 }
+  const origin = overlay.getBoundingClientRect()
+  const panel = canvasRoot.querySelector(`.${SHEET_SIDEBAR_CLASS}`)?.getBoundingClientRect()
+  const covered = panel && panel.width > 0 ? Math.max(0, origin.right - panel.left) : 0
+  return { width: overlay.clientWidth - covered, height: overlay.clientHeight }
 }
 
 /** The header's box as laid out, or null when the element shows no title. */
