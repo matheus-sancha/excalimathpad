@@ -125,7 +125,7 @@ describe('starting', () => {
   it('starts untitled and clean, with no dialog when there is no copy', async () => {
     const { session, dialogs } = await setup()
 
-    expect(session.getState()).toEqual({ name: null, dirty: false })
+    expect(session.getState()).toMatchObject({ name: null, dirty: false })
     expect(dialogs.askRestore).not.toHaveBeenCalled()
   })
 
@@ -135,7 +135,7 @@ describe('starting', () => {
 
     expect(dialogs.askRestore).toHaveBeenCalledWith('pump.excalimathpad')
     expect(scene.source()).toBe('restored')
-    expect(session.getState()).toEqual({ name: 'pump.excalimathpad', dirty: true })
+    expect(session.getState()).toMatchObject({ name: 'pump.excalimathpad', dirty: true })
 
     // Its handle came back too, so Ctrl+S writes back to the same file.
     await session.save()
@@ -161,7 +161,7 @@ describe('starting', () => {
 
     expect(recovery.current()).toBeNull()
     expect(scene.source()).toBe('seed')
-    expect(session.getState()).toEqual({ name: null, dirty: false })
+    expect(session.getState()).toMatchObject({ name: null, dirty: false })
   })
 
   it('runs once, however often it is called', async () => {
@@ -232,7 +232,7 @@ describe('saving', () => {
     expect(await session.save()).toBe(true)
 
     expect(files.saveAs).toHaveBeenCalledWith('Untitled.excalimathpad', expect.any(String))
-    expect(session.getState()).toEqual({ name: 'Untitled.excalimathpad', dirty: false })
+    expect(session.getState()).toMatchObject({ name: 'Untitled.excalimathpad', dirty: false })
     expect(JSON.parse(files.disk.get('Untitled.excalimathpad')!)).toMatchObject({
       elements: [{ source: 'a = 1' }],
       excalimathpad: { format: 1, settings: DEFAULT_SETTINGS },
@@ -270,7 +270,7 @@ describe('saving', () => {
 
     expect(await session.save()).toBe(false)
 
-    expect(session.getState()).toEqual({ name: null, dirty: true })
+    expect(session.getState()).toMatchObject({ name: null, dirty: true })
   })
 
   it('says why a save failed, and stays dirty', async () => {
@@ -369,7 +369,7 @@ describe('opening', () => {
     await session.open()
 
     expect(scene.source()).toBe('D = 4 in')
-    expect(session.getState()).toEqual({ name: 'pump.excalimathpad', dirty: false })
+    expect(session.getState()).toMatchObject({ name: 'pump.excalimathpad', dirty: false })
     await session.save()
     expect(files.save).toHaveBeenCalledWith(handleFor('pump.excalimathpad'), expect.any(String))
   })
@@ -384,6 +384,33 @@ describe('opening', () => {
 
     expect(session.settings).toEqual(settings)
     expect(JSON.parse(files.disk.get('pump.excalimathpad')!).excalimathpad.settings).toEqual(settings)
+  })
+
+  // Section 8, Settings tab: a change is saved with the sheet, so it turns
+  // dirty; it isn't in the scene, so undo never reaches it.
+  it('changes the settings: the sheet turns dirty, subscribers hear it, a save writes them', async () => {
+    const { session, files } = await setup()
+    const heard = vi.fn()
+    session.subscribe(heard)
+    const settings = {
+      ...DEFAULT_SETTINGS,
+      units: { system: 'uscs' as const, custom: { pressure: 'bar' } },
+      digits: 6,
+    }
+
+    session.setSettings(settings)
+
+    expect(session.getState()).toMatchObject({ dirty: true, settings })
+    expect(heard).toHaveBeenCalled()
+    await session.save()
+    expect(JSON.parse(files.disk.get('Untitled.excalimathpad')!).excalimathpad.settings).toEqual(settings)
+    expect(session.getState().dirty).toBe(false)
+  })
+
+  it('ignores settings equal to the current ones', async () => {
+    const { session } = await setup()
+    session.setSettings({ ...DEFAULT_SETTINGS })
+    expect(session.getState().dirty).toBe(false)
   })
 
   it('commits the line being typed first, and leaves it only as the new sheet loads', async () => {
@@ -415,7 +442,7 @@ describe('opening', () => {
     expect(dialogs.askSaveChanges).not.toHaveBeenCalled()
     expect(line.leaveLine).not.toHaveBeenCalled()
     expect(scene.source()).toBe('mine')
-    expect(session.getState()).toEqual({ name: null, dirty: true })
+    expect(session.getState()).toMatchObject({ name: null, dirty: true })
   })
 
   it('says why the picker or the read failed, not that the file is not a sheet', async () => {
@@ -487,7 +514,7 @@ describe('opening', () => {
       expect(dialogs.askSaveChanges).toHaveBeenCalledWith(null)
       expect(line.leaveLine).not.toHaveBeenCalled()
       expect(scene.source()).toBe('mine')
-      expect(session.getState()).toEqual({ name: null, dirty: true })
+      expect(session.getState()).toMatchObject({ name: null, dirty: true })
     })
 
     it('counts the line it just committed, before the scene reports the change', async () => {
@@ -539,7 +566,7 @@ describe('opening', () => {
 
       expect(files.disk.get('pump.excalimathpad')).toContain('v2')
       expect(scene.source()).toBe('v2')
-      expect(session.getState()).toEqual({ name: 'pump.excalimathpad', dirty: false })
+      expect(session.getState()).toMatchObject({ name: 'pump.excalimathpad', dirty: false })
     })
 
     it('Save as onto the picked file loads what was just saved', async () => {
@@ -550,7 +577,7 @@ describe('opening', () => {
       await session.open()
 
       expect(scene.source()).toBe('mine')
-      expect(session.getState()).toEqual({ name: 'Untitled.excalimathpad', dirty: false })
+      expect(session.getState()).toMatchObject({ name: 'Untitled.excalimathpad', dirty: false })
     })
 
     it('says so when the file cannot be read again after the save, and keeps the sheet', async () => {

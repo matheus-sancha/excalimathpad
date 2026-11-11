@@ -20,7 +20,8 @@ import {
   type MathAnchor,
 } from '../canvas/mathAnchor.ts'
 import type { ForwardWheel } from '../canvas/SheetCanvas.tsx'
-import { evaluateSheet, type SheetBlock, type SheetLine } from '../math/evaluate.ts'
+import { DEFAULT_DISPLAY, evaluateSheet, type SheetBlock, type SheetLine } from '../math/evaluate.ts'
+import type { DisplaySettings } from '../math/display.ts'
 import {
   applyLineMove,
   startLineEdit,
@@ -77,6 +78,8 @@ export interface MathOverlayProps {
   onEvaluated?: (sheet: readonly EvaluatedElement[]) => void
   /** The line a jump from the panel flashes. */
   flash?: FlashLine | null
+  /** How results show: the sheet's unit system and Digits (section 5). */
+  settings?: DisplaySettings
 }
 
 /** One math element as evaluated: what the Sheet panel lists. */
@@ -131,6 +134,7 @@ export function MathOverlay({
   keepClean = runNow,
   onEvaluated,
   flash = null,
+  settings = DEFAULT_DISPLAY,
 }: MathOverlayProps) {
   const overlayRef = useRef<HTMLDivElement>(null)
   const store = useMemo(() => createSceneStore(api), [api])
@@ -156,8 +160,8 @@ export function MathOverlay({
     }),
   )
   const lines = useMemo(
-    () => evaluateSheet(JSON.parse(sheetKey) as SheetBlock[]),
-    [sheetKey],
+    () => evaluateSheet(JSON.parse(sheetKey) as SheetBlock[], settings),
+    [sheetKey, settings],
   )
 
   // The panel's view of the same run: titles name elements, so they count too.

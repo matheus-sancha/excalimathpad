@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import type { ExcalidrawElement } from '@excalidraw/excalidraw/element/types'
 import { AppShell } from './shell/AppShell.tsx'
 import {
@@ -12,6 +12,8 @@ import { jumpToAnchor, SIDEBAR_DOCKS_ABOVE } from './canvas/selection.ts'
 import { MathOverlay, type EvaluatedElement, type FlashLine } from './overlay/MathOverlay.tsx'
 import { rememberedOpen, rememberOpen } from './panel/panelMemory.ts'
 import { ProblemsTab, VariablesTab } from './panel/SheetPanel.tsx'
+import { SettingsTab } from './panel/SettingsTab.tsx'
+import { DEFAULT_SETTINGS } from './file/sheetFormat.ts'
 import { problemCount, type PanelTarget } from './panel/sheetPanel.ts'
 import { createDialogHost } from './file/dialogs.ts'
 import { browserFileAccess, type FileAccess } from './file/fileAccess.ts'
@@ -54,6 +56,12 @@ export default function App({ files, recovery, initialElements }: AppProps = {})
     })
     return { session, dialogs }
   }, [canvas, files, recovery, line])
+
+  // The sheet's settings: the file's, changed from the Settings tab.
+  const settings = useSyncExternalStore(
+    useCallback((listener: () => void) => file?.session.subscribe(listener) ?? (() => {}), [file]),
+    () => file?.session.getState().settings ?? DEFAULT_SETTINGS,
+  )
 
   // The sheet as last evaluated, for the Sheet panel; null until the first run.
   const [sheet, setSheet] = useState<readonly EvaluatedElement[] | null>(null)
@@ -121,6 +129,7 @@ export default function App({ files, recovery, initialElements }: AppProps = {})
             problems,
             variables: <VariablesTab sheet={sheet ?? []} onJump={jump} />,
             problemsTab: <ProblemsTab sheet={sheet ?? []} onJump={jump} />,
+            settings: file && <SettingsTab settings={settings} onChange={file.session.setSettings} />,
             // Remembered per browser; a floating panel closes by itself, so
             // only a wide window's choice counts.
             onChange: (open) => {
@@ -141,6 +150,7 @@ export default function App({ files, recovery, initialElements }: AppProps = {})
               control={line}
               keepClean={file.session.keepClean}
               onEvaluated={setSheet}
+              settings={settings}
               flash={flash}
             />
             <FileChrome session={file.session} dialogs={file.dialogs} canvasRoot={canvas.root} />

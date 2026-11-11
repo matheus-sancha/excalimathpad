@@ -116,3 +116,45 @@
   font-size: 12px;
   color: var(--color-gray-50, #868e96);
 }
+
+/* The Settings tab (section 8). */
+.sheet-settings__field {
+  display: grid;
+  grid-template-columns: 7.5rem minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  padding: 2px 4px;
+}
+
+.sheet-settings select,
+.sheet-settings input {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 4px 6px;
+  border: 1px solid var(--default-border-color, #dee2e6);
+  border-radius: 6px;
+  background: var(--input-bg-color, transparent);
+  color: inherit;
+  font: inherit;
+}
+
+.sheet-settings input[aria-invalid='true'] {
+  border-color: #e03131;
+}
+
+.sheet-settings__kinds {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.sheet-settings__kinds th {
+  padding: 2px 4px;
+  font-weight: normal;
+  text-align: left;
+  white-space: nowrap;
+  color: var(--color-gray-50, #868e96);
+}
+
+.sheet-settings__kinds td {
+  padding: 2px 4px;
+}

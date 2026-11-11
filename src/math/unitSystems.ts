@@ -157,3 +157,56 @@ export function unitsFor(settings: UnitSettings, kind: Kind): readonly string[] 
 export function baseSystem(settings: UnitSettings): 'si' | 'uscs' {
   return settings.system === 'uscs' ? 'uscs' : 'si'
 }
+
+/** Each kind's name, as the Settings tab and the unit slot show it. */
+export const KIND_LABELS: Record<Kind, string> = {
+  length: 'Length',
+  area: 'Area',
+  volume: 'Volume',
+  volumeFlow: 'Volume flow',
+  massFlow: 'Mass flow',
+  velocity: 'Velocity',
+  acceleration: 'Acceleration',
+  force: 'Force',
+  pressure: 'Pressure',
+  energy: 'Energy',
+  power: 'Power',
+  density: 'Density',
+  dynamicViscosity: 'Dynamic viscosity',
+  kinematicViscosity: 'Kinematic viscosity',
+  frequency: 'Frequency',
+  mass: 'Mass',
+  time: 'Time',
+  temperature: 'Temperature',
+}
+
+/**
+ * The units offered for each kind (section 5, Unit slot: a fixed list in app
+ * code), in Custom's table and the unit slot's list. The app units join their
+ * kinds' lists (section 5, App units).
+ */
+export const SLOT_UNITS: Record<Kind, readonly string[]> = {
+  length: ['mm', 'cm', 'm', 'km', 'in', 'ft', 'yd', 'mi'],
+  area: ['mm^2', 'cm^2', 'm^2', 'km^2', 'in^2', 'ft^2'],
+  volume: ['mL', 'L', 'm^3', 'in^3', 'ft^3', 'gal'],
+  volumeFlow: ['L/s', 'L/minute', 'm^3/s', 'm^3/h', 'ft^3/s', 'gpm', 'cfm'],
+  massFlow: ['kg/s', 'kg/h', 'tonne/h', 'lbm/s', 'lbm/h'],
+  velocity: ['mm/s', 'm/s', 'km/h', 'ft/s', 'mi/h'],
+  acceleration: ['m/s^2', 'ft/s^2'],
+  force: ['N', 'kN', 'MN', 'lbf', 'kgf', 'tonf', 'tf'],
+  pressure: ['Pa', 'kPa', 'MPa', 'mbar', 'bar', 'psi', 'atm'],
+  energy: ['J', 'kJ', 'MJ', 'kWh', 'BTU', 'kcal'],
+  power: ['W', 'kW', 'MW', 'hp', 'BTU/h'],
+  density: ['kg/m^3', 'g/cm^3', 'lbm/ft^3'],
+  dynamicViscosity: ['Pa s', 'mPa s', 'cP', 'poise'],
+  kinematicViscosity: ['m^2/s', 'mm^2/s', 'cSt', 'St'],
+  frequency: ['Hz', 'kHz', 'rpm'],
+  mass: ['g', 'kg', 'tonne', 'lbm'],
+  time: ['ms', 's', 'minute', 'h', 'day'],
+  temperature: ['K', 'degC', 'degF', 'degR'],
+}
+
+/** The unit settings' system name for the Settings tab: Custom when any kind is chosen. */
+export function isCustom(settings: UnitSettings): boolean {
+  return Object.values(settings.custom).some((unit) => unit)
+}

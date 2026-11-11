@@ -163,7 +163,8 @@ server. v1 target: one sheet, for Matheus's own use.
   math, `katex` (lazily).
 - **file** (`src/file/`) — the sheet file (ADR 0004, spec section 7).
   `sheetFormat.ts` (pure) reads and writes the `excalimathpad` block, settings
-  and migrations. `sheetSession.ts` is the deep module: save, save as, open,
+  and migrations. The session's state carries the settings, and
+  `setSettings` changes them. `sheetSession.ts` is the deep module: save, save as, open,
   startup with the recovery offer, the clean mark and the recovery copy, over
   ports (scene, file access, recovery store, dialogs, line), so it knows no
   Excalidraw, React or DOM. `fileAccess.ts` wraps the File System Access API,
@@ -185,7 +186,10 @@ server. v1 target: one sheet, for Matheus's own use.
   turns the evaluated sheet (`EvaluatedElement`s, which `MathOverlay` hands
   out through `onEvaluated`) into Variables groups and Problems rows;
   `SheetPanel.tsx` renders them, and a click asks App to jump.
-  `panelMemory.ts` keeps open/closed in `localStorage`. App does the jump
+  `panelMemory.ts` keeps open/closed in `localStorage`. `SettingsTab.tsx`
+  edits the unit system, Custom's kind → unit table and Digits through the
+  session's `setSettings` (saved with the sheet, dirty, not in undo); App
+  hands the session's settings to `MathOverlay`, which evaluates with them. App does the jump
   (`jumpToAnchor` in `canvas/selection.ts`: scroll, select with `NEVER`) and
   the flash (`MathOverlay`'s `flash`, a row class). Depends on: math, overlay
   (KaTeX).

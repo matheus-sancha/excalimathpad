@@ -204,5 +204,52 @@ describe('App', () => {
         expect(document.querySelector('[data-anchor-id="m1"] [data-line="1"]')).not.toHaveClass('is-flash'),
       )
     })
+
+    it('Settings: the unit system and Digits re-show every result, mark the sheet dirty, and undo never reaches them', async () => {
+      renderApp({
+        initialElements: createMathAnchorElements([
+          { id: 'm1', x: 100, y: 100, width: 300, height: 48, source: 'p = 45430 Pa * 1\nq = 45430 Pa * 1 in kPa' },
+        ]),
+      })
+      await ready()
+      const [element] = await screen.findAllByRole('list', { name: 'Lines' })
+      await waitFor(() => expect(resultsOf(element)).toBe('45.43 kPa 45.43 kPa'))
+
+      fireEvent.click(await sheetButton())
+      fireEvent.mouseDown(await screen.findByRole('tab', { name: 'Settings' }))
+      fireEvent.change(await screen.findByLabelText('Unit system'), { target: { value: 'si-base' } })
+
+      // A chosen unit keeps it.
+      await waitFor(() => expect(resultsOf(element)).toBe('4.543·10⁴ Pa 45.43 kPa'))
+      await waitFor(() => expect(document.title).toBe('● Untitled'))
+
+      fireEvent.change(screen.getByLabelText('Digits'), { target: { value: '6' } })
+      await waitFor(() => expect(resultsOf(element)).toBe('45430 Pa 45.43 kPa'))
+
+      act(() => {
+        document
+          .querySelector('.excalidraw')!
+          .dispatchEvent(new KeyboardEvent('keydown', { key: 'z', ctrlKey: true, bubbles: true, cancelable: true }))
+      })
+      expect(resultsOf(element)).toBe('45430 Pa 45.43 kPa')
+    })
+
+    it('Settings: Custom changes the unit for a chosen kind', async () => {
+      renderApp({
+        initialElements: createMathAnchorElements([
+          { id: 'm1', x: 100, y: 100, width: 300, height: 48, source: 'p = 45430 Pa * 1\nw = 5412 W * 1' },
+        ]),
+      })
+      await ready()
+      const [element] = await screen.findAllByRole('list', { name: 'Lines' })
+
+      fireEvent.click(await sheetButton())
+      fireEvent.mouseDown(await screen.findByRole('tab', { name: 'Settings' }))
+      fireEvent.change(await screen.findByLabelText('Unit system'), { target: { value: 'custom' } })
+      fireEvent.change(await screen.findByLabelText('Pressure'), { target: { value: 'bar' } })
+
+      await waitFor(() => expect(resultsOf(element)).toBe('0.4543 bar 5.412 kW'))
+      expect(screen.getByLabelText('Unit system')).toHaveValue('custom')
+    })
   })
 })

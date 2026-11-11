@@ -829,3 +829,29 @@ describe('variables (docs/spec-v1.md section 8, Variables tab)', () => {
     ])
   })
 })
+
+describe('the unit lists per kind (docs/spec-v1.md section 5)', () => {
+  it('offers only units math.js knows, each of its own kind', async () => {
+    const { all, create } = await import('mathjs')
+    const { KIND_REFERENCE, SLOT_UNITS, SI_PREFIXED, USCS } = await import('./unitSystems.ts')
+    const check = create(all)
+    for (const name of ['cP', 'poise', 'cSt', 'St', 'rpm', 'gpm', 'cfm', 'kcal', 'tonf', 'tf']) {
+      // The app units, as the engine registers them.
+      if (!check.Unit.isValuelessUnit(name)) {
+        const { APP_UNITS } = await import('./appUnits.ts')
+        const unit = APP_UNITS.find((entry) => entry.name === name)!
+        check.createUnit(name, { definition: unit.definition, prefixes: 'none' })
+      }
+    }
+    for (const [kind, reference] of Object.entries(KIND_REFERENCE)) {
+      const units = [
+        ...SLOT_UNITS[kind as keyof typeof SLOT_UNITS],
+        ...SI_PREFIXED[kind as keyof typeof SI_PREFIXED],
+        USCS[kind as keyof typeof USCS],
+      ]
+      for (const unit of units) {
+        expect(check.unit(unit).equalBase(check.unit(reference)), `${kind}: ${unit}`).toBe(true)
+      }
+    }
+  })
+})
