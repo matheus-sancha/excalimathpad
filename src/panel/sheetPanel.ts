@@ -27,7 +27,7 @@ export interface VariableRow extends PanelTarget {
   name: string
   /** The typeset name: a function's signature, `H_s(Q)`, for a function. */
   tex: string
-  /** The number, `function`, or `error`. */
+  /** The number, `function`, `solve function`, or `error`. */
   value: string
   /** The unit, as the result shows it; blank for a function, an error or a plain number. */
   unit: string
@@ -80,7 +80,7 @@ export function variableGroups(sheet: readonly PanelElement[], filter = ''): Var
                 return {
                   ...base,
                   tex: `${nameTex(variable.name)}\\left(${variable.params.map(nameTex).join(',')}\\right)`,
-                  value: 'function',
+                  value: variable.solve ? 'solve function' : 'function',
                   unit: '',
                   kind: 'function',
                 }

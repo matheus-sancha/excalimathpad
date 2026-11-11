@@ -1075,6 +1075,10 @@ The wording of every user-facing message. `<…>` is filled in. Numbers follow
 | Units of the two sides differ | `guess Q = 15 m: Hp(Q) - Hs(Q) units do not match` | M3 |
 | Iteration cap | `no convergence for Q after 100 iterations` | M3 |
 | The guess fails | `guess Q: <message>` | M3 |
+| The guess isn't a number or a quantity | `guess Q: not a number or a quantity` | #70 |
+| No equation, or more than one `=` | `solve needs one equation: "<left side> = <right side>"` | #70 |
+| No root, and no point near the guess had a value | `no root near Q = 15 L/s (the equation has no value near the guess)` | #70 |
+| A side isn't a number or a quantity | `a side of the equation is not a number or a quantity` | #70 |
 
 **Ranges, tables, plots**
 
@@ -1348,6 +1352,15 @@ spike is M0, done.
 The first four change only what the sheet computes and shows, so the panel and the slot are built on values
 that are already right. The slot is last: its list needs the unit systems, and its Sheet units entry the
 Settings tab.
+
+**M3's issue order** (M2's seven are built, #55 to #60 and #7):
+
+1. Solver and the value form (#70)
+2. Solve functions and nested solves, with the pump sheet's lines 14-28 in CI (#71)
+3. Solve typeset and hover details (#72)
+
+The engine comes first, so the nested solve, the open risk below, surfaces in the first two issues; the
+typeset form and the hover are built on values that are already right.
 
 **Dates:** set a date for M1 when this spec is agreed. Date each later milestone when the previous one lands,
 from how long it really took. The v1 end is a forecast only.
@@ -1671,4 +1684,13 @@ Changes line if it changes behaviour.
   A typed text that matches a unit exactly is highlighted first (`bar` before `mbar`), and the highlight returns to the
   top as you type. `%` is a display unit the app reads itself (`in %` shows the value times 100), since math.js has
   none. A row's slot outline follows the pointer by geometry, selected or not.
-
+- 2026-11-11, [section 13](#13-messages) (#70, Engineer's, for Matheus to confirm on the PR): four solve messages the
+  table didn't have, added to it: a guess that isn't a number or a quantity, a line with no equation or more than one
+  top-level `=`, no root when no point tried had a value, and a side that is a matrix or a string. A missing guess
+  names the first free name in the equation as the unknown (`", guess Q = <value>"`), or `x` if there is none. The
+  span searched shows the unit once, after the high end (`searched 0.9 .. 240 L / s`), in the guess's unit. A units
+  mismatch quotes the guess as typed (`guess Q = Q_d: …`); no root shows the guess's value (`no root near Q = 15 L/s`).
+- 2026-11-11, [section 9](#9-solve) (#70, Engineer's): the bracket search steps out from the guess by 0.1·s·1.6ⁿ
+  (s is the guess's size, 1 for a zero guess), right then left, up to 60 steps (about 10¹² times the guess), and skips
+  points where the equation has no value. A root at exactly zero that the residual never reaches exactly (`x^3 = 0`)
+  can't meet a relative tolerance, so it fails after 100 iterations; a tolerance setting stays out of scope.

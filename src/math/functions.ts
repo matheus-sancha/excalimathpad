@@ -21,10 +21,17 @@ import { usedNames } from './warnings.ts'
 export class SheetError extends Error {
   /** Final: the message goes to the line as it is, with no `in f(…):` around it. */
   readonly final: boolean
+  /**
+   * A solve that found no root (section 9, Nested solves): an outer solve
+   * treats the trial point as outside the domain. Kept through the
+   * `in f(…):` an outer call puts around it.
+   */
+  readonly outsideDomain: boolean
 
-  constructor(message: string, final = false) {
+  constructor(message: string, final = false, outsideDomain = false) {
     super(message)
     this.final = final
+    this.outsideDomain = outsideDomain
   }
 }
 
@@ -32,6 +39,8 @@ export class SheetError extends Error {
 export interface SheetFunctionInfo {
   name: string
   params: readonly string[]
+  /** Defined by a solve line: each call solves (section 9). */
+  solve?: boolean
 }
 
 export type SheetFunction = ((...args: unknown[]) => unknown) & { sheetFunction: SheetFunctionInfo }
@@ -72,7 +81,8 @@ export function createCalls(show: (value: unknown) => string, lookup: (name: str
             return at === -1 ? lookup(n) : args[at]
           }
           const message = messageOf(error, body, local)
-          throw new SheetError(`in ${name}(${args.map(argText).join(', ')}): ${message}`)
+          const outside = error instanceof SheetError && error.outsideDomain
+          throw new SheetError(`in ${name}(${args.map(argText).join(', ')}): ${message}`, false, outside)
         } finally {
           depth--
         }

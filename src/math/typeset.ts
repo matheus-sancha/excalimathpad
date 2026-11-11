@@ -106,6 +106,22 @@ export function lineTex(node: MathNode, names: Names): LineTex {
   return { name: null, expression: toTex(withoutConversion(node), names) }
 }
 
+/**
+ * A solve line (section 4): `Q_op ≔ solve H_p(Q) = H_s(Q)`, then its guess.
+ * `names` already counts the unknown and the parameters as sheet names.
+ */
+export function solveTex(
+  name: string,
+  params: readonly string[] | null,
+  parts: { unknown: string; lhs: MathNode; rhs: MathNode; guess: MathNode },
+  names: Names,
+): LineTex {
+  const head = params === null ? nameTex(name) : `${nameTex(name)}\\left(${params.map(nameTex).join(',')}\\right)`
+  const equation = `\\mathrm{solve}\\;${toTex(parts.lhs, names)}=${toTex(parts.rhs, names)}`
+  const guess = `\\text{guess }${nameTex(parts.unknown)}=${toTex(parts.guess, names)}`
+  return { name: head, expression: `${equation}\\quad ${guess}` }
+}
+
 function withoutConversion(node: MathNode): MathNode {
   return isOperatorNode(node) && node.fn === 'to' ? node.args[0] : node
 }

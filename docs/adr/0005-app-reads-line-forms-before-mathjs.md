@@ -2,7 +2,8 @@
 
 - **Status**: accepted; the comment built (#44) and the format clause built (#63), both in
   `src/math/lineForm.ts`; the display unit built (#56), taken off the text there and
-  checked as a pure unit by the engine; the forms not built yet (M3, M4)
+  checked as a pure unit by the engine; the solve built (#70), read in
+  `src/math/solveLine.ts`; the forms not built yet (M4)
 - **Amended**: 2026-11-11 (#63): the format clause, read after the comment.
 - **Date**: 2026-11-03
 
