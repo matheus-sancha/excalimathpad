@@ -1731,3 +1731,7 @@ Changes line if it changes behaviour.
   to it: a range's start, end or step that isn't a single number or quantity. An aggregate name the sheet defines as
   a function (`max(x) = …`) is the sheet's function, not the aggregate. A bare range (`1 .. 10`, no name) shows its
   summary too.
+- 2026-11-11, [section 10](#ranges-and-lists) (#75, Engineer's, for Matheus to confirm on the PR): the hover on a
+  list's summary shows every point of a list of up to 7, else the first three and the last three with `…` between,
+  each as `index: value` in the line's unit; a failed point reads `5: failed: <message>`. It is the problem tip, with
+  no dotted underline (that marks solve details). The count is grey and the two values are typeset.

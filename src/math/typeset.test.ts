@@ -145,7 +145,7 @@ describe('solve lines (section 4: keyword form, guess small after it)', () => {
     const line = math(typeset('Hp(Q) = 2 Q\nHs(Q) = Q + 1\nQ_op = solve Hp(Q) = Hs(Q), guess Q = 15 L/s in L/s')[2])
     expect(line.name).toBe('{Q}_{\\mathrm{op}}')
     expect(line.expression).toBe('\\mathrm{solve}\\;\\mathit{Hp}\\left( Q\\right)=\\mathit{Hs}\\left( Q\\right)')
-    expect(line.guess).toBe('\\text{guess }Q=15\\,\\mathrm{L}/\\mathrm{s}')
+    expect(line.aside).toBe('\\text{guess }Q=15\\,\\mathrm{L}/\\mathrm{s}')
   })
 
   it('typesets the function form, its unknown and parameters as names, and renders in KaTeX', () => {
@@ -153,11 +153,27 @@ describe('solve lines (section 4: keyword form, guess small after it)', () => {
       typeset('f(Re, r) = solve 1/sqrt(f) = -2 log10(r/3.7 + 2.51/(Re sqrt(f))), guess f = 0.02')[0],
     )
     expect(line.name).toBe('f\\left(\\mathit{Re},r\\right)')
-    for (const tex of [line.name!, line.expression, line.guess!]) expect(() => render(tex)).not.toThrow()
+    for (const tex of [line.name!, line.expression, line.aside!]) expect(() => render(tex)).not.toThrow()
   })
 
-  it('gives other lines no guess', () => {
-    expect(math(typeset('x = 2')[0]).guess).toBeUndefined()
+  it('gives other lines no aside', () => {
+    expect(math(typeset('x = 2')[0]).aside).toBeUndefined()
+  })
+})
+
+describe('range lines (section 4: start … end, the step small after it)', () => {
+  it('typesets the range with its step apart, and renders in KaTeX', () => {
+    const line = math(typeset('Q_s = 1 L/s .. 30 L/s step 1 L/s')[0])
+    expect(line.name).toBe('{Q}_{s}')
+    expect(line.expression).toBe('1\\,\\mathrm{L}/\\mathrm{s}\\ldots 30\\,\\mathrm{L}/\\mathrm{s}')
+    expect(line.aside).toBe('\\text{step }1\\,\\mathrm{L}/\\mathrm{s}')
+    for (const tex of [line.name!, line.expression, line.aside!]) expect(() => render(tex)).not.toThrow()
+  })
+
+  it('has no aside without a step, and no name for a bare range', () => {
+    const line = math(typeset('1 .. 10')[0])
+    expect(line).toMatchObject({ name: null, expression: '1\\ldots 10' })
+    expect(line.aside).toBeUndefined()
   })
 })
 

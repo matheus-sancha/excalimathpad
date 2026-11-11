@@ -116,13 +116,28 @@ export function solveTex(
   params: readonly string[] | null,
   parts: { unknown: string; lhs: MathNode; rhs: MathNode; guess: MathNode },
   names: Names,
-): LineTex & { guess: string } {
+): LineTex & { aside: string } {
   const head = params === null ? nameTex(name) : `${nameTex(name)}\\left(${params.map(nameTex).join(',')}\\right)`
   return {
     name: head,
     expression: `\\mathrm{solve}\\;${toTex(parts.lhs, names)}=${toTex(parts.rhs, names)}`,
-    guess: `\\text{guess }${nameTex(parts.unknown)}=${toTex(parts.guess, names)}`,
+    aside: `\\text{guess }${nameTex(parts.unknown)}=${toTex(parts.guess, names)}`,
   }
+}
+
+/**
+ * A range line (section 4): `Q_s ≔ 1 L/s … 30 L/s`, and its step, which the
+ * grid sets small and grey after it.
+ */
+export function rangeTex(
+  name: string | null,
+  parts: { start: MathNode; end: MathNode; step: MathNode | null },
+  names: Names,
+): LineTex & { aside?: string } {
+  const expression = `${toTex(parts.start, names)}\\ldots ${toTex(parts.end, names)}`
+  const tex: LineTex & { aside?: string } = { name: name === null ? null : nameTex(name), expression }
+  if (parts.step !== null) tex.aside = `\\text{step }${toTex(parts.step, names)}`
+  return tex
 }
 
 function withoutConversion(node: MathNode): MathNode {

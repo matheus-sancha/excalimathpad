@@ -26,7 +26,7 @@ import { createSolver, LayeredScope, type CompiledSolve, type SolveDetails, type
 import { readSolve } from './solveLine.ts'
 import { readRange } from './rangeLine.ts'
 import { AGGREGATES, createRanges, isSheetList, listSummary, SheetList, type Point } from './lists.ts'
-import { lineTex, nameTex, resultTex, solveTex, textTex, unitTex, type Names } from './typeset.ts'
+import { lineTex, rangeTex, resultTex, solveTex, textTex, unitTex, type Names } from './typeset.ts'
 import { bodyNames, lineWarnings, solveWarnings, usedNames } from './warnings.ts'
 
 /**
@@ -209,8 +209,8 @@ export type TypesetLine =
       note: string | null
       /** Bold, underline and highlight colour, for the whole row. */
       format: LineFormat
-      /** A solve line's guess (section 4), set small and grey after the expression. */
-      guess?: string
+      /** A solve line's guess or a range's step (section 4), set small and grey after the expression. */
+      aside?: string
     }
   | { kind: 'unparsed'; source: string }
 
@@ -241,6 +241,11 @@ export interface SheetLine {
    * a solve function. Null everywhere else. Never saved.
    */
   solveDetails: SolveDetails | null
+  /**
+   * A list result's hover (section 10): the first and last few points, each
+   * with its index, `1: 12.04 m`, a gap marked `…`. Null on any other line.
+   */
+  listPreview: string | null
 }
 
 export type { SolveDetails } from './solve.ts'
@@ -390,6 +395,7 @@ export function evaluateSheet(
   // The slot and solve details of the line being evaluated, set by `evaluateLine`.
   let slot: SheetLine['unitSlot'] = null
   let details: SolveDetails | null = null
+  let preview: string | null = null
   position = 0
   for (const { id, lines } of sheet) {
     results.set(
@@ -400,6 +406,7 @@ export function evaluateSheet(
         if (line.kind !== 'blank') line.defines.forEach((name) => assigned.add(name))
         slot = null
         details = null
+        preview = null
         const result = evaluateLine(line)
         return {
           result,
@@ -408,6 +415,7 @@ export function evaluateSheet(
           variables: variablesOf(line),
           unitSlot: slot,
           solveDetails: result.kind === 'value' ? details : null,
+          listPreview: result.kind === 'list' ? preview : null,
         }
       }),
     )
@@ -497,7 +505,10 @@ export function evaluateSheet(
       try {
         const shown = line.display
         const unit = shown?.kind === 'unit' ? shown.unit : shown?.kind === 'percent' ? 'percent' : null
-        if (isSheetList(value)) return { kind: 'list', text: summaryOf(value, unit), failed: failureOf(value) }
+        if (isSheetList(value)) {
+          preview = previewOf(value, unit)
+          return { kind: 'list', text: summaryOf(value, unit), failed: failureOf(value) }
+        }
         const text = display.show(value, unit, settings)
         const offered = display.slot(value, settings)
         slot = offered && { ...offered, chosen: line.displayText }
@@ -659,6 +670,17 @@ export function evaluateSheet(
     )
   }
 
+  /** The hover of a list's summary: three points from each end, with their index. */
+  function previewOf(list: SheetList, unit: ShownUnit | null): string {
+    const row = (i: number) => {
+      const point = list.points[i]
+      return `${i + 1}: ${point.ok ? display.show(point.value, unit, settings) : `failed: ${point.message}`}`
+    }
+    const n = list.length
+    if (n <= 7) return list.points.map((_, i) => row(i)).join('\n')
+    return [row(0), row(1), row(2), '…', row(n - 3), row(n - 2), row(n - 1)].join('\n')
+  }
+
   /** One value of a list in the unit its summary ends with, so `0 L/s` reads as the list does. */
   function likeList(list: SheetList, value: unknown): string {
     const last = [...list.points].reverse().find((point) => point.ok)
@@ -696,12 +718,10 @@ function typesetLine(line: ParsedLine, names: Names): TypesetLine {
     case 'syntax-error':
       return { kind: 'unparsed', source: line.source }
     case 'range':
-      return {
-        kind: 'math',
-        name: line.name === null ? null : nameTex(line.name),
-        expression: textTex(line.source.replace(/^\s*[A-Za-z_]\w*\s*=/, '').trim()),
-        note: line.note,
-        format: line.format,
+      try {
+        return { kind: 'math', ...rangeTex(line.name, line, names), note: line.note, format: line.format }
+      } catch {
+        return { kind: 'math', name: null, expression: textTex(line.source), note: line.note, format: line.format }
       }
     case 'solve': {
       const inLine: Names = {

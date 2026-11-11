@@ -253,6 +253,7 @@ const EMPTY_LINE: SheetLine = {
   variables: [],
   unitSlot: null,
   solveDetails: null,
+  listPreview: null,
 }
 
 /** A row's cells, by line form (section 3, section 4 Problems). */
@@ -316,7 +317,7 @@ function MathCells({
   const name = typeset.name === null ? null : texToHtml(typeset.name)
   const defines = texToHtml(DEFINES)
   const expression = texToHtml(typeset.expression)
-  const guess = typeset.guess === undefined ? null : texToHtml(typeset.guess)
+  const aside = typeset.aside === undefined ? null : texToHtml(typeset.aside)
   // TeX KaTeX couldn't render: the line's source, as text, rather than nothing.
   const cells =
     expression === null || (typeset.name !== null && name === null) ? (
@@ -340,9 +341,9 @@ function MathCells({
         <span className="math-element__expression">
           <Html html={expression} />
         </span>
-        {guess !== null && (
-          <span className="math-element__guess">
-            <Html html={guess} />
+        {aside !== null && (
+          <span className="math-element__aside">
+            <Html html={aside} />
           </span>
         )}
       </span>
@@ -351,7 +352,13 @@ function MathCells({
     <>
       <Gutter result={result} warnings={warnings} />
       {cells}
-      <ResultCell result={result} slot={line.unitSlot} index={index} details={line.solveDetails} />
+      <ResultCell
+        result={result}
+        slot={line.unitSlot}
+        index={index}
+        details={line.solveDetails}
+        preview={line.listPreview}
+      />
       {typeset.note !== null && <span className="math-element__note">{typeset.note}</span>}
     </>
   )
@@ -400,12 +407,14 @@ function ResultCell({
   slot = null,
   index = -1,
   details = null,
+  preview = null,
 }: {
   result: LineResult
   plain?: boolean
   slot?: SheetLine['unitSlot']
   index?: number
   details?: SolveDetails | null
+  preview?: string | null
 }) {
   const slots = useContext(SlotsContext)
   let content: ReactNode = null
@@ -425,9 +434,15 @@ function ResultCell({
     text = result.message
     content = result.message
   } else if (result.kind === 'list') {
-    // Section 10: one row high, as a summary; no unit slot.
+    // Section 10: one row high, as a summary, its points on hover; no unit slot.
     text = result.text
-    content = result.text
+    content = plain ? (
+      result.text
+    ) : (
+      <span className="math-element__summary" data-tip={preview ?? undefined} data-tip-when="details">
+        <SummaryContent text={result.text} />
+      </span>
+    )
   } else if (slot && slots.hovered === index && !plain) {
     // A plain input: an empty slot on hover (section 5, Unit slot).
     content = <SlotBox index={index} chosen={false} hovered unitHtml={null} />
@@ -460,6 +475,29 @@ function detailsText({ method, iterations, residual, bracket }: SolveDetails): s
     `Residual: ${residual}`,
     `Bracket: ${bracket}`,
   ].join('\n')
+}
+
+/**
+ * A list's summary (section 10): the count as text, then the first and last
+ * values typeset, `30 values, 12.04 … 33.18 m`.
+ */
+function SummaryContent({ text }: { text: string }) {
+  const comma = text.indexOf(', ')
+  if (comma === -1) return <>{text}</>
+  const values = text.slice(comma + 2).split(' … ')
+  const typeset = values.map((value) => texToHtml(typesetResult(value)))
+  if (typeset.some((html) => html === null)) return <>{text}</>
+  return (
+    <>
+      <span className="math-element__count">{text.slice(0, comma + 1)} </span>
+      {typeset.map((html, i) => (
+        <span key={i}>
+          {i > 0 && ' … '}
+          <Html html={html!} />
+        </span>
+      ))}
+    </>
+  )
 }
 
 /**

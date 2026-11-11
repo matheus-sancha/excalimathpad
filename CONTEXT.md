@@ -185,8 +185,10 @@ server. v1 target: one sheet, for Matheus's own use.
   details** (spec section 4) use the same tip: a value with `solveDetails`
   sits in a `math-element__detailed` span, dotted underline, whose `data-tip`
   reads `Brent, 5 iterations`, the residual and the bracket. A solve line's
-  guess is its own TeX (`TypesetLine.guess`), set small and grey after the
-  expression.
+  guess and a range's step are their own TeX (`TypesetLine.aside`), set small
+  and grey after the expression. A list's summary (`math-element__summary`)
+  typesets its first and last values after the count, and its `data-tip` is
+  the line's `listPreview`: three points from each end with their index.
   `MathOverlay` subscribes to the scene (`onChange`, `onScrollChange`) and
   places each element from its anchor's scene position via `viewport.ts`
   (`sceneToStage`, pure). It reads source from the anchors and holds the sheet's

@@ -1187,3 +1187,18 @@ describe('ranges and lists (docs/spec-v1.md section 10, #74)', () => {
     ])
   })
 })
+
+describe('a list’s hover (docs/spec-v1.md section 10, #75)', () => {
+  const preview = (source: string) => evaluateSheet([{ id: 'b', source }]).get('b')!.map((line) => line.listPreview)
+
+  it('shows every point of a short list with its index, in the line’s unit', () => {
+    expect(preview('x = 1 m .. 3 m step 1 m in cm\ny = 2')).toEqual(['1: 100 cm\n2: 200 cm\n3: 300 cm', null])
+  })
+
+  it('shows three points from each end of a long one, and a failed point’s message', () => {
+    expect(preview('x = 1 .. 30')[0]).toBe('1: 1\n2: 2\n3: 3\n…\n28: 28\n29: 29\n30: 30')
+    expect(preview('x = -1 .. 1\nr(t) = t < 0 ? nope : t\nr(x)')[2]).toBe(
+      '1: failed: in r(-1): Undefined symbol nope\n2: 0\n3: 1',
+    )
+  })
+})

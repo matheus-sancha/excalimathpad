@@ -456,8 +456,8 @@
   }
 }
 
-/* Section 4, Solve line: the guess, small and grey after the equation, inside the expression cell. */
-.math-element__guess {
+/* Section 4: a solve's guess or a range's step, small and grey after the equation, inside the expression cell. */
+.math-element__aside {
   margin-left: 14px;
   color: var(--math-quiet);
   font-size: 0.75em;
@@ -472,4 +472,9 @@
   .math-element__detailed {
     border-bottom: none;
   }
+}
+
+/* Section 10: a list's count, quieter than its values. */
+.math-element__count {
+  color: var(--math-quiet);
 }

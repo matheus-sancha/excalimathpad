@@ -39,6 +39,7 @@ const anchors = createMathAnchorElements([
   },
   { id: 'm2', x: 100, y: 250, width: 560, height: 48, source: 'y = 3 kg + 1 s' },
   { id: 'm3', x: 100, y: 400, width: 560, height: 48, source: 'x = solve x^2 = 2, guess x = 1' },
+  { id: 'm4', x: 100, y: 550, width: 560, height: 48, source: 'n = 1 .. 3' },
 ])
 
 const WARNING = 'K shadows the unit K'
@@ -279,5 +280,15 @@ describe('a solve’s details on hover (docs/spec-v1.md section 4, Solve details
     await rest(TIP_DELAY_MS * 2)
     expect(positionOf('m3')).toEqual({ x: 140, y: 430 })
     expect(tip()).toBeNull()
+  })
+})
+
+describe('a list’s points on hover (docs/spec-v1.md section 10)', () => {
+  it('shows the points with their index over the summary', async () => {
+    await mount()
+
+    hover(onResult('m4', 1))
+    await waitFor(() => expect(tip()).toHaveTextContent('1: 1'))
+    expect(tip()?.textContent).toBe('1: 1\n2: 2\n3: 3')
   })
 })
