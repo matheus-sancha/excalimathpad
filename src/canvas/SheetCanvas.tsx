@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { Excalidraw, FONT_FAMILY, MainMenu, WelcomeScreen } from '@excalidraw/excalidraw'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import { Excalidraw, FONT_FAMILY, MainMenu, Sidebar, WelcomeScreen } from '@excalidraw/excalidraw'
 import type { ExcalidrawElement } from '@excalidraw/excalidraw/element/types'
 import type { ExcalidrawImperativeAPI, UIOptions } from '@excalidraw/excalidraw/types'
 import '@excalidraw/excalidraw/index.css'
@@ -33,6 +33,22 @@ export interface FileMenu {
   saveAs: () => void
 }
 
+/** Excalidraw's sidebar name for the Sheet panel. */
+export const SHEET_PANEL = 'sheet'
+
+export type SheetPanelTab = 'variables' | 'problems' | 'settings'
+
+/** What fills the Sheet panel (docs/spec-v1.md section 8); the canvas draws its frame. */
+export interface SheetPanelSlot {
+  /** Errors and warnings: the Sheet button's badge. */
+  problems: number
+  variables: ReactNode
+  problemsTab: ReactNode
+  settings?: ReactNode
+  /** Opened, closed, or moved to another tab. */
+  onChange?: (open: boolean, tab: SheetPanelTab) => void
+}
+
 export interface SheetCanvasProps {
   /** Called once Excalidraw has mounted. */
   onReady?: (handle: SheetCanvasHandle) => void
@@ -40,6 +56,8 @@ export interface SheetCanvasProps {
   initialElements?: readonly ExcalidrawElement[]
   /** The app's file items, at the top of the ☰ menu. */
   fileMenu?: FileMenu
+  /** The Sheet button and panel. */
+  sheetPanel?: SheetPanelSlot
 }
 
 /**
@@ -63,8 +81,11 @@ const INITIAL_APP_STATE = { currentItemFontFamily: FONT_FAMILY.Nunito }
  * The `src/canvas/` modules are the only ones that import
  * `@excalidraw/excalidraw` at runtime (ADR 0001).
  */
-export function SheetCanvas({ onReady, initialElements, fileMenu }: SheetCanvasProps) {
+export function SheetCanvas({ onReady, initialElements, fileMenu, sheetPanel }: SheetCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null)
+  // The tab the Sheet button opens: the one last shown.
+  const lastTab = useRef<SheetPanelTab>('variables')
+  const [docked, setDocked] = useState(true)
 
   const forwardWheel = useCallback((event: WheelEvent) => {
     const canvas = containerRef.current?.querySelector('canvas')
@@ -105,19 +126,54 @@ export function SheetCanvas({ onReady, initialElements, fileMenu }: SheetCanvasP
         UIOptions={UI_OPTIONS}
         renderTopRightUI={(_isMobile, appState) =>
           api && (
-            <AddMathButton
-              placing={isPlacing(appState)}
-              onPress={() => {
-                startPlacing(api)
-                // The button would keep the keyboard: Esc and M go to the canvas.
-                focusCanvas()
-              }}
-            />
+            <>
+              <AddMathButton
+                placing={isPlacing(appState)}
+                onPress={() => {
+                  startPlacing(api)
+                  // The button would keep the keyboard: Esc and M go to the canvas.
+                  focusCanvas()
+                }}
+              />
+              {sheetPanel && (
+                <SheetButton
+                  open={appState.openSidebar?.name === SHEET_PANEL}
+                  problems={sheetPanel.problems}
+                  onPress={() => api.toggleSidebar({ name: SHEET_PANEL, tab: lastTab.current })}
+                />
+              )}
+            </>
           )
         }
       >
         <SheetMenu fileMenu={fileMenu} />
         <SheetWelcome fileMenu={fileMenu} />
+        {sheetPanel && (
+          <Sidebar
+            name={SHEET_PANEL}
+            docked={docked}
+            onDock={setDocked}
+            className="sheet-sidebar"
+            onStateChange={(state) => {
+              const open = state?.name === SHEET_PANEL
+              if (open && isPanelTab(state.tab)) lastTab.current = state.tab
+              sheetPanel.onChange?.(open, lastTab.current)
+            }}
+          >
+            <Sidebar.Tabs>
+              <Sidebar.Header>
+                <Sidebar.TabTriggers>
+                  <Sidebar.TabTrigger tab="variables">Variables</Sidebar.TabTrigger>
+                  <Sidebar.TabTrigger tab="problems">Problems</Sidebar.TabTrigger>
+                  {sheetPanel.settings && <Sidebar.TabTrigger tab="settings">Settings</Sidebar.TabTrigger>}
+                </Sidebar.TabTriggers>
+              </Sidebar.Header>
+              <Sidebar.Tab tab="variables">{sheetPanel.variables}</Sidebar.Tab>
+              <Sidebar.Tab tab="problems">{sheetPanel.problemsTab}</Sidebar.Tab>
+              {sheetPanel.settings && <Sidebar.Tab tab="settings">{sheetPanel.settings}</Sidebar.Tab>}
+            </Sidebar.Tabs>
+          </Sidebar>
+        )}
       </Excalidraw>
     </div>
   )
@@ -137,6 +193,43 @@ function AddMathButton({ placing, onPress }: { placing: boolean; onPress: () => 
       onClick={onPress}
     >
       <span aria-hidden="true">∑</span> Add math <kbd>M</kbd>
+    </button>
+  )
+}
+
+function isPanelTab(tab: string | undefined): tab is SheetPanelTab {
+  return tab === 'variables' || tab === 'problems' || tab === 'settings'
+}
+
+/**
+ * Sheet, beside Add math: opens and closes the panel, with a red badge counting
+ * errors and warnings while the sheet has any (docs/spec-v1.md section 8). It
+ * carries `sidebar-trigger`, so a floating panel's outside click ignores it
+ * rather than closing the panel the button then reopens.
+ */
+function SheetButton({
+  open,
+  problems,
+  onPress,
+}: {
+  open: boolean
+  problems: number
+  onPress: () => void
+}) {
+  return (
+    <button
+      type="button"
+      className="sidebar-trigger sheet-button"
+      aria-pressed={open}
+      title="Sheet: variables, problems and settings"
+      onClick={onPress}
+    >
+      Sheet
+      {problems > 0 && (
+        <span className="sheet-button__badge" aria-label={`${problems} problems`}>
+          {problems}
+        </span>
+      )}
     </button>
   )
 }

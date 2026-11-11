@@ -316,3 +316,28 @@
   border-radius: 2px;
   pointer-events: none;
 }
+
+/* Section 8: a jump from the Sheet panel flashes its line for about 1.5 s;
+   with reduced motion, a static outline that clears on the next click. */
+.math-element__row.is-flash {
+  animation: math-flash 1.5s ease-out;
+  border-radius: 3px;
+}
+
+@keyframes math-flash {
+  0%,
+  40% {
+    background-color: rgba(250, 176, 5, 0.45);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .math-element__row.is-flash {
+    animation: none;
+    outline: 2px solid #fab005;
+    outline-offset: 1px;
+  }
+}

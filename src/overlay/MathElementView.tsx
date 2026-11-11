@@ -45,6 +45,8 @@ export interface MathElementViewProps {
   onEscape: () => void
   onBlurLine: (lineIndex: number) => void
   forwardWheel: ForwardWheel
+  /** The line a jump from the Sheet panel flashes (section 8), with its key to restart the flash. */
+  flash?: { line: number; key: number } | null
 }
 
 /**
@@ -75,6 +77,7 @@ export function MathElementView({
   onEscape,
   onBlurLine,
   forwardWheel,
+  flash = null,
 }: MathElementViewProps) {
   const rootRef = useRef<HTMLDivElement>(null)
   const katexReady = useKatexReady()
@@ -128,12 +131,14 @@ export function MathElementView({
           {splitLines(source).map((text, i) => {
             const line = lines[i] ?? EMPTY_LINE
             const editing = edit?.lineIndex === i
+            const flashing = flash?.line === i
             return (
               <li
-                key={i}
+                // A new key restarts the flash's animation on a second jump.
+                key={flashing ? `${i}:${flash.key}` : i}
                 className={`math-element__row is-${editing ? 'editing' : line.typeset.kind}${formatClasses(
                   editing ? formatOf(edit.text) : line.typeset.kind === 'math' ? line.typeset.format : NO_FORMAT,
-                )}`}
+                )}${flashing ? ' is-flash' : ''}`}
                 data-line={i}
                 aria-label={text}
               >
@@ -211,6 +216,7 @@ const EMPTY_LINE: SheetLine = {
   result: { kind: 'empty' },
   typeset: { kind: 'blank' },
   warnings: [],
+  variables: [],
 }
 
 /** A row's cells, by line form (section 3, section 4 Problems). */

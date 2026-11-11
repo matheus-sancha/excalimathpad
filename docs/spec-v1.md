@@ -1637,3 +1637,17 @@ Changes line if it changes behaviour.
   1 or above, so a few read above 1000 (`9290 cm²`). USCS uses BTU for energy, lbf·s/ft² for dynamic viscosity
   and °R for temperature. A result's plain text writes units as math.js does (`1.002 mPa s`, `18.81 L / s`,
   `2 (kg m) / s`); typeset, they read `mPa·s`, `L/s`.
+- 2026-11-11, [section 8](#sheet-panel) (#58, checked in Chromium at 1440 and 1000 px wide): Excalidraw docks its
+  sidebar only when the editor is wider than 1229 px (`MQ_RIGHT_SIDEBAR_MIN_WIDTH`); narrower, the panel floats over
+  the canvas, and a click on the canvas or Esc closes it. At launch on a 1440 px window the panel opened docked on
+  Variables; a jump from Problems scrolled to the element, selected it, flashed the line and left the sheet as it was.
+- 2026-11-11, [section 8](#sheet-panel) (#58, Engineer's, for Matheus to confirm on the PR): an element without a title
+  is labelled by its place in reading order, `Element 2`. A jump's select adds no undo step (`NEVER`, like the second
+  Esc's deselect) and gives the keyboard to the canvas, so Enter opens the line. Open or closed is remembered only from
+  a wide window, since the floating panel closes by itself after a jump or a click. The Sheet button is the app's own,
+  so it can carry the badge and reopen the last tab. Values in Variables read as the result's plain text, with the unit
+  typeset.
+- 2026-11-11, [section 4](#problems) (#7 and #58, found while building): the overlay takes no pointer events, so a
+  hover title on the gutter mark or an error cell never shows on screen (true of errors since M1). The full message of
+  every error and warning is in the Problems tab; a hover that works needs the gesture layer to show it, a follow-up.
+

@@ -1,4 +1,5 @@
 import {
+  useEffect,
   useImperativeHandle,
   useMemo,
   useRef,
@@ -19,7 +20,7 @@ import {
   type MathAnchor,
 } from '../canvas/mathAnchor.ts'
 import type { ForwardWheel } from '../canvas/SheetCanvas.tsx'
-import { evaluateSheet, type SheetBlock } from '../math/evaluate.ts'
+import { evaluateSheet, type SheetBlock, type SheetLine } from '../math/evaluate.ts'
 import {
   applyLineMove,
   startLineEdit,
@@ -72,6 +73,24 @@ export interface MathOverlayProps {
    * (`SheetSession.keepClean`, docs/spec-v1.md section 4, Size).
    */
   keepClean?: (write: () => void) => void
+  /** Each evaluation of the sheet, in reading order, for the Sheet panel (section 8). */
+  onEvaluated?: (sheet: readonly EvaluatedElement[]) => void
+  /** The line a jump from the panel flashes. */
+  flash?: FlashLine | null
+}
+
+/** One math element as evaluated: what the Sheet panel lists. */
+export interface EvaluatedElement {
+  anchorId: string
+  title: string | null
+  lines: readonly SheetLine[]
+}
+
+/** A line to flash; a new `key` flashes it again. */
+export interface FlashLine {
+  anchorId: string
+  line: number
+  key: number
 }
 
 interface SceneSnapshot {
@@ -110,6 +129,8 @@ export function MathOverlay({
   focusCanvas,
   control,
   keepClean = runNow,
+  onEvaluated,
+  flash = null,
 }: MathOverlayProps) {
   const overlayRef = useRef<HTMLDivElement>(null)
   const store = useMemo(() => createSceneStore(api), [api])
@@ -138,6 +159,24 @@ export function MathOverlay({
     () => evaluateSheet(JSON.parse(sheetKey) as SheetBlock[]),
     [sheetKey],
   )
+
+  // The panel's view of the same run: titles name elements, so they count too.
+  const titlesKey = JSON.stringify(anchors.map(({ id, title }) => [id, title]))
+  const onEvaluatedRef = useRef(onEvaluated)
+  useEffect(() => {
+    onEvaluatedRef.current = onEvaluated
+  })
+  useEffect(() => {
+    const titles = new Map(JSON.parse(titlesKey) as [string, string][])
+    const order = (JSON.parse(sheetKey) as SheetBlock[]).map(({ id }) => id)
+    onEvaluatedRef.current?.(
+      order.map((anchorId) => ({
+        anchorId,
+        title: titles.get(anchorId) || null,
+        lines: lines.get(anchorId) ?? [],
+      })),
+    )
+  }, [lines, sheetKey, titlesKey])
 
   const findAnchor = (anchorId: string) =>
     store.getSnapshot().anchors.find(({ id }) => id === anchorId)
@@ -249,6 +288,7 @@ export function MathOverlay({
           }}
           onBlurLine={(lineIndex) => leaveLine(anchor.id, lineIndex)}
           forwardWheel={forwardWheel}
+          flash={flash?.anchorId === anchor.id ? flash : null}
         />
       ))}
       {placing && <PlacingGhost canvasRoot={canvasRoot} zoom={viewport.zoom} />}

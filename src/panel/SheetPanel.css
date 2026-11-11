@@ -1,0 +1,118 @@
+/* The Sheet panel's tabs, inside Excalidraw's sidebar (section 8). Colours
+   come from Excalidraw's own theme variables, so dark mode follows. */
+.sheet-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 4px 2px 12px;
+  font-size: 13px;
+  color: var(--color-on-surface, #1e1e1e);
+}
+
+.sheet-panel__filter {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid var(--default-border-color, #dee2e6);
+  border-radius: 6px;
+  background: var(--input-bg-color, transparent);
+  color: inherit;
+  font: inherit;
+}
+
+.sheet-panel__empty {
+  margin: 8px 4px;
+  color: var(--color-gray-50, #868e96);
+}
+
+.sheet-panel__group-label {
+  margin: 8px 4px 2px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-gray-50, #868e96);
+}
+
+.sheet-panel__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sheet-panel__row,
+.sheet-panel__problem {
+  box-sizing: border-box;
+  width: 100%;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.sheet-panel__row:hover,
+.sheet-panel__problem:hover,
+.sheet-panel__row:focus-visible,
+.sheet-panel__problem:focus-visible {
+  background: var(--button-hover-bg, rgba(0, 0, 0, 0.05));
+}
+
+/* Name, value, unit: the numbers line up in their own column. */
+.sheet-panel__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(3.5em, auto);
+  align-items: center;
+  gap: 8px;
+  padding: 3px 6px;
+}
+
+.sheet-panel__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sheet-panel__value {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  color: #1971c2;
+}
+
+.sheet-panel__unit {
+  color: var(--color-gray-50, #868e96);
+}
+
+.sheet-panel__row.is-function .sheet-panel__value {
+  font-style: italic;
+  color: var(--color-gray-50, #868e96);
+}
+
+.sheet-panel__row.is-error .sheet-panel__value {
+  color: #e03131;
+}
+
+.sheet-panel__problem {
+  display: grid;
+  grid-template-columns: 14px minmax(0, 1fr);
+  gap: 2px 6px;
+  padding: 5px 6px;
+}
+
+.sheet-panel__mark {
+  grid-row: 1 / 3;
+  color: #e03131;
+}
+
+.sheet-panel__problem.is-warning .sheet-panel__mark {
+  color: #e8590c;
+}
+
+.sheet-panel__message {
+  overflow-wrap: anywhere;
+}
+
+.sheet-panel__where {
+  font-size: 12px;
+  color: var(--color-gray-50, #868e96);
+}

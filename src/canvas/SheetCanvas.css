@@ -25,6 +25,45 @@
   background: var(--color-primary-darkest, #4a47b1);
 }
 
+.sheet-button {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  height: var(--lg-button-size, 2.25rem);
+  margin-left: 0.5rem;
+  padding: 0 0.75rem;
+  border: 0;
+  border-radius: var(--border-radius-lg, 0.75rem);
+  background: var(--island-bg-color, #fff);
+  box-shadow: var(--shadow-island, 0 0 0 1px rgba(0, 0, 0, 0.1));
+  color: var(--color-on-surface, #1e1e1e);
+  font: inherit;
+  font-size: 0.875rem;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.sheet-button:hover,
+.sheet-button[aria-pressed='true'] {
+  background: var(--color-surface-primary-container, #e0dfff);
+}
+
+/* Section 8: a red badge counting errors and warnings. */
+.sheet-button__badge {
+  min-width: 1.125rem;
+  height: 1.125rem;
+  margin-left: 0.375rem;
+  padding: 0 0.25rem;
+  box-sizing: border-box;
+  border-radius: 0.5625rem;
+  background: #e03131;
+  color: #fff;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  line-height: 1.125rem;
+  text-align: center;
+}
+
 .add-math-button kbd {
   padding: 0 0.3125rem;
   border: 1px solid currentColor;
@@ -52,4 +91,33 @@
 
 [data-math-selection='one'] .HintViewer::after {
   content: var(--math-hint);
+}
+
+/* The Sheet panel's tabs (section 8): labelled, so they size to their words,
+   in one segmented control like Excalidraw's own sidebar tabs. */
+.excalidraw .sheet-sidebar {
+  display: flex;
+  flex-direction: column;
+}
+
+.excalidraw .sheet-sidebar .sidebar-triggers {
+  display: flex;
+  gap: 0;
+  padding: 2px;
+  border: 1px solid var(--sidebar-border-color);
+  border-radius: 0.625rem;
+  background: var(--default-bg-color);
+}
+
+.excalidraw .sheet-sidebar .sidebar-tab-trigger {
+  width: auto;
+  height: 2rem;
+  padding: 0 0.75rem;
+  border: none;
+  font-size: 0.8125rem;
+  white-space: nowrap;
+}
+
+.excalidraw .sheet-sidebar .sidebar-tabs-root {
+  overflow-y: auto;
 }

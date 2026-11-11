@@ -15,7 +15,8 @@ server. v1 target: one sheet, for Matheus's own use.
 ## Modules
 
 - **App** (`src/App.tsx`) — composition root. Decides what fills each shell
-  slot and wires the sheet file to the canvas and the line edit. The untitled
+  slot and wires the sheet file to the canvas and the line edit, and the
+  sheet's evaluation to the Sheet panel (opened at launch on a wide window). The untitled
   sheet starts empty, on the welcome screen. Takes `files`, `recovery` and
   `initialElements` so tests pass fakes and a sheet to work on. Depends on:
   shell, canvas, overlay, file.
@@ -178,7 +179,16 @@ server. v1 target: one sheet, for Matheus's own use.
   size tests (`layout.ts`) and readers for the grid (`sheetView.ts`). KaTeX is
   loaded before the tests run. Not app code.
 
-Planned (not built): the Sheet panel.
+- **panel** (`src/panel/`) — the Sheet panel's tabs (spec section 8), drawn
+  inside Excalidraw's sidebar, which `SheetCanvas` frames (`SheetPanelSlot`:
+  the badge count, the tabs' content, `onChange`). `sheetPanel.ts` (pure)
+  turns the evaluated sheet (`EvaluatedElement`s, which `MathOverlay` hands
+  out through `onEvaluated`) into Variables groups and Problems rows;
+  `SheetPanel.tsx` renders them, and a click asks App to jump.
+  `panelMemory.ts` keeps open/closed in `localStorage`. App does the jump
+  (`jumpToAnchor` in `canvas/selection.ts`: scroll, select with `NEVER`) and
+  the flash (`MathOverlay`'s `flash`, a row class). Depends on: math, overlay
+  (KaTeX).
 
 ## Domain
 

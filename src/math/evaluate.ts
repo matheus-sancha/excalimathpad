@@ -12,10 +12,10 @@ import {
 } from 'mathjs'
 import { APP_UNITS } from './appUnits.ts'
 import { createDisplay, type DisplaySettings, type DisplayUnit } from './display.ts'
-import { createCalls, messageOf } from './functions.ts'
+import { createCalls, isSheetFunction, messageOf } from './functions.ts'
 import { readLine, type LineFormat } from './lineForm.ts'
 import { DEFAULT_DIGITS } from './numbers.ts'
-import { lineTex, resultTex, textTex, type Names } from './typeset.ts'
+import { lineTex, resultTex, textTex, unitTex, type Names } from './typeset.ts'
 import { lineWarnings } from './warnings.ts'
 
 /**
@@ -198,7 +198,18 @@ export interface SheetLine {
    * They never change the result, and an error line keeps them too.
    */
   warnings: readonly string[]
+  /**
+   * What the line defines, for the Variables tab (section 8): each name with
+   * its value in the sheet's system and Digits, even where the result cell
+   * stays empty (a plain input), a function's parameters, or `error`.
+   */
+  variables: readonly SheetVariable[]
 }
+
+export type SheetVariable =
+  | { name: string; kind: 'value'; text: string }
+  | { name: string; kind: 'function'; params: readonly string[] }
+  | { name: string; kind: 'error' }
 
 /** One math element's source, as the sheet sees it. */
 export interface SheetBlock {
@@ -305,11 +316,30 @@ export function evaluateSheet(
         // Read before the line runs: what the scope holds above it.
         const warnings = line.kind === 'parsed' ? warningsAt(line.node, position) : []
         if (line.kind !== 'blank') line.defines.forEach((name) => assigned.add(name))
-        return { result: evaluateLine(line), typeset: typesetLine(line, names), warnings }
+        const result = evaluateLine(line)
+        return { result, typeset: typesetLine(line, names), warnings, variables: variablesOf(line) }
       }),
     )
   }
   return results
+
+  /** Read right after the line ran: a failed line has removed its names. */
+  function variablesOf(line: ParsedLine): SheetVariable[] {
+    if (line.kind === 'blank') return []
+    return line.defines.map((name): SheetVariable => {
+      if (line.kind === 'syntax-error' || failed.has(name) || !scope.has(name)) {
+        return { name, kind: 'error' }
+      }
+      const value = scope.get(name)
+      if (isSheetFunction(value)) return { name, kind: 'function', params: value.sheetFunction.params }
+      if (typeof value === 'function') return { name, kind: 'function', params: [] }
+      try {
+        return { name, kind: 'value', text: display.show(value, null, settings) }
+      } catch {
+        return { name, kind: 'error' }
+      }
+    })
+  }
 
   function warningsAt(node: MathNode, here: number): string[] {
     const at = (name: string) => definedAt.get(name) ?? []
@@ -423,6 +453,15 @@ const ENGINE_NAMES: Omit<Names, 'isSheetName'> = {
  */
 export function typesetResult(text: string): string {
   return resultTex(text, (unit) => parse(unit), { ...ENGINE_NAMES, isSheetName: () => false })
+}
+
+/** A unit's text, as a result writes it (`kohm`, `m^3 / s`), typeset (`k\Omega`); plain text if it isn't one. */
+export function typesetUnit(unit: string): string {
+  try {
+    return unitTex(parse(unit), { ...ENGINE_NAMES, isSheetName: () => false }) ?? textTex(unit)
+  } catch {
+    return textTex(unit)
+  }
 }
 
 /**

@@ -807,3 +807,25 @@ describe('function and reserved-name messages (docs/spec-v1.md section 13, #57)'
     expect(block('q(x) = x * k\nr = q\nk = 3\nr(2)')).toEqual([empty, empty, empty, value('6')])
   })
 })
+
+describe('variables (docs/spec-v1.md section 8, Variables tab)', () => {
+  const variables = (source: string) =>
+    evaluateSheet([{ id: 'b', source }]).get('b')!.map((line) => line.variables)
+
+  it('gives each defined name its value in the sheet system, plain inputs included', () => {
+    expect(variables('D = 102.3 mm\nP = 5412 W\n2 * D\n# note')).toEqual([
+      [{ name: 'D', kind: 'value', text: '102.3 mm' }],
+      [{ name: 'P', kind: 'value', text: '5.412 kW' }],
+      [],
+      [],
+    ])
+  })
+
+  it('gives a function its parameters, and a failed line error', () => {
+    expect(variables('Hs(Q, k) = Q * k\nx = 1 m + 1 s\ny = (')).toEqual([
+      [{ name: 'Hs', kind: 'function', params: ['Q', 'k'] }],
+      [{ name: 'x', kind: 'error' }],
+      [{ name: 'y', kind: 'error' }],
+    ])
+  })
+})
