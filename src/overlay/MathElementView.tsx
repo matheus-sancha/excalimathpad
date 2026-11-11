@@ -358,9 +358,11 @@ function Html({ html }: { html: string }) {
 
 /**
  * The problem gutter (section 4, Problems): a red `●` for an error, else an
- * amber `⚠` for warnings, with their messages as the mark's title. Warnings
- * never change the result, so the value still shows beside the mark. Screen
- * only: print and the file never carry it.
+ * amber `⚠` for warnings. Warnings never change the result, so the value still
+ * shows beside the mark. The mark's message (`data-tip`) shows on hover, found
+ * by the gestures from the mark's box (`tipAt`): the overlay takes no pointer
+ * events, so a `title` here would never show. Screen only: print and the file
+ * never carry it.
  */
 function Gutter({ result, warnings }: { result: LineResult; warnings: readonly string[] }) {
   const error = result.kind === 'error'
@@ -368,7 +370,7 @@ function Gutter({ result, warnings }: { result: LineResult; warnings: readonly s
   return (
     <span
       className={`math-element__gutter${warned ? ' is-warning' : ''}`}
-      title={warned ? warnings.join('\n') : undefined}
+      data-tip={error ? result.message : warned ? warnings.join('\n') : undefined}
       data-warnings={warnings.length > 0 ? warnings.join('\n') : undefined}
     >
       {error ? '●' : warned ? '⚠' : ''}
@@ -379,7 +381,8 @@ function Gutter({ result, warnings }: { result: LineResult; warnings: readonly s
 /**
  * The result cell, after the column rule. A value shows typeset, with no
  * leading `=`; an error shows its message, capped with an ellipsis, the whole
- * text on hover (section 4, Problems). `data-text` holds the result as text.
+ * text on hover (section 4, Problems): `data-tip`, which the gestures show only
+ * while the cell is cut short. `data-text` holds the result as text.
  */
 function ResultCell({
   result,
@@ -410,7 +413,8 @@ function ResultCell({
     <span
       className={`math-element__result is-${result.kind}`}
       data-text={text}
-      title={result.kind === 'error' ? result.message : undefined}
+      data-tip={result.kind === 'error' ? result.message : undefined}
+      data-tip-when={result.kind === 'error' ? 'capped' : undefined}
     >
       {content}
       {open && (

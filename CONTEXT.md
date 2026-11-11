@@ -145,6 +145,13 @@ server. v1 target: one sheet, for Matheus's own use.
   writes it with `writeDisplayUnit` as one line commit. The engine gives each
   line its `unitSlot` (kind, chosen unit, value in the system and in each
   unit of the kind).
+  A **problem's message on hover** (spec section 4, Problems): the gutter mark
+  and an error's result cell carry it as `data-tip`, never a `title` (the
+  overlay takes no pointer events, so a title never shows). The gestures find
+  the mark under the pointer from its screen box (`tipAt`, the error cell only
+  while it is cut short) on each `pointerMove` over the canvas, and `HoverTip`
+  shows it after a rest, short of the Sheet panel; a press, a drag, leaving the
+  canvas or a scene or viewport change hides it. Screen only.
   `MathOverlay` subscribes to the scene (`onChange`, `onScrollChange`) and
   places each element from its anchor's scene position via `viewport.ts`
   (`sceneToStage`, pure). It reads source from the anchors and holds the sheet's
@@ -277,7 +284,7 @@ and everything downstream recalculates. Engine: math.js, client-side.
 - A variable named like a math.js unit or built-in (`V`, `m`, `s`, `i`, ...)
   shadows the unit below its definition and falls back to the unit above it
   or after it fails (ADR 0003). Both are **warnings** (`warnings.ts`, spec
-  section 5): an amber `⚠` in the gutter, the message as its title. So is a
+  section 5): an amber `⚠` in the gutter, its message on hover. So is a
   function body name not defined above. A warning never changes a result.
 - Known limit: a size write doesn't move a bound arrow's end (Excalidraw's
   binding update isn't public); it follows when the element next moves (#44).

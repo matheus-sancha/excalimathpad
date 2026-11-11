@@ -95,7 +95,7 @@
   font-size: 10px;
 }
 
-/* Section 4, Problems: a warning's mark is amber; its message is the title. */
+/* Section 4, Problems: a warning's mark is amber; its message shows on hover. */
 .math-element__gutter.is-warning {
   color: var(--math-warning);
 }
@@ -141,7 +141,7 @@
   white-space: pre;
 }
 
-/* An error's message is capped; the whole text is in its title. */
+/* An error's message is capped; the whole text shows on hover. */
 .math-element__result.is-error {
   display: block;
   align-self: center;
@@ -429,4 +429,29 @@
 .math-unit-field__value {
   color: var(--math-result);
   font-variant-numeric: tabular-nums;
+}
+
+/* Section 4, Problems: a mark's message, or a capped error's whole text, on
+   hover. The gestures find the mark from its box, so the tip takes no pointer
+   events either. Screen only: never printed (section 11). */
+.math-hover-tip {
+  position: absolute;
+  z-index: 2;
+  box-sizing: border-box;
+  max-width: 360px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: #343a40;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 18%);
+  color: #f8f9fa;
+  font: 13px/18px system-ui, 'Segoe UI', sans-serif;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+  pointer-events: none;
+}
+
+@media print {
+  .math-hover-tip {
+    display: none;
+  }
 }
