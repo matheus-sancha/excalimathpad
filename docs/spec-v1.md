@@ -57,7 +57,7 @@ One name per concept, used the same in conversation, code, tests, docs and the U
 | **Math element** | A block of source lines anchored at a scene position, shown as a typeset grid |
 | **Anchor** | The marked Excalidraw rectangle that carries a math element. Its `customData` holds `kind` and `source` |
 | **Line** | One string of an element's source: one statement. See [section 3](#3-sheet-lines-every-form) for its forms |
-| **Typeset row** | One line on screen: *gutter · name · `≔` · expression (+ guess or step) · result · note* |
+| **Typeset row** | One line on screen: *gutter · equation (name · `≔` · expression, plus guess or step) · result · note* |
 | **Line edit** | The one line shown as raw source, held as *anchor id + line index*. UI state |
 | **Line commit** | The moment an edit leaves a line whose text differs from the scene. Writes the source once |
 | **Result** | What a line computes: a value with unit, a list, an error, or empty |
@@ -259,10 +259,12 @@ Built in M1. Hover details arrive with M3; the unit slot with M2.
 
 ### Typeset grid
 
-- A math element is a **worksheet block**. Lines form a grid aligned on `≔`: names
-  right-aligned, then `≔`, then expressions left-aligned.
+- A math element is a **worksheet block**. Each line is its own display, **flush left**:
+  name, `≔` and expression together, from the element's left edge. `≔` doesn't line up
+  between lines, and a bare expression starts at the left edge like the rest. There is no
+  alignment setting.
 - A row is as tall as its tallest cell.
-- **Result column:** one per element, right of its longest expression, after a thin
+- **Result column:** one per element, right of its longest line, after a thin
   column rule. A value shows typeset, without a leading `=`. Columns aren't lined up
   across elements.
 - **Note column:** one per element, right of the result column, in the same text
@@ -271,7 +273,7 @@ Built in M1. Hover details arrive with M3; the unit slot with M2.
 - **Comment line:** plain literal text from the row's left edge, ignoring the
   columns. No formatting, typeset math or `##` headings.
 - **Empty cells:** a plain input and a function definition leave the result cell
-  empty. A bare expression leaves name and `≔` empty.
+  empty. A bare expression has no name or `≔`.
 - **Solve line:** `Q_op ≔ solve H_p(Q) = H_s(Q)`, with the guess small and grey after
   the equation, inside the expression cell.
 - **Range line:** `Q_s ≔ 1 L/s … 30 L/s`, with the step small and grey after it.
@@ -300,7 +302,7 @@ Lines typeset through math.js `toTex` with one custom handler, then KaTeX.
 | Problem | Gutter | Elsewhere |
 |---|---|---|
 | Error | Red `●` | Its message takes the result cell, in red |
-| Line that doesn't parse | Red `●` | Raw source in red with a wavy underline, over the name, `≔` and expression cells (where the field opens); any `#` part stays in it, so no note cell. Its message takes the result cell, as for any error |
+| Line that doesn't parse | Red `●` | Raw source in red with a wavy underline, over the line's equation space (where the field opens); any `#` part stays in it, so no note cell. Its message takes the result cell, as for any error |
 | Warning | Amber `⚠` | Message on hover over the mark; the line's value still shows |
 
 **An error is capped** at about 320 px of the result column and ends in an ellipsis.
@@ -335,8 +337,8 @@ none. Hover is screen-only.
 
 ### While editing a line
 
-- The line becomes a one-line source field spanning the name, `≔` and expression
-  cells. Its result cell shows the live result as plain text, and its note cell is
+- The line becomes a one-line source field over the line's equation space, starting
+  where the typeset line did, so the text doesn't move. Its result cell shows the live result as plain text, and its note cell is
   empty because the note is in the field.
 - The sheet re-runs on every keystroke. Every other line stays typeset and updates
   live.
@@ -367,7 +369,7 @@ none. Hover is screen-only.
 A math element's box always fits its content. The app measures the content and writes
 the size to the anchor, live, while typing too.
 
-- **Counts toward width:** name, `≔` and expression cells, a solve's guess, a range's
+- **Counts toward width:** the equation (name, `≔` and expression), a solve's guess, a range's
   step, result values, list summaries, tables, charts, notes, comments and the gutter.
 - **Doesn't:** error text past its cap.
 - **A very long line widens the element.** One source line stays one row. You can
@@ -1536,4 +1538,14 @@ Changes line if it changes behaviour.
   drawn, as for any element; a new math element still starts at 100.
 - 2026-11-10, [section 16](#16-milestones-and-finish-line) (agreed by Matheus, in chat): M2 is seven issues, in the
   order listed there. #7 keeps its number as the third.
+- 2026-11-11, [section 4](#typeset-grid) (#62, agreed by Matheus, in chat on 2026-11-11, with the
+  [design](https://github.com/matheus-sancha/excalimathpad/issues/62#issuecomment-6784530105) approved): each line of a
+  math element is its own display, flush left, instead of a grid aligned on `≔` with right-aligned names. This replaces the
+  grid agreed in #14. Matheus first asked for left, center and right as a setting per element, then chose one layout and
+  no setting. Every sheet looks different when opened, and boxes can get narrower; the size write keeps a clean sheet clean.
+  The result and note columns, comment lines, the gutter and unparsed lines are unchanged.
+- 2026-11-11, [section 4](#typeset-grid) (#62, checked in Chromium with real keys and mouse): six lines (a comment, three
+  assignments, a bare expression, a plain input with a note) all started at the same left edge, the `≔` fell at three
+  different places, and the results stayed in one column; opening a line put the field where the equation was; a saved
+  sheet reopened with a box 40 px too wide was refitted and stayed clean.
 

@@ -35,10 +35,11 @@
   font: 16px/24px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 
-/* The worksheet block (section 4, Typeset grid): gutter, name (right-aligned),
-   ≔, expression (left-aligned), result after a thin rule, note. Rows are
-   subgrids, so cells line up across the element's rows and each row keeps a
-   box of its own for the line hit (offsetTop, offsetHeight). The note column
+/* The worksheet block (section 4, Typeset grid): gutter, equation (name, ≔ and
+   expression, flush left), result after a thin rule, note. Rows are subgrids,
+   so the result and note columns line up across the element's rows and each row
+   keeps a box of its own for the line hit (offsetTop, offsetHeight). The
+   equation spans the three columns the open field also spans. The note column
    is flexible, so a comment line, which spans the row, widens only it. */
 .math-element__grid {
   display: grid;
@@ -72,19 +73,16 @@
   font-size: 10px;
 }
 
-.math-element__name {
-  grid-column: 2;
-  justify-self: end;
+/* Each line is its own display, flush left: ≔ doesn't line up between lines. */
+.math-element__equation {
+  grid-column: 2 / 5;
+  justify-self: start;
+  display: flex;
+  align-items: center;
 }
 
 .math-element__defines {
-  grid-column: 3;
   padding: 0 6px;
-}
-
-.math-element__expression {
-  grid-column: 4;
-  justify-self: start;
 }
 
 /* Source in place of the typeset cells: a line that doesn't parse, a line

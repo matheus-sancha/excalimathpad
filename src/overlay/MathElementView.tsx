@@ -38,8 +38,9 @@ export interface MathElementViewProps {
 
 /**
  * One math element as a worksheet block (docs/spec-v1.md section 4, Typeset
- * grid): a grid of typeset rows, *gutter · name · `≔` · expression · result ·
- * note*, aligned across the element's rows. Laid out in scene units and scaled
+ * grid): a grid of typeset rows, *gutter · equation · result · note*, where the
+ * equation is the line's name, `≔` and expression, flush left. The result and
+ * note columns line up across the element's rows. Laid out in scene units and scaled
  * by the zoom, so it moves and scales exactly like the anchor Excalidraw draws
  * underneath.
  *
@@ -195,15 +196,25 @@ function MathCells({
     expression === null || (typeset.name !== null && name === null) ? (
       <span className="math-element__source">{fallback}</span>
     ) : (
-      <>
-        <span className="math-element__name">{name !== null && <Html html={name} />}</span>
-        <span className="math-element__defines">
-          {name !== null && defines !== null && <Html html={defines} />}
-        </span>
+      // One display, flush left: name, ≔ and expression together (section 4,
+      // Typeset grid). A bare expression has no name or ≔ to indent it.
+      <span className="math-element__equation">
+        {name !== null && (
+          <>
+            <span className="math-element__name">
+              <Html html={name} />
+            </span>
+            {defines !== null && (
+              <span className="math-element__defines">
+                <Html html={defines} />
+              </span>
+            )}
+          </>
+        )}
         <span className="math-element__expression">
           <Html html={expression} />
         </span>
-      </>
+      </span>
     )
   return (
     <>
