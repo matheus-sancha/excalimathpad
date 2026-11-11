@@ -9,7 +9,7 @@ import { evaluateSheet, type SheetLine } from './evaluate.ts'
  * drift, run through `evaluateSheet` and compared with the reference
  * (`pump-sizing.py`) at 4 significant figures, in the unit the reference
  * shows, whatever prefix the sheet picks. It grows each milestone: M2 checks
- * lines 1-13, 16 and 17.
+ * lines 1-13, 16 and 17; M3 adds lines 14-28, the solves.
  */
 
 /** The sheet's lines by their number in the doc (`c`, `1`, ..., `24a`), in order. */
@@ -18,15 +18,24 @@ const SHEET = [...doc.matchAll(/^\| (c|\d+[a-z]?) \| `(.+?)` \|/gm)].map(([, id,
   source,
 }))
 
-/** Lines the CI test runs at this milestone, in reading order. */
-const M2_LINES = ['c', ...Array.from({ length: 13 }, (_, i) => `${i + 1}`), '16', '17']
+/** Lines the CI test runs at this milestone, in reading order: every line up to the ranges (M4). */
+const M3_LINES = SHEET.map((line) => line.id).filter((id) => !['29', '30', '31'].includes(id))
 
-/** The 4" column of the doc's Expected results, for the lines M2 runs. */
+/** The 4" column of the doc's Expected results, for the lines M3 runs. */
 const EXPECTED_4IN: Record<string, { value: number; unit: string }> = {
   '6': { value: 5.4, unit: '' },
   '11': { value: 82.19, unit: 'cm^2' },
   '16': { value: 1.825, unit: 'm/s' },
   '17': { value: 1.86e5, unit: '' },
+  '18': { value: 0.01864, unit: '' },
+  '19': { value: 45.43, unit: 'kPa' },
+  '20': { value: 8.976, unit: 'kPa' },
+  '21': { value: 117.5, unit: 'kPa' },
+  '22': { value: 17.56, unit: 'm' },
+  '23': { value: 3.683, unit: 'kW' },
+  '26': { value: 18.81, unit: 'L/s' },
+  '27': { value: 20.58, unit: 'm' },
+  '28': { value: 5.412, unit: 'kW' },
 }
 
 const reference = create(all)
@@ -53,12 +62,12 @@ function run(ids: readonly string[]): Map<string, SheetLine> {
   return new Map(ids.map((id, i) => [id, shown[i]]))
 }
 
-describe('the pump sheet (acceptance, M2: lines 1-13, 16, 17)', () => {
-  const lines = run(M2_LINES)
+describe('the pump sheet (acceptance, M3: lines 1-28)', () => {
+  const lines = run(M3_LINES)
   const results = new Map([...lines].map(([id, line]) => [id, line.result]))
 
   it('reads the sheet from the acceptance doc', () => {
-    expect(SHEET.map((line) => line.id)).toEqual(expect.arrayContaining(M2_LINES))
+    expect(M3_LINES).toEqual(['c', ...Array.from({ length: 23 }, (_, i) => `${i + 1}`), '24a', '24b', '24c', '25', '26', '27', '28'])
     expect(SHEET.find((line) => line.id === '2')?.source).toBe('mu = 1.002 cP')
   })
 
@@ -68,8 +77,8 @@ describe('the pump sheet (acceptance, M2: lines 1-13, 16, 17)', () => {
     }
   })
 
-  it('leaves plain inputs and functions empty, line 2 included', () => {
-    for (const id of ['1', '2', '3', '4', '5', '7', '8', '9', '10', '12', '13']) {
+  it('leaves plain inputs and functions empty, line 2 and the solve function included', () => {
+    for (const id of ['1', '2', '3', '4', '5', '7', '8', '9', '10', '12', '13', '14', '15', '24a', '24b', '24c', '25']) {
       expect(results.get(id), `line ${id}`).toEqual({ kind: 'empty' })
     }
   })
@@ -91,5 +100,23 @@ describe('the pump sheet (acceptance, M2: lines 1-13, 16, 17)', () => {
     expect(results.get('6')).toEqual({ kind: 'value', text: '5.4' })
     expect(results.get('16')).toEqual({ kind: 'value', text: '1.825 m / s' })
     expect(results.get('17')).toEqual({ kind: 'value', text: '1.86·10⁵' })
+    expect(results.get('18')).toEqual({ kind: 'value', text: '0.01864' })
+    expect(results.get('26')).toEqual({ kind: 'value', text: '18.81 L / s' })
+  })
+
+  // Section 4, Solve details: a solve line and a direct call to a solve function, nothing deeper.
+  it('gives solve details to lines 18 and 26 only', () => {
+    for (const [id, line] of lines) {
+      if (id === '18' || id === '26') expect(line.solveDetails?.method, `line ${id}`).toBe('Brent')
+      else expect(line.solveDetails, `line ${id}`).toBeNull()
+    }
+  })
+
+  // Section 17, verify first (#71): the whole sheet, nested solves included, runs on every keystroke.
+  it('runs the whole sheet well inside a keystroke', () => {
+    const source = M3_LINES.map((id) => SHEET.find((line) => line.id === id)!.source).join('\n')
+    const started = performance.now()
+    for (let i = 0; i < 5; i++) evaluateSheet([{ id: 'sheet', source }])
+    expect((performance.now() - started) / 5).toBeLessThan(200)
   })
 })

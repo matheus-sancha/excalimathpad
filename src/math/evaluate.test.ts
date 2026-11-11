@@ -992,3 +992,97 @@ describe('solve, the value form (docs/spec-v1.md section 9, #70)', () => {
     expect(plain.solveDetails).toBeNull()
   })
 })
+
+describe('solve functions and nested solves (docs/spec-v1.md section 9, #71)', () => {
+  const lines = (source: string) => evaluateSheet([{ id: 'b', source }]).get('b')!
+  const colebrook = 'f(Re, r) = solve 1/sqrt(f) = -2 log10(r/3.7 + 2.51/(Re sqrt(f))), guess f = 0.02'
+
+  it('defines a function that solves at each call; the definition’s cell stays empty', () => {
+    expect(block(`${colebrook}\nf(1.86e5, 4.399e-4)\nf(3e4, 4.4e-4)`)).toEqual([
+      empty,
+      value('0.01864'),
+      value('0.02463'),
+    ])
+  })
+
+  it('lets the unknown win over the function being defined', () => {
+    // In Colebrook, `f` inside is the unknown, not a recursive call.
+    expect(block('g(a) = solve g^2 = a, guess g = 1\ng(9)')).toEqual([empty, value('3')])
+  })
+
+  it('evaluates the guess at each call, with the parameters and late binding', () => {
+    expect(block('r(a) = solve x^2 = a, guess x = a / k\nk = 2\nr(16)\nk = -2\nr(16)')).toEqual([
+      empty,
+      empty,
+      value('4'),
+      empty,
+      value('-4'),
+    ])
+  })
+
+  it('fails only for syntax at its definition; a failure lands on the calling line', () => {
+    expect(block('h(a) = solve x^2 = a, guess x = 1\nh(-1)\nh(4)')).toEqual([
+      empty,
+      error('in h(-1): no root near x = 1 (searched -1.104·10¹¹ .. 1.104·10¹¹)'),
+      value('2'),
+    ])
+    expect(block('h(a) = solve x^2 = a, guess x = 1 m\nh(4)')).toEqual([
+      empty,
+      error('in h(4): guess x = 1 m: x^2 - a units do not match'),
+    ])
+  })
+
+  it('checks the number of arguments', () => {
+    expect(block('h(a, b) = solve x = a + b, guess x = 1\nh(1)')).toEqual([
+      empty,
+      error('h needs 2 arguments, got 1'),
+    ])
+  })
+
+  it('takes no display unit on its definition', () => {
+    expect(block('h(a) = solve x = a, guess x = 1 m in cm\nh(2 m)')).toEqual([
+      error("Set a function's display unit on the line that calls it"),
+      error('h has an error above'),
+    ])
+  })
+
+  it('solves through a solve: an inner failure counts as outside the domain', () => {
+    // At Q ≤ 0 Colebrook has no root; the outer search steps past those points.
+    const sheet = [
+      colebrook,
+      'Hs(Q) = 12 m + f(Q / (1 L/s) * 1e4, 4e-4) * 1e3 m * (Q / (1 L/s))^2 / 100',
+      'Q_op = solve Hs(Q) = 25 m, guess Q = 1 L/s',
+    ].join('\n')
+    const [, , solved] = lines(sheet)
+    expect(solved.result.kind).toBe('value')
+    expect(solved.solveDetails?.method).toBe('Brent')
+  })
+
+  it('carries the last inner error when the outer solve finds no root', () => {
+    const [, result] = block('g(a) = solve x^2 = a, guess x = 1\ny = solve g(y) = -5, guess y = 4')
+    expect(result.kind).toBe('error')
+    if (result.kind === 'error') {
+      expect(result.message).toMatch(/^no root near y = 4 \(searched .*\); last inner error: in g\(-?[\d.·⁰¹²³⁴⁵⁶⁷⁸⁹⁻]+\): no root near x = 1/)
+    }
+  })
+
+  it('never swallows a units error in an inner solve', () => {
+    expect(block('g(a) = solve x = a, guess x = 1 m\ny = solve g(y) = 5, guess y = 1')).toEqual([
+      empty,
+      error('in g(1): guess x = 1 m: x - a units do not match'),
+    ])
+  })
+
+  it('gives details to a line that is just one call, and none deeper or to the definition', () => {
+    const [definition, direct, bare, deeper] = lines(`${colebrook}\nf_d = f(1.86e5, 4.399e-4)\nf(1e5, 4e-4)\n2 * f(1e5, 4e-4)`)
+    expect(definition.solveDetails).toBeNull()
+    expect(direct.solveDetails?.method).toBe('Brent')
+    expect(bare.solveDetails?.method).toBe('Brent')
+    expect(deeper.solveDetails).toBeNull()
+  })
+
+  it('warns on a guess name not defined above, but not on the unknown or the parameters', () => {
+    expect(warnings('r(a) = solve x^2 = a, guess x = a / k')[0]).toEqual(["k isn't defined above this line"])
+    expect(warnings(colebrook)[0]).toEqual([])
+  })
+})

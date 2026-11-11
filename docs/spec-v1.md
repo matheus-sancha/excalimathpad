@@ -1494,9 +1494,14 @@ Changes line if it changes behaviour.
 
 **M3, M4**
 
-- The nested solve on the pump sheet (`f_d`, `Q_op`, and the table).
+- The nested solve on the pump sheet (`f_d`, `Q_op`, and the table). **Passed for `f_d` and `Q_op` (#71):** lines
+  1-28 match the reference at 4 s.f. in both the 4" and the 5" columns (`Q_op` 18.81 and 25.21 L/s), and 30 calls
+  `Hs(1 L/s)` … `Hs(30 L/s)` match the range table's 4" rows. `Q_op` converged in 5 Brent iterations (10 residual
+  evaluations, each one Colebrook solve), `f_d` in 6. The table itself waits for M4.
 - Run time: the sheet runs 30 Colebrook solves for the table on every keystroke, plus `Q_op`'s nested solves. A
-  91-row sweep took 30 ms in the research, so it's probably fine, but measure it.
+  91-row sweep took 30 ms in the research, so it's probably fine, but measure it. **Measured (#71), in Node under
+  Vitest:** lines 1-28 run in about 8 ms (median of 20), 9 ms at 5"; with the 30 `Hs` calls added, about 11 ms
+  (38 ms at worst). The pump sheet's CI test pins the whole run under 200 ms. M4 measures the table in the browser.
 - The mark label's position, log scale and `points`, tried only as prototype switches.
 - The clause parser and lazy loading of Observable Plot, not built in the prototype.
 
@@ -1694,3 +1699,7 @@ Changes line if it changes behaviour.
   (s is the guess's size, 1 for a zero guess), right then left, up to 60 steps (about 10¹² times the guess), and skips
   points where the equation has no value. A root at exactly zero that the residual never reaches exactly (`x^3 = 0`)
   can't meet a relative tolerance, so it fails after 100 iterations; a tolerance setting stays out of scope.
+- 2026-11-11, [section 9](#9-solve) (#71, Engineer's, for Matheus to confirm on the PR): an outer solve counts a trial
+  point as outside the domain only when an inner solve there found no root or didn't converge. Any other error at a
+  trial point, a units error included, fails the outer line at once with that error. A solve function's details on
+  hover are those of the call the line makes; the details of solves inside its equation are not shown.
