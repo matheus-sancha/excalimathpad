@@ -109,6 +109,12 @@ server. v1 target: one sheet, for Matheus's own use.
   `evaluateSheet(blocks, settings)` takes the system and Digits. An unknown
   display unit is the line's error after it ran. Each `SheetLine` also
   carries its `warnings` (`warnings.ts`, pure, read before the line runs).
+  Each function the sheet defines is wrapped once its line has run
+  (`functions.ts`, `createCalls`): the wrapper checks the argument count,
+  stops recursion at a fixed depth, prefixes an error from its body with
+  `in k(1 s): `, and carries `sheetFunction` (name, parameters); `messageOf`
+  rewords math.js's errors (a value called, a function used as a number) in
+  section 13's words. `table`, `plot` and `solve` can't be assigned.
   App code must evaluate only
   through `evaluateSheet`: math.js functions that depend on the disabled
   names (`help`, `rationalize`, a `parser()`'s methods) no longer work. The

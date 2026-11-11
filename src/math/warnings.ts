@@ -103,7 +103,7 @@ function statements(node: MathNode): MathNode[] {
  * The names a line reads as values when it runs: not a function's body, which
  * binds late, not the name of a function it calls, and not what it assigns.
  */
-function usedNames(node: MathNode): string[] {
+export function usedNames(node: MathNode): string[] {
   if (isFunctionAssignmentNode(node)) return []
   if (isSymbolNode(node)) return [node.name]
   if (isAssignmentNode(node)) {

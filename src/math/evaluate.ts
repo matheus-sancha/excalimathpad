@@ -12,6 +12,7 @@ import {
 } from 'mathjs'
 import { APP_UNITS } from './appUnits.ts'
 import { createDisplay, type DisplaySettings, type DisplayUnit } from './display.ts'
+import { createCalls, messageOf } from './functions.ts'
 import { readLine, type LineFormat } from './lineForm.ts'
 import { DEFAULT_DIGITS } from './numbers.ts'
 import { lineTex, resultTex, textTex, type Names } from './typeset.ts'
@@ -285,6 +286,11 @@ export function evaluateSheet(
   }
 
   const scope = newSheetScope()
+  // Each function the sheet defines is wrapped, to word its errors (section 13).
+  const calls = createCalls(
+    (value) => display.show(value, null, settings),
+    (name) => scope.get(name),
+  )
   // Names whose latest assignment so far failed.
   const failed = new Set<string>()
   // Names assigned on or above the line being read, for typesetting.
@@ -329,6 +335,8 @@ export function evaluateSheet(
       return { kind: 'error', message }
     }
     if (line.kind === 'syntax-error') return fail(line.message)
+    const reserved = line.defines.find((name) => RESERVED.includes(name))
+    if (reserved !== undefined) return fail(`${reserved} is a line form: choose another name`)
     // `in <unit>` belongs on the line that calls a function (section 3).
     if (line.display !== null && isFunctionAssignmentNode(line.node)) {
       return fail("Set a function's display unit on the line that calls it")
@@ -337,6 +345,11 @@ export function evaluateSheet(
       // Asked before the line runs: the line itself may assign one of these names.
       const isPlain = line.plainInputUnits?.every((name) => !scope.has(name)) ?? false
       const value: unknown = line.node.compile().evaluate(scope)
+      for (const definition of functionDefinitions(line.node)) {
+        const { name, params, expr } = definition
+        const fn = scope.get(name) as (...args: unknown[]) => unknown
+        scope.set(name, calls.wrap({ name, params }, expr, fn))
+      }
       line.defines.forEach((name) => failed.delete(name))
       // Reported after the line ran, so its value still reaches the lines
       // below, as for an unknown display unit (section 3).
@@ -360,7 +373,7 @@ export function evaluateSheet(
         return { kind: 'error', message: error instanceof Error ? error.message : String(error) }
       }
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
+      const message = messageOf(error, line.node, (name) => scope.get(name))
       return fail(explain(message, here, definedAt, failed))
     }
   }
@@ -457,6 +470,15 @@ function parseLine(text: string): ParsedLine {
 
 // `name = ...` or `name(args) = ...` (not `==`), for lines that do not parse.
 const ASSIGNMENT_TARGET = /^\s*([A-Za-z_]\w*)\s*(?:\([^)]*\))?\s*=(?!=)/
+
+/** Names that start a line form (ADR 0005): assigning to one is an error. */
+const RESERVED = ['table', 'plot', 'solve']
+
+/** The function definitions of a line: one, or several `;`-separated. */
+function functionDefinitions(node: MathNode) {
+  if (isBlockNode(node)) return node.blocks.map((block) => block.node).filter(isFunctionAssignmentNode)
+  return isFunctionAssignmentNode(node) ? [node] : []
+}
 
 /** The names a statement assigns: `x = ...`, `f(x) = ...`, or several `;`-separated. */
 function definedNames(node: MathNode): string[] {

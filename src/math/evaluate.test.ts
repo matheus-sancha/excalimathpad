@@ -739,3 +739,71 @@ describe('warnings (docs/spec-v1.md section 5, #7)', () => {
     expect(warnings('K = 1 m + 1 s')).toEqual([['K shadows the unit K']])
   })
 })
+
+describe('function and reserved-name messages (docs/spec-v1.md section 13, #57)', () => {
+  it('a value called like a function', () => {
+    expect(block('f_d = 0.02\nx = f_d (2)')[1]).toEqual(
+      error('f_d is a value, not a function: write f_d * (...) to multiply'),
+    )
+  })
+
+  it('a function used as a number', () => {
+    expect(block('q(x) = x * 2\nq + 1')[1]).toEqual(error('q is a function: call it with q(...)'))
+  })
+
+  it('the wrong number of arguments', () => {
+    expect(block('h(a, b) = a + b\nh(1)\nh(1, 2, 3)')).toEqual([
+      empty,
+      error('h needs 2 arguments, got 1'),
+      error('h needs 2 arguments, got 3'),
+    ])
+    expect(block('k(a) = a\nk(1, 2)')[1]).toEqual(error('k needs 1 argument, got 2'))
+  })
+
+  it('recursion with no end, and recursion with an end still works', () => {
+    expect(block('loop(x) = loop(x)\nloop(1)')[1]).toEqual(error('loop calls itself without end'))
+    expect(block('fact(n) = n <= 1 ? 1 : n * fact(n - 1)\nfact(5)')[1]).toEqual(value('120'))
+  })
+
+  it('an error inside a body, on the calling line, with the arguments as the sheet shows them', () => {
+    expect(block('k(t) = t + 1 m\nk(1 s)')[1]).toEqual(error('in k(1 s): Units do not match'))
+    expect(block('k(t) = t + 1 m\nk(12345 s)')[1]).toEqual(
+      error('in k(1.235·10⁴ s): Units do not match'),
+    )
+  })
+
+  it('names each function an error passes through', () => {
+    expect(block('h(x) = x + 1 m\ng(x) = h(x * 2)\ng(1 s)')[2]).toEqual(
+      error('in g(1 s): in h(2 s): Units do not match'),
+    )
+  })
+
+  it('words a misuse inside a body too', () => {
+    expect(block('c = 3\nw(x) = c (x)\nw(2)')[2]).toEqual(
+      error('in w(2): c is a value, not a function: write c * (...) to multiply'),
+    )
+  })
+
+  it('table, plot and solve are reserved names', () => {
+    expect(block('table = 3\nplot(x) = x\nsolve = 1\ny = 2')).toEqual([
+      error('table is a line form: choose another name'),
+      error('plot is a line form: choose another name'),
+      error('solve is a line form: choose another name'),
+      empty,
+    ])
+  })
+
+  it('a failed line still removes its name, and the lines below run', () => {
+    expect(block('a = 2\na = a (3)\nb = 4\nb * 2\na')).toEqual([
+      empty,
+      error('a is a value, not a function: write a * (...) to multiply'),
+      empty,
+      value('8'),
+      error('a has an error above'),
+    ])
+  })
+
+  it('keeps functions as values and late binding', () => {
+    expect(block('q(x) = x * k\nr = q\nk = 3\nr(2)')).toEqual([empty, empty, empty, value('6')])
+  })
+})
