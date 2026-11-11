@@ -278,7 +278,7 @@ describe('evaluateSheet', () => {
     // Regression (#25): a result showed in whichever unit of its dimension
     // an earlier line or run had read last: after `1 psi`, pressure showed
     // as `9.6691825159135e-5 psi`; after `h`, speed as `m / h`.
-    describe('formats results in SI, whatever units were read before', () => {
+    describe('formats results in the sheet system, whatever units were read before', () => {
       // Each line reads units that, under `auto`, took over a dimension.
       const otherUnits = [
         'p = 1 psi',
@@ -291,9 +291,9 @@ describe('evaluateSheet', () => {
         value('0.6667 Pa'),
         empty,
         empty,
-        value('10 m^3 / h'),
+        value('2.778 L / s'),
         value('2 m^2'),
-        value('0.001389 m / s'),
+        value('1.389 mm / s'),
       ]
 
       it('in a run that reads only these units', () => {
@@ -316,11 +316,11 @@ describe('evaluateSheet', () => {
         expect(block(check)).toEqual(expected)
       })
 
-      // The display trade-off of a fixed system (ADR 0003): a result math.js
-      // simplifies shows in SI with an SI prefix, even from SI-prefixed or
-      // non-SI inputs (`auto` showed `10 ft^2`, `6 cm^2`, `4 cm^2`). A
-      // result whose units it keeps shows as written. `to` converts.
-      it('simplifies to SI with a prefix, keeps units it does not simplify', () => {
+      // Section 5, Shown result: every result shows in the sheet's system for
+      // its kind, whatever units it was written in; SI with prefixes keeps
+      // the number at 1 or above in the largest unit the steps allow. A
+      // display unit (`in`, or `to` at the end) shows it in that unit.
+      it('shows each kind in the sheet system, a display unit as chosen', () => {
         const lines = [
           '5 ft * 2 ft',
           '2 cm * 3 cm',
@@ -331,12 +331,12 @@ describe('evaluateSheet', () => {
         ]
 
         expect(block(lines.join('\n'))).toEqual([
-          value('0.929 m^2'),
-          value('600 mm^2'),
+          value('9290 cm^2'),
+          value('6 cm^2'),
           empty,
-          value('400 mm^2'),
-          value('1 psi'),
-          value('60 mi / h'),
+          value('4 cm^2'),
+          value('6.895 kPa'),
+          value('26.82 m / s'),
           value('10 ft^2'),
         ])
       })
@@ -500,7 +500,7 @@ describe('numbers (docs/spec-v1.md section 5)', () => {
 
 describe('app units (docs/spec-v1.md section 5)', () => {
   it.each([
-    ['1.002 cP', '1.002 cP'],
+    ['1.002 cP', '1.002 mPa s'],
     ['1.002 cP to Pa s', '0.001002 Pa s'],
     ['2 poise to Pa s', '0.2 Pa s'],
     ['1 cSt to m^2/s', '1·10⁻⁶ m^2 / s'],
@@ -526,14 +526,19 @@ describe('app units (docs/spec-v1.md section 5)', () => {
   })
 
   // Section 14, setup order: a plain createUnit made each app unit a display
-  // unit (`0.01 m^2 * 1.8 m/s` showed `285.3 gpm`).
+  // unit (`0.01 m^2 * 1.8 m/s` showed `285.3 gpm`). The app's formatter
+  // converts each unit result itself; a matrix still goes through math.js's
+  // own format, which a leak would reach.
   it('shows results as an engine without them does', async () => {
     const { all, create } = await import('mathjs')
-    const { formatOptions, plainNumbers } = await import('./numbers.ts')
+    const { createDisplay } = await import('./display.ts')
+    const { DEFAULT_DISPLAY } = await import('./evaluate.ts')
     const bare = create(all)
     bare.Unit.setUnitSystem('si')
+    const bareDisplay = createDisplay(bare, bare.parse)
     const expressions = [
       '0.01 m^2 * 1.8 m/s',
+      '[0.01 m^2 * 1.8 m/s, 2 Pa * 3 s]',
       '2 Pa * 3 s',
       '4 m^2 / (2 s)',
       '5 m^3 / s * 2',
@@ -549,8 +554,128 @@ describe('app units (docs/spec-v1.md section 5)', () => {
 
     expect(block(expressions.join('\n'))).toEqual(
       expressions.map((source) =>
-        value(plainNumbers(bare.format(bare.evaluate(source), formatOptions(4)))),
+        value(bareDisplay.show(bare.evaluate(source), null, DEFAULT_DISPLAY)),
       ),
     )
+  })
+})
+
+describe('display unit, `in <unit>` (docs/spec-v1.md sections 3 and 5)', () => {
+  it('shows the result in the chosen unit', () => {
+    expect(block('dP = 45430 Pa in kPa\nQ = 0.5 L/s in L/minute\nv = 2 m/s to km/h')).toEqual([
+      value('45.43 kPa'),
+      value('30 L / minute'),
+      value('7.2 km / h'),
+    ])
+  })
+
+  it('reads the whole unit after `in`, as math.js would not: `L/minute`, `kN/m^2`, `m^-1`', () => {
+    expect(block('a = 3 L/s in L/minute\nb = 2 kPa in kN/m^2\nc = 4 / mm in m^-1')).toEqual([
+      value('180 L / minute'),
+      value('2 kN / m^2'),
+      value('4000 m^-1'),
+    ])
+  })
+
+  it('shows a plain input converted, and still passes its value below', () => {
+    expect(block('D = 102.3 mm in in\nD2 = D * 2')).toEqual([value('4.028 in'), value('204.6 mm')])
+  })
+
+  it('balances a unit of the wrong kind, as in Mathcad', () => {
+    expect(block('dP = 45430 Pa in m')).toEqual([value('4.543·10⁴ m kg / (m^2 s^2)')])
+  })
+
+  it('reads the unit outside the sheet: a variable named like a unit changes nothing', () => {
+    expect(block('m = 3\nd = 2 km in m')).toEqual([empty, value('2000 m')])
+  })
+
+  it('reports an unknown unit, and the value still reaches the lines below', () => {
+    expect(block('x = 2 m * 1 in xyz\ny = x * 2')).toEqual([error('Unknown unit xyz'), value('4 m')])
+    expect(block('k = 3\nx = 2 m * 1 in k')).toEqual([empty, error('Unknown unit k')])
+  })
+
+  it('leaves a conversion inside the expression to math.js', () => {
+    expect(block('(2 bar in kPa) + 1 kPa')).toEqual([value('201 kPa')])
+  })
+
+  it('is an error on a function definition, which removes the function', () => {
+    expect(block('p(x) = x * 2 in kPa\np(1 kPa)')).toEqual([
+      error("Set a function's display unit on the line that calls it"),
+      error('p has an error above'),
+    ])
+  })
+
+  it('works on the line that calls a function', () => {
+    expect(block('p(x) = x * 2\ndP = p(100 kPa) in bar')).toEqual([empty, value('2 bar')])
+  })
+
+  it('comes before the format clause and the note', () => {
+    expect(block('U = 2 A * 3 ohm in mV @bold # check')).toEqual([value('6000 mV')])
+  })
+})
+
+describe('unit systems (docs/spec-v1.md section 5)', () => {
+  const inSystem = (source: string, units: Parameters<typeof evaluateSheet>[1]) =>
+    evaluateSheet([{ id: 'b', source }], units).get('b')!.map(({ result }) => result)
+  const lines = '45430 Pa\n5412 W\n0.001002 Pa s\n1 m\n0.008219 m^2\n0.01881 m^3/s\n2 kg m / s'
+
+  it('SI with prefixes is the default: the number between 1 and 1000 where the kind has steps', () => {
+    expect(block(lines)).toEqual([
+      value('45.43 kPa'),
+      value('5.412 kW'),
+      value('1.002 mPa s'),
+      value('1 m'),
+      value('82.19 cm^2'),
+      value('18.81 L / s'),
+      value('2 (kg m) / s'),
+    ])
+  })
+
+  it('SI base units: no prefixes', () => {
+    expect(inSystem(lines, { units: { system: 'si-base', custom: {} }, digits: 4 })).toEqual([
+      value('4.543·10⁴ Pa'),
+      value('5412 W'),
+      value('0.001002 Pa s'),
+      value('1 m'),
+      value('0.008219 m^2'),
+      value('0.01881 m^3 / s'),
+      value('2 (kg m) / s'),
+    ])
+  })
+
+  it('USCS: ft, psi, hp and so on, other kinds in its base units', () => {
+    expect(inSystem(lines, { units: { system: 'uscs', custom: {} }, digits: 4 })).toEqual([
+      value('6.589 psi'),
+      value('7.258 hp'),
+      value('2.093·10⁻⁵ (lbf s) / ft^2'),
+      value('3.281 ft'),
+      value('0.08847 ft^2'),
+      value('0.6643 ft^3 / s'),
+      value('14.47 (lbm ft) / s'),
+    ])
+  })
+
+  it('Custom changes the unit for chosen kinds, and the rest follow the system', () => {
+    const custom = { units: { system: 'si-prefixed', custom: { pressure: 'bar' } }, digits: 4 } as const
+    expect(inSystem('45430 Pa\n5412 W', custom)).toEqual([value('0.4543 bar'), value('5.412 kW')])
+  })
+
+  it('shows electrical units by name, with a prefix', () => {
+    expect(block('R = 10 kohm\nI = 2 mA\nI * R\nI * R / 1000')).toEqual([
+      empty,
+      empty,
+      value('20 V'),
+      value('20 mV'),
+    ])
+  })
+
+  it('shows a dimensionless result as a plain number', () => {
+    expect(block('2 m / (4 mm)')).toEqual([value('500')])
+  })
+
+  it('takes the sheet digits', () => {
+    expect(inSystem('45430.12 Pa', { units: { system: 'si-base', custom: {} }, digits: 6 })).toEqual([
+      value('45430.1 Pa'),
+    ])
   })
 })

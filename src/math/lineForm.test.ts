@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { codeLength, NO_FORMAT, readLine, writeFormat, type LineFormat } from './lineForm.ts'
+import {
+  codeLength,
+  NO_FORMAT,
+  readLine,
+  splitDisplayUnit,
+  writeFormat,
+  type LineFormat,
+} from './lineForm.ts'
 
 describe('readLine (docs/spec-v1.md section 3, step 1: the comment)', () => {
   it.each([
@@ -65,6 +72,8 @@ describe('the format clause (docs/spec-v1.md section 3: after everything, before
       note: null,
       format: { bold: true, underline: false, color: 'yellow' },
       unknownFormat: null,
+      displayUnit: null,
+      expression: 'U = I * R',
     })
   })
 
@@ -143,5 +152,29 @@ describe('writeFormat (what the format bar writes)', () => {
   it('says where the code ends, for the caret', () => {
     expect(codeLength('x = 1 @bold # n')).toBe(5)
     expect(codeLength('x = 1')).toBe(5)
+  })
+})
+
+describe('splitDisplayUnit (docs/spec-v1.md section 3, step 3)', () => {
+  it.each([
+    ['dP = a * b in kPa', 'dP = a * b', 'kPa'],
+    ['Q = q to L/minute', 'Q = q', 'L/minute'],
+    ['D = 102.3 mm in in', 'D = 102.3 mm', 'in'],
+    ['a to m in cm', 'a to m', 'cm'],
+    ['x = 2', 'x = 2', null],
+    ['x = (a in bar) + b', 'x = (a in bar) + b', null],
+    ['s = "go to bed"', 's = "go to bed"', null],
+    ['x_in = 2 in_2', 'x_in = 2 in_2', null],
+    ['in = 2', 'in = 2', null],
+  ])('%s', (code, expression, displayUnit) => {
+    expect(splitDisplayUnit(code)).toEqual({ expression, displayUnit })
+  })
+
+  it('reads a line’s display unit after its format clause and note are off', () => {
+    expect(readLine('U = I * R in V @bold # check')).toMatchObject({
+      code: 'U = I * R in V',
+      expression: 'U = I * R',
+      displayUnit: 'V',
+    })
   })
 })

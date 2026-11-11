@@ -1626,4 +1626,14 @@ Changes line if it changes behaviour.
   ↑ twice from line 2 reached the title; two Ctrl+Z took back the change and then the title, and redo brought both back;
   the title was in the saved file and showed again when it was reopened, clean; emptying it removed the header and kept
   the element.
-
+- 2026-11-11, [section 5](#unit-systems) (#56, Engineer's, for Matheus to confirm on the PR): the kinds list has
+  no electrical kinds, so `I * R` would have shown as `20 (kg m^2) / (s^3 A)`. A dimension off the list now shows
+  in its named SI unit when there is one (A, C, V, Ω, F, H, S, Wb, T), with a prefix in SI with prefixes (`20 mV`),
+  in every system, before composed base units. SI with prefixes steps through these units per kind: length µm,
+  mm, m, km; area mm², cm², m², km²; volume mm³, cm³, L, m³; volume flow mL/s, L/s, m³/s; mass flow g/s, kg/s;
+  velocity mm/s, m/s, km/s; force mN to MN; pressure Pa to GPa; energy mJ to GJ; power mW to GW; dynamic viscosity
+  µPa·s, mPa·s, Pa·s; kinematic viscosity mm²/s, m²/s; frequency Hz to GHz; mass mg, g, kg, t; time µs, ms, s;
+  acceleration, density and temperature have one unit. A result shows in the largest one that keeps its number at
+  1 or above, so a few read above 1000 (`9290 cm²`). USCS uses BTU for energy, lbf·s/ft² for dynamic viscosity
+  and °R for temperature. A result's plain text writes units as math.js does (`1.002 mPa s`, `18.81 L / s`,
+  `2 (kg m) / s`); typeset, they read `mPa·s`, `L/s`.

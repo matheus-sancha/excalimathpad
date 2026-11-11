@@ -1,7 +1,8 @@
 # 0005. The app reads its line forms before math.js sees a line
 
 - **Status**: accepted; the comment built (#44) and the format clause built (#63), both in
-  `src/math/lineForm.ts`; the display unit and the forms not built yet (M2 to M4)
+  `src/math/lineForm.ts`; the display unit built (#56), taken off the text there and
+  checked as a pure unit by the engine; the forms not built yet (M3, M4)
 - **Amended**: 2026-11-11 (#63): the format clause, read after the comment.
 - **Date**: 2026-11-03
 

@@ -97,12 +97,17 @@ server. v1 target: one sheet, for Matheus's own use.
   `∞`); `resultTex` typesets it (`1.235 \cdot 10^{4}`). Source numbers are
   never reformatted. `pump-sizing.test.ts` runs the acceptance sheet's lines,
   read from `docs/acceptance/pump-sizing.md`, against the reference at 4 s.f.
-  (spec section 16). Results format in a fixed unit
-  system, SI, so units read elsewhere never change how a result shows
-  (#25, ADR 0003). A result math.js simplifies shows in SI units with an
-  SI prefix (`5 ft * 2 ft` is `0.929 m^2`, `2 cm * 3 cm` is
-  `600 mm^2`); one whose units it keeps shows as written (`1 psi`,
-  `60 mi / h`); `to` converts. App code must evaluate only
+  (spec section 16). math.js's own unit system stays fixed at SI, so
+  units read elsewhere never change a result (#25, ADR 0003). How a result
+  shows is the app's formatter, `display.ts` (`createDisplay`, given the
+  instance and the captured `parse`, spec section 5): a trailing `in <unit>`
+  (`lineForm.ts` takes it off the text, the formatter checks it is a pure
+  unit, read outside the sheet's scope) shows the value in that unit,
+  balanced if the kind differs; else the kind's unit in the sheet's system
+  (`unitSystems.ts`: SI with prefixes by default, SI base, USCS, Custom),
+  else a named SI unit (`V`, `ohm`), else composed base units.
+  `evaluateSheet(blocks, settings)` takes the system and Digits. An unknown
+  display unit is the line's error after it ran. App code must evaluate only
   through `evaluateSheet`: math.js functions that depend on the disabled
   names (`help`, `rationalize`, a `parser()`'s methods) no longer work. The
   only module that imports `mathjs`. Depends on: `mathjs`.

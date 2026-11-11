@@ -11,8 +11,9 @@ import {
   type MathNode,
 } from 'mathjs'
 import { APP_UNITS } from './appUnits.ts'
+import { createDisplay, type DisplaySettings, type DisplayUnit } from './display.ts'
 import { readLine, type LineFormat } from './lineForm.ts'
-import { DEFAULT_DIGITS, formatOptions, plainNumbers } from './numbers.ts'
+import { DEFAULT_DIGITS } from './numbers.ts'
 import { lineTex, resultTex, textTex, type Names } from './typeset.ts'
 
 /**
@@ -68,6 +69,15 @@ registerAppUnits()
 // names (`help`, `rationalize`, `symbolicEqual`, a `parser()`'s methods)
 // fail with "... is not supported" messages.
 const parse = math.parse
+
+/** The shown result's formatter (docs/spec-v1.md section 5), on the captured parser. */
+const display = createDisplay(math, parse)
+
+/** How results show when the sheet sets nothing: SI with prefixes, 4 digits. */
+export const DEFAULT_DISPLAY: DisplaySettings = {
+  units: { system: 'si-prefixed', custom: {} },
+  digits: DEFAULT_DIGITS,
+}
 
 const disabled = (name: string) => () => {
   throw new Error(`${name} is not supported in a math element`)
@@ -204,6 +214,8 @@ type ParsedLine =
       note: string | null
       format: LineFormat
       unknownFormat: string | null
+      /** The line's trailing `in <unit>`, read outside the sheet's scope, or null. */
+      display: DisplayUnit | null
     }
 
 /**
@@ -243,7 +255,10 @@ type ParsedLine =
  * Returns exactly one `SheetLine` (result and typeset form) per line of each
  * block's source, keyed by block id. Ids are expected to be unique.
  */
-export function evaluateSheet(blocks: readonly SheetBlock[]): ReadonlyMap<string, SheetLine[]> {
+export function evaluateSheet(
+  blocks: readonly SheetBlock[],
+  settings: DisplaySettings = DEFAULT_DISPLAY,
+): ReadonlyMap<string, SheetLine[]> {
   const sheet = blocks.map(({ id, source }) => ({
     id,
     lines: splitLines(source).map(parseLine),
@@ -293,6 +308,10 @@ export function evaluateSheet(blocks: readonly SheetBlock[]): ReadonlyMap<string
       return { kind: 'error', message }
     }
     if (line.kind === 'syntax-error') return fail(line.message)
+    // `in <unit>` belongs on the line that calls a function (section 3).
+    if (line.display !== null && isFunctionAssignmentNode(line.node)) {
+      return fail("Set a function's display unit on the line that calls it")
+    }
     try {
       // Asked before the line runs: the line itself may assign one of these names.
       const isPlain = line.plainInputUnits?.every((name) => !scope.has(name)) ?? false
@@ -303,27 +322,27 @@ export function evaluateSheet(blocks: readonly SheetBlock[]): ReadonlyMap<string
       if (line.unknownFormat !== null) {
         return { kind: 'error', message: `Unknown format ${line.unknownFormat}` }
       }
-      // Comment-only lines evaluate to nothing. A plain input and a line
-      // whose value is a function leave the result cell empty, though the
-      // value still reaches the lines below (docs/spec-v1.md section 3).
-      if (value === undefined || typeof value === 'function' || isPlain) {
+      if (line.display?.kind === 'unknown') {
+        return { kind: 'error', message: `Unknown unit ${line.display.name}` }
+      }
+      // Comment-only lines evaluate to nothing. A plain input without a display
+      // unit and a line whose value is a function leave the result cell empty,
+      // though the value still reaches the lines below (section 3).
+      if (value === undefined || typeof value === 'function' || (isPlain && line.display === null)) {
         return { kind: 'empty' }
       }
-      return { kind: 'value', text: formatResult(value) }
+      try {
+        const unit = line.display?.kind === 'unit' ? line.display.unit : null
+        return { kind: 'value', text: display.show(value, unit, settings) }
+      } catch (error) {
+        // The value is assigned: only its showing failed.
+        return { kind: 'error', message: error instanceof Error ? error.message : String(error) }
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       return fail(explain(message, here, definedAt, failed))
     }
   }
-}
-
-/**
- * A value as the result cell's plain text (docs/spec-v1.md section 5, Numbers):
- * `math.format` at the sheet's digits, then `1.235·10⁴`, `∞`. The Digits
- * setting arrives with the Settings tab; until then every sheet has the default.
- */
-function formatResult(value: unknown, digits = DEFAULT_DIGITS): string {
-  return plainNumbers(math.format(value, formatOptions(digits)))
 }
 
 function typesetLine(line: ParsedLine, names: Names): TypesetLine {
@@ -388,7 +407,10 @@ function parseLine(text: string): ParsedLine {
   const form = readLine(text)
   if (form.kind === 'blank') return { kind: 'blank', comment: null }
   if (form.kind === 'comment') return { kind: 'blank', comment: form.text }
-  const line = form.code
+  // A trailing `in <unit>` comes off only when its target is a pure unit
+  // expression; otherwise the conversion stays math.js's own (ADR 0005).
+  const target = form.displayUnit === null ? null : display.readTarget(form.displayUnit)
+  const line = target === null ? form.code : form.expression
   try {
     const node = parse(line)
     return {
@@ -399,6 +421,7 @@ function parseLine(text: string): ParsedLine {
       note: form.note,
       format: form.format,
       unknownFormat: form.unknownFormat,
+      display: target,
     }
   } catch (error) {
     const target = ASSIGNMENT_TARGET.exec(line)?.[1]

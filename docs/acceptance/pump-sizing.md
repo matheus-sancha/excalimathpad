@@ -109,8 +109,8 @@ From `pump-sizing.py`, to 4 significant figures, in the unit shown.
 | `P_op` | 5.412 kW | 6.013 kW |
 
 - **The CI test compares values in the unit shown here,** whatever prefix the
-  sheet's unit system picks. So `A_p` passes as `8219 mm²` or `82.19 cm²`. Record
-  here what the app actually shows for it once M2 exists.
+  sheet's unit system picks. So `A_p` passes as `8219 mm²` or `82.19 cm²`. In SI
+  with prefixes, the app shows `82.19 cm²` (M2, #56).
 - **`eps/D` has no line of its own.** It is the second argument of `f` on lines
   15 and 18, and it stays in this table as a reference for checking `f_d`.
 
