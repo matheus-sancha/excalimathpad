@@ -625,15 +625,15 @@ describe('MathOverlay', () => {
       expect(scene.sourceWrites()).toBe(0)
     })
 
-    it('ArrowUp and ArrowDown stay put, and write nothing, at the ends', () => {
+    it('ArrowDown stays put, and writes nothing, on the last line', () => {
       const { scene } = renderOverlay([anchorWith('a = 1\nb = 2')])
-      const first = openLine(1)
-      type(first, 'typed')
+      const last = openLine(2)
+      type(last, 'typed')
 
-      fireEvent.keyDown(first, { key: 'ArrowUp' })
+      fireEvent.keyDown(last, { key: 'ArrowDown' })
 
-      expect(openField()).toBe(first)
-      expect(first.value).toBe('typed')
+      expect(openField()).toBe(last)
+      expect(last.value).toBe('typed')
       expect(scene.sourceWrites()).toBe(0)
     })
 
@@ -1239,13 +1239,14 @@ describe('line format (docs/spec-v1.md section 4: bold, underline, highlight)', 
     expect(barButton(/Highlight red/)).toHaveAttribute('aria-pressed', 'false')
   })
 
-  it('has no bar on a comment line or an empty line, which take no format', () => {
+  it('offers no format on a comment line or an empty line: the bar has Title alone', () => {
     renderOverlay([anchorWith('# inputs\n')])
 
-    openLine(1)
-    expect(bar()).toBeNull()
-    openLine(2)
-    expect(bar()).toBeNull()
+    for (const n of [1, 2]) {
+      openLine(n)
+      expect(within(bar()!).getAllByRole('button')).toHaveLength(1)
+      expect(within(bar()!).getByRole('button', { name: /^Title/ })).toBeInTheDocument()
+    }
   })
 
   it('a press writes the clause as one line commit, and the line stays open on it', () => {
@@ -1316,6 +1317,144 @@ describe('line format (docs/spec-v1.md section 4: bold, underline, highlight)', 
 
     expect(rowOf('m1', 1)).toHaveClass('is-gray')
     expect(barButton(/Highlight gray/)).toHaveAttribute('aria-pressed', 'true')
+  })
+})
+
+describe('title (docs/spec-v1.md section 4: an optional header on the element)', () => {
+  const header = () => elementOf('m1')!.querySelector<HTMLElement>('[data-title]')
+  const titleField = () => screen.queryByRole<HTMLInputElement>('textbox', { name: 'Title' })
+  const titled = (title: string, source = 'x = 2') =>
+    createMathAnchorElements([{ id: 'm1', ...box, source, title }])[0]
+  const titleOf = (scene: ReturnType<typeof fakeScene>) =>
+    scene.elementOf('m1').customData?.title as string | undefined
+
+  it('shows no header on an element without a title', () => {
+    renderOverlay([anchorWith('x = 2')])
+
+    expect(header()).toBeNull()
+  })
+
+  it('shows the title in a header above the lines, as plain text', () => {
+    renderOverlay([titled('Pipe flow = 2 * 3')])
+
+    expect(header()).toHaveTextContent('Pipe flow = 2 * 3')
+    expect(header()!.querySelector('.katex')).toBeNull()
+    // Before the lines in the body, so it is above them and counts toward the size.
+    const body = elementOf('m1')!.querySelector('.math-element__body')!
+    expect(body.firstElementChild).toBe(header())
+    // Never evaluated: the sheet has one line.
+    expect(resultsOf('m1')).toBe('')
+  })
+
+  it('↑ on the first line opens the title, adding the header', () => {
+    const { scene } = renderOverlay([anchorWith('x = 2')])
+    const first = openLine(1)
+    type(first, 'x = 5')
+
+    fireEvent.keyDown(first, { key: 'ArrowUp' })
+
+    // The line was left, so it is written; the title isn't in the scene yet.
+    expect(scene.sourceOf('m1')).toBe('x = 5')
+    expect(titleField()).toHaveFocus()
+    expect(titleField()!.value).toBe('')
+    expect(header()).not.toBeNull()
+    expect(titleOf(scene)).toBeUndefined()
+  })
+
+  it('the bar’s Title button opens the title too, from any line', () => {
+    renderOverlay([titled('Pipe flow', 'x = 2\ny = 3')])
+    openLine(2)
+
+    fireEvent.click(screen.getByRole('button', { name: /^Title/ }))
+
+    expect(titleField()).toHaveFocus()
+    expect(titleField()!.value).toBe('Pipe flow')
+  })
+
+  it('has no bar while the title is open', () => {
+    renderOverlay([titled('Pipe flow')])
+    openLine(1)
+    fireEvent.click(screen.getByRole('button', { name: /^Title/ }))
+
+    expect(screen.queryByRole('toolbar', { name: 'Line format' })).toBeNull()
+  })
+
+  it('Esc keeps what was typed, as one write, trimmed', () => {
+    const { scene } = renderOverlay([anchorWith('x = 2')])
+    fireEvent.keyDown(openLine(1), { key: 'ArrowUp' })
+    scene.updateScene.mockClear()
+
+    type(titleField()!, '  Pipe flow ')
+    fireEvent.keyDown(titleField()!, { key: 'Escape' })
+
+    expect(titleOf(scene)).toBe('Pipe flow')
+    expect(scene.sourceOf('m1')).toBe('x = 2')
+    expect(header()).toHaveTextContent('Pipe flow')
+    expect(titleField()).toBeNull()
+  })
+
+  it.each(['Enter', 'ArrowDown'])('%s keeps the title and goes to the first line', (key) => {
+    const { scene } = renderOverlay([anchorWith('x = 2\ny = 3')])
+    fireEvent.keyDown(openLine(1), { key: 'ArrowUp' })
+    type(titleField()!, 'Inputs')
+
+    fireEvent.keyDown(titleField()!, { key })
+
+    expect(titleOf(scene)).toBe('Inputs')
+    expect(openField()!.value).toBe('x = 2')
+    // Enter in the title never splits a line.
+    expect(scene.sourceOf('m1')).toBe('x = 2\ny = 3')
+  })
+
+  it('an empty title removes the header and the stored title', () => {
+    const { scene } = renderOverlay([titled('Pipe flow')])
+    openLine(1)
+    fireEvent.click(screen.getByRole('button', { name: /^Title/ }))
+
+    type(titleField()!, '   ')
+    fireEvent.keyDown(titleField()!, { key: 'Escape' })
+
+    expect(header()).toBeNull()
+    expect(scene.elementOf('m1').customData).not.toHaveProperty('title')
+    expect(scene.elementOf('m1').isDeleted).toBe(false)
+  })
+
+  it('a title left unchanged writes nothing', () => {
+    const { scene } = renderOverlay([titled('Pipe flow')])
+    openLine(1)
+    fireEvent.click(screen.getByRole('button', { name: /^Title/ }))
+    scene.updateScene.mockClear()
+
+    fireEvent.keyDown(titleField()!, { key: 'Escape' })
+
+    expect(scene.updateScene).not.toHaveBeenCalled()
+  })
+
+  it('keeps an element that holds only a title', () => {
+    const { scene } = renderOverlay([titled('Notes', '')])
+
+    fireEvent.keyDown(openLine(1), { key: 'Escape' })
+
+    expect(scene.elementOf('m1').isDeleted).toBe(false)
+  })
+
+  it('removes an element left with no title and no text', () => {
+    const { scene } = renderOverlay([anchorWith('')])
+    fireEvent.keyDown(openLine(1), { key: 'ArrowUp' })
+
+    fireEvent.keyDown(titleField()!, { key: 'Escape' })
+
+    expect(scene.elementOf('m1').isDeleted).toBe(true)
+  })
+
+  it('reads anything but a string as no title, and a title as one line', () => {
+    const [bad] = createMathAnchorElements([{ id: 'm1', ...box, source: 'x = 2' }])
+    renderOverlay([{ ...bad, customData: { ...bad.customData, title: 42 } }])
+    expect(header()).toBeNull()
+    cleanup()
+
+    renderOverlay([{ ...bad, customData: { ...bad.customData, title: 'Pipe\nflow' } }])
+    expect(header()).toHaveTextContent('Pipe flow')
   })
 })
 

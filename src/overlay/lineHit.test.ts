@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { MathAnchor } from '../canvas/mathAnchor.ts'
-import { anchorAt, containsPoint, lineAt, toAnchorFrame } from './lineHit.ts'
+import { anchorAt, containsPoint, lineAt, onHeader, toAnchorFrame } from './lineHit.ts'
 import { sceneToStage, stageToScene } from './viewport.ts'
 
 const anchor = (props: Partial<MathAnchor> = {}): MathAnchor => ({
@@ -12,6 +12,7 @@ const anchor = (props: Partial<MathAnchor> = {}): MathAnchor => ({
   angle: 0,
   source: '',
   locked: false,
+  title: '',
   opacity: 100,
   ...props,
 })
@@ -102,3 +103,19 @@ describe('lineAt', () => {
     expect(lineAt(turned, stageToScene(stage, viewport), rows)).toBe(2)
   })
 })
+
+describe('onHeader (a double-click on the title edits it)', () => {
+  const header = { top: 12, height: 28 }
+
+  it('is true inside the header’s box, across the element’s width', () => {
+    expect(onHeader(anchor(), { x: 110, y: 70 }, header)).toBe(true)
+    expect(onHeader(anchor(), { x: 490, y: 89 }, header)).toBe(true)
+  })
+
+  it('is false above it, on the rows below it, and with no header', () => {
+    expect(onHeader(anchor(), { x: 110, y: 55 }, header)).toBe(false)
+    expect(onHeader(anchor(), { x: 110, y: 95 }, header)).toBe(false)
+    expect(onHeader(anchor(), { x: 110, y: 70 }, null)).toBe(false)
+  })
+})
+

@@ -7,7 +7,7 @@ import { SheetCanvas, type SheetCanvasHandle } from '../canvas/SheetCanvas.tsx'
 import { createMathAnchorElements } from '../canvas/mathAnchor.ts'
 import { AppShell } from '../shell/AppShell.tsx'
 import { sceneLoaded, undoControls } from '../test/excalidraw.ts'
-import { doubleClickLine } from '../test/gestures.ts'
+import { doubleClickLine, doubleClickOnCanvas } from '../test/gestures.ts'
 import { MathOverlay } from './MathOverlay.tsx'
 import { resultsOf as sheetResults } from '../test/sheetView.ts'
 
@@ -370,6 +370,51 @@ describe('a line format on real Excalidraw', () => {
 
     const [, result] = screen.getAllByRole('list', { name: 'Lines' })
     expect(result.querySelector('.math-element__result')).toHaveAttribute('data-text', '20 V')
+  })
+})
+
+// docs/spec-v1.md section 6: a title change is one undo step.
+describe('a title on real Excalidraw', () => {
+  const titleField = () => screen.getByRole<HTMLInputElement>('textbox', { name: 'Title' })
+  const titleOf = (id = 'm1') =>
+    api.getSceneElements().find((e) => e.id === id)?.customData?.title as string | undefined
+
+  it('adding a title is one step, and so is changing it', async () => {
+    const { sourceOf, undo, canUndo } = await mount()
+    openLine(1)
+    press('ArrowUp')
+    fireEvent.input(titleField(), { target: { value: 'Inputs' } })
+    fireEvent.keyDown(titleField(), { key: 'Enter' })
+    expect(titleOf()).toBe('Inputs')
+
+    press('ArrowUp')
+    fireEvent.input(titleField(), { target: { value: 'Circuit inputs' } })
+    fireEvent.keyDown(titleField(), { key: 'Escape' })
+    expect(titleOf()).toBe('Circuit inputs')
+
+    undo()
+    await waitFor(() => expect(titleOf()).toBe('Inputs'))
+    undo()
+    await waitFor(() => expect(titleOf()).toBeUndefined())
+    expect(canUndo()).toBe(false)
+    expect(sourceOf()).toBe('R = 10 kohm\nI = 2 mA')
+  })
+
+  it('a double-click on the header edits the title', async () => {
+    await mount()
+    openLine(1)
+    press('ArrowUp')
+    fireEvent.input(titleField(), { target: { value: 'Inputs' } })
+    fireEvent.keyDown(titleField(), { key: 'Escape' })
+    // jsdom lays nothing out: give the header its box above the first row.
+    const header = document.querySelector<HTMLElement>('[data-anchor-id="m1"] [data-title]')!
+    Object.defineProperty(header, 'offsetTop', { value: 0, configurable: true })
+    Object.defineProperty(header, 'offsetHeight', { value: 10, configurable: true })
+
+    doubleClickOnCanvas({ clientX: 300, clientY: 55 })
+
+    expect(titleField()).toHaveFocus()
+    expect(titleField().value).toBe('Inputs')
   })
 })
 

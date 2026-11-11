@@ -11,6 +11,7 @@ const at = (id: string, x: number, y: number, more: Partial<MathAnchor> = {}): M
   source: '',
   angle: 0,
   locked: false,
+  title: '',
   opacity: 100,
   ...more,
 })

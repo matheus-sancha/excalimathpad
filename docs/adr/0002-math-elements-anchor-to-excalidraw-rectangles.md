@@ -12,7 +12,8 @@
   snap back (#44, 2026-11-07); Add math as a custom tool, the removal of an
   element left empty, and the untitled sheet without its seed (#45, 2026-11-10);
   the fixed style, restored with `NEVER` through `src/canvas/anchorStyle.ts`, and
-  opacity followed by the overlay (#46, 2026-11-10).
+  opacity followed by the overlay (#46, 2026-11-10); the optional title in
+  `customData.title` (#64, 2026-11-11).
 
 ## Context
 
@@ -38,7 +39,7 @@ through Excalidraw's public API (`getSceneElements`, `getAppState`, `onChange`,
 Who owns what on the anchor (#10, #11, #29, #32; M1):
 
 - **Excalidraw owns** position, rotation, selection, deletion, undo and redo.
-- **The app writes** three things:
+- **The app writes** four things:
   - `customData.source`, the element's lines, once per line commit. This is the
     decision the first version left open.
   - Size, always equal to the content, with no undo step. Resize handles snap back.
@@ -46,6 +47,8 @@ Who owns what on the anchor (#10, #11, #29, #32; M1):
     isn't public, so the end follows when the element next moves (known limit,
     #44).
   - Style, fixed except `opacity`, restored with no undo step if anything changes it.
+  - `customData.title`, the element's optional title, one undo step per change, by the same
+    write path as the source (#64, 2026-11-11).
 
 Engineering rules that make it work (Engineer's, found in the #2 spike and #28):
 

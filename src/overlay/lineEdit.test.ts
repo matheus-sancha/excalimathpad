@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  TITLE_LINE,
   applyLineMove,
   hasText,
   startLineEdit,
@@ -63,7 +64,6 @@ describe('applyLineMove', () => {
 
   describe('a move with nowhere to go stays on the line and commits nothing', () => {
     it.each([
-      ['up from the first line', 0, { kind: 'up' }],
       ['down from the last line', 2, { kind: 'down' }],
       ['join on the first line', 0, { kind: 'join' }],
     ] as const)('%s', (_, lineIndex, move) => {
@@ -148,3 +148,81 @@ describe('an element left with no text is removed (section 4)', () => {
     expect(applyLineMove('', editing(0, '', ''), { kind: 'split', from: 0, to: 0 }).remove).toBe(false)
   })
 })
+
+describe('the title (section 4: above the first line)', () => {
+  const onTitle = (text: string, title = ''): LineEdit => ({
+    ...startLineEdit(SOURCE, 'm1', TITLE_LINE, title),
+    text,
+  })
+
+  it('opens on the scene’s title, with the caret at its end', () => {
+    expect(startLineEdit(SOURCE, 'm1', TITLE_LINE, 'Pipe flow')).toEqual({
+      anchorId: 'm1',
+      lineIndex: TITLE_LINE,
+      text: 'Pipe flow',
+      caret: 9,
+    })
+  })
+
+  it.each([{ kind: 'up' }, { kind: 'title' }] as const)(
+    '$kind from the first line commits the line and opens the title',
+    (move) => {
+      expect(applyLineMove(SOURCE, editing(0, 'a = 9'), move, 'Pipe flow')).toEqual({
+        source: 'a = 9\nb = 2\nc = 3',
+        title: 'Pipe flow',
+        edit: { anchorId: 'm1', lineIndex: TITLE_LINE, text: 'Pipe flow', caret: 9 },
+        remove: false,
+      })
+    },
+  )
+
+  it('the Title move works from any line', () => {
+    expect(applyLineMove(SOURCE, editing(2), { kind: 'title' }).edit?.lineIndex).toBe(TITLE_LINE)
+  })
+
+  it('typing in the title leaves the lines alone', () => {
+    expect(withTypedLine(SOURCE, onTitle('Pipe flow'))).toBe(SOURCE)
+  })
+
+  it('leave commits the title, trimmed', () => {
+    expect(applyLineMove(SOURCE, onTitle('  Pipe flow '), { kind: 'leave' })).toEqual({
+      source: SOURCE,
+      title: 'Pipe flow',
+      edit: null,
+      remove: false,
+    })
+  })
+
+  it.each([{ kind: 'down' }, { kind: 'split', from: 2, to: 2 }] as const)(
+    '$kind commits the title and opens the first line',
+    (move) => {
+      expect(applyLineMove(SOURCE, onTitle('Inputs'), move)).toEqual({
+        source: SOURCE,
+        title: 'Inputs',
+        edit: { anchorId: 'm1', lineIndex: 0, text: 'a = 1', caret: 5 },
+        remove: false,
+      })
+    },
+  )
+
+  it.each([{ kind: 'up' }, { kind: 'join' }, { kind: 'title' }] as const)(
+    '$kind has nowhere to go from the title, and commits nothing',
+    (move) => {
+      const edit = onTitle('typed', 'Pipe flow')
+      expect(applyLineMove(SOURCE, edit, move, 'Pipe flow')).toEqual({
+        source: SOURCE,
+        title: 'Pipe flow',
+        edit,
+        remove: false,
+      })
+    },
+  )
+
+  it('a title is text: an element with only a title is kept, with neither it is removed', () => {
+    const leave = { kind: 'leave' } as const
+    expect(applyLineMove('', editing(0, '', ''), leave, 'Notes').remove).toBe(false)
+    expect(applyLineMove('', { ...onTitle('Notes'), text: 'Notes' }, leave).remove).toBe(false)
+    expect(applyLineMove('', { ...onTitle(''), text: ' ' }, leave, 'Notes').remove).toBe(true)
+  })
+})
+

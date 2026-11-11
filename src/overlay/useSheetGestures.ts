@@ -7,8 +7,8 @@ import { isMathAnchor, type MathAnchor } from '../canvas/mathAnchor.ts'
 import { deselectAll } from '../canvas/selection.ts'
 import { splitLines } from '../math/evaluate.ts'
 import { clickTarget, keyAction, ownerAt, type CanvasState, type Press } from './gestures.ts'
-import { containsPoint, lineAt, type RowBox } from './lineHit.ts'
-import type { LineEdit } from './lineEdit.ts'
+import { containsPoint, lineAt, onHeader, type RowBox } from './lineHit.ts'
+import { TITLE_LINE, type LineEdit } from './lineEdit.ts'
 import type { SceneApi } from './MathOverlay.tsx'
 import { stageToScene, type Point } from './viewport.ts'
 
@@ -23,6 +23,8 @@ export interface SheetGestures {
   anchors: () => readonly MathAnchor[]
   /** An element's rows as laid out, top first. */
   rowsOf: (anchorId: string) => RowBox[]
+  /** An element's header as laid out, or null when it shows no title. */
+  headerOf: (anchorId: string) => RowBox | null
   edit: () => LineEdit | null
   /** Leaves any open edit, then opens this line with the caret at the end. */
   openLine: (anchorId: string, lineIndex: number) => void
@@ -61,6 +63,12 @@ export function useSheetGestures(gestures: SheetGestures) {
       )
     }
 
+    // The line under the point, or the title when the point is on the header.
+    const lineUnder = (anchor: MathAnchor, point: Point) =>
+      onHeader(anchor, point, g().headerOf(anchor.id))
+        ? TITLE_LINE
+        : lineAt(anchor, point, g().rowsOf(anchor.id))
+
     const facts = (event: Event) => ({ targetOwnsEvent: isTypingTarget(event.target) })
 
     // A press on the edited element, kept until its click.
@@ -78,7 +86,7 @@ export function useSheetGestures(gestures: SheetGestures) {
         const anchor = anchorById(edit.anchorId)
         const point = toScene(event)
         if (anchor && containsPoint(anchor, point)) {
-          const lineIndex = lineAt(anchor, point, g().rowsOf(anchor.id))
+          const lineIndex = lineUnder(anchor, point)
           press = { anchorId: anchor.id, lineIndex, x: anchor.x, y: anchor.y }
         }
         g().leaveLine()
@@ -110,7 +118,7 @@ export function useSheetGestures(gestures: SheetGestures) {
           facts(event),
         )
         if (!owner) return false
-        g().openLine(owner.id, lineAt(owner, point, g().rowsOf(owner.id)))
+        g().openLine(owner.id, lineUnder(owner, point))
         return true
       },
 

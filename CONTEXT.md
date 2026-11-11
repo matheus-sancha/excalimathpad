@@ -30,7 +30,8 @@ server. v1 target: one sheet, for Matheus's own use.
   `focusCanvas`. `mathAnchor.ts` defines a math element's anchor (a rectangle
   with `customData.kind === "math"` and `customData.source`, ADR 0002; a solid
   `#ffffff01` fill, so clicks inside it select and drag it) and
-  `writeAnchorSource`, the only way source enters the scene. `selection.ts`
+  `writeAnchorSource`, the only way source enters the scene, and
+  `writeAnchorTitle`, the same for the optional `customData.title`. `selection.ts`
   holds `deselectAll`, the second Esc's write (`NEVER`, no undo step).
   `anchorStyle.ts` keeps anchors in the fixed style (`ANCHOR_STYLE`, in
   `mathAnchor.ts`): `restoreAnchorStyles` writes it back with `NEVER`.
@@ -176,8 +177,12 @@ and everything downstream recalculates. Engine: math.js, client-side.
 - **Placing** — the UI mode between Add math (M or the button) and the click
   that creates the anchor. It is Excalidraw's active tool, never in the scene,
   and no undo step. Esc cancels it.
-- **Empty element** — one whose source has no text: every line is blank or
-  spaces. A comment is text.
+- **Title** — a math element's optional name: plain text on one line, in
+  `customData.title`, shown in a header above the lines. Never evaluated. An
+  edit on it is the line edit at `TITLE_LINE` (-1): ↑ on the first line, the
+  bar's Title button, or a double-click on the header (`onHeader`).
+- **Empty element** — one whose source has no text and that has no title:
+  every line is blank or spaces. A comment is text.
 - **Line edit** — the one line shown as raw source: anchor id, line index and
   the typed text. UI state, never in the scene. The sheet runs from the typed
   text on every keystroke.
@@ -313,6 +318,9 @@ and everything downstream recalculates. Engine: math.js, client-side.
   at the next Excalidraw upgrade.
 - **`focusCanvas` queries `.excalidraw`,** the element that hears Excalidraw's
   keys. It lives in `src/canvas/`, and `SheetCanvas.test.tsx` pins it.
+- **The header is in the body, above the grid.** So the measured size
+  includes it, and each row's `offsetTop` already counts it: the line hit
+  needs no offset. The gestures read its box from `[data-title]`.
 - **The format bar never takes focus.** Its buttons prevent `mousedown` and
   are out of the tab order: a blur leaves the line. It is absolutely placed,
   so the measured body, and so the anchor, never includes it.

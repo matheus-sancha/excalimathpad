@@ -15,6 +15,7 @@ import {
   sameAnchor,
   toMathAnchor,
   writeAnchorSource,
+  writeAnchorTitle,
   type MathAnchor,
 } from '../canvas/mathAnchor.ts'
 import type { ForwardWheel } from '../canvas/SheetCanvas.tsx'
@@ -22,6 +23,7 @@ import { evaluateSheet, type SheetBlock } from '../math/evaluate.ts'
 import {
   applyLineMove,
   startLineEdit,
+  TITLE_LINE,
   withTypedLine,
   type LineEdit,
   type LineMove,
@@ -152,16 +154,20 @@ export function MathOverlay({
       changeEdit(null)
       return
     }
-    const next = applyLineMove(anchor.source, current, move)
+    const next = applyLineMove(anchor.source, current, move, anchor.title)
     if (next.remove) removeAnchor(api, current.anchorId)
-    else writeAnchorSource(api, current.anchorId, next.source)
+    else {
+      // A move changes the line or the title, never both: one write, one step.
+      writeAnchorSource(api, current.anchorId, next.source)
+      writeAnchorTitle(api, current.anchorId, next.title)
+    }
     changeEdit(next.edit)
   }
 
   const openLine = (anchorId: string, lineIndex: number) => {
     moveEdit({ kind: 'leave' })
     const anchor = findAnchor(anchorId)
-    if (anchor) changeEdit(startLineEdit(anchor.source, anchorId, lineIndex))
+    if (anchor) changeEdit(startLineEdit(anchor.source, anchorId, lineIndex, anchor.title))
   }
 
   useImperativeHandle(control, () => ({
@@ -169,7 +175,9 @@ export function MathOverlay({
     commitLine() {
       const current = editRef.current
       const anchor = current && findAnchor(current.anchorId)
-      if (current && anchor) writeAnchorSource(api, current.anchorId, withTypedLine(anchor.source, current))
+      if (!current || !anchor) return
+      if (current.lineIndex === TITLE_LINE) writeAnchorTitle(api, current.anchorId, current.text)
+      else writeAnchorSource(api, current.anchorId, withTypedLine(anchor.source, current))
     },
     leaveLine: () => moveEdit({ kind: 'leave' }),
   }))
@@ -179,6 +187,7 @@ export function MathOverlay({
     canvasRoot,
     anchors: () => store.getSnapshot().anchors,
     rowsOf: (anchorId) => rowsOf(overlayRef.current, anchorId),
+    headerOf: (anchorId) => headerOf(overlayRef.current, anchorId),
     edit: () => editRef.current,
     openLine,
     leaveLine: () => moveEdit({ kind: 'leave' }),
@@ -262,6 +271,19 @@ function rowsOf(overlay: HTMLElement | null, anchorId: string): RowBox[] {
     top: row.offsetTop,
     height: row.offsetHeight,
   }))
+}
+
+/** The header's box as laid out, or null when the element shows no title. */
+function headerOf(overlay: HTMLElement | null, anchorId: string): RowBox | null {
+  const header = elementOf(overlay, anchorId)?.querySelector<HTMLElement>('[data-title]')
+  return header ? { top: header.offsetTop, height: header.offsetHeight } : null
+}
+
+function elementOf(overlay: HTMLElement | null, anchorId: string): HTMLElement | undefined {
+  return Array.from(overlay?.children ?? []).find(
+    (child): child is HTMLElement =>
+      child instanceof HTMLElement && child.dataset.anchorId === anchorId,
+  )
 }
 
 function createSceneStore(api: SceneApi) {
