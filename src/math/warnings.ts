@@ -173,7 +173,7 @@ export function usedNames(node: MathNode): string[] {
 }
 
 /** Every name in a function body, called ones included. */
-function bodyNames(node: MathNode): string[] {
+export function bodyNames(node: MathNode): string[] {
   if (isSymbolNode(node)) return [node.name]
   if (isFunctionAssignmentNode(node)) {
     // A function defined inside a body: its own parameters are local to it.

@@ -1086,3 +1086,104 @@ describe('solve functions and nested solves (docs/spec-v1.md section 9, #71)', (
     expect(warnings(colebrook)[0]).toEqual([])
   })
 })
+
+describe('ranges and lists (docs/spec-v1.md section 10, #74)', () => {
+  const list = (text: string, failed: string | null = null): LineResult => ({ kind: 'list', text, failed })
+  const variables = (source: string) => evaluateSheet([{ id: 'b', source }]).get('b')!.map((line) => line.variables)
+
+  it('makes a list from a range: the end included when the steps land on it', () => {
+    expect(block('n = 1 .. 10\nx = 0 .. 1 step 0.1\nQ_s = 1 L/s .. 30 L/s step 1 L/s')).toEqual([
+      list('10 values, 1 … 10'),
+      list('11 values, 0 … 1'),
+      list('30 values, 1 … 30 L / s'),
+    ])
+  })
+
+  it('stops at the last point before the end, and counts down with a negative step', () => {
+    expect(block('a = 0 .. 1 step 0.3\nb = 10 .. 1 step -3')).toEqual([
+      list('4 values, 0 … 0.9'),
+      list('4 values, 10 … 1'),
+    ])
+  })
+
+  it('needs a step with units, the same kind throughout, and one that reaches the end', () => {
+    expect(block('a = 1 m .. 3 m\nb = 1 .. 3 step 1 m\nc = 1 .. 3 step 0\nd = 1 .. 3 step -1')).toEqual([
+      error('a range with units needs a step, such as "step 1 m"'),
+      error('start, end and step must be the same kind'),
+      error('step 0 never reaches the end'),
+      error('step -1 never reaches the end'),
+    ])
+  })
+
+  it('refuses more than 10,000 points', () => {
+    expect(block('big = 1 .. 10001\nok = 1 .. 10000')).toEqual([
+      error('big has more than 10,000 points'),
+      list('10000 values, 1 … 1·10⁴'),
+    ])
+  })
+
+  it('runs a line that mentions a list once per point, functions included', () => {
+    expect(block('x = 1 .. 3\nsq(t) = t^2\ny = sq(x)\nx^2 + 1')).toEqual([
+      list('3 values, 1 … 3'),
+      empty,
+      list('3 values, 1 … 9'),
+      list('3 values, 2 … 10'),
+    ])
+  })
+
+  it('pairs several lists point by point, and refuses different lengths', () => {
+    expect(block('a = 1 .. 3\nb = 10 .. 30 step 10\na + b\nc = 1 .. 4\na + c')).toEqual([
+      list('3 values, 1 … 3'),
+      list('3 values, 10 … 30'),
+      list('3 values, 11 … 33'),
+      list('4 values, 1 … 4'),
+      error('a has 3 values, c has 4'),
+    ])
+  })
+
+  it('takes the whole list in an aggregate: min, max, sum, mean, count', () => {
+    expect(block('h = 1 m .. 4 m step 1 m\nmin(h)\nmax(h)\nsum(h)\nmean(h)\ncount(h)\nmax(h * 2) + 1 m')).toEqual([
+      list('4 values, 1 … 4 m'),
+      value('1 m'),
+      value('4 m'),
+      value('10 m'),
+      value('2.5 m'),
+      value('4'),
+      value('9 m'),
+    ])
+  })
+
+  it('leaves aggregates on plain values to math.js', () => {
+    expect(block('max(1, 5, 3)')).toEqual([value('5')])
+  })
+
+  it('fails only the failed point, names it, and fails an aggregate over it', () => {
+    expect(block('x = -1 .. 2\nr(t) = 1 / sqrt(t) + (t < 0 ? missing : 0)\ny = r(x)\nmax(y)')).toEqual([
+      list('4 values, -1 … 2'),
+      empty,
+      list('3 of 4 values, ∞ … 0.7071', '1 of 4 points failed. At x = -1: in r(-1): Undefined symbol missing'),
+      error('y has a failed point'),
+    ])
+  })
+
+  it('carries a failed input point to the lines below, without shifting the others', () => {
+    const [, , , twice] = block('x = -1 .. 1\nr(t) = t < 0 ? missing : t\ny = r(x)\ny * 2')
+    // The input point itself failed, so there is no value to name it by.
+    expect(twice).toEqual(list('2 of 3 values, 0 … 2', '1 of 3 points failed. At point 1: in r(-1): Undefined symbol missing'))
+  })
+
+  it('keeps a function body from reaching an outside list', () => {
+    expect(block('Q_s = 1 .. 3\ng(x) = x + Q_s\nh(x, Q_s) = x + Q_s')).toEqual([
+      list('3 values, 1 … 3'),
+      error('pass Q_s as an argument'),
+      empty,
+    ])
+  })
+
+  it('shows a list in its display unit, and in Variables as its summary', () => {
+    expect(block('Q_s = 1 L/s .. 2 L/s step 1 L/s in L/minute')).toEqual([list('2 values, 60 … 120 L / minute')])
+    expect(variables('Q_s = 1 L/s .. 2 L/s step 1 L/s')).toEqual([
+      [{ name: 'Q_s', kind: 'list', text: '2 values, 1 … 2 L / s' }],
+    ])
+  })
+})

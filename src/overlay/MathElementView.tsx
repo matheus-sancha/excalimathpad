@@ -373,12 +373,14 @@ function Html({ html }: { html: string }) {
  * never carry it.
  */
 function Gutter({ result, warnings }: { result: LineResult; warnings: readonly string[] }) {
-  const error = result.kind === 'error'
+  // A list's failed points are the line's error (section 10).
+  const message = result.kind === 'error' ? result.message : result.kind === 'list' ? result.failed : null
+  const error = message !== null
   const warned = !error && warnings.length > 0
   return (
     <span
       className={`math-element__gutter${warned ? ' is-warning' : ''}`}
-      data-tip={error ? result.message : warned ? warnings.join('\n') : undefined}
+      data-tip={error ? message : warned ? warnings.join('\n') : undefined}
       data-warnings={warnings.length > 0 ? warnings.join('\n') : undefined}
     >
       {error ? '●' : warned ? '⚠' : ''}
@@ -422,6 +424,10 @@ function ResultCell({
   } else if (result.kind === 'error') {
     text = result.message
     content = result.message
+  } else if (result.kind === 'list') {
+    // Section 10: one row high, as a summary; no unit slot.
+    text = result.text
+    content = result.text
   } else if (slot && slots.hovered === index && !plain) {
     // A plain input: an empty slot on hover (section 5, Unit slot).
     content = <SlotBox index={index} chosen={false} hovered unitHtml={null} />

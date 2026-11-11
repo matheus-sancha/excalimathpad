@@ -134,6 +134,18 @@ server. v1 target: one sheet, for Matheus's own use.
   solve's details (method, iterations, residual in SI, bracket) ride on its
   line's `solveDetails`, and on a line that is just one call to a solve
   function.
+  **Lists** (spec section 10, `lists.ts`): a `SheetList` holds point results
+  (a value or an error) and the first list its line ran over, to name a failed
+  point. A range line is read as text (`rangeLine.ts`, `[name =] a .. b [step
+  s]`) and `createRanges` steps it in SI numbers, in the start's unit. A line
+  whose names include a list runs once per point (`iterate` in `evaluate.ts`):
+  each list name bound to its i-th value in a `LayeredScope`, lists paired,
+  one compiled expression, no math.js matrices; a point that throws fails
+  alone. An aggregate (`min`, `max`, `sum`, `mean`, `count`) over a list is
+  worked out first and stands in the node as a bound name (`foldAggregates`).
+  A function body that names an outside list fails at its definition. A list
+  result is `{ kind: 'list', text, failed }`: its summary, and the line's
+  error when points failed.
   App code must evaluate only
   through `evaluateSheet`: math.js functions that depend on the disabled
   names (`help`, `rationalize`, a `parser()`'s methods) no longer work. The

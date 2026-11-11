@@ -86,6 +86,8 @@ export function variableGroups(sheet: readonly PanelElement[], filter = ''): Var
                 }
               case 'error':
                 return { ...base, tex: nameTex(variable.name), value: 'error', unit: '', kind: 'error' }
+              case 'list':
+                return { ...base, tex: nameTex(variable.name), value: variable.text, unit: '', kind: 'value' }
               case 'value': {
                 const split = leadingNumber(variable.text)
                 const number = split && (split.rest === '' || split.rest.startsWith(' '))
@@ -113,13 +115,9 @@ export function problemRows(sheet: readonly PanelElement[]): ProblemRow[] {
       const where = `${label}, line ${lineIndex + 1}${name ? ` · ${name}` : ''}`
       const target = { anchorId: element.anchorId, line: lineIndex, where }
       const rows: ProblemRow[] = []
-      if (line.result.kind === 'error') {
-        rows.push({
-          ...target,
-          key: `${element.anchorId}:${lineIndex}:error`,
-          severity: 'error',
-          message: line.result.message,
-        })
+      const error = problemOf(line.result)
+      if (error !== null) {
+        rows.push({ ...target, key: `${element.anchorId}:${lineIndex}:error`, severity: 'error', message: error })
       }
       line.warnings.forEach((message, i) =>
         rows.push({ ...target, key: `${element.anchorId}:${lineIndex}:w${i}`, severity: 'warning', message }),
@@ -132,4 +130,10 @@ export function problemRows(sheet: readonly PanelElement[]): ProblemRow[] {
 /** The Sheet button's badge: how many errors and warnings the sheet has. */
 export function problemCount(sheet: readonly PanelElement[]): number {
   return problemRows(sheet).length
+}
+
+/** A line's error: its message, or a list's failed points (section 10). */
+function problemOf(result: PanelElement['lines'][number]['result']): string | null {
+  if (result.kind === 'error') return result.message
+  return result.kind === 'list' ? result.failed : null
 }

@@ -1096,6 +1096,7 @@ The wording of every user-facing message. `<…>` is filled in. Numbers follow
 | Unknown clause | `Unknown plot setting xyz` | M4 |
 | Log axis with zero or negative | `x log needs values above 0` | M4 |
 | All of a series' points failed | `H_s: every point failed. At Q_s = 1 L/s: <message>` | M4 |
+| A range's start, end or step isn't a single number or quantity | `the range's step must be a number or a quantity`, `a range takes single values, not a list` | #74 |
 
 **App**
 
@@ -1362,6 +1363,18 @@ Settings tab.
 The engine comes first, so the nested solve, the open risk below, surfaces in the first two issues; the
 typeset form and the hover are built on values that are already right.
 
+**M4's issue order** (M3's three are built, #70 to #72):
+
+1. Ranges and lists, with the pump sheet's `Hs(Q_s)`, `Hp(Q_s)` and 5" column in CI (#74)
+2. Range typeset and list hover (#75)
+3. Tables (#76)
+4. Plots (#77)
+5. Plot settings popover (#78)
+
+Lists come first, since tables and plots only show them. The table comes before the plot: it is the simpler
+display of the same lists, and it settles the column units the plot axes reuse. The popover is last: it only
+writes clauses the plot already reads.
+
 **Dates:** set a date for M1 when this spec is agreed. Date each later milestone when the previous one lands,
 from how long it really took. The v1 end is a forecast only.
 
@@ -1502,6 +1515,9 @@ Changes line if it changes behaviour.
   91-row sweep took 30 ms in the research, so it's probably fine, but measure it. **Measured (#71), in Node under
   Vitest:** lines 1-28 run in about 8 ms (median of 20), 9 ms at 5"; with the 30 `Hs` calls added, about 11 ms
   (38 ms at worst). The pump sheet's CI test pins the whole run under 200 ms. M4 measures the table in the browser.
+  **Measured in Chromium (#74):** lines 1-29 plus `H_s = Hs(Q_s)` and `H_p = Hp(Q_s)`, so 30 Colebrook solves per
+  run besides `Q_op`'s, take about 6 ms (median of 30 runs, dev build), 11 ms at worst. Re-running the whole sheet
+  on every keystroke holds.
 - The mark label's position, log scale and `points`, tried only as prototype switches.
 - The clause parser and lazy loading of Observable Plot, not built in the prototype.
 
@@ -1708,3 +1724,10 @@ Changes line if it changes behaviour.
   `Bracket: 0.01864160794462 .. 0.01864160794463`, both at 13 significant digits so the bracket's ends differ. It is
   the problem tip: the same 500 ms rest, the same hiding, and a press or drag from the value still selects and moves
   the element. The dotted underline sits under the value and its unit, and print drops it.
+- 2026-11-11, [section 10](#ranges-and-lists) (#74, Engineer's, for Matheus to confirm on the PR): a list's summary
+  writes the unit as results do (`30 values, 1 … 30 L / s`); the first value is shown in the last one's unit. A
+  failed point is named by the first list the line runs over, in that list's unit (`At Q_s = 0 L / s: …`); when the
+  point failed already in that list, by its position (`At point 1: …`). Two messages the table didn't have are added
+  to it: a range's start, end or step that isn't a single number or quantity. An aggregate name the sheet defines as
+  a function (`max(x) = …`) is the sheet's function, not the aggregate. A bare range (`1 .. 10`, no name) shows its
+  summary too.
