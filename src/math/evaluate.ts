@@ -197,6 +197,8 @@ export type TypesetLine =
       note: string | null
       /** Bold, underline and highlight colour, for the whole row. */
       format: LineFormat
+      /** A solve line's guess (section 4), set small and grey after the expression. */
+      guess?: string
     }
   | { kind: 'unparsed'; source: string }
 

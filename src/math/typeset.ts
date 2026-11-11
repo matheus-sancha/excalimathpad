@@ -107,7 +107,8 @@ export function lineTex(node: MathNode, names: Names): LineTex {
 }
 
 /**
- * A solve line (section 4): `Q_op ≔ solve H_p(Q) = H_s(Q)`, then its guess.
+ * A solve line (section 4): `Q_op ≔ solve H_p(Q) = H_s(Q)`, and its guess,
+ * which the grid sets small and grey after the equation.
  * `names` already counts the unknown and the parameters as sheet names.
  */
 export function solveTex(
@@ -115,11 +116,13 @@ export function solveTex(
   params: readonly string[] | null,
   parts: { unknown: string; lhs: MathNode; rhs: MathNode; guess: MathNode },
   names: Names,
-): LineTex {
+): LineTex & { guess: string } {
   const head = params === null ? nameTex(name) : `${nameTex(name)}\\left(${params.map(nameTex).join(',')}\\right)`
-  const equation = `\\mathrm{solve}\\;${toTex(parts.lhs, names)}=${toTex(parts.rhs, names)}`
-  const guess = `\\text{guess }${nameTex(parts.unknown)}=${toTex(parts.guess, names)}`
-  return { name: head, expression: `${equation}\\quad ${guess}` }
+  return {
+    name: head,
+    expression: `\\mathrm{solve}\\;${toTex(parts.lhs, names)}=${toTex(parts.rhs, names)}`,
+    guess: `\\text{guess }${nameTex(parts.unknown)}=${toTex(parts.guess, names)}`,
+  }
 }
 
 function withoutConversion(node: MathNode): MathNode {

@@ -169,7 +169,12 @@ server. v1 target: one sheet, for Matheus's own use.
   the mark under the pointer from its screen box (`tipAt`, the error cell only
   while it is cut short) on each `pointerMove` over the canvas, and `HoverTip`
   shows it after a rest, short of the Sheet panel; a press, a drag, leaving the
-  canvas or a scene or viewport change hides it. Screen only.
+  canvas or a scene or viewport change hides it. Screen only. A **solve's
+  details** (spec section 4) use the same tip: a value with `solveDetails`
+  sits in a `math-element__detailed` span, dotted underline, whose `data-tip`
+  reads `Brent, 5 iterations`, the residual and the bracket. A solve line's
+  guess is its own TeX (`TypesetLine.guess`), set small and grey after the
+  expression.
   `MathOverlay` subscribes to the scene (`onChange`, `onScrollChange`) and
   places each element from its anchor's scene position via `viewport.ts`
   (`sceneToStage`, pure). It reads source from the anchors and holds the sheet's

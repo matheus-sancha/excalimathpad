@@ -1703,3 +1703,8 @@ Changes line if it changes behaviour.
   point as outside the domain only when an inner solve there found no root or didn't converge. Any other error at a
   trial point, a units error included, fails the outer line at once with that error. A solve function's details on
   hover are those of the call the line makes; the details of solves inside its equation are not shown.
+- 2026-11-11, [section 4](#solve-details) (#72, Engineer's, for Matheus to confirm on the PR; checked in Chromium with
+  a real mouse): the hover reads `Brent, 6 iterations`, then `Residual: -2.06·10⁻¹³` with its SI unit, then
+  `Bracket: 0.01864160794462 .. 0.01864160794463`, both at 13 significant digits so the bracket's ends differ. It is
+  the problem tip: the same 500 ms rest, the same hiding, and a press or drag from the value still selects and moves
+  the element. The dotted underline sits under the value and its unit, and print drops it.
