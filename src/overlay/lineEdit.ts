@@ -10,6 +10,11 @@ export interface LineEdit {
   lineIndex: number
   text: string
   caret: number
+  /**
+   * Goes up each time the app rewrites the text of the open line (the format
+   * bar): the field takes only what the user types, so it is mounted again.
+   */
+  revision?: number
 }
 
 /** The ways an edit leaves a line, or tries to. */

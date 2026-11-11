@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { act, cleanup, createEvent, fireEvent, render, screen, within } from '@testing-library/react'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import type { ExcalidrawElement } from '@excalidraw/excalidraw/element/types'
 import type { AppState } from '@excalidraw/excalidraw/types'
@@ -1205,3 +1205,117 @@ describe('Add math and empty removal (docs/spec-v1.md sections 4 and 8)', () => 
     expect(openField()).not.toBeNull()
   })
 })
+
+describe('line format (docs/spec-v1.md section 4: bold, underline, highlight)', () => {
+  const bar = () => screen.queryByRole('toolbar', { name: 'Line format' })
+  const barButton = (name: RegExp) => screen.getByRole('button', { name })
+  /** A press as the browser sends it: the mousedown the bar must not lose focus on, then the click. */
+  const press = (button: HTMLElement) => {
+    const down = createEvent.mouseDown(button)
+    fireEvent(button, down)
+    fireEvent.click(button)
+    return down
+  }
+
+  it('draws a typeset row with its format, and hides the clause', () => {
+    renderOverlay([anchorWith('x = 2 m * 3 @bold @underline @yellow # tripled\ny = 1')])
+
+    expect(rowOf('m1', 1)).toHaveClass('is-bold', 'is-underline', 'is-yellow')
+    expect(rowOf('m1', 1).textContent).not.toContain('@')
+    expect(resultsOf('m1')).toContain('6 m')
+    expect(rowOf('m1', 2)).not.toHaveClass('is-bold', 'is-underline', 'is-yellow')
+  })
+
+  it('shows the bar only beside the open line, with the line’s format pressed', () => {
+    renderOverlay([anchorWith('x = 2 @bold @green\ny = 1')])
+    expect(bar()).toBeNull()
+
+    openLine(1)
+
+    expect(rowOf('m1', 1)).toContainElement(bar())
+    expect(barButton(/^Bold/)).toHaveAttribute('aria-pressed', 'true')
+    expect(barButton(/^Underline/)).toHaveAttribute('aria-pressed', 'false')
+    expect(barButton(/Highlight green/)).toHaveAttribute('aria-pressed', 'true')
+    expect(barButton(/Highlight red/)).toHaveAttribute('aria-pressed', 'false')
+  })
+
+  it('has no bar on a comment line or an empty line, which take no format', () => {
+    renderOverlay([anchorWith('# inputs\n')])
+
+    openLine(1)
+    expect(bar()).toBeNull()
+    openLine(2)
+    expect(bar()).toBeNull()
+  })
+
+  it('a press writes the clause as one line commit, and the line stays open on it', () => {
+    const { scene } = renderOverlay([anchorWith('x = 2 # two')])
+    openLine(1)
+
+    const down = press(barButton(/^Bold/))
+
+    // The press never takes the keyboard from the field: a blur would leave the line.
+    expect(down.defaultPrevented).toBe(true)
+    expect(scene.sourceOf('m1')).toBe('x = 2 @bold # two')
+    expect(scene.sourceWrites()).toBe(1)
+    const field = openField()!
+    expect(field.value).toBe('x = 2 @bold # two')
+    expect(field).toHaveFocus()
+    expect(rowOf('m1', 1)).toHaveClass('is-bold')
+  })
+
+  it('keeps the caret where it was in the code', () => {
+    renderOverlay([anchorWith('x = 2 # two')])
+    const field = openLine(1)
+    field.setSelectionRange(3, 3)
+
+    press(barButton(/Highlight blue/))
+
+    expect(openField()!.selectionStart).toBe(3)
+  })
+
+  it('writes what is typed with the format, not the scene’s line', () => {
+    const { scene } = renderOverlay([anchorWith('x = 2')])
+    type(openLine(1), 'x = 5')
+
+    press(barButton(/^Underline/))
+
+    expect(scene.sourceOf('m1')).toBe('x = 5 @underline')
+  })
+
+  it('pressing a pressed button takes the format off, and No highlight clears the colour', () => {
+    const { scene } = renderOverlay([anchorWith('x = 2 @bold @red')])
+    openLine(1)
+
+    press(barButton(/^Bold/))
+    expect(scene.sourceOf('m1')).toBe('x = 2 @red')
+
+    press(barButton(/No highlight/))
+    expect(scene.sourceOf('m1')).toBe('x = 2')
+    expect(rowOf('m1', 1)).not.toHaveClass('is-red')
+  })
+
+  it('Ctrl+B and Ctrl+U toggle bold and underline from the field', () => {
+    const { scene } = renderOverlay([anchorWith('x = 2')])
+    openLine(1)
+
+    const bold = createEvent.keyDown(openField()!, { key: 'b', ctrlKey: true })
+    fireEvent(openField()!, bold)
+    expect(bold.defaultPrevented).toBe(true)
+    fireEvent.keyDown(openField()!, { key: 'u', ctrlKey: true })
+    expect(scene.sourceOf('m1')).toBe('x = 2 @bold @underline')
+
+    fireEvent.keyDown(openField()!, { key: 'B', ctrlKey: true })
+    expect(scene.sourceOf('m1')).toBe('x = 2 @underline')
+  })
+
+  it('follows a clause typed by hand, live', () => {
+    renderOverlay([anchorWith('x = 2')])
+
+    type(openLine(1), 'x = 2 @gray')
+
+    expect(rowOf('m1', 1)).toHaveClass('is-gray')
+    expect(barButton(/Highlight gray/)).toHaveAttribute('aria-pressed', 'true')
+  })
+})
+

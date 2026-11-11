@@ -223,6 +223,16 @@ export function MathOverlay({
             const current = editRef.current
             if (current) changeEdit({ ...current, text })
           }}
+          onRewrite={(text, caret) => {
+            // A format from the bar: the line's new text goes to the scene as
+            // one line commit, and the line stays open on it.
+            const current = editRef.current
+            const live = current && findAnchor(current.anchorId)
+            if (!current || !live) return
+            const next = { ...current, text, caret, revision: (current.revision ?? 0) + 1 }
+            writeAnchorSource(api, current.anchorId, withTypedLine(live.source, next))
+            changeEdit(next)
+          }}
           onMove={moveEdit}
           onEscape={() => {
             moveEdit({ kind: 'leave' })

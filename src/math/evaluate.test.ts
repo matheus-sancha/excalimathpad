@@ -454,3 +454,22 @@ describe('evaluateSheet', () => {
     })
   })
 })
+
+describe('the format clause (docs/spec-v1.md section 3)', () => {
+  it('never changes a result', () => {
+    expect(block('a = 2 m @bold @yellow\nb = a * 3 @underline # tripled')).toEqual(
+      block('a = 2 m\nb = a * 3 # tripled'),
+    )
+  })
+
+  it('reports a word that isn’t a format, and the value still reaches the lines below', () => {
+    expect(block('a = 2 m * 2 @bolt\nb = a * 3')).toEqual([
+      error('Unknown format @bolt'),
+      value('12 m'),
+    ])
+  })
+
+  it('leaves an @ in the middle of the code to math.js, as a syntax error', () => {
+    expect(block('a = 2 @bold + 1')[0].kind).toBe('error')
+  })
+})

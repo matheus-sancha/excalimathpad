@@ -61,7 +61,7 @@ describe('nameTex (docs/spec-v1.md section 4, Typesetting names)', () => {
 
 describe('typeset lines', () => {
   it('splits an assignment into its name and expression cells', () => {
-    expect(math(typeset('Q = 1\nA_p = 2\nv_d = Q / A_p')[2])).toEqual({
+    expect(math(typeset('Q = 1\nA_p = 2\nv_d = Q / A_p')[2])).toMatchObject({
       kind: 'math',
       name: '{v}_{d}',
       expression: '\\frac{ Q}{ {A}_{p}}',

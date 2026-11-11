@@ -67,8 +67,11 @@ server. v1 target: one sheet, for Matheus's own use.
   line, keyed by block id; never throws. A `SheetLine` is the line's
   `LineResult` (value | error | empty) and its `TypesetLine`, from the same
   parse: blank, comment, math (name, expression and note, as TeX) or unparsed
-  (raw source). `lineForm.ts` (pure) reads a line's comment before math.js sees
-  it (ADR 0005 step 1), so a note never reaches math.js. `typeset.ts` is the
+  (raw source). `lineForm.ts` (pure) reads a line's comment and its format clause
+  (`@bold @yellow`) before math.js sees it (ADR 0005), so a note or a format
+  never reaches math.js; `writeFormat` composes the clause back for the bar. A
+  math line carries its `LineFormat`; an unknown clause word is the line's
+  error, reported after the line ran. `typeset.ts` is the
   `toTex` handler of spec section 4, Typesetting names; a name counts as the
   sheet's from the line that assigns it down. `typesetResult` sets a result's
   `math.format` text as number and unit. A plain
@@ -115,8 +118,11 @@ server. v1 target: one sheet, for Matheus's own use.
   line writes. It owns the sheet's evaluation: it sorts anchors with
   `readingOrder.ts` (pure) and runs `evaluateSheet` on every keystroke,
   every source change and every change of order, then hands each
-  `MathElementView` its lines. The overlay takes no pointer events except the open field:
-  Excalidraw gets every click and drag. `useSheetGestures` opens, moves and
+  `MathElementView` its lines. The overlay takes no pointer events except the open field
+  and its format bar: Excalidraw gets every click and drag. The bar
+  (`FormatBar`, in `MathElementView`) writes the clause into the open line's
+  text; `MathOverlay` commits it at once and mounts a new field on the
+  rewritten text (`LineEdit.revision`). `useSheetGestures` opens, moves and
   leaves the line edit from the events `listenToCanvas` hands it, starts and
   cancels placing (M, Esc) and opens the first line of a placed element.
   `PlacingGhost` draws the new element's box at the pointer while placing. A
@@ -307,6 +313,12 @@ and everything downstream recalculates. Engine: math.js, client-side.
   at the next Excalidraw upgrade.
 - **`focusCanvas` queries `.excalidraw`,** the element that hears Excalidraw's
   keys. It lives in `src/canvas/`, and `SheetCanvas.test.tsx` pins it.
+- **The format bar never takes focus.** Its buttons prevent `mousedown` and
+  are out of the tab order: a blur leaves the line. It is absolutely placed,
+  so the measured body, and so the anchor, never includes it.
+- **Underline is drawn, not `text-decoration`.** KaTeX's boxes are
+  inline-blocks, which a decoration doesn't reach; bold is set on `.katex`
+  itself, because KaTeX sets its own font there.
 - **The line field is uncontrolled and remounts per line.** Setting its value
   from code clears the browser's text undo, which is what Ctrl+Z means while
   editing (spec section 6).

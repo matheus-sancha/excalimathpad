@@ -10,7 +10,7 @@ import {
   isSymbolNode,
   type MathNode,
 } from 'mathjs'
-import { readLine } from './lineForm.ts'
+import { readLine, type LineFormat } from './lineForm.ts'
 import { lineTex, resultTex, textTex, type Names } from './typeset.ts'
 
 /**
@@ -140,7 +140,14 @@ export type LineResult =
 export type TypesetLine =
   | { kind: 'blank' }
   | { kind: 'comment'; text: string }
-  | { kind: 'math'; name: string | null; expression: string; note: string | null }
+  | {
+      kind: 'math'
+      name: string | null
+      expression: string
+      note: string | null
+      /** Bold, underline and highlight colour, for the whole row. */
+      format: LineFormat
+    }
   | { kind: 'unparsed'; source: string }
 
 /** One line of the sheet: what it computes and how it shows. */
@@ -168,6 +175,8 @@ type ParsedLine =
       /** The unit names of a plain input, or null for any other line. */
       plainInputUnits: readonly string[] | null
       note: string | null
+      format: LineFormat
+      unknownFormat: string | null
     }
 
 /**
@@ -262,6 +271,11 @@ export function evaluateSheet(blocks: readonly SheetBlock[]): ReadonlyMap<string
       const isPlain = line.plainInputUnits?.every((name) => !scope.has(name)) ?? false
       const value: unknown = line.node.compile().evaluate(scope)
       line.defines.forEach((name) => failed.delete(name))
+      // Reported after the line ran, so its value still reaches the lines
+      // below, as for an unknown display unit (section 3).
+      if (line.unknownFormat !== null) {
+        return { kind: 'error', message: `Unknown format ${line.unknownFormat}` }
+      }
       // Comment-only lines evaluate to nothing. A plain input and a line
       // whose value is a function leave the result cell empty, though the
       // value still reaches the lines below (docs/spec-v1.md section 3).
@@ -284,10 +298,16 @@ function typesetLine(line: ParsedLine, names: Names): TypesetLine {
       return { kind: 'unparsed', source: line.source }
     case 'parsed':
       try {
-        return { kind: 'math', ...lineTex(line.node, names), note: line.note }
+        return { kind: 'math', ...lineTex(line.node, names), note: line.note, format: line.format }
       } catch {
         // A typesetting bug must not hide the line: show its code as text.
-        return { kind: 'math', name: null, expression: textTex(line.node.toString()), note: line.note }
+        return {
+          kind: 'math',
+          name: null,
+          expression: textTex(line.node.toString()),
+          note: line.note,
+          format: line.format,
+        }
       }
   }
 }
@@ -325,8 +345,8 @@ export function splitLines(source: string): string[] {
 }
 
 /**
- * Reads the line's comment first (ADR 0005), then parses only its code: a note
- * never reaches math.js, so it never changes a result.
+ * Reads the line's comment and format clause first (ADR 0005), then parses only
+ * its code: a note or a format never reaches math.js, so neither changes a result.
  */
 function parseLine(text: string): ParsedLine {
   const form = readLine(text)
@@ -341,6 +361,8 @@ function parseLine(text: string): ParsedLine {
       defines: definedNames(node),
       plainInputUnits: plainInputUnits(node),
       note: form.note,
+      format: form.format,
+      unknownFormat: form.unknownFormat,
     }
   } catch (error) {
     const target = ASSIGNMENT_TARGET.exec(line)?.[1]
