@@ -199,6 +199,20 @@ Any form with code can end with a `# note`. Any line with a value can end with
 dP_pipe = f_d * (L_p/D) rho v_d^2 / 2 in kPa # friction only
 ```
 
+Any line with code can also carry a **format**: a clause of `@` words after everything
+else and before the note. The words are `@bold`, `@underline` and one highlight colour,
+`@yellow`, `@green`, `@blue`, `@red` or `@gray`, in any order.
+
+```
+U = I_load * R in V @bold @yellow # check
+```
+
+- A colour named twice keeps the last. A word that isn't a format is an error on the
+  line, and the line's value still reaches the lines below.
+- Only `@` words at the end of the code are a clause. An `@` in a string, in a note or in
+  the middle of the code is left alone (in the code, math.js reports it).
+- Comment lines and blank lines take no format.
+
 A solve line follows the same rule: `in <unit>` comes last, after the guess. It sets the
 result's display unit and doesn't convert the guess. A clause added later goes before it.
 
@@ -209,17 +223,19 @@ Q_op = solve Hp(Q) = Hs(Q), guess Q = 15 L/s in L/s
 **How a line is read, in this order:**
 
 1. **Comment:** split at the first `#` outside a string. Nothing after it is read.
-2. **Display unit:** take off a trailing top-level `in` or `to` whose target is a
+2. **Format:** take off the trailing `@` words. math.js rejects `@`, so a clause can
+   never be read as code.
+3. **Display unit:** take off a trailing top-level `in` or `to` whose target is a
    pure unit. The target is read outside the sheet's scope, so a variable named `K`
    doesn't change what `in K` means. A conversion inside the expression
    (`(a in bar) + …`) stays math.js's own.
-3. **Form:** recognise solve (`= solve`), range (`..`), `table(` and `plot(`, and
+4. **Form:** recognise solve (`= solve`), range (`..`), `table(` and `plot(`, and
    take off their clauses.
-4. **The rest goes to math.js.**
+5. **The rest goes to math.js.**
 
-**Rules for what the app writes:** the unit slot and the plot popover write before
-the `#`, so a line reads `D = 102.3 mm in cm # 4" Sch 40`. Neither puts the line in
-source, and each write is one line commit.
+**Rules for what the app writes:** the unit slot, the plot popover and the format bar
+write before the `#`, so a line reads `D = 102.3 mm in cm @bold # 4" Sch 40`. The slot
+and the popover don't put the line in source. Each write is one line commit.
 
 **Parsing notes that catch people:**
 
@@ -277,7 +293,12 @@ Built in M1. Hover details arrive with M3; the unit slot with M2.
 - **Solve line:** `Q_op ≔ solve H_p(Q) = H_s(Q)`, with the guess small and grey after
   the equation, inside the expression cell.
 - **Range line:** `Q_s ≔ 1 L/s … 30 L/s`, with the step small and grey after it.
-- `in <unit>` and plot clauses don't show when typeset. They show in source.
+- `in <unit>`, plot clauses and the format clause don't show when typeset. They show
+  in source.
+- **Format:** a line's bold, underline and highlight apply to its whole row: equation,
+  result and note. The highlight is a soft band behind the row, in one of five colours
+  that keep the text readable, in the dark theme too. On a table or plot line it covers
+  the line's own row, not what draws under it. A line that doesn't parse shows no format.
 - **Dark theme:** in Excalidraw's dark theme the math takes the canvas's own filter, so it
   darkens exactly as drawings do. Print stays light.
 
@@ -347,6 +368,12 @@ none. Hover is screen-only.
 - **↑ / ↓** move the edit to the line above or below.
 - **Backspace** at the start joins the line to the one above.
 - A **single click on another line** of the element moves the edit there.
+- **The format bar** sits beside the open line, outside the element's box: Bold,
+  Underline, the five colours and no colour, with the line's format shown pressed.
+  **Ctrl+B** and **Ctrl+U** do the same from the field. A press writes the clause into
+  the line and keeps the line open, with the caret where it was in the code. Pressing a
+  pressed button takes that format off. A comment line or an empty line has no bar. A
+  clause typed by hand shows live, like any other typing.
 
 **Leaving:**
 
@@ -584,6 +611,9 @@ Excalidraw's own selection steps, and a nudge or Link edit that a line commit fo
   removed for being empty is one step, so Ctrl+Z after an empty Add math brings back the
   empty box.
 - **A unit slot or plot popover change** is one line commit.
+- **A format from the bar or its keys** is one line commit too, written at once with the
+  line's typed text, so each press is one step. The field's text undo starts fresh after
+  it, because the app rewrote the field.
 - **Redo** (Ctrl+Y, Ctrl+Shift+Z) is Excalidraw's own and mirrors undo.
 - **Undoing a line shows nothing extra:** no selection, scroll or highlight. An undo off
   screen shows only as changed results.
@@ -1015,6 +1045,7 @@ The wording of every user-facing message. `<…>` is filled in. Numbers follow
 | When | Message | Arrives |
 |---|---|---|
 | Unknown `in xyz` in source | `Unknown unit xyz` | M2 |
+| A clause word that isn't a format | `Unknown format @bolt` | #63 |
 
 **Solve**
 
@@ -1137,7 +1168,9 @@ Engineer's design gate. Tested on Excalidraw 0.18.1, math.js 15.2 and Chromium.
 
 **Gestures**
 
-- **Overlay stays `pointer-events: none`,** except the open line editor, unit field and plot popover. The
+- **Overlay stays `pointer-events: none`,** except the open line editor, its format bar, the unit field and
+  the plot popover. The bar's buttons never take focus (`mousedown` is prevented, `tabIndex` -1): a blur
+  would leave the line. The bar is absolutely placed, so it never counts toward the element's size. The
   unit slot and ⚙ let pointer-down through and open on `click`.
 - **Capture `dblclick` on the stage, capture `keydown` on `document`,** for double-click, Enter and M. Stop
   them there. Act on Enter only when one math anchor is selected, the tool is the selection tool, no
@@ -1548,4 +1581,15 @@ Changes line if it changes behaviour.
   assignments, a bare expression, a plain input with a note) all started at the same left edge, the `≔` fell at three
   different places, and the results stayed in one column; opening a line put the field where the equation was; a saved
   sheet reopened with a box 40 px too wide was refitted and stayed clean.
+- 2026-11-11, [sections 3](#3-sheet-lines-every-form), [4](#4-math-element-look-and-editing), [6](#6-undo) and
+  [13](#13-messages) (#63, agreed by Matheus, in chat on 2026-11-11, with the
+  [design](https://github.com/matheus-sancha/excalimathpad/issues/63#issuecomment-6792436906) approved): a line with
+  code can be bold, underlined and highlighted in one of five colours, for the whole row; the format is a clause of `@`
+  words in the line's source, set from a bar beside the open line or with Ctrl+B and Ctrl+U; each change is one line
+  commit. The clause is read second, after the comment, so the display unit and the forms move down one step.
+- 2026-11-11, [section 4](#typeset-grid) (#63, checked in Chromium with real keys and mouse): bold reached KaTeX's
+  glyphs through a rule on `.katex` (weight 700 on the equation and the result); the bands showed behind the row in
+  the light and dark themes; the bar sat right of the box, a click on it kept the field focused, and the box's size
+  didn't count it. Found: `text-decoration` doesn't reach KaTeX's inline-block boxes, so the underline is a line
+  drawn in each cell's background; a bold row is 1 px taller than a plain one.
 

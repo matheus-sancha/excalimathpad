@@ -1,7 +1,8 @@
 # 0005. The app reads its line forms before math.js sees a line
 
-- **Status**: accepted; step 1, the comment, built (#44, `src/math/lineForm.ts`); steps 2
-  and 3 not built yet (M2 to M4)
+- **Status**: accepted; the comment built (#44) and the format clause built (#63), both in
+  `src/math/lineForm.ts`; the display unit and the forms not built yet (M2 to M4)
+- **Amended**: 2026-11-11 (#63): the format clause, read after the comment.
 - **Date**: 2026-11-03
 
 ## Context
@@ -21,11 +22,13 @@ Each line is plain source text, one statement. The app reads it in this order, a
 goes to math.js:
 
 1. **Comment:** split at the first `#` outside a string.
-2. **Display unit:** take off a trailing top-level `in` or `to` whose target is a pure unit,
+2. **Format:** take off the trailing `@` words (`@bold`, `@underline`, a colour). Decided by
+   Matheus on 2026-11-11 (#63): a format lives in the line's source, like a display unit.
+3. **Display unit:** take off a trailing top-level `in` or `to` whose target is a pure unit,
    read outside the sheet's scope.
-3. **Form:** recognise `= solve`, `..`, `table(` and `plot(`, and take off their clauses.
+4. **Form:** recognise `= solve`, `..`, `table(` and `plot(`, and take off their clauses.
 
-What the app writes into a line (a display unit, plot clauses) is text in that same line, in
+What the app writes into a line (a display unit, plot clauses, a format) is text in that same line, in
 front of any `#`. So split, join, copy, paste, undo and save carry it, and one line stays one
 string.
 
@@ -52,7 +55,10 @@ Engineering rules (Engineer's):
 - Source reads as typed, and a sheet file needs no change when a new clause is added.
 - Line forms are syntax math.js doesn't know, so typesetting, the missing-name check and the
   shadow warning must each handle them; a solve line's parts go through math.js separately.
-- `#`, `..`, `step`, `guess` and `= solve` have to stay unambiguous against math.js's own grammar,
+- `@` was chosen for the format clause because math.js rejects it: `U = I * R @bold` is a syntax
+  error there, where `style bold`, `[bold]`, `| bold` and `!bold` all parse as math (tried on
+  math.js 15.2).
+- `#`, `@`, `..`, `step`, `guess` and `= solve` have to stay unambiguous against math.js's own grammar,
   and a math.js upgrade could clash with them. The pump sheet's CI test covers every form.
 - A name directly before `(` stays a function call, because that's math.js's rule: `f_d (L_p/D)`
   errors when `f_d` is a number, with a readable message. Making it multiply would let a mistyped

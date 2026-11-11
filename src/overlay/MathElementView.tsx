@@ -6,6 +6,7 @@ import {
   type KeyboardEvent,
   type MouseEvent,
   type ReactNode,
+  type RefObject,
 } from 'react'
 import type { MathAnchor } from '../canvas/mathAnchor.ts'
 import type { ForwardWheel } from '../canvas/SheetCanvas.tsx'
@@ -16,6 +17,14 @@ import {
   type SheetLine,
   type TypesetLine,
 } from '../math/evaluate.ts'
+import {
+  codeLength,
+  FORMAT_COLORS,
+  NO_FORMAT,
+  readLine,
+  writeFormat,
+  type LineFormat,
+} from '../math/lineForm.ts'
 import { texToHtml, useKatexReady } from './katex.ts'
 import { hasText, type LineEdit, type LineMove } from './lineEdit.ts'
 import { sceneToStage, type Viewport } from './viewport.ts'
@@ -30,6 +39,8 @@ export interface MathElementViewProps {
   /** The sheet's line edit, when it is in this element. */
   edit: LineEdit | null
   onType: (text: string) => void
+  /** The app rewrote the open line's text (a format from the bar): one line commit. */
+  onRewrite: (text: string, caret: number) => void
   onMove: (move: LineMove) => void
   onEscape: () => void
   onBlurLine: (lineIndex: number) => void
@@ -59,6 +70,7 @@ export function MathElementView({
   lines,
   edit,
   onType,
+  onRewrite,
   onMove,
   onEscape,
   onBlurLine,
@@ -109,7 +121,9 @@ export function MathElementView({
             return (
               <li
                 key={i}
-                className={`math-element__row is-${editing ? 'editing' : line.typeset.kind}`}
+                className={`math-element__row is-${editing ? 'editing' : line.typeset.kind}${formatClasses(
+                  editing ? formatOf(edit.text) : line.typeset.kind === 'math' ? line.typeset.format : NO_FORMAT,
+                )}`}
                 data-line={i}
                 aria-label={text}
               >
@@ -119,6 +133,7 @@ export function MathElementView({
                     result={line.result}
                     isEmpty={isEmpty}
                     onType={onType}
+                    onRewrite={onRewrite}
                     onMove={onMove}
                     onEscape={onEscape}
                     onBlur={() => onBlurLine(i)}
@@ -133,6 +148,17 @@ export function MathElementView({
       </div>
     </div>
   )
+}
+
+/** The format the open line's typed text asks for; a line with no code has none. */
+function formatOf(text: string): LineFormat {
+  const form = readLine(text)
+  return form.kind === 'code' ? form.format : NO_FORMAT
+}
+
+/** A row's format as classes: the stylesheet draws bold, underline and the band. */
+function formatClasses({ bold, underline, color }: LineFormat): string {
+  return `${bold ? ' is-bold' : ''}${underline ? ' is-underline' : ''}${color ? ` is-${color}` : ''}`
 }
 
 const EMPTY_LINE: SheetLine = {
@@ -273,6 +299,7 @@ interface EditingRowProps {
   result: LineResult
   isEmpty: boolean
   onType: (text: string) => void
+  onRewrite: (text: string, caret: number) => void
   onMove: (move: LineMove) => void
   onEscape: () => void
   onBlur: () => void
@@ -285,7 +312,19 @@ interface EditingRowProps {
  * text shares the field's cell, so the column widens as you type, and the
  * element with it, without the field's value ever being set from code.
  */
-function EditingRow({ edit, result, isEmpty, ...field }: EditingRowProps) {
+function EditingRow({ edit, result, isEmpty, onRewrite, ...field }: EditingRowProps) {
+  const fieldRef = useRef<HTMLInputElement>(null)
+  const form = readLine(edit.text)
+  const format = form.kind === 'code' ? form.format : null
+
+  // Writes the clause into the line's text. The caret stays where it was in
+  // the code; from the clause on, the text moved, so it goes to the code's end.
+  const setFormat = (next: LineFormat) => {
+    const text = writeFormat(edit.text, next)
+    const caret = fieldRef.current?.selectionStart ?? text.length
+    onRewrite(text, Math.min(caret, codeLength(text)))
+  }
+
   return (
     <>
       <Gutter result={result} />
@@ -293,15 +332,79 @@ function EditingRow({ edit, result, isEmpty, ...field }: EditingRowProps) {
         <span className="math-element__field-text" aria-hidden="true">
           {edit.text}
         </span>
-        <LineField edit={edit} {...field} />
+        <LineField
+          key={edit.revision ?? 0}
+          fieldRef={fieldRef}
+          edit={edit}
+          onFormat={format && ((change) => setFormat({ ...format, ...change(format) }))}
+          {...field}
+        />
       </span>
       <ResultCell result={result} plain />
+      {format && <FormatBar format={format} onChange={setFormat} />}
     </>
   )
 }
 
+/**
+ * The bar beside the open line (section 4, While editing a line): Bold,
+ * Underline, the five highlight colours and no colour. Each press is one line
+ * commit. A press mustn't take the keyboard from the field, or the blur would
+ * leave the line, so its buttons never take focus. It is outside the body's
+ * layout, so it never counts toward the element's size.
+ */
+function FormatBar({
+  format,
+  onChange,
+}: {
+  format: LineFormat
+  onChange: (format: LineFormat) => void
+}) {
+  const button = (label: string, pressed: boolean, next: LineFormat, className: string, text = '') => (
+    <button
+      type="button"
+      className={`math-format-bar__button ${className}`}
+      aria-label={label}
+      aria-pressed={pressed}
+      title={label}
+      tabIndex={-1}
+      onMouseDown={(event) => event.preventDefault()}
+      onClick={() => onChange(next)}
+    >
+      {text}
+    </button>
+  )
+  return (
+    <span className="math-format-bar" role="toolbar" aria-label="Line format">
+      {button('Bold (Ctrl+B)', format.bold, { ...format, bold: !format.bold }, 'is-bold', 'B')}
+      {button(
+        'Underline (Ctrl+U)',
+        format.underline,
+        { ...format, underline: !format.underline },
+        'is-underline',
+        'U',
+      )}
+      <span className="math-format-bar__rule" aria-hidden="true" />
+      {FORMAT_COLORS.map((color) => (
+        <span key={color}>
+          {button(
+            `Highlight ${color}`,
+            format.color === color,
+            { ...format, color: format.color === color ? null : color },
+            `is-color is-${color}`,
+          )}
+        </span>
+      ))}
+      {button('No highlight', format.color === null, { ...format, color: null }, 'is-color is-none')}
+    </span>
+  )
+}
+
 interface LineFieldProps {
+  fieldRef: RefObject<HTMLInputElement | null>
   edit: LineEdit
+  /** Ctrl+B and Ctrl+U: null on a line with no code, which takes no format. */
+  onFormat: ((change: (format: LineFormat) => Partial<LineFormat>) => void) | null
   onType: (text: string) => void
   onMove: (move: LineMove) => void
   onEscape: () => void
@@ -311,19 +414,28 @@ interface LineFieldProps {
 /**
  * The line being edited. It takes only what the user types: setting the value
  * from code clears the browser's text undo, so it is uncontrolled. Each line
- * gets its own field, which is why that text undo starts fresh on each line. Its
+ * gets its own field, which is why that text undo starts fresh on each line; a
+ * format from the bar rewrites the text, so it mounts a new field too. Its
  * Ctrl+Z never reaches the sheet's undo, because Excalidraw only hears keys
  * inside its own container.
  */
-function LineField({ edit, onType, onMove, onEscape, onBlur }: LineFieldProps) {
-  const fieldRef = useRef<HTMLInputElement>(null)
+function LineField({
+  fieldRef,
+  edit,
+  onFormat,
+  onType,
+  onMove,
+  onEscape,
+  onBlur,
+}: LineFieldProps) {
   // Only what the field opens with: from then on the text and caret are the user's.
   const [opening] = useState(edit)
 
   useLayoutEffect(() => {
-    fieldRef.current?.focus()
-    fieldRef.current?.setSelectionRange(opening.caret, opening.caret)
-  }, [opening])
+    const field = fieldRef.current
+    field?.focus()
+    field?.setSelectionRange(opening.caret, opening.caret)
+  }, [opening, fieldRef])
 
   // A double-click on another line while editing: its first click moved the
   // edit here, and its second lands in this field, where the browser would
@@ -344,6 +456,11 @@ function LineField({ edit, onType, onMove, onEscape, onBlur }: LineFieldProps) {
     const take = (run: () => void) => {
       event.preventDefault()
       run()
+    }
+    if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && onFormat) {
+      const key = event.key.toLowerCase()
+      if (key === 'b') return take(() => onFormat(({ bold }) => ({ bold: !bold })))
+      if (key === 'u') return take(() => onFormat(({ underline }) => ({ underline: !underline })))
     }
     switch (event.key) {
       case 'ArrowUp':

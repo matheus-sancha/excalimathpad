@@ -178,6 +178,104 @@
   pointer-events: auto;
 }
 
+/* A line's format (section 4, Typeset grid): it applies to the whole row. The
+   band is a soft tint behind the row, so black text and blue results stay
+   readable, in the dark theme's filter too. It prints (M5). */
+.math-element__row.is-yellow { background: #fff3bf; }
+.math-element__row.is-green { background: #d3f9d8; }
+.math-element__row.is-blue { background: #d0ebff; }
+.math-element__row.is-red { background: #ffe3e3; }
+.math-element__row.is-gray { background: #e9ecef; }
+
+.math-element__row[class*='is-'] {
+  print-color-adjust: exact;
+}
+
+/* KaTeX sets its own font on .katex, so bold is set there, not inherited. */
+.math-element__row.is-bold .katex,
+.math-element__row.is-bold .math-element__note,
+.math-element__row.is-bold .math-element__source {
+  font-weight: bold;
+}
+
+/* KaTeX's boxes are inline-blocks, which text-decoration doesn't reach, so the
+   underline is a line drawn in each cell's background, just under the text.
+   It takes no room, so an underlined row is as tall as any other. */
+.math-element__row.is-underline .math-element__equation,
+.math-element__row.is-underline .math-element__source,
+.math-element__row.is-underline .math-element__result.is-value .math-element__tex,
+.math-element__row.is-underline .math-element__note {
+  background: linear-gradient(currentColor, currentColor) no-repeat 0 calc(100% - 2px) / 100% 1px;
+  /* Under the text only, not under a cell's padding. */
+  background-origin: content-box;
+}
+
+/* The row anchors the format bar, which sits outside the element's box. */
+.math-element__row.is-editing {
+  position: relative;
+}
+
+/* The bar beside the open line. Absolutely placed, so it never counts toward
+   the body's size, and the only other part of the overlay, with the field, that
+   takes pointer events. */
+.math-format-bar {
+  position: absolute;
+  left: calc(100% + 24px);
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 6px;
+  border: 1px solid var(--math-rule);
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 1px 4px rgb(0 0 0 / 12%);
+  white-space: nowrap;
+  pointer-events: auto;
+}
+
+.math-format-bar__button {
+  box-sizing: border-box;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--math-text);
+  font: 13px/20px system-ui, 'Segoe UI', sans-serif;
+  cursor: pointer;
+}
+
+.math-format-bar__button:hover {
+  border-color: var(--math-quiet);
+}
+
+.math-format-bar__button[aria-pressed='true'] {
+  border-color: #1971c2;
+  box-shadow: 0 0 0 1px #1971c2;
+}
+
+.math-format-bar__button.is-bold { font-weight: bold; }
+.math-format-bar__button.is-underline { text-decoration: underline; }
+.math-format-bar__button.is-color { width: 18px; height: 18px; border-radius: 50%; border-color: var(--math-rule); }
+.math-format-bar__button.is-yellow { background: #ffe066; }
+.math-format-bar__button.is-green { background: #8ce99a; }
+.math-format-bar__button.is-blue { background: #74c0fc; }
+.math-format-bar__button.is-red { background: #ffa8a8; }
+.math-format-bar__button.is-gray { background: #ced4da; }
+.math-format-bar__button.is-none {
+  background: linear-gradient(to top right, transparent 46%, #e03131 46% 54%, transparent 54%);
+}
+
+.math-format-bar__rule {
+  width: 1px;
+  height: 16px;
+  margin: 0 2px;
+  background: var(--math-rule);
+}
+
 /* The ghost box while placing (section 8, Add math): the new element's box at
    the pointer, drawn like an anchor's border. */
 .math-ghost {

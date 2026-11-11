@@ -337,3 +337,39 @@ describe('MathOverlay on real Excalidraw', () => {
     expect(sourceOf('m2')).toBe('U = I * R')
   })
 })
+
+// docs/spec-v1.md section 6: a format from the bar or its shortcuts is one line commit.
+describe('a line format on real Excalidraw', () => {
+  it('each format change is one undo step, and typing after it is the next', async () => {
+    const { sourceOf, undo, canUndo } = await mount()
+    openLine(2)
+
+    press('b', { ctrlKey: true })
+    expect(sourceOf()).toBe('R = 10 kohm\nI = 2 mA @bold')
+    fireEvent.click(screen.getByRole('button', { name: /Highlight yellow/ }))
+    expect(sourceOf()).toBe('R = 10 kohm\nI = 2 mA @bold @yellow')
+    type('I = 4 mA @bold @yellow')
+    press('Escape')
+    expect(sourceOf()).toBe('R = 10 kohm\nI = 4 mA @bold @yellow')
+
+    undo()
+    await waitFor(() => expect(sourceOf()).toBe('R = 10 kohm\nI = 2 mA @bold @yellow'))
+    undo()
+    await waitFor(() => expect(sourceOf()).toBe('R = 10 kohm\nI = 2 mA @bold'))
+    undo()
+    await waitFor(() => expect(sourceOf()).toBe('R = 10 kohm\nI = 2 mA'))
+    expect(canUndo()).toBe(false)
+  })
+
+  it('a format never changes what the sheet computes', async () => {
+    await mount()
+    openLine(1)
+
+    press('u', { ctrlKey: true })
+    press('Escape')
+
+    const [, result] = screen.getAllByRole('list', { name: 'Lines' })
+    expect(result.querySelector('.math-element__result')).toHaveAttribute('data-text', '20 V')
+  })
+})
+
