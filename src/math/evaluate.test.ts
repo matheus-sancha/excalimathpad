@@ -92,8 +92,8 @@ describe('evaluateSheet', () => {
 
     it.each([
       ['arithmetic', 'x = 2 * 3', '6'],
-      ['a constant', 'x = 2 pi', '6.2831853071796'],
-      ['another name', 'x = pi', '3.1415926535898'],
+      ['a constant', 'x = 2 pi', '6.283'],
+      ['another name', 'x = pi', '3.142'],
     ])('shows a value when the right side is not a literal: %s', (_, line, shown) => {
       expect(block(line)).toEqual([value(shown)])
     })
@@ -266,7 +266,7 @@ describe('evaluateSheet', () => {
       const expected = [
         error('Undefined symbol knot'),
         value('"number"'),
-        value('3.1415926535898'),
+        value('3.142'),
       ]
 
       // In the same run, below the attack...
@@ -288,12 +288,12 @@ describe('evaluateSheet', () => {
       ].join('\n')
       const check = 'F = (2 kg) / (3 m * s^2)\nQ = 10 m^3 / h\nA = 2 m^2\nQ\nA\nQ / A'
       const expected = [
-        value('0.66666666666667 Pa'),
+        value('0.6667 Pa'),
         empty,
         empty,
         value('10 m^3 / h'),
         value('2 m^2'),
-        value('0.0013888888888889 m / s'),
+        value('0.001389 m / s'),
       ]
 
       it('in a run that reads only these units', () => {
@@ -331,7 +331,7 @@ describe('evaluateSheet', () => {
         ]
 
         expect(block(lines.join('\n'))).toEqual([
-          value('0.9290304 m^2'),
+          value('0.929 m^2'),
           value('600 mm^2'),
           empty,
           value('400 mm^2'),
@@ -378,11 +378,11 @@ describe('evaluateSheet', () => {
         return sources.map((_, i) => lines.get(`${i}`)!.map(({ result }) => result))
       }
 
-      const [, afterwards] = run('n = simplifyCore("typed.clear()")\nn.evaluate()', '20 V to mV\nsqrt(16)\ncos(0)')
+      const [, afterwards] = run('n = simplifyCore("typed.clear()")\nn.evaluate()', '2 V to mV\nsqrt(16)\ncos(0)')
 
-      const expected = [value('20000 mV'), value('4'), value('1')]
+      const expected = [value('2000 mV'), value('4'), value('1')]
       expect(afterwards).toEqual(expected)
-      expect(run('20 V to mV\nsqrt(16)\ncos(0)')[0]).toEqual(expected)
+      expect(run('2 V to mV\nsqrt(16)\ncos(0)')[0]).toEqual(expected)
     })
 
     // Regression (PR #5 review, round 2): math.js exposes its `typed` registry
@@ -395,8 +395,8 @@ describe('evaluateSheet', () => {
         'g(x) = 0\ntyped.addConversion({from: "boolean", to: "Unit", convert: g})',
       ]
       // Functions this file has not used yet, so they are built after clear().
-      const check = '20 V to mV\nsqrt(16)\ncos(0)\nmean(1, 2, 3)'
-      const expected = [value('20000 mV'), value('4'), value('1'), value('2')]
+      const check = '2 V to mV\nsqrt(16)\ncos(0)\nmean(1, 2, 3)'
+      const expected = [value('2000 mV'), value('4'), value('1'), value('2')]
 
       expect(sheet(...attack, check)[2]).toEqual(expected)
       expect(block(check)).toEqual(expected)
@@ -471,5 +471,86 @@ describe('the format clause (docs/spec-v1.md section 3)', () => {
 
   it('leaves an @ in the middle of the code to math.js, as a syntax error', () => {
     expect(block('a = 2 @bold + 1')[0].kind).toBe('error')
+  })
+})
+
+describe('numbers (docs/spec-v1.md section 5)', () => {
+  it.each([
+    ['1234', '1234'],
+    ['12345', '1.235·10⁴'],
+    ['185997', '1.86·10⁵'],
+    ['0.01864', '0.01864'],
+    ['0.0004399', '4.399·10⁻⁴'],
+    ['5.400', '5.4'],
+    ['25 m', '25 m'],
+    ['n = 123456\nn', '1.235·10⁵'],
+    ['1/0', '∞'],
+    ['-1/0', '-∞'],
+    ['0/0', 'NaN'],
+    ['-0', '0'],
+    ['2 + 3i', '2 + 3i'],
+  ])('%s shows %s at the default 4 digits', (source, shown) => {
+    expect(block(source).at(-1)).toEqual(value(shown))
+  })
+
+  it('never reformats source: a plain input stays as typed', () => {
+    expect(block('D = 102.30 mm\nD')).toEqual([empty, value('102.3 mm')])
+  })
+})
+
+describe('app units (docs/spec-v1.md section 5)', () => {
+  it.each([
+    ['1.002 cP', '1.002 cP'],
+    ['1.002 cP to Pa s', '0.001002 Pa s'],
+    ['2 poise to Pa s', '0.2 Pa s'],
+    ['1 cSt to m^2/s', '1·10⁻⁶ m^2 / s'],
+    ['3 St to cSt', '300 cSt'],
+    ['1500 rpm to Hz', '25 Hz'],
+    ['1 gpm to L/minute', '3.785 L / minute'],
+    ['1 cfm to L/s', '0.4719 L / s'],
+    ['1 kcal to J', '4184 J'],
+    ['1 tonf to lbf', '2000 lbf'],
+    ['1 tf to kgf', '1000 kgf'],
+  ])('%s is %s', (source, shown) => {
+    expect(block(source)).toEqual([value(shown)])
+  })
+
+  it('registers each name with no prefixes, and no bare P', () => {
+    expect(block('1 mcP')).toEqual([error('Undefined symbol mcP')])
+    expect(block('1 P')).toEqual([error('Undefined symbol P')])
+    expect(block('P = 5 kW\nP * 2')).toEqual([empty, value('10 kW')])
+  })
+
+  it('leaves a name free for a variable', () => {
+    expect(block('St = 3\nSt * 2')).toEqual([empty, value('6')])
+  })
+
+  // Section 14, setup order: a plain createUnit made each app unit a display
+  // unit (`0.01 m^2 * 1.8 m/s` showed `285.3 gpm`).
+  it('shows results as an engine without them does', async () => {
+    const { all, create } = await import('mathjs')
+    const { formatOptions, plainNumbers } = await import('./numbers.ts')
+    const bare = create(all)
+    bare.Unit.setUnitSystem('si')
+    const expressions = [
+      '0.01 m^2 * 1.8 m/s',
+      '2 Pa * 3 s',
+      '4 m^2 / (2 s)',
+      '5 m^3 / s * 2',
+      '6 kg m^2 / s^2',
+      '7 kg m^2 / s^3',
+      '8 kg m / s^2',
+      '9 / s * 2',
+      '10 kg / s * 2',
+      '1 gal * 2 / (3 minute)',
+      '1 lbf * 3',
+      '1 BTU * 2',
+    ]
+
+    expect(block(expressions.join('\n'))).toEqual(
+      expressions.map((source) =>
+        value(plainNumbers(bare.format(bare.evaluate(source), formatOptions(4)))),
+      ),
+    )
   })
 })

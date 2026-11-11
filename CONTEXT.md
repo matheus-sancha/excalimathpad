@@ -88,10 +88,19 @@ server. v1 target: one sheet, for Matheus's own use.
   the namespace without breaking math.js). Parsed Nodes from `simplifyCore`
   / `simplifyConstant` evaluate against the namespace, where `typed` is the
   real registry, so its mutators (`clear`, `addConversion`, ...) are also
-  disabled in place on `math.typed`. Results format in a fixed unit
+  disabled in place on `math.typed`. The app units (`appUnits.ts`: `cP`,
+  `gpm`, ...) are registered once at setup, before `createUnit` is disabled,
+  and every unit system is then put back as it was, so they show only where
+  written (spec section 14; a test compares with an engine without them).
+  A result's `text` is its plain form at 4 significant digits
+  (`numbers.ts`, pure: `math.format` with `formatOptions`, then `1.235·10⁴`,
+  `∞`); `resultTex` typesets it (`1.235 \cdot 10^{4}`). Source numbers are
+  never reformatted. `pump-sizing.test.ts` runs the acceptance sheet's lines,
+  read from `docs/acceptance/pump-sizing.md`, against the reference at 4 s.f.
+  (spec section 16). Results format in a fixed unit
   system, SI, so units read elsewhere never change how a result shows
   (#25, ADR 0003). A result math.js simplifies shows in SI units with an
-  SI prefix (`5 ft * 2 ft` is `0.9290304 m^2`, `2 cm * 3 cm` is
+  SI prefix (`5 ft * 2 ft` is `0.929 m^2`, `2 cm * 3 cm` is
   `600 mm^2`); one whose units it keeps shows as written (`1 psi`,
   `60 mi / h`); `to` converts. App code must evaluate only
   through `evaluateSheet`: math.js functions that depend on the disabled

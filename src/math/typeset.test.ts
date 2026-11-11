@@ -140,7 +140,7 @@ describe('typeset lines', () => {
   })
 })
 
-describe('typesetResult (section 4: from math.format’s text)', () => {
+describe('typesetResult (section 4: from the result’s plain text)', () => {
   it.each([
     ['a number', '6', '6'],
     ['a negative number', '-2.5', '-2.5'],
@@ -148,7 +148,11 @@ describe('typesetResult (section 4: from math.format’s text)', () => {
     ['a prefixed power', '600 mm^2', '600\\,{\\mathrm{mm}}^{2}'],
     ['a compound unit', '60 mi / h', '60\\,\\mathrm{mi}/\\mathrm{h}'],
     ['micro', '6 uA', '6\\,\\mathrm{\\mu A}'],
-    ['exponent notation, kept as written until M2', '1.2e-5 m', '\\text{1.2e-5}\\,\\mathrm{m}'],
+    ['scientific notation (section 5)', '1.235·10⁴ m', '1.235 \\cdot 10^{4}\\,\\mathrm{m}'],
+    ['a negative exponent', '-4.399·10⁻⁴', '-4.399 \\cdot 10^{-4}'],
+    ['infinity', '-∞', '-\\infty'],
+    ['not a number, as text', 'NaN', '\\text{NaN}'],
+    ['a complex number, as text', '2 + 3i', '\\text{2 + 3i}'],
     ['a matrix, as text', '[1, 2]', '\\text{[1, 2]}'],
     ['a string, as text', '"a # b"', '\\text{"a \\# b"}'],
   ])('%s: %s', (_, text, tex) => {

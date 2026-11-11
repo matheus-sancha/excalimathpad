@@ -10,7 +10,9 @@ import {
   isSymbolNode,
   type MathNode,
 } from 'mathjs'
+import { APP_UNITS } from './appUnits.ts'
 import { readLine, type LineFormat } from './lineForm.ts'
+import { DEFAULT_DIGITS, formatOptions, plainNumbers } from './numbers.ts'
 import { lineTex, resultTex, textTex, type Names } from './typeset.ts'
 
 /**
@@ -31,6 +33,31 @@ const math = create(all)
  * will build on this.
  */
 math.Unit.setUnitSystem('si')
+
+/**
+ * The app units, registered once here (docs/spec-v1.md section 14, setup
+ * order: SI, then `createUnit`, then undo what that did to the unit systems,
+ * then disable `createUnit` below). A plain `createUnit` makes the new unit a
+ * display unit: it adds its own dimension to every system and, in `auto`,
+ * takes over existing ones, so a flow would show in `gpm`. Every system is
+ * put back exactly as it was, so the app units show only where they are
+ * written (a test pins that results match an engine without them).
+ */
+function registerAppUnits() {
+  const systems = math.Unit.UNIT_SYSTEMS as Record<string, Record<string, unknown>>
+  const before = Object.fromEntries(
+    Object.entries(systems).map(([name, system]) => [name, { ...system }]),
+  )
+  for (const { name, definition } of APP_UNITS) {
+    math.createUnit(name, { definition, prefixes: 'none' })
+  }
+  for (const [name, system] of Object.entries(systems)) {
+    const kept = before[name] ?? {}
+    for (const key of Object.keys(system)) if (!(key in kept)) delete system[key]
+    Object.assign(system, kept)
+  }
+}
+registerAppUnits()
 
 // Keep our own reference before hardening: the `parse` that expressions can
 // see is disabled below; this one stays usable. The sheet parses each line
@@ -282,12 +309,21 @@ export function evaluateSheet(blocks: readonly SheetBlock[]): ReadonlyMap<string
       if (value === undefined || typeof value === 'function' || isPlain) {
         return { kind: 'empty' }
       }
-      return { kind: 'value', text: math.format(value, { precision: 14 }) }
+      return { kind: 'value', text: formatResult(value) }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       return fail(explain(message, here, definedAt, failed))
     }
   }
+}
+
+/**
+ * A value as the result cell's plain text (docs/spec-v1.md section 5, Numbers):
+ * `math.format` at the sheet's digits, then `1.235·10⁴`, `∞`. The Digits
+ * setting arrives with the Settings tab; until then every sheet has the default.
+ */
+function formatResult(value: unknown, digits = DEFAULT_DIGITS): string {
+  return plainNumbers(math.format(value, formatOptions(digits)))
 }
 
 function typesetLine(line: ParsedLine, names: Names): TypesetLine {
