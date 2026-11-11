@@ -95,8 +95,10 @@ server. v1 target: one sheet, for Matheus's own use.
   only module that imports `mathjs`. Depends on: `mathjs`.
 - **overlay** (`src/overlay/`) — renders math elements over the canvas, each
   as a typeset grid (`MathElementView`, spec section 4): rows are CSS subgrids
-  of one grid per element (gutter, name, `≔`, expression, result after a rule,
-  note), each with its own box for the line hit. Cells hold KaTeX's HTML,
+  of one grid per element (gutter, equation, result after a rule, note), each
+  with its own box for the line hit. The equation is one cell holding the
+  line's name, `≔` and expression inline, flush left, so `≔` doesn't line up
+  between lines (#62). Cells hold KaTeX's HTML,
   loaded lazily by `katex.ts`; until it loads, a line shows as its source. Rows
   are named by their source (`aria-label`) and result cells carry their text
   (`data-text`). `useAnchorSizes` measures each body after every render and on
@@ -120,7 +122,7 @@ server. v1 target: one sheet, for Matheus's own use.
   `PlacingGhost` draws the new element's box at the pointer while placing. A
   leave that finds the element with no text (`hasText`, in `lineEdit.ts`)
   removes it instead of writing the line. The open line
-  is a field over the name, `≔` and expression cells, beside its live result as
+  is a field over the equation's cells, beside its live result as
   plain text; a hidden copy of its text widens the cell. `gestures.ts`
   (pure) decides when a double-click, a click, Enter or Esc is math's, and
   `lineHit.ts` (pure) finds the

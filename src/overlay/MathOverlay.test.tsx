@@ -258,12 +258,32 @@ describe('MathOverlay', () => {
       expect(result.textContent).not.toContain('=')
     })
 
-    it('leaves the name and ≔ cells empty for a bare expression', () => {
+    it('has no name or ≔ for a bare expression, so it starts at the left edge', () => {
       renderOverlay([anchorWith('2 * 4')])
 
-      expect(cellOf(1, 'name')).toBeEmptyDOMElement()
-      expect(cellOf(1, 'defines')).toBeEmptyDOMElement()
+      expect(cellOf(1, 'equation')).not.toBeNull()
+      expect(cellOf(1, 'name')).toBeNull()
+      expect(cellOf(1, 'defines')).toBeNull()
+      expect(cellOf(1, 'expression')!.querySelector('.katex')).not.toBeNull()
       expect(cellOf(1, 'result')!.dataset.text).toBe('8')
+    })
+
+    // Each line is its own display, flush left (#62): CSS lays them out, and
+    // jsdom does none, so Chromium holds the alignment itself.
+    it('keeps name, ≔ and expression in one equation cell, in that order', () => {
+      renderOverlay([anchorWith('R_1 = 10 kohm\nU = R_1 * 2 mA')])
+
+      for (const n of [1, 2]) {
+        const equation = cellOf(n, 'equation')!
+        expect(Array.from(equation.children).map((part) => part.className)).toEqual([
+          'math-element__name',
+          'math-element__defines',
+          'math-element__expression',
+        ])
+        // The row holds one equation, and the results sit beside it, not inside.
+        expect(rowOf('m1', n).querySelectorAll('.math-element__equation')).toHaveLength(1)
+        expect(equation.querySelector('.math-element__result')).toBeNull()
+      }
     })
 
     it('leaves a plain input’s result cell empty and keeps its note in the note column', () => {
