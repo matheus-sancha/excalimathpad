@@ -33,6 +33,12 @@ export interface FileMenu {
   saveAs: () => void
 }
 
+/**
+ * The Sheet panel's class: the overlay keeps its hover tips clear of it, since
+ * the panel (docked or floating) covers the canvas's right edge.
+ */
+export const SHEET_SIDEBAR_CLASS = 'sheet-sidebar'
+
 /** Excalidraw's sidebar name for the Sheet panel. */
 export const SHEET_PANEL = 'sheet'
 
@@ -153,7 +159,7 @@ export function SheetCanvas({ onReady, initialElements, fileMenu, sheetPanel }: 
             name={SHEET_PANEL}
             docked={docked}
             onDock={setDocked}
-            className="sheet-sidebar"
+            className={SHEET_SIDEBAR_CLASS}
             onStateChange={(state) => {
               const open = state?.name === SHEET_PANEL
               if (open && isPanelTab(state.tab)) lastTab.current = state.tab

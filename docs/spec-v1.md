@@ -1189,6 +1189,9 @@ Engineer's design gate. Tested on Excalidraw 0.18.1, math.js 15.2 and Chromium.
   the plot popover. The bar's buttons never take focus (`mousedown` is prevented, `tabIndex` -1): a blur
   would leave the line. The bar is absolutely placed, so it never counts toward the element's size. The
   unit slot and ⚙ let pointer-down through and open on `click`.
+  - As built (#7 and #58 follow-up): an overlay hover is found from geometry on the canvas's `pointermove`
+    (`slotAt`, `tipAt`), never from the overlay's own events; a `title` attribute there never shows. The
+    root's `pointerleave` (not in capture) hides a problem's tip.
 - **Capture `dblclick` on the stage, capture `keydown` on `document`,** for double-click, Enter and M. Stop
   them there. Act on Enter only when one math anchor is selected, the tool is the selection tool, no
   modifier is held, and the target isn't an input, textarea, contenteditable or button.
@@ -1650,9 +1653,14 @@ Changes line if it changes behaviour.
   a wide window, since the floating panel closes by itself after a jump or a click. The Sheet button is the app's own,
   so it can carry the badge and reopen the last tab. Values in Variables read as the result's plain text, with the unit
   typeset.
-- 2026-11-11, [section 4](#problems) (#7 and #58, found while building): the overlay takes no pointer events, so a
-  hover title on the gutter mark or an error cell never shows on screen (true of errors since M1). The full message of
-  every error and warning is in the Problems tab; a hover that works needs the gesture layer to show it, a follow-up.
+- 2026-11-11, [section 4](#problems) (#7 and #58, found while building; fixed in the follow-up, checked in Chromium with
+  a real mouse): the overlay takes no pointer events, so a hover title on the gutter mark or an error cell never showed
+  on screen (true of errors since M1). The gestures now find the mark under the pointer from its screen box, as the
+  unit slot does (#60), and the overlay draws the message as a tip: a `⚠`'s warnings, a `●`'s error, and a capped
+  error's whole text (only while the cell is cut short). It shows after the pointer rests 500 ms, moves straight to the
+  next mark while one shows, and hides when the pointer leaves the mark or the canvas, on a press, and on a scroll,
+  zoom or scene change. The press still reaches Excalidraw, which selects and drags as before. The tip stays clear of
+  the Sheet panel, and is screen only: never in the scene, the file or print. No `title` is set on overlay content.
 - 2026-11-11, [section 14](#14-engineering-constraints) (#60, verify first, measured in Chromium): the slot's
   pointer cursor set two frames after a move, as the crosshair is, flickered while the pointer moved: about half the
   painted frames showed Excalidraw's `move`. Excalidraw sets its cursor in its own move handler and again from a frame
