@@ -4,6 +4,7 @@ import {
   NO_FORMAT,
   readLine,
   splitDisplayUnit,
+  writeDisplayUnit,
   writeFormat,
   type LineFormat,
 } from './lineForm.ts'
@@ -176,5 +177,20 @@ describe('splitDisplayUnit (docs/spec-v1.md section 3, step 3)', () => {
       expression: 'U = I * R',
       displayUnit: 'V',
     })
+  })
+})
+
+describe('writeDisplayUnit (docs/spec-v1.md sections 3 and 5: what the unit slot writes)', () => {
+  it.each([
+    ['D = 102.3 mm', 'cm', 'D = 102.3 mm in cm'],
+    ['D = 102.3 mm in in', 'cm', 'D = 102.3 mm in cm'],
+    ['D = 102.3 mm in in', null, 'D = 102.3 mm'],
+    ['dP = a * b # friction only', 'kPa', 'dP = a * b in kPa # friction only'],
+    ['U = I * R in V @bold @yellow # check', 'mV', 'U = I * R in mV @bold @yellow # check'],
+    ['U = I * R @bold', null, 'U = I * R @bold'],
+    ['Q = q to L/s   # flow', 'L/minute', 'Q = q in L/minute # flow'],
+    ['# a comment', 'm', '# a comment'],
+  ])('%s with %s', (line, unit, written) => {
+    expect(writeDisplayUnit(line, unit)).toBe(written)
   })
 })

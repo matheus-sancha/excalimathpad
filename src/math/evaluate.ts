@@ -11,7 +11,12 @@ import {
   type MathNode,
 } from 'mathjs'
 import { APP_UNITS } from './appUnits.ts'
-import { createDisplay, type DisplaySettings, type DisplayUnit } from './display.ts'
+import {
+  createDisplay,
+  type DisplaySettings,
+  type DisplayUnit,
+  type UnitSlot,
+} from './display.ts'
 import { createCalls, isSheetFunction, messageOf } from './functions.ts'
 import { readLine, type LineFormat } from './lineForm.ts'
 import { DEFAULT_DIGITS } from './numbers.ts'
@@ -204,6 +209,12 @@ export interface SheetLine {
    * stays empty (a plain input), a function's parameters, or `error`.
    */
   variables: readonly SheetVariable[]
+  /**
+   * The result's unit slot (section 5): the chosen unit as typed after `in`,
+   * and what the list offers. Null where the line has no value to show a
+   * unit for: a function, an error, a matrix, a string.
+   */
+  unitSlot: (UnitSlot & { chosen: string | null }) | null
 }
 
 export type SheetVariable =
@@ -234,6 +245,8 @@ type ParsedLine =
       unknownFormat: string | null
       /** The line's trailing `in <unit>`, read outside the sheet's scope, or null. */
       display: DisplayUnit | null
+      /** That unit as typed. */
+      displayText: string | null
     }
 
 /**
@@ -308,6 +321,8 @@ export function evaluateSheet(
   const assigned = new Set<string>()
   const names: Names = { ...ENGINE_NAMES, isSheetName: (name) => assigned.has(name) }
   const results = new Map<string, SheetLine[]>()
+  // The slot of the line being evaluated, set by `evaluateLine`.
+  let slot: SheetLine['unitSlot'] = null
   position = 0
   for (const { id, lines } of sheet) {
     results.set(
@@ -316,8 +331,15 @@ export function evaluateSheet(
         // Read before the line runs: what the scope holds above it.
         const warnings = line.kind === 'parsed' ? warningsAt(line.node, position) : []
         if (line.kind !== 'blank') line.defines.forEach((name) => assigned.add(name))
+        slot = null
         const result = evaluateLine(line)
-        return { result, typeset: typesetLine(line, names), warnings, variables: variablesOf(line) }
+        return {
+          result,
+          typeset: typesetLine(line, names),
+          warnings,
+          variables: variablesOf(line),
+          unitSlot: slot,
+        }
       }),
     )
   }
@@ -392,12 +414,15 @@ export function evaluateSheet(
       // Comment-only lines evaluate to nothing. A plain input without a display
       // unit and a line whose value is a function leave the result cell empty,
       // though the value still reaches the lines below (section 3).
-      if (value === undefined || typeof value === 'function' || (isPlain && line.display === null)) {
-        return { kind: 'empty' }
-      }
+      if (value === undefined || typeof value === 'function') return { kind: 'empty' }
       try {
-        const unit = line.display?.kind === 'unit' ? line.display.unit : null
-        return { kind: 'value', text: display.show(value, unit, settings) }
+        const shown = line.display
+        const unit = shown?.kind === 'unit' ? shown.unit : shown?.kind === 'percent' ? 'percent' : null
+        const text = display.show(value, unit, settings)
+        const offered = display.slot(value, settings)
+        slot = offered && { ...offered, chosen: line.displayText }
+        if (isPlain && line.display === null) return { kind: 'empty' }
+        return { kind: 'value', text }
       } catch (error) {
         // The value is assigned: only its showing failed.
         return { kind: 'error', message: error instanceof Error ? error.message : String(error) }
@@ -455,6 +480,15 @@ export function typesetResult(text: string): string {
   return resultTex(text, (unit) => parse(unit), { ...ENGINE_NAMES, isSheetName: () => false })
 }
 
+/**
+ * Whether text typed in the unit slot is a unit a line can show in: a pure
+ * unit expression math.js knows (`bar`, `kN/m^2`, `L/minute`), or `%`.
+ */
+export function isDisplayUnit(text: string): boolean {
+  const target = display.readTarget(text)
+  return target?.kind === 'unit' || target?.kind === 'percent'
+}
+
 /** A unit's text, as a result writes it (`kohm`, `m^3 / s`), typeset (`k\Omega`); plain text if it isn't one. */
 export function typesetUnit(unit: string): string {
   try {
@@ -495,6 +529,7 @@ function parseLine(text: string): ParsedLine {
       format: form.format,
       unknownFormat: form.unknownFormat,
       display: target,
+      displayText: target === null ? null : form.displayUnit,
     }
   } catch (error) {
     const target = ASSIGNMENT_TARGET.exec(line)?.[1]

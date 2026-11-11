@@ -1,4 +1,6 @@
 import {
+  createContext,
+  useContext,
   useEffect,
   useLayoutEffect,
   useRef,
@@ -13,6 +15,7 @@ import type { ForwardWheel } from '../canvas/SheetCanvas.tsx'
 import {
   splitLines,
   typesetResult,
+  typesetUnit,
   type LineResult,
   type SheetLine,
   type TypesetLine,
@@ -25,7 +28,9 @@ import {
   writeFormat,
   type LineFormat,
 } from '../math/lineForm.ts'
+import { leadingNumber } from '../math/numbers.ts'
 import { texToHtml, useKatexReady } from './katex.ts'
+import { UnitField } from './UnitField.tsx'
 import { hasText, TITLE_LINE, type LineEdit, type LineMove } from './lineEdit.ts'
 import { sceneToStage, type Viewport } from './viewport.ts'
 
@@ -47,7 +52,32 @@ export interface MathElementViewProps {
   forwardWheel: ForwardWheel
   /** The line a jump from the Sheet panel flashes (section 8), with its key to restart the flash. */
   flash?: { line: number; key: number } | null
+  /** The unit slots (section 5): which row is hovered, which slot's field is open. */
+  unitSlots?: UnitSlots
 }
+
+/** What the result cells need for their unit slots. */
+export interface UnitSlots {
+  /** The hovered row: its slot shows outlined, an empty one included. */
+  hovered: number | null
+  /** The row whose unit field is open. */
+  open: number | null
+  /** Writes the chosen unit (null for Sheet units) into the line, as one line commit. */
+  apply: (line: number, unit: string | null) => void
+  cancel: () => void
+  /** Whether typed text is a unit the line can show in. */
+  isUnit: (text: string) => boolean
+}
+
+const NO_SLOTS: UnitSlots = {
+  hovered: null,
+  open: null,
+  apply: () => {},
+  cancel: () => {},
+  isUnit: () => false,
+}
+
+const SlotsContext = createContext<UnitSlots>(NO_SLOTS)
 
 /**
  * One math element as a worksheet block (docs/spec-v1.md section 4, Typeset
@@ -78,6 +108,7 @@ export function MathElementView({
   onBlurLine,
   forwardWheel,
   flash = null,
+  unitSlots = NO_SLOTS,
 }: MathElementViewProps) {
   const rootRef = useRef<HTMLDivElement>(null)
   const katexReady = useKatexReady()
@@ -127,40 +158,42 @@ export function MathElementView({
             onBlur={() => onBlurLine(TITLE_LINE)}
           />
         )}
-        <ol className="math-element__grid" aria-label="Lines">
-          {splitLines(source).map((text, i) => {
-            const line = lines[i] ?? EMPTY_LINE
-            const editing = edit?.lineIndex === i
-            const flashing = flash?.line === i
-            return (
-              <li
-                // A new key restarts the flash's animation on a second jump.
-                key={flashing ? `${i}:${flash.key}` : i}
-                className={`math-element__row is-${editing ? 'editing' : line.typeset.kind}${formatClasses(
-                  editing ? formatOf(edit.text) : line.typeset.kind === 'math' ? line.typeset.format : NO_FORMAT,
-                )}${flashing ? ' is-flash' : ''}`}
-                data-line={i}
-                aria-label={text}
-              >
-                {editing ? (
-                  <EditingRow
-                    edit={edit}
-                    result={line.result}
-                    warnings={line.warnings}
-                    isEmpty={isEmpty}
-                    onType={onType}
-                    onRewrite={onRewrite}
-                    onMove={onMove}
-                    onEscape={onEscape}
-                    onBlur={() => onBlurLine(i)}
-                  />
-                ) : (
-                  <TypesetRow text={text} line={line} katexReady={katexReady} />
-                )}
-              </li>
-            )
-          })}
-        </ol>
+        <SlotsContext.Provider value={unitSlots}>
+          <ol className="math-element__grid" aria-label="Lines">
+            {splitLines(source).map((text, i) => {
+              const line = lines[i] ?? EMPTY_LINE
+              const editing = edit?.lineIndex === i
+              const flashing = flash?.line === i
+              return (
+                <li
+                  // A new key restarts the flash's animation on a second jump.
+                  key={flashing ? `${i}:${flash.key}` : i}
+                  className={`math-element__row is-${editing ? 'editing' : line.typeset.kind}${formatClasses(
+                    editing ? formatOf(edit.text) : line.typeset.kind === 'math' ? line.typeset.format : NO_FORMAT,
+                  )}${flashing ? ' is-flash' : ''}`}
+                  data-line={i}
+                  aria-label={text}
+                >
+                  {editing ? (
+                    <EditingRow
+                      edit={edit}
+                      result={line.result}
+                      warnings={line.warnings}
+                      isEmpty={isEmpty}
+                      onType={onType}
+                      onRewrite={onRewrite}
+                      onMove={onMove}
+                      onEscape={onEscape}
+                      onBlur={() => onBlurLine(i)}
+                    />
+                  ) : (
+                    <TypesetRow text={text} line={line} index={i} katexReady={katexReady} />
+                  )}
+                </li>
+              )
+            })}
+          </ol>
+        </SlotsContext.Provider>
       </div>
     </div>
   )
@@ -217,16 +250,19 @@ const EMPTY_LINE: SheetLine = {
   typeset: { kind: 'blank' },
   warnings: [],
   variables: [],
+  unitSlot: null,
 }
 
 /** A row's cells, by line form (section 3, section 4 Problems). */
 function TypesetRow({
   text,
   line,
+  index,
   katexReady,
 }: {
   text: string
   line: SheetLine
+  index: number
   katexReady: boolean
 }) {
   const { typeset, result, warnings } = line
@@ -254,7 +290,9 @@ function TypesetRow({
           </>
         )
       }
-      return <MathCells typeset={typeset} result={result} warnings={warnings} fallback={text} />
+      return (
+        <MathCells typeset={typeset} result={result} warnings={warnings} fallback={text} line={line} index={index} />
+      )
   }
 }
 
@@ -263,11 +301,15 @@ function MathCells({
   result,
   warnings,
   fallback,
+  line,
+  index,
 }: {
   typeset: Extract<TypesetLine, { kind: 'math' }>
   result: LineResult
   warnings: readonly string[]
   fallback: string
+  line: SheetLine
+  index: number
 }) {
   const name = typeset.name === null ? null : texToHtml(typeset.name)
   const defines = texToHtml(DEFINES)
@@ -301,7 +343,7 @@ function MathCells({
     <>
       <Gutter result={result} warnings={warnings} />
       {cells}
-      <ResultCell result={result} />
+      <ResultCell result={result} slot={line.unitSlot} index={index} />
       {typeset.note !== null && <span className="math-element__note">{typeset.note}</span>}
     </>
   )
@@ -339,17 +381,31 @@ function Gutter({ result, warnings }: { result: LineResult; warnings: readonly s
  * leading `=`; an error shows its message, capped with an ellipsis, the whole
  * text on hover (section 4, Problems). `data-text` holds the result as text.
  */
-function ResultCell({ result, plain = false }: { result: LineResult; plain?: boolean }) {
+function ResultCell({
+  result,
+  plain = false,
+  slot = null,
+  index = -1,
+}: {
+  result: LineResult
+  plain?: boolean
+  slot?: SheetLine['unitSlot']
+  index?: number
+}) {
+  const slots = useContext(SlotsContext)
   let content: ReactNode = null
   let text: string | undefined
   if (result.kind === 'value') {
     text = result.text
-    const html = plain ? null : texToHtml(typesetResult(result.text))
-    content = html === null ? result.text : <Html html={html} />
+    content = plain ? result.text : <ValueContent text={result.text} slot={slot} index={index} />
   } else if (result.kind === 'error') {
     text = result.message
     content = result.message
+  } else if (slot && slots.hovered === index && !plain) {
+    // A plain input: an empty slot on hover (section 5, Unit slot).
+    content = <SlotBox index={index} chosen={false} hovered unitHtml={null} />
   }
+  const open = slot !== null && slots.open === index && !plain
   return (
     <span
       className={`math-element__result is-${result.kind}`}
@@ -357,6 +413,74 @@ function ResultCell({ result, plain = false }: { result: LineResult; plain?: boo
       title={result.kind === 'error' ? result.message : undefined}
     >
       {content}
+      {open && (
+        <UnitField
+          slot={slot}
+          isUnit={slots.isUnit}
+          onApply={(unit) => slots.apply(index, unit)}
+          onCancel={slots.cancel}
+        />
+      )}
+    </span>
+  )
+}
+
+/**
+ * A value: its number, then its unit in the slot. A value that isn't a number
+ * with a unit (a complex number, a matrix) shows whole, with no slot.
+ */
+function ValueContent({ text, slot, index }: { text: string; slot: SheetLine['unitSlot']; index: number }) {
+  const slots = useContext(SlotsContext)
+  const split = leadingNumber(text)
+  if (!slot || !split || !(split.rest === '' || split.rest.startsWith(' '))) {
+    const html = texToHtml(typesetResult(text))
+    return html === null ? <>{text}</> : <Html html={html} />
+  }
+  const number = texToHtml(typesetResult(split.number))
+  const unit = split.rest.trim()
+  const unitHtml = unit === '' ? null : texToHtml(typesetUnit(unit))
+  return (
+    <>
+      {number === null ? split.number : <Html html={number} />}
+      {(unit !== '' || slots.hovered === index) && (
+        <SlotBox
+          index={index}
+          chosen={slot.chosen !== null}
+          hovered={slots.hovered === index}
+          unitHtml={unitHtml}
+          unitText={unit}
+        />
+      )}
+    </>
+  )
+}
+
+/**
+ * The unit slot (section 5): the result's unit, outlined while its row is
+ * hovered, tinted when chosen. It takes no pointer events: the canvas's own
+ * click opens it (section 14), found by `data-unit-slot`.
+ */
+function SlotBox({
+  index,
+  chosen,
+  hovered,
+  unitHtml,
+  unitText = '',
+}: {
+  index: number
+  chosen: boolean
+  hovered: boolean
+  unitHtml: string | null
+  unitText?: string
+}) {
+  return (
+    <span
+      className={`math-element__unit${chosen ? ' is-chosen' : ''}${hovered ? ' is-hovered' : ''}${
+        unitText === '' ? ' is-empty' : ''
+      }`}
+      data-unit-slot={index}
+    >
+      {unitHtml === null ? unitText : <Html html={unitHtml} />}
     </span>
   )
 }

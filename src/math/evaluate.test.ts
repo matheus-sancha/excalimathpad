@@ -855,3 +855,42 @@ describe('the unit lists per kind (docs/spec-v1.md section 5)', () => {
     }
   })
 })
+
+describe('unit slot (docs/spec-v1.md section 5)', () => {
+  const slots = (source: string) =>
+    evaluateSheet([{ id: 'b', source }]).get('b')!.map((line) => line.unitSlot)
+
+  it('offers the units of the result’s kind, each with the value in it, and Sheet units', () => {
+    const [slot] = slots('dP = 45430 Pa * 1')
+    expect(slot).toMatchObject({ kind: 'pressure', system: '45.43 kPa', chosen: null })
+    expect(slot!.options).toEqual([
+      { unit: 'Pa', text: '4.543·10⁴ Pa' },
+      { unit: 'kPa', text: '45.43 kPa' },
+      { unit: 'MPa', text: '0.04543 MPa' },
+      { unit: 'mbar', text: '454.3 mbar' },
+      { unit: 'bar', text: '0.4543 bar' },
+      { unit: 'psi', text: '6.589 psi' },
+      { unit: 'atm', text: '0.4484 atm' },
+    ])
+  })
+
+  it('knows the chosen unit as typed, and a plain input has a slot too', () => {
+    expect(slots('D = 102.3 mm in in\nL = 2 m')).toMatchObject([
+      { kind: 'length', chosen: 'in' },
+      { kind: 'length', chosen: null, system: '2 m' },
+    ])
+  })
+
+  it('offers % for a dimensionless result, and in % shows it in percent', () => {
+    expect(slots('eta = 0.7 * 1')[0]).toMatchObject({
+      kind: 'dimensionless',
+      options: [{ unit: '%', text: '70 %' }],
+    })
+    expect(block('eta = 0.7 * 1 in %')).toEqual([value('70 %')])
+  })
+
+  it('has no slot on a function, an error or a matrix; the app units join their kinds', () => {
+    expect(slots('f(x) = x\n1 m + 1 s\n[1, 2]')).toEqual([null, null, null])
+    expect(slots('mu = 0.001002 Pa s * 1')[0]!.options.map((o) => o.unit)).toContain('cP')
+  })
+})

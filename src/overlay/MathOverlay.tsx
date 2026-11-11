@@ -20,7 +20,15 @@ import {
   type MathAnchor,
 } from '../canvas/mathAnchor.ts'
 import type { ForwardWheel } from '../canvas/SheetCanvas.tsx'
-import { DEFAULT_DISPLAY, evaluateSheet, type SheetBlock, type SheetLine } from '../math/evaluate.ts'
+import {
+  DEFAULT_DISPLAY,
+  evaluateSheet,
+  isDisplayUnit,
+  splitLines,
+  type SheetBlock,
+  type SheetLine,
+} from '../math/evaluate.ts'
+import { writeDisplayUnit } from '../math/lineForm.ts'
 import type { DisplaySettings } from '../math/display.ts'
 import {
   applyLineMove,
@@ -35,7 +43,7 @@ import { MathElementView } from './MathElementView.tsx'
 import { PlacingGhost } from './PlacingGhost.tsx'
 import { readingOrder } from './readingOrder.ts'
 import { useAnchorSizes } from './useAnchorSizes.ts'
-import { useSheetGestures } from './useSheetGestures.ts'
+import { useSheetGestures, type SlotTarget } from './useSheetGestures.ts'
 import type { Viewport } from './viewport.ts'
 import './MathOverlay.css'
 
@@ -185,6 +193,28 @@ export function MathOverlay({
   const findAnchor = (anchorId: string) =>
     store.getSnapshot().anchors.find(({ id }) => id === anchorId)
 
+  // The unit slots (section 5): the hovered row, and the slot whose field is open.
+  const [slotHover, setSlotHover] = useState<SlotTarget | null>(null)
+  const [unitEdit, setUnitEdit] = useState<SlotTarget | null>(null)
+  const hoverRow = (target: SlotTarget | null) =>
+    setSlotHover((current) =>
+      current?.anchorId === target?.anchorId && current?.line === target?.line ? current : target,
+    )
+
+  /** Writes the slot's choice into the line's source, as one line commit; the line stays typeset. */
+  const applyUnit = (anchorId: string, lineIndex: number, unit: string | null) => {
+    setUnitEdit(null)
+    focusCanvas()
+    const anchor = findAnchor(anchorId)
+    if (!anchor) return
+    const sourceLines = splitLines(anchor.source)
+    if (lineIndex >= sourceLines.length) return
+    const written = writeDisplayUnit(sourceLines[lineIndex], unit)
+    if (written === sourceLines[lineIndex]) return
+    sourceLines[lineIndex] = written
+    writeAnchorSource(api, anchorId, sourceLines.join('\n'))
+  }
+
   /**
    * Every line commit goes through here, so each one is written exactly once.
    * An element left with no text is removed instead, as its own one step.
@@ -235,6 +265,12 @@ export function MathOverlay({
     openLine,
     leaveLine: () => moveEdit({ kind: 'leave' }),
     focusCanvas,
+    slotAt: (clientX, clientY) => slotAt(overlayRef.current, clientX, clientY),
+    hoverRow,
+    openUnit: (target) => {
+      moveEdit({ kind: 'leave' })
+      setUnitEdit(target)
+    },
   })
 
   useAnchorSizes({
@@ -293,6 +329,13 @@ export function MathOverlay({
           onBlurLine={(lineIndex) => leaveLine(anchor.id, lineIndex)}
           forwardWheel={forwardWheel}
           flash={flash?.anchorId === anchor.id ? flash : null}
+          unitSlots={{
+            hovered: slotHover?.anchorId === anchor.id ? slotHover.line : null,
+            open: unitEdit?.anchorId === anchor.id ? unitEdit.line : null,
+            apply: (lineIndex, unit) => applyUnit(anchor.id, lineIndex, unit),
+            cancel: () => setUnitEdit(null),
+            isUnit: isDisplayUnit,
+          }}
         />
       ))}
       {placing && <PlacingGhost canvasRoot={canvasRoot} zoom={viewport.zoom} />}
@@ -315,6 +358,25 @@ function rowsOf(overlay: HTMLElement | null, anchorId: string): RowBox[] {
     top: row.offsetTop,
     height: row.offsetHeight,
   }))
+}
+
+/**
+ * The unit slot drawn under a point on screen, from the slots' boxes: the
+ * topmost element first (later in the DOM paints above).
+ */
+function slotAt(overlay: HTMLElement | null, clientX: number, clientY: number): SlotTarget | null {
+  const elements = Array.from(overlay?.children ?? []).reverse()
+  for (const element of elements) {
+    if (!(element instanceof HTMLElement) || !element.dataset.anchorId) continue
+    for (const slot of element.querySelectorAll<HTMLElement>('[data-unit-slot]')) {
+      const box = slot.getBoundingClientRect()
+      if (box.width === 0 && box.height === 0) continue
+      if (clientX >= box.left && clientX <= box.right && clientY >= box.top && clientY <= box.bottom) {
+        return { anchorId: element.dataset.anchorId, line: Number(slot.dataset.unitSlot) }
+      }
+    }
+  }
+  return null
 }
 
 /** The header's box as laid out, or null when the element shows no title. */

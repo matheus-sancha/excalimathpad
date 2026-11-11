@@ -128,6 +128,24 @@ export function writeFormat(line: string, format: LineFormat): string {
   return at === -1 ? head : `${head} ${line.slice(at)}`
 }
 
+/**
+ * The line with its display unit set to `unit`, or taken off for null (the
+ * unit slot, section 5): `in <unit>` goes at the end of the code, before the
+ * format clause and the note (section 3, Rules for what the app writes). The
+ * rest of the line stays as typed. A line with no code comes back unchanged.
+ */
+export function writeDisplayUnit(line: string, unit: string | null): string {
+  const at = commentStart(line)
+  const head = at === -1 ? line : line.slice(0, at)
+  if (head.trim() === '') return line
+  const tail = at === -1 ? '' : line.slice(at)
+  const clause = CLAUSE.exec(head)
+  const code = (clause ? head.slice(0, clause.index) : head).trimEnd()
+  const { expression } = splitDisplayUnit(code)
+  const written = unit ? `${expression} in ${unit.trim()}` : expression
+  return `${written}${clause ? clause[0].trimEnd() : ''}${tail ? ` ${tail}` : ''}`
+}
+
 /** Where the code part of a line ends: before its clause and its note. */
 export function codeLength(line: string): number {
   const at = commentStart(line)

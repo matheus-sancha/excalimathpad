@@ -1405,7 +1405,10 @@ Changes line if it changes behaviour.
   then reaches the canvas root. A click is that `click` with the anchor's `x` and `y` unchanged; after a drag
   they have changed. In Chromium with real input, a click on the result column of another line moved the edit
   there, and a drag from the same place moved the element and opened nothing. M2 builds the slot on this rule;
-  the slot itself is untried.
+  the slot itself is untried. **Passed for the slot (#60):** in Chromium with real mouse input, a click on a
+  result's unit opened its field and list, and choosing `bar` wrote `in bar` before the note as one undo step; a
+  drag started on the same slot moved the element and opened nothing; Ctrl+Z took back the drag, then the unit.
+  `unitSlot.excalidraw.test.tsx` holds both against the installed package, with the slots' boxes stubbed.
 - The reduced panel's CSS on `.panelColumn` children, and the hint's replacement through `.HintViewer`.
   **Passed (#46):** in Chromium, the panel's children are Stroke, Background, Fill, Stroke width, Stroke style,
   Sloppiness, Edges, Opacity, Layers, (Align), Actions, and Opacity is the only one with a class of its own
@@ -1650,4 +1653,14 @@ Changes line if it changes behaviour.
 - 2026-11-11, [section 4](#problems) (#7 and #58, found while building): the overlay takes no pointer events, so a
   hover title on the gutter mark or an error cell never shows on screen (true of errors since M1). The full message of
   every error and warning is in the Problems tab; a hover that works needs the gesture layer to show it, a follow-up.
+- 2026-11-11, [section 14](#14-engineering-constraints) (#60, verify first, measured in Chromium): the slot's
+  pointer cursor set two frames after a move, as the crosshair is, flickered while the pointer moved: about half the
+  painted frames showed Excalidraw's `move`. Excalidraw sets its cursor in its own move handler and again from a frame
+  callback it queues there. The slot now sets the pointer in a microtask after the event and from a frame callback
+  queued after Excalidraw's: every painted frame showed the pointer, still or moving.
+- 2026-11-11, [section 5](#unit-slot) (#60, Engineer's, for Matheus to confirm on the PR): each kind's list in the slot
+  and in Custom is in `src/math/unitSystems.ts` (`SLOT_UNITS`), the app units included; pressure is section 5's own.
+  A typed text that matches a unit exactly is highlighted first (`bar` before `mbar`), and the highlight returns to the
+  top as you type. `%` is a display unit the app reads itself (`in %` shows the value times 100), since math.js has
+  none. A row's slot outline follows the pointer by geometry, selected or not.
 

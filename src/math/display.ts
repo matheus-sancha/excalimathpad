@@ -7,6 +7,7 @@ import {
   KINDS,
   NAMED_SI_UNITS,
   namedUnitsFor,
+  SLOT_UNITS,
   unitsFor,
   type Kind,
   type UnitSettings,
@@ -29,13 +30,32 @@ export interface DisplaySettings {
 /** What a line's trailing `in <unit>` turned out to be. */
 export type DisplayUnit =
   | { kind: 'unit'; unit: Unit; text: string }
+  /** `in %`, offered for a dimensionless result (section 5, Unit slot). */
+  | { kind: 'percent' }
   | { kind: 'unknown'; name: string }
+
+/** A unit to show a value in: a math.js unit, or percent. */
+export type ShownUnit = Unit | 'percent'
+
+/**
+ * A result's unit slot (section 5): what the list under it offers. The kind is
+ * null for a dimension off the kinds list, which offers only Sheet units.
+ */
+export interface UnitSlot {
+  kind: Kind | 'dimensionless' | null
+  /** The value in the sheet's system: the list's Sheet units entry. */
+  system: string
+  /** The units of the same kind, each with the value in it. */
+  options: readonly { unit: string; text: string }[]
+}
 
 export interface Display {
   /** The target of an `in`, read outside the sheet's scope; null when not a pure unit expression. */
   readTarget(target: string): DisplayUnit | null
   /** A value's plain text, in `unit` if given, else in the settings' system. */
-  show(value: unknown, unit: Unit | null, settings: DisplaySettings): string
+  show(value: unknown, unit: ShownUnit | null, settings: DisplaySettings): string
+  /** The slot's list for a value, or null for a value with no unit to choose (a matrix, a string). */
+  slot(value: unknown, settings: DisplaySettings): UnitSlot | null
 }
 
 /**
@@ -44,6 +64,7 @@ export interface Display {
  */
 export function createDisplay(math: MathJsInstance, parse: (text: string) => MathNode): Display {
   const isUnit = (value: unknown): value is Unit => math.isUnit(value)
+  const slotUnits = new Map<string, Unit>()
 
   const kinds = KINDS.map((kind) => ({ kind, dimensions: math.unit(KIND_REFERENCE[kind]).dimensions }))
 
@@ -122,6 +143,7 @@ export function createDisplay(math: MathJsInstance, parse: (text: string) => Mat
 
   return {
     readTarget(target) {
+      if (target.trim() === '%') return { kind: 'percent' }
       let node: MathNode
       try {
         node = parse(target)
@@ -136,10 +158,44 @@ export function createDisplay(math: MathJsInstance, parse: (text: string) => Mat
       return { kind: 'unit', unit, text: unit.formatUnits() }
     },
     show(value, unit, settings) {
-      if (unit !== null) return inUnit(value, unit, settings)
-      if (isUnit(value)) return inSystem(value, settings)
-      return format(value, settings.digits)
+      return show(value, unit, settings)
     },
+    slot(value, settings) {
+      const dimensions = isUnit(value) ? value.dimensions : typeof value === 'number' ? null : undefined
+      if (dimensions === undefined || (isUnit(value) && value.value === null)) return null
+      const system = show(value, null, settings)
+      if (dimensions === null || dimensions.every((d) => d === 0)) {
+        return { kind: 'dimensionless', system, options: [{ unit: '%', text: show(value, 'percent', settings) }] }
+      }
+      const kind = kindOf(dimensions)
+      if (kind === null) return { kind: null, system, options: [] }
+      return {
+        kind,
+        system,
+        options: SLOT_UNITS[kind].map((unit) => ({ unit, text: show(value, slotUnit(unit), settings) })),
+      }
+    },
+  }
+
+  function show(value: unknown, unit: ShownUnit | null, settings: DisplaySettings): string {
+    if (unit === 'percent') {
+      const hundredfold = math.multiply(value as never, 100) as unknown
+      const shown = isUnit(hundredfold) ? inSystem(hundredfold, settings) : format(hundredfold, settings.digits)
+      return `${shown} %`
+    }
+    if (unit !== null) return inUnit(value, unit, settings)
+    if (isUnit(value)) return inSystem(value, settings)
+    return format(value, settings.digits)
+  }
+
+  /** The slot lists' units, read once per engine. */
+  function slotUnit(text: string): Unit {
+    let unit = slotUnits.get(text)
+    if (!unit) {
+      unit = buildUnit(parse(text), math)
+      slotUnits.set(text, unit)
+    }
+    return unit
   }
 }
 

@@ -41,8 +41,8 @@ server. v1 target: one sheet, for Matheus's own use.
   `SheetCanvas.css` uses the mark for the reduced panel and the hint.
   `SheetCanvas` starts new text in the Normal font (Nunito).
   `canvasEvents.ts` (`listenToCanvas`) hands the canvas's double-clicks, presses,
-  clicks and keys to the gestures before Excalidraw hears them, and stops the
-  ones they take. `sceneFile.ts` is
+  clicks, pointer moves and keys to the gestures before Excalidraw hears them,
+  and stops the ones they take. `sceneFile.ts` is
   the Excalidraw half of the sheet file: `serializeScene`, `loadScene` (no undo
   step, clears history) and `saveKey`, the key dirty is measured by.
   `SheetCanvas` also turns off Excalidraw's own open, save and export and draws
@@ -135,6 +135,16 @@ server. v1 target: one sheet, for Matheus's own use.
   Each row is drawn at its anchor's opacity (`--math-opacity`), the edited row
   at full. In Excalidraw's dark theme the
   overlay takes its canvas filter.
+  The **unit slot** (spec section 5): a result's unit is drawn in its own
+  `[data-unit-slot]` span, tinted when the line has `in <unit>`, outlined on
+  its hovered row (an empty one for a plain input or a dimensionless value).
+  The gestures find a slot from the slots' screen boxes (`slotAt`), open its
+  field on the canvas's click when the element hasn't moved, and follow hover
+  from `pointerMove`; `UnitField` (the field and list, one of the overlay's
+  controls that take pointer events) hands back a unit, and `MathOverlay`
+  writes it with `writeDisplayUnit` as one line commit. The engine gives each
+  line its `unitSlot` (kind, chosen unit, value in the system and in each
+  unit of the kind).
   `MathOverlay` subscribes to the scene (`onChange`, `onScrollChange`) and
   places each element from its anchor's scene position via `viewport.ts`
   (`sceneToStage`, pure). It reads source from the anchors and holds the sheet's
