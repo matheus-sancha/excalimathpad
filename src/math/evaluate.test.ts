@@ -7,6 +7,11 @@ function sheet(...sources: string[]): LineResult[][] {
   return sources.map((_, i) => lines.get(`b${i}`)!.map(({ result }) => result))
 }
 
+/** The warnings of each line of a one-block sheet. */
+function warnings(source: string): (readonly string[])[] {
+  return evaluateSheet([{ id: 'b', source }]).get('b')!.map((line) => line.warnings)
+}
+
 /** A sheet of one block. */
 const block = (source: string) => sheet(source)[0]
 
@@ -190,8 +195,11 @@ describe('evaluateSheet', () => {
     // Known limit, follow-up #7: a name that is also a unit (V, A, m, ...)
     // is never undefined. If its definition fails, lines below silently read
     // the unit instead.
-    it('falls back to the unit when a unit-named definition fails', () => {
+    it('falls back to the unit when a unit-named definition fails, with a warning (#7)', () => {
       expect(sheet('V = 1 mA + 1 V', 'V * 2')[1]).toEqual([value('2 V')])
+      expect(warnings('V = 1 mA + 1 V\nV * 2')[1]).toEqual([
+        'V reads as the unit V here: its definition failed',
+      ])
     })
 
     it('clears the error once the name is defined again', () => {
@@ -677,5 +685,57 @@ describe('unit systems (docs/spec-v1.md section 5)', () => {
     expect(inSystem('45430.12 Pa', { units: { system: 'si-base', custom: {} }, digits: 6 })).toEqual([
       value('45430.1 Pa'),
     ])
+  })
+})
+
+describe('warnings (docs/spec-v1.md section 5, #7)', () => {
+  it('warns when a variable shadows a unit; the name wins and the result is unchanged', () => {
+    expect(warnings('K = 5.4\nx = 2 K')).toEqual([['K shadows the unit K'], []])
+    expect(block('K = 5.4\nx = 2 K')).toEqual([empty, value('10.8')])
+  })
+
+  it('covers function names, parameters, built-ins and the app units', () => {
+    expect(warnings('g(x) = x^2')).toEqual([['g shadows the unit g']])
+    expect(warnings('u(s) = s + 5 s')).toEqual([['s shadows the unit s']])
+    expect(warnings('pi = 3')).toEqual([['pi shadows the built-in pi']])
+    expect(warnings('cP = 2')).toEqual([['cP shadows the unit cP']])
+  })
+
+  it('does not warn for a parameter that hides a sheet function', () => {
+    expect(warnings('h(Q) = Q * 2\nf(h, r) = h * r')).toEqual([['h shadows the unit h'], []])
+  })
+
+  it('flags a use that falls back to the unit because the variable is defined below', () => {
+    expect(warnings('P = V * 2\nV = 3 A * 2 ohm')).toEqual([
+      ['V reads as the unit V here: the variable is defined below'],
+      ['V shadows the unit V'],
+    ])
+    expect(block('P = V * 2\nV = 3 A * 2 ohm')[0]).toEqual(value('2 V'))
+  })
+
+  it('keeps 5 V meaning volts above any V = ... without a fallback warning when V is not defined', () => {
+    expect(warnings('U = 5 V\nI = 2 A')).toEqual([[], []])
+  })
+
+  it('warns on a function body name not defined above this line', () => {
+    expect(warnings('f(x) = k * x\nk = 2\nf(3)')).toEqual([["k isn't defined above this line"], [], []])
+    expect(block('f(x) = k * x\nk = 2\nf(3)')[2]).toEqual(value('6'))
+  })
+
+  it('skips the function itself, its parameters, units and math.js functions in a body', () => {
+    expect(warnings('fact(n) = n <= 1 ? 1 : n * fact(n - 1)')).toEqual([[]])
+    expect(warnings('w(x) = sqrt(x) * 2 m + pi')).toEqual([[]])
+  })
+
+  it('stays silent for a body name defined above and redefined later', () => {
+    expect(warnings('k = 1\nf(x) = k * x\nk = 2')).toEqual([[], [], []])
+  })
+
+  it('leaves names that are not units or built-ins alone', () => {
+    expect(warnings('rho = 998.2 kg/m^3\nD = 2 m\nx = rho * D')).toEqual([[], [], []])
+  })
+
+  it('keeps the warnings of a line that fails', () => {
+    expect(warnings('K = 1 m + 1 s')).toEqual([['K shadows the unit K']])
   })
 })

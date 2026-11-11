@@ -141,6 +141,7 @@ export function MathElementView({
                   <EditingRow
                     edit={edit}
                     result={line.result}
+                    warnings={line.warnings}
                     isEmpty={isEmpty}
                     onType={onType}
                     onRewrite={onRewrite}
@@ -209,6 +210,7 @@ function formatClasses({ bold, underline, color }: LineFormat): string {
 const EMPTY_LINE: SheetLine = {
   result: { kind: 'empty' },
   typeset: { kind: 'blank' },
+  warnings: [],
 }
 
 /** A row's cells, by line form (section 3, section 4 Problems). */
@@ -221,7 +223,7 @@ function TypesetRow({
   line: SheetLine
   katexReady: boolean
 }) {
-  const { typeset, result } = line
+  const { typeset, result, warnings } = line
   switch (typeset.kind) {
     case 'blank':
       return <ResultCell result={result} />
@@ -230,7 +232,7 @@ function TypesetRow({
     case 'unparsed':
       return (
         <>
-          <Gutter result={result} />
+          <Gutter result={result} warnings={warnings} />
           <span className="math-element__raw">{typeset.source}</span>
           <ResultCell result={result} />
         </>
@@ -240,23 +242,25 @@ function TypesetRow({
       if (!katexReady) {
         return (
           <>
-            <Gutter result={result} />
+            <Gutter result={result} warnings={warnings} />
             <span className="math-element__source">{text}</span>
             <ResultCell result={result} plain />
           </>
         )
       }
-      return <MathCells typeset={typeset} result={result} fallback={text} />
+      return <MathCells typeset={typeset} result={result} warnings={warnings} fallback={text} />
   }
 }
 
 function MathCells({
   typeset,
   result,
+  warnings,
   fallback,
 }: {
   typeset: Extract<TypesetLine, { kind: 'math' }>
   result: LineResult
+  warnings: readonly string[]
   fallback: string
 }) {
   const name = typeset.name === null ? null : texToHtml(typeset.name)
@@ -289,7 +293,7 @@ function MathCells({
     )
   return (
     <>
-      <Gutter result={result} />
+      <Gutter result={result} warnings={warnings} />
       {cells}
       <ResultCell result={result} />
       {typeset.note !== null && <span className="math-element__note">{typeset.note}</span>}
@@ -304,10 +308,22 @@ function Html({ html }: { html: string }) {
   return <span className="math-element__tex" dangerouslySetInnerHTML={{ __html: html }} />
 }
 
-function Gutter({ result }: { result: LineResult }) {
+/**
+ * The problem gutter (section 4, Problems): a red `●` for an error, else an
+ * amber `⚠` for warnings, with their messages as the mark's title. Warnings
+ * never change the result, so the value still shows beside the mark. Screen
+ * only: print and the file never carry it.
+ */
+function Gutter({ result, warnings }: { result: LineResult; warnings: readonly string[] }) {
+  const error = result.kind === 'error'
+  const warned = !error && warnings.length > 0
   return (
-    <span className="math-element__gutter" aria-hidden="true">
-      {result.kind === 'error' ? '●' : ''}
+    <span
+      className={`math-element__gutter${warned ? ' is-warning' : ''}`}
+      title={warned ? warnings.join('\n') : undefined}
+      data-warnings={warnings.length > 0 ? warnings.join('\n') : undefined}
+    >
+      {error ? '●' : warned ? '⚠' : ''}
     </span>
   )
 }
@@ -342,6 +358,7 @@ function ResultCell({ result, plain = false }: { result: LineResult; plain?: boo
 interface EditingRowProps {
   edit: LineEdit
   result: LineResult
+  warnings: readonly string[]
   isEmpty: boolean
   onType: (text: string) => void
   onRewrite: (text: string, caret: number) => void
@@ -357,7 +374,7 @@ interface EditingRowProps {
  * text shares the field's cell, so the column widens as you type, and the
  * element with it, without the field's value ever being set from code.
  */
-function EditingRow({ edit, result, isEmpty, onRewrite, ...field }: EditingRowProps) {
+function EditingRow({ edit, result, warnings, isEmpty, onRewrite, ...field }: EditingRowProps) {
   const fieldRef = useRef<HTMLInputElement>(null)
   const form = readLine(edit.text)
   const format = form.kind === 'code' ? form.format : null
@@ -372,7 +389,7 @@ function EditingRow({ edit, result, isEmpty, onRewrite, ...field }: EditingRowPr
 
   return (
     <>
-      <Gutter result={result} />
+      <Gutter result={result} warnings={warnings} />
       <span className={`math-element__field-cell${isEmpty ? ' is-empty-element' : ''}`}>
         <span className="math-element__field-text" aria-hidden="true">
           {edit.text}

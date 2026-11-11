@@ -107,7 +107,9 @@ server. v1 target: one sheet, for Matheus's own use.
   (`unitSystems.ts`: SI with prefixes by default, SI base, USCS, Custom),
   else a named SI unit (`V`, `ohm`), else composed base units.
   `evaluateSheet(blocks, settings)` takes the system and Digits. An unknown
-  display unit is the line's error after it ran. App code must evaluate only
+  display unit is the line's error after it ran. Each `SheetLine` also
+  carries its `warnings` (`warnings.ts`, pure, read before the line runs).
+  App code must evaluate only
   through `evaluateSheet`: math.js functions that depend on the disabled
   names (`help`, `rationalize`, a `parser()`'s methods) no longer work. The
   only module that imports `mathjs`. Depends on: `mathjs`.
@@ -242,9 +244,11 @@ and everything downstream recalculates. Engine: math.js, client-side.
   starts from a fresh scope, and every known route for a line to change the
   engine is closed, including through parsed Nodes and the unit system
   results format in (see **math**).
-- Known limit: a variable named like a math.js unit or built-in (`V`, `m`,
-  `s`, `i`, ...) silently shadows the unit below its definition and falls
-  back to the unit above it or after it fails (ADR 0003). Warnings are issue #7.
+- A variable named like a math.js unit or built-in (`V`, `m`, `s`, `i`, ...)
+  shadows the unit below its definition and falls back to the unit above it
+  or after it fails (ADR 0003). Both are **warnings** (`warnings.ts`, spec
+  section 5): an amber `⚠` in the gutter, the message as its title. So is a
+  function body name not defined above. A warning never changes a result.
 - Known limit: a size write doesn't move a bound arrow's end (Excalidraw's
   binding update isn't public); it follows when the element next moves (#44).
 

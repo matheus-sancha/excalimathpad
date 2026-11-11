@@ -112,7 +112,7 @@ Engineering rules (Engineer's):
   unit: after `V = I * R` (20 V), `U = 5 V` gives `100 V`. Above it, or after it fails,
   lines read the unit: `V * 2` gives `2 V`. The variable still wins, but such a name
   warns on its line, as do function names, parameters and a solve's unknown (#7, #27;
-  M2). Plain redefinition of any other name stays silent, as Matheus chose. A test
+  built in M2 by #7, `src/math/warnings.ts`; the solve's unknown joins in M3). Plain redefinition of any other name stays silent, as Matheus chose. A test
   records the fallback.
 - How results display (a product decision, #16 and #30; M2, replacing what #25 chose). A
   result shows in its display unit, a trailing `in <unit>` on its line, else in the

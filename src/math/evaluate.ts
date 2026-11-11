@@ -15,6 +15,7 @@ import { createDisplay, type DisplaySettings, type DisplayUnit } from './display
 import { readLine, type LineFormat } from './lineForm.ts'
 import { DEFAULT_DIGITS } from './numbers.ts'
 import { lineTex, resultTex, textTex, type Names } from './typeset.ts'
+import { lineWarnings } from './warnings.ts'
 
 /**
  * The math engine: math.js with units, fully client-side.
@@ -191,6 +192,11 @@ export type TypesetLine =
 export interface SheetLine {
   result: LineResult
   typeset: TypesetLine
+  /**
+   * The line's warnings (section 5, Warnings), in the wording of section 13.
+   * They never change the result, and an error line keeps them too.
+   */
+  warnings: readonly string[]
 }
 
 /** One math element's source, as the sheet sees it. */
@@ -290,12 +296,27 @@ export function evaluateSheet(
     results.set(
       id,
       lines.map((line): SheetLine => {
+        // Read before the line runs: what the scope holds above it.
+        const warnings = line.kind === 'parsed' ? warningsAt(line.node, position) : []
         if (line.kind !== 'blank') line.defines.forEach((name) => assigned.add(name))
-        return { result: evaluateLine(line), typeset: typesetLine(line, names) }
+        return { result: evaluateLine(line), typeset: typesetLine(line, names), warnings }
       }),
     )
   }
   return results
+
+  function warningsAt(node: MathNode, here: number): string[] {
+    const at = (name: string) => definedAt.get(name) ?? []
+    return lineWarnings(node, {
+      isUnit: (name) => math.Unit.isValuelessUnit(name),
+      isBuiltIn: (name) => name in math,
+      inScope: (name) => scope.has(name),
+      isSheetFunction: (name) => typeof scope.get(name) === 'function',
+      definedAbove: (name) => at(name).some((position) => position < here),
+      definedBelow: (name) => at(name).some((position) => position > here),
+      failed: (name) => failed.has(name),
+    })
+  }
 
   function evaluateLine(line: ParsedLine): LineResult {
     const here = position++

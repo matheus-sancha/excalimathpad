@@ -1,7 +1,7 @@
 import { all, create } from 'mathjs'
 import { describe, expect, it } from 'vitest'
 import doc from '../../docs/acceptance/pump-sizing.md?raw'
-import { evaluateSheet, type LineResult } from './evaluate.ts'
+import { evaluateSheet, type SheetLine } from './evaluate.ts'
 
 /**
  * The pump sheet in CI (docs/spec-v1.md sections 15 and 16): the acceptance
@@ -42,7 +42,7 @@ function inUnit(text: string, unit: string): number {
   return Number(number.toPrecision(4))
 }
 
-function run(ids: readonly string[]): Map<string, LineResult> {
+function run(ids: readonly string[]): Map<string, SheetLine> {
   const lines = ids.map((id) => {
     const line = SHEET.find((entry) => entry.id === id)
     if (!line) throw new Error(`Line ${id} is not in pump-sizing.md`)
@@ -50,11 +50,12 @@ function run(ids: readonly string[]): Map<string, LineResult> {
   })
   const results = evaluateSheet([{ id: 'sheet', source: lines.map((l) => l.source).join('\n') }])
   const shown = results.get('sheet')!
-  return new Map(ids.map((id, i) => [id, shown[i].result]))
+  return new Map(ids.map((id, i) => [id, shown[i]]))
 }
 
 describe('the pump sheet (acceptance, M2: lines 1-13, 16, 17)', () => {
-  const results = run(M2_LINES)
+  const lines = run(M2_LINES)
+  const results = new Map([...lines].map(([id, line]) => [id, line.result]))
 
   it('reads the sheet from the acceptance doc', () => {
     expect(SHEET.map((line) => line.id)).toEqual(expect.arrayContaining(M2_LINES))
@@ -77,6 +78,13 @@ describe('the pump sheet (acceptance, M2: lines 1-13, 16, 17)', () => {
     const result = results.get(id)
     if (result?.kind !== 'value') throw new Error(`line ${id} shows no value`)
     expect(inUnit(result.text, expected.unit)).toBe(expected.value)
+  })
+
+  // Step 1 of the acceptance: `K` shadows kelvin on purpose (section 16).
+  it('warns on line 6 only', () => {
+    for (const [id, line] of lines) {
+      expect(line.warnings, `line ${id}`).toEqual(id === '6' ? ['K shadows the unit K'] : [])
+    }
   })
 
   it('shows the results in 4 significant digits', () => {

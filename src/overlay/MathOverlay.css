@@ -4,6 +4,7 @@
   --math-text: #1e1e1e;
   --math-result: #1971c2;
   --math-error: #e03131;
+  --math-warning: #e8590c;
   --math-quiet: #868e96;
   --math-rule: #dee2e6;
 }
@@ -92,6 +93,11 @@
   margin-right: 4px;
   color: var(--math-error);
   font-size: 10px;
+}
+
+/* Section 4, Problems: a warning's mark is amber; its message is the title. */
+.math-element__gutter.is-warning {
+  color: var(--math-warning);
 }
 
 /* Each line is its own display, flush left: ≔ doesn't line up between lines. */
