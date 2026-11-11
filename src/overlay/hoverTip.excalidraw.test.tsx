@@ -38,6 +38,7 @@ const anchors = createMathAnchorElements([
     source: 'K = 2 * 2.7\nx = 1 m + 2 s\nD = 102.3 mm',
   },
   { id: 'm2', x: 100, y: 250, width: 560, height: 48, source: 'y = 3 kg + 1 s' },
+  { id: 'm3', x: 100, y: 400, width: 560, height: 48, source: 'x = solve x^2 = 2, guess x = 1' },
 ])
 
 const WARNING = 'K shadows the unit K'
@@ -249,5 +250,34 @@ describe('a problem’s message on hover (docs/spec-v1.md section 4, Problems)',
 
     expect(JSON.stringify(api.getSceneElements())).toBe(before)
     expect(tip()).toHaveClass('math-hover-tip')
+  })
+})
+
+describe('a solve’s details on hover (docs/spec-v1.md section 4, Solve details)', () => {
+  it('shows the method, iterations, residual and bracket over a solved value', async () => {
+    await mount()
+
+    hover(onResult('m3', 1))
+    await waitFor(() => expect(tip()).toHaveTextContent(/^Brent, \d+ iterations/))
+    expect(tip()).toHaveTextContent('Bracket: 1.41421356237')
+
+    hover(offMarks('m3', 1))
+    expect(tip()).toBeNull()
+  })
+
+  it('lets Excalidraw select and drag from the value, and shows nothing during the drag', async () => {
+    const { selected, positionOf } = await mount()
+    hover(onResult('m3', 1))
+    await waitFor(() => expect(tip()).not.toBeNull())
+
+    clickOnCanvas(onResult('m3', 1))
+    expect(selected()).toEqual(['m3'])
+    expect(tip()).toBeNull()
+
+    const from = onResult('m3', 1)
+    await dragOnCanvas(from, { clientX: from.clientX + 40, clientY: from.clientY + 30 })
+    await rest(TIP_DELAY_MS * 2)
+    expect(positionOf('m3')).toEqual({ x: 140, y: 430 })
+    expect(tip()).toBeNull()
   })
 })

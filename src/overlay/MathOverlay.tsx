@@ -392,8 +392,9 @@ function slotAt(overlay: HTMLElement | null, clientX: number, clientY: number): 
 }
 
 /**
- * The problem message under a point on screen (section 4, Problems): a gutter
- * mark, or an error cell while its text is cut short, found from their boxes
+ * The message under a point on screen (section 4, Problems and Solve details):
+ * a gutter mark, an error cell while its text is cut short, or a solved
+ * value's details, found from their boxes
  * (`data-tip`), the topmost element first. The box comes back relative to the
  * overlay, where the tip is drawn.
  */

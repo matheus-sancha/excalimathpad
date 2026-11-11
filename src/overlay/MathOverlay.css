@@ -455,3 +455,21 @@
     display: none;
   }
 }
+
+/* Section 4, Solve line: the guess, small and grey after the equation, inside the expression cell. */
+.math-element__guess {
+  margin-left: 14px;
+  color: var(--math-quiet);
+  font-size: 0.75em;
+}
+
+/* Section 4, Solve details: a dotted underline marks a result with details on hover. Screen only. */
+.math-element__detailed {
+  border-bottom: 1px dotted currentColor;
+}
+
+@media print {
+  .math-element__detailed {
+    border-bottom: none;
+  }
+}

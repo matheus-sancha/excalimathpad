@@ -52,6 +52,11 @@ describe('Variables (docs/spec-v1.md section 8)', () => {
     expect(rows[1]).toMatchObject({ name: 'bad', value: 'error', unit: '', kind: 'error' })
   })
 
+  it('shows a solve function as "solve function"', () => {
+    const rows = variableGroups(sheetOf({ source: 'f(Re, r) = solve f = Re * r, guess f = 1' }))[0].rows
+    expect(rows[0]).toMatchObject({ name: 'f', value: 'solve function', unit: '', kind: 'function' })
+  })
+
   it('filters by name, ignoring case, and drops groups left empty', () => {
     const sheet = sheetOf({ source: 'Q_d = 15 L/s\nD = 2 m' }, { source: 'q = 1' })
     const groups = variableGroups(sheet, 'q')

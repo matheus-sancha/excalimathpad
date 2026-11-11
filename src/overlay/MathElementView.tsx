@@ -18,6 +18,7 @@ import {
   typesetUnit,
   type LineResult,
   type SheetLine,
+  type SolveDetails,
   type TypesetLine,
 } from '../math/evaluate.ts'
 import {
@@ -251,6 +252,7 @@ const EMPTY_LINE: SheetLine = {
   warnings: [],
   variables: [],
   unitSlot: null,
+  solveDetails: null,
 }
 
 /** A row's cells, by line form (section 3, section 4 Problems). */
@@ -314,6 +316,7 @@ function MathCells({
   const name = typeset.name === null ? null : texToHtml(typeset.name)
   const defines = texToHtml(DEFINES)
   const expression = texToHtml(typeset.expression)
+  const guess = typeset.guess === undefined ? null : texToHtml(typeset.guess)
   // TeX KaTeX couldn't render: the line's source, as text, rather than nothing.
   const cells =
     expression === null || (typeset.name !== null && name === null) ? (
@@ -337,13 +340,18 @@ function MathCells({
         <span className="math-element__expression">
           <Html html={expression} />
         </span>
+        {guess !== null && (
+          <span className="math-element__guess">
+            <Html html={guess} />
+          </span>
+        )}
       </span>
     )
   return (
     <>
       <Gutter result={result} warnings={warnings} />
       {cells}
-      <ResultCell result={result} slot={line.unitSlot} index={index} />
+      <ResultCell result={result} slot={line.unitSlot} index={index} details={line.solveDetails} />
       {typeset.note !== null && <span className="math-element__note">{typeset.note}</span>}
     </>
   )
@@ -389,11 +397,13 @@ function ResultCell({
   plain = false,
   slot = null,
   index = -1,
+  details = null,
 }: {
   result: LineResult
   plain?: boolean
   slot?: SheetLine['unitSlot']
   index?: number
+  details?: SolveDetails | null
 }) {
   const slots = useContext(SlotsContext)
   let content: ReactNode = null
@@ -401,6 +411,14 @@ function ResultCell({
   if (result.kind === 'value') {
     text = result.text
     content = plain ? result.text : <ValueContent text={result.text} slot={slot} index={index} />
+    // Section 4, Solve details: a dotted underline, and the details on hover.
+    if (details !== null && !plain) {
+      content = (
+        <span className="math-element__detailed" data-tip={detailsText(details)} data-tip-when="details">
+          {content}
+        </span>
+      )
+    }
   } else if (result.kind === 'error') {
     text = result.message
     content = result.message
@@ -427,6 +445,15 @@ function ResultCell({
       )}
     </span>
   )
+}
+
+/** How a solve went, for the hover (section 4, Solve details). */
+function detailsText({ method, iterations, residual, bracket }: SolveDetails): string {
+  return [
+    `${method}, ${iterations} ${iterations === 1 ? 'iteration' : 'iterations'}`,
+    `Residual: ${residual}`,
+    `Bracket: ${bracket}`,
+  ].join('\n')
 }
 
 /**

@@ -336,6 +336,21 @@ describe('MathOverlay', () => {
       )
     })
 
+    it('typesets a solve line with its guess small after the equation, and the details on hover', () => {
+      renderOverlay([anchorWith('x = solve x^2 = 2, guess x = 1\ny = x\nf(a) = solve u^2 = a, guess u = 1\nf_d = f(4)')])
+
+      expect(cellOf(1, 'expression')).toHaveTextContent(/solve/)
+      expect(rowOf('m1', 1).querySelector('.math-element__guess')).toHaveTextContent(/guess/)
+      const detailed = cellOf(1, 'result')!.querySelector<HTMLElement>('.math-element__detailed')!
+      expect(detailed.dataset.tip).toMatch(/^Brent, \d+ iterations\nResidual: .+\nBracket: 1\.41421356237\d* \.\. 1\.41421356237/)
+      expect(detailed).toHaveAttribute('data-tip-when', 'details')
+      // Not on a line that only uses the value, nor on a solve function's definition.
+      expect(cellOf(2, 'result')!.querySelector('.math-element__detailed')).toBeNull()
+      expect(rowOf('m1', 3).querySelector('[data-tip-when="details"]')).toBeNull()
+      // A line that is just one call to a solve function has them.
+      expect(cellOf(4, 'result')!.querySelector('.math-element__detailed')).not.toBeNull()
+    })
+
     it('shows the error mark, not the warning, on a line with both', () => {
       renderOverlay([anchorWith('K = 1 m + 1 s')])
 

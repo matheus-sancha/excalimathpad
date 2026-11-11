@@ -75,6 +75,61 @@ export function lineWarnings(node: MathNode, facts: WarningFacts): string[] {
   return warnings
 }
 
+/** A solve line's parts (section 9), for its warnings. */
+export interface SolveWarningParts {
+  name: string
+  params: readonly string[] | null
+  unknown: string
+  lhs: MathNode
+  rhs: MathNode
+  guess: MathNode
+}
+
+/**
+ * A solve line's warnings, by the same rules as `lineWarnings`: its name,
+ * parameters and unknown are checked for shadowing. The value form runs at
+ * its line, so a name in it that falls back to the unit warns. The function
+ * form runs at each call, so the body-name check covers the equation and the
+ * guess, except the function's name, its parameters and the unknown.
+ */
+export function solveWarnings(parts: SolveWarningParts, facts: WarningFacts): string[] {
+  const warnings: string[] = []
+  const add = (message: string) => {
+    if (!warnings.includes(message)) warnings.push(message)
+  }
+  const what = (name: string) => (facts.isUnit(name) ? 'the unit' : 'the built-in')
+  const clashes = (name: string) => facts.isUnit(name) || facts.isBuiltIn(name)
+  const { name, params, unknown } = parts
+  const defined = [
+    { name, parameter: false },
+    ...(params ?? []).map((param) => ({ name: param, parameter: true })),
+    { name: unknown, parameter: false },
+  ]
+  for (const entry of defined) {
+    if (!clashes(entry.name)) continue
+    if (entry.parameter && facts.isSheetFunction(entry.name)) continue
+    add(`${entry.name} shadows ${what(entry.name)} ${entry.name}`)
+  }
+  const sides = [parts.lhs, parts.rhs, parts.guess]
+  if (params === null) {
+    for (const used of sides.flatMap(usedNames)) {
+      if (used === unknown || !clashes(used) || facts.inScope(used)) continue
+      if (facts.failed(used)) add(`${used} reads as ${what(used)} ${used} here: its definition failed`)
+      else if (facts.definedBelow(used)) {
+        add(`${used} reads as ${what(used)} ${used} here: the variable is defined below`)
+      }
+    }
+    return warnings
+  }
+  const own = new Set([name, ...params, unknown])
+  for (const used of sides.flatMap(bodyNames)) {
+    if (own.has(used) || clashes(used)) continue
+    if (facts.inScope(used) || facts.definedAbove(used)) continue
+    add(`${used} isn't defined above this line`)
+  }
+  return warnings
+}
+
 /** The names a line defines: variables, function names and their parameters. */
 function definedNames(node: MathNode): { name: string; parameter: boolean }[] {
   return statements(node).flatMap((statement) => {

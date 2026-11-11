@@ -5,6 +5,7 @@ import {
   isBlockNode,
   isConstantNode,
   isFunctionAssignmentNode,
+  isFunctionNode,
   isOperatorNode,
   isParenthesisNode,
   isSymbolNode,
@@ -20,8 +21,10 @@ import {
 import { createCalls, isSheetFunction, messageOf } from './functions.ts'
 import { readLine, type LineFormat } from './lineForm.ts'
 import { DEFAULT_DIGITS } from './numbers.ts'
-import { lineTex, resultTex, textTex, unitTex, type Names } from './typeset.ts'
-import { lineWarnings } from './warnings.ts'
+import { createSolver, LayeredScope, type CompiledSolve, type SolveDetails, type SolveParts, type SolveText } from './solve.ts'
+import { readSolve } from './solveLine.ts'
+import { lineTex, resultTex, solveTex, textTex, unitTex, type Names } from './typeset.ts'
+import { lineWarnings, solveWarnings } from './warnings.ts'
 
 /**
  * The math engine: math.js with units, fully client-side.
@@ -79,6 +82,9 @@ const parse = math.parse
 
 /** The shown result's formatter (docs/spec-v1.md section 5), on the captured parser. */
 const display = createDisplay(math, parse)
+
+/** Solve lines' residuals and runs (docs/spec-v1.md section 9), on the same engine. */
+const solver = createSolver(math)
 
 /** How results show when the sheet sets nothing: SI with prefixes, 4 digits. */
 export const DEFAULT_DISPLAY: DisplaySettings = {
@@ -191,6 +197,8 @@ export type TypesetLine =
       note: string | null
       /** Bold, underline and highlight colour, for the whole row. */
       format: LineFormat
+      /** A solve line's guess (section 4), set small and grey after the expression. */
+      guess?: string
     }
   | { kind: 'unparsed'; source: string }
 
@@ -215,11 +223,19 @@ export interface SheetLine {
    * unit for: a function, an error, a matrix, a string.
    */
   unitSlot: (UnitSlot & { chosen: string | null }) | null
+  /**
+   * How the solve behind the result went, for the hover (section 4, Solve
+   * details): on a solve line's value, and on a line that is just one call to
+   * a solve function. Null everywhere else. Never saved.
+   */
+  solveDetails: SolveDetails | null
 }
+
+export type { SolveDetails } from './solve.ts'
 
 export type SheetVariable =
   | { name: string; kind: 'value'; text: string }
-  | { name: string; kind: 'function'; params: readonly string[] }
+  | { name: string; kind: 'function'; params: readonly string[]; solve: boolean }
   | { name: string; kind: 'error' }
 
 /** One math element's source, as the sheet sees it. */
@@ -246,6 +262,20 @@ type ParsedLine =
       /** The line's trailing `in <unit>`, read outside the sheet's scope, or null. */
       display: DisplayUnit | null
       /** That unit as typed. */
+      displayText: string | null
+    }
+  /** A solve line (section 9): it defines one name, a value or a solve function. */
+  | {
+      kind: 'solve'
+      name: string
+      params: readonly string[] | null
+      parts: SolveParts
+      solve: CompiledSolve
+      defines: readonly string[]
+      note: string | null
+      format: LineFormat
+      unknownFormat: string | null
+      display: DisplayUnit | null
       displayText: string | null
     }
 
@@ -315,23 +345,32 @@ export function evaluateSheet(
     (value) => display.show(value, null, settings),
     (name) => scope.get(name),
   )
+  // How a solve writes values in its messages and details.
+  const solveText: SolveText = {
+    show: (value, unit) => display.show(value, unit, settings),
+    exact: (value, unit) => display.show(value, unit, { ...settings, digits: 13 }),
+  }
+  // The latest solve to converge, for the hover of a line that calls a solve function.
+  let lastSolve: SolveDetails | null = null
   // Names whose latest assignment so far failed.
   const failed = new Set<string>()
   // Names assigned on or above the line being read, for typesetting.
   const assigned = new Set<string>()
   const names: Names = { ...ENGINE_NAMES, isSheetName: (name) => assigned.has(name) }
   const results = new Map<string, SheetLine[]>()
-  // The slot of the line being evaluated, set by `evaluateLine`.
+  // The slot and solve details of the line being evaluated, set by `evaluateLine`.
   let slot: SheetLine['unitSlot'] = null
+  let details: SolveDetails | null = null
   position = 0
   for (const { id, lines } of sheet) {
     results.set(
       id,
       lines.map((line): SheetLine => {
         // Read before the line runs: what the scope holds above it.
-        const warnings = line.kind === 'parsed' ? warningsAt(line.node, position) : []
+        const warnings = warningsOf(line, position)
         if (line.kind !== 'blank') line.defines.forEach((name) => assigned.add(name))
         slot = null
+        details = null
         const result = evaluateLine(line)
         return {
           result,
@@ -339,6 +378,7 @@ export function evaluateSheet(
           warnings,
           variables: variablesOf(line),
           unitSlot: slot,
+          solveDetails: result.kind === 'value' ? details : null,
         }
       }),
     )
@@ -353,8 +393,11 @@ export function evaluateSheet(
         return { name, kind: 'error' }
       }
       const value = scope.get(name)
-      if (isSheetFunction(value)) return { name, kind: 'function', params: value.sheetFunction.params }
-      if (typeof value === 'function') return { name, kind: 'function', params: [] }
+      if (isSheetFunction(value)) {
+        const { params, solve } = value.sheetFunction
+        return { name, kind: 'function', params, solve: solve === true }
+      }
+      if (typeof value === 'function') return { name, kind: 'function', params: [], solve: false }
       try {
         return { name, kind: 'value', text: display.show(value, null, settings) }
       } catch {
@@ -363,17 +406,23 @@ export function evaluateSheet(
     })
   }
 
-  function warningsAt(node: MathNode, here: number): string[] {
+  function warningsOf(line: ParsedLine, here: number): string[] {
     const at = (name: string) => definedAt.get(name) ?? []
-    return lineWarnings(node, {
-      isUnit: (name) => math.Unit.isValuelessUnit(name),
-      isBuiltIn: (name) => name in math,
-      inScope: (name) => scope.has(name),
-      isSheetFunction: (name) => typeof scope.get(name) === 'function',
-      definedAbove: (name) => at(name).some((position) => position < here),
-      definedBelow: (name) => at(name).some((position) => position > here),
-      failed: (name) => failed.has(name),
-    })
+    const facts = {
+      isUnit: (name: string) => math.Unit.isValuelessUnit(name),
+      isBuiltIn: (name: string) => name in math,
+      inScope: (name: string) => scope.has(name),
+      isSheetFunction: (name: string) => typeof scope.get(name) === 'function',
+      definedAbove: (name: string) => at(name).some((position) => position < here),
+      definedBelow: (name: string) => at(name).some((position) => position > here),
+      failed: (name: string) => failed.has(name),
+    }
+    if (line.kind === 'parsed') return lineWarnings(line.node, facts)
+    if (line.kind === 'solve') {
+      const { name, params, parts } = line
+      return solveWarnings({ name, params, ...parts }, facts)
+    }
+    return []
   }
 
   function evaluateLine(line: ParsedLine): LineResult {
@@ -390,18 +439,16 @@ export function evaluateSheet(
     const reserved = line.defines.find((name) => RESERVED.includes(name))
     if (reserved !== undefined) return fail(`${reserved} is a line form: choose another name`)
     // `in <unit>` belongs on the line that calls a function (section 3).
-    if (line.display !== null && isFunctionAssignmentNode(line.node)) {
+    const definesFunction = line.kind === 'solve' ? line.params !== null : isFunctionAssignmentNode(line.node)
+    if (line.display !== null && definesFunction) {
       return fail("Set a function's display unit on the line that calls it")
     }
     try {
       // Asked before the line runs: the line itself may assign one of these names.
-      const isPlain = line.plainInputUnits?.every((name) => !scope.has(name)) ?? false
-      const value: unknown = line.node.compile().evaluate(scope)
-      for (const definition of functionDefinitions(line.node)) {
-        const { name, params, expr } = definition
-        const fn = scope.get(name) as (...args: unknown[]) => unknown
-        scope.set(name, calls.wrap({ name, params }, expr, fn))
-      }
+      const isPlain = (line.kind === 'parsed' && line.plainInputUnits?.every((name) => !scope.has(name))) || false
+      lastSolve = null
+      const value: unknown = line.kind === 'solve' ? runSolve(line) : runCode(line.node)
+      if (line.kind === 'solve' || isSolveCall(line.node)) details = lastSolve
       line.defines.forEach((name) => failed.delete(name))
       // Reported after the line ran, so its value still reaches the lines
       // below, as for an unknown display unit (section 3).
@@ -428,9 +475,53 @@ export function evaluateSheet(
         return { kind: 'error', message: error instanceof Error ? error.message : String(error) }
       }
     } catch (error) {
-      const message = messageOf(error, line.node, (name) => scope.get(name))
+      const node = line.kind === 'solve' ? line.parts.lhs : line.node
+      const message = messageOf(error, node, (name) => scope.get(name))
       return fail(explain(message, here, definedAt, failed))
     }
+  }
+
+  function runCode(node: MathNode): unknown {
+    const value: unknown = node.compile().evaluate(scope)
+    for (const definition of functionDefinitions(node)) {
+      const { name, params, expr } = definition
+      const fn = scope.get(name) as (...args: unknown[]) => unknown
+      scope.set(name, calls.wrap({ name, params }, expr, fn))
+    }
+    return value
+  }
+
+  /**
+   * A solve line (section 9). The value form solves here, once per run. The
+   * function form defines a function that solves at each call, with its
+   * parameters over the scope as it is at the call (late binding); its errors
+   * land on the calling line, through the wrapper.
+   */
+  function runSolve(line: Extract<ParsedLine, { kind: 'solve' }>): unknown {
+    const { name, params, solve } = line
+    if (params === null) {
+      const { value, details } = solve.run(scope, solveText)
+      lastSolve = details
+      scope.set(name, value)
+      return value
+    }
+    const fn = (...args: unknown[]) => {
+      const own = new Map(params.map((param, i) => [param, args[i]]))
+      const { value, details } = solve.run(new LayeredScope(scope, own), solveText)
+      lastSolve = details
+      return value
+    }
+    const wrapped = calls.wrap({ name, params, solve: true }, line.parts.lhs, fn)
+    scope.set(name, wrapped)
+    return wrapped
+  }
+
+  /** `f_d = f(Re_d, eps/D)` or `f(…)`: the line is just one call to a solve function. */
+  function isSolveCall(node: MathNode): boolean {
+    const call = isAssignmentNode(node) && !node.index ? node.value : node
+    if (!isFunctionNode(call) || !isSymbolNode(call.fn)) return false
+    const fn = scope.get(call.fn.name)
+    return isSheetFunction(fn) && fn.sheetFunction.solve === true
   }
 }
 
@@ -440,6 +531,17 @@ function typesetLine(line: ParsedLine, names: Names): TypesetLine {
       return line.comment === null ? { kind: 'blank' } : { kind: 'comment', text: line.comment }
     case 'syntax-error':
       return { kind: 'unparsed', source: line.source }
+    case 'solve': {
+      const inLine: Names = {
+        ...names,
+        isSheetName: (n) => n === line.parts.unknown || (line.params ?? []).includes(n) || names.isSheetName(n),
+      }
+      try {
+        return { kind: 'math', ...solveTex(line.name, line.params, line.parts, inLine), note: line.note, format: line.format }
+      } catch {
+        return { kind: 'math', name: null, expression: textTex(line.parts.lhsText), note: line.note, format: line.format }
+      }
+    }
     case 'parsed':
       try {
         return { kind: 'math', ...lineTex(line.node, names), note: line.note, format: line.format }
@@ -518,6 +620,43 @@ function parseLine(text: string): ParsedLine {
   // expression; otherwise the conversion stays math.js's own (ADR 0005).
   const target = form.displayUnit === null ? null : display.readTarget(form.displayUnit)
   const line = target === null ? form.code : form.expression
+  const solve = readSolve(line)
+  if (solve?.kind === 'malformed') {
+    return { kind: 'syntax-error', message: solve.message, defines: [solve.name], source: text }
+  }
+  if (solve) {
+    try {
+      const parts: SolveParts = {
+        unknown: solve.unknown,
+        lhs: parse(solve.lhs),
+        rhs: parse(solve.rhs),
+        guess: parse(solve.guess),
+        lhsText: solve.lhs,
+        rhsText: solve.rhs,
+        guessText: solve.guess,
+      }
+      return {
+        kind: 'solve',
+        name: solve.name,
+        params: solve.params,
+        parts,
+        solve: solver.compile(parts),
+        defines: [solve.name],
+        note: form.note,
+        format: form.format,
+        unknownFormat: form.unknownFormat,
+        display: target,
+        displayText: target === null ? null : form.displayUnit,
+      }
+    } catch (error) {
+      return {
+        kind: 'syntax-error',
+        message: error instanceof Error ? error.message : String(error),
+        defines: [solve.name],
+        source: text,
+      }
+    }
+  }
   try {
     const node = parse(line)
     return {
