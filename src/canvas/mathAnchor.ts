@@ -49,6 +49,11 @@ export interface MathAnchor {
   source: string
   /** Excalidraw's lock: it holds the position only, and the lines still edit (#43). */
   locked: boolean
+  /**
+   * The element's optional title, shown as a header above its lines; empty for
+   * none. Stored beside the source, in `customData.title`.
+   */
+  title: string
   /** 0 to 100, Excalidraw's scale. The element's math is drawn at it (section 4). */
   opacity: number
 }
@@ -67,9 +72,26 @@ function readSource(element: ExcalidrawElement): string {
   return typeof source === 'string' ? source : ''
 }
 
+/** As for the source: anything but a string is no title. A title is one line. */
+function readTitle(element: ExcalidrawElement): string {
+  const title: unknown = element.customData?.title
+  return typeof title === 'string' ? title.replace(/\s*[\r\n]+\s*/g, ' ').trim() : ''
+}
+
 export function toMathAnchor(element: ExcalidrawElement): MathAnchor {
   const { id, x, y, width, height, angle, locked, opacity } = element
-  return { id, x, y, width, height, angle, locked, opacity, source: readSource(element) }
+  return {
+    id,
+    x,
+    y,
+    width,
+    height,
+    angle,
+    locked,
+    opacity,
+    source: readSource(element),
+    title: readTitle(element),
+  }
 }
 
 /** True when two anchors would be drawn and evaluated identically. */
@@ -83,21 +105,23 @@ export function sameAnchor(a: MathAnchor, b: MathAnchor): boolean {
     a.angle === b.angle &&
     a.locked === b.locked &&
     a.opacity === b.opacity &&
-    a.source === b.source
+    a.source === b.source &&
+    a.title === b.title
   )
 }
 
 /** Builds the scene elements for new anchors (e.g. for `initialData`). */
 export function createMathAnchorElements(
   anchors: ReadonlyArray<
-    Omit<MathAnchor, 'angle' | 'source' | 'locked' | 'opacity'> & {
+    Omit<MathAnchor, 'angle' | 'source' | 'locked' | 'opacity' | 'title'> & {
       source?: string
+      title?: string
       locked?: boolean
     }
   >,
 ) {
   return convertToExcalidrawElements(
-    anchors.map(({ id, x, y, width, height, source = '', locked = false }) => ({
+    anchors.map(({ id, x, y, width, height, source = '', locked = false, title }) => ({
       type: 'rectangle' as const,
       id,
       x,
@@ -106,7 +130,7 @@ export function createMathAnchorElements(
       height,
       ...ANCHOR_STYLE,
       locked,
-      customData: { kind: MATH_ANCHOR_KIND, source },
+      customData: { kind: MATH_ANCHOR_KIND, source, ...(title ? { title } : {}) },
     })),
     // Keep our ids: callers refer to their anchors by them.
     { regenerateIds: false },
@@ -139,14 +163,39 @@ export function writeAnchorSource(
   anchorId: string,
   source: string,
 ): boolean {
+  return writeAnchorData(api, anchorId, (anchor) =>
+    readSource(anchor) === source ? null : { ...anchor.customData, source },
+  )
+}
+
+/**
+ * Sets or clears a math element's title (docs/spec-v1.md section 4), under
+ * the same rules as a source write: one undo step when it changes, nothing
+ * when it doesn't. An empty title removes the key, so an element without a
+ * title is stored as it always was.
+ */
+export function writeAnchorTitle(api: SourceWriteApi, anchorId: string, title: string): boolean {
+  const next = title.replace(/\s*[\r\n]+\s*/g, ' ').trim()
+  return writeAnchorData(api, anchorId, (anchor) => {
+    if (readTitle(anchor) === next) return null
+    const { title: _old, ...rest } = anchor.customData ?? {}
+    return next ? { ...rest, title: next } : rest
+  })
+}
+
+/** One captured write of an anchor's `customData`; `change` returns null for no change. */
+function writeAnchorData(
+  api: SourceWriteApi,
+  anchorId: string,
+  change: (anchor: ExcalidrawElement) => Record<string, unknown> | null,
+): boolean {
   const anchor = api.getSceneElementsIncludingDeleted().find(({ id }) => id === anchorId)
-  if (!anchor || !isMathAnchor(anchor) || readSource(anchor) === source) return false
+  if (!anchor || !isMathAnchor(anchor)) return false
+  const customData = change(anchor)
+  if (!customData) return false
   const committed = recordPendingChange(api, anchor)
   api.updateScene({
-    elements: withElement(
-      api,
-      newElementWith(committed, { customData: { ...committed.customData, source } }),
-    ),
+    elements: withElement(api, newElementWith(committed, { customData })),
     captureUpdate: CaptureUpdateAction.IMMEDIATELY,
   })
   return true

@@ -49,6 +49,27 @@
   list-style: none;
 }
 
+/* The header (section 4, Typeset grid): the element's optional title, above
+   its lines. Plain text on one line; it counts toward the body's size. */
+.math-element__title {
+  min-height: 24px;
+  margin-bottom: 4px;
+  padding: 0 0 3px 14px;
+  border-bottom: 1px solid var(--math-rule);
+  font: 600 16px/24px system-ui, 'Segoe UI', sans-serif;
+  white-space: pre;
+  opacity: var(--math-opacity, 1);
+}
+
+.math-element__title.is-editing {
+  opacity: 1;
+}
+
+/* The title's field starts with room to type, as a new element's line does. */
+.math-element__field-cell.is-title {
+  min-width: 160px;
+}
+
 /* A row is as tall as its tallest cell; an empty one keeps one line. */
 .math-element__row {
   grid-column: 1 / -1;
@@ -257,6 +278,7 @@
   box-shadow: 0 0 0 1px #1971c2;
 }
 
+.math-format-bar__button.is-title { font-weight: 600; }
 .math-format-bar__button.is-bold { font-weight: bold; }
 .math-format-bar__button.is-underline { text-decoration: underline; }
 .math-format-bar__button.is-color { width: 18px; height: 18px; border-radius: 50%; border-color: var(--math-rule); }

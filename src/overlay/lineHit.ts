@@ -71,3 +71,14 @@ export function lineAt(anchor: MathAnchor, point: Point, rows: readonly RowBox[]
   })
   return nearest
 }
+
+/**
+ * True when the point is on the element's header, the box its title is drawn
+ * in, above the rows: a double-click there edits the title. `header` is the
+ * header's box as laid out, or null when the element has no title.
+ */
+export function onHeader(anchor: MathAnchor, point: Point, header: RowBox | null): boolean {
+  if (!header) return false
+  const { y } = toAnchorFrame(anchor, point)
+  return y >= header.top && y < header.top + header.height
+}

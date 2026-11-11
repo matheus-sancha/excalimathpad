@@ -26,7 +26,7 @@ import {
   type LineFormat,
 } from '../math/lineForm.ts'
 import { texToHtml, useKatexReady } from './katex.ts'
-import { hasText, type LineEdit, type LineMove } from './lineEdit.ts'
+import { hasText, TITLE_LINE, type LineEdit, type LineMove } from './lineEdit.ts'
 import { sceneToStage, type Viewport } from './viewport.ts'
 
 export interface MathElementViewProps {
@@ -114,6 +114,16 @@ export function MathElementView({
             : undefined
         }
       >
+        {(anchor.title !== '' || edit?.lineIndex === TITLE_LINE) && (
+          <Header
+            title={anchor.title}
+            edit={edit?.lineIndex === TITLE_LINE ? edit : null}
+            onType={onType}
+            onMove={onMove}
+            onEscape={onEscape}
+            onBlur={() => onBlurLine(TITLE_LINE)}
+          />
+        )}
         <ol className="math-element__grid" aria-label="Lines">
           {splitLines(source).map((text, i) => {
             const line = lines[i] ?? EMPTY_LINE
@@ -146,6 +156,41 @@ export function MathElementView({
           })}
         </ol>
       </div>
+    </div>
+  )
+}
+
+/**
+ * The element's header (section 4, Typeset grid): its optional title, bold,
+ * above the lines, with a rule under it. Plain text on one line, never
+ * evaluated. While its edit is open it is a field, as a line is; an element
+ * with no title has no header until the edit opens one.
+ */
+function Header({
+  title,
+  edit,
+  ...field
+}: {
+  title: string
+  edit: LineEdit | null
+  onType: (text: string) => void
+  onMove: (move: LineMove) => void
+  onEscape: () => void
+  onBlur: () => void
+}) {
+  const fieldRef = useRef<HTMLInputElement>(null)
+  return (
+    <div className={`math-element__title${edit ? ' is-editing' : ''}`} data-title aria-label="Title">
+      {edit ? (
+        <span className="math-element__field-cell is-title">
+          <span className="math-element__field-text" aria-hidden="true">
+            {edit.text}
+          </span>
+          <LineField fieldRef={fieldRef} label="Title" edit={edit} onFormat={null} {...field} />
+        </span>
+      ) : (
+        title
+      )}
     </div>
   )
 }
@@ -341,24 +386,27 @@ function EditingRow({ edit, result, isEmpty, onRewrite, ...field }: EditingRowPr
         />
       </span>
       <ResultCell result={result} plain />
-      {format && <FormatBar format={format} onChange={setFormat} />}
+      <FormatBar format={format} onChange={setFormat} onTitle={() => field.onMove({ kind: 'title' })} />
     </>
   )
 }
 
 /**
- * The bar beside the open line (section 4, While editing a line): Bold,
- * Underline, the five highlight colours and no colour. Each press is one line
- * commit. A press mustn't take the keyboard from the field, or the blur would
+ * The bar beside the open line (section 4, While editing a line): Title, then
+ * Bold, Underline, the five highlight colours and no colour. Title moves the
+ * edit to the element's title; each format press is one line commit. A line
+ * with no code takes no format, so its bar has Title alone. A press mustn't take the keyboard from the field, or the blur would
  * leave the line, so its buttons never take focus. It is outside the body's
  * layout, so it never counts toward the element's size.
  */
 function FormatBar({
   format,
   onChange,
+  onTitle,
 }: {
-  format: LineFormat
+  format: LineFormat | null
   onChange: (format: LineFormat) => void
+  onTitle: () => void
 }) {
   const button = (label: string, pressed: boolean, next: LineFormat, className: string, text = '') => (
     <button
@@ -374,8 +422,30 @@ function FormatBar({
       {text}
     </button>
   )
+  const titleButton = (
+    <button
+      type="button"
+      className="math-format-bar__button is-title"
+      aria-label="Title (↑ from the first line)"
+      title="Title (↑ from the first line)"
+      tabIndex={-1}
+      onMouseDown={(event) => event.preventDefault()}
+      onClick={onTitle}
+    >
+      T
+    </button>
+  )
+  if (!format) {
+    return (
+      <span className="math-format-bar" role="toolbar" aria-label="Line format">
+        {titleButton}
+      </span>
+    )
+  }
   return (
     <span className="math-format-bar" role="toolbar" aria-label="Line format">
+      {titleButton}
+      <span className="math-format-bar__rule" aria-hidden="true" />
       {button('Bold (Ctrl+B)', format.bold, { ...format, bold: !format.bold }, 'is-bold', 'B')}
       {button(
         'Underline (Ctrl+U)',
@@ -402,6 +472,8 @@ function FormatBar({
 
 interface LineFieldProps {
   fieldRef: RefObject<HTMLInputElement | null>
+  /** What the field is, for assistive tech: a line's source, or the title. */
+  label?: string
   edit: LineEdit
   /** Ctrl+B and Ctrl+U: null on a line with no code, which takes no format. */
   onFormat: ((change: (format: LineFormat) => Partial<LineFormat>) => void) | null
@@ -421,6 +493,7 @@ interface LineFieldProps {
  */
 function LineField({
   fieldRef,
+  label = 'Line source',
   edit,
   onFormat,
   onType,
@@ -482,7 +555,7 @@ function LineField({
     <input
       ref={fieldRef}
       className="math-element__field"
-      aria-label="Line source"
+      aria-label={label}
       defaultValue={opening.text}
       spellCheck={false}
       autoCapitalize="off"

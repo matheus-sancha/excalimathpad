@@ -55,7 +55,7 @@ One name per concept, used the same in conversation, code, tests, docs and the U
 | **Sheet** | All live math elements in reading order, plus drawings and settings. The unit of evaluation |
 | **Reading order** | By the top of each anchor's visual bounds, then its left, then its id. Derived, never stored |
 | **Math element** | A block of source lines anchored at a scene position, shown as a typeset grid |
-| **Anchor** | The marked Excalidraw rectangle that carries a math element. Its `customData` holds `kind` and `source` |
+| **Anchor** | The marked Excalidraw rectangle that carries a math element. Its `customData` holds `kind`, `source` and an optional `title` |
 | **Line** | One string of an element's source: one statement. See [section 3](#3-sheet-lines-every-form) for its forms |
 | **Typeset row** | One line on screen: *gutter · equation (name · `≔` · expression, plus guess or step) · result · note* |
 | **Line edit** | The one line shown as raw source, held as *anchor id + line index*. UI state |
@@ -88,6 +88,7 @@ One name per concept, used the same in conversation, code, tests, docs and the U
 | **Dirty** | The scene or settings changed since the last save or open |
 | **Recovery copy** | The whole sheet file, its name and its file handle in IndexedDB. Exists only while dirty |
 | **Sheet panel** | Excalidraw's sidebar with the tabs Variables, Problems and Settings |
+| **Title** | A math element's optional name: plain text on one line, shown in a header above its lines. Never evaluated |
 | **Placing** | The UI mode between Add math and the click that creates the anchor |
 | **Print pages** | The sheet laid out for its Page setting. Computed at print time, never stored |
 | **Unbreakable box** | A math line, table row, plot, or drawing that fits a page. A break doesn't pass through one |
@@ -288,6 +289,10 @@ Built in M1. Hover details arrive with M3; the unit slot with M2.
   with the others.
 - **Comment line:** plain literal text from the row's left edge, ignoring the
   columns. No formatting, typeset math or `##` headings.
+- **Title:** optional. An element with a title shows it in a **header** at the top of its
+  box, above the lines: bold plain text on one line, with a thin rule under it. It is
+  never evaluated and takes no format or typeset math. An element with no title has no
+  header and looks as it always did. The header follows the element's opacity.
 - **Empty cells:** a plain input and a function definition leave the result cell
   empty. A bare expression has no name or `≔`.
 - **Solve line:** `Q_op ≔ solve H_p(Q) = H_s(Q)`, with the guess small and grey after
@@ -341,6 +346,7 @@ none. Hover is screen-only.
 
 - **Single click** selects the anchor. **Dragging from anywhere** on it moves it.
   There is no grip. Both are Excalidraw's own behaviour.
+- **Double-click on the header** edits the title, by the same rule as a line.
 - **Double-click on a line** edits that line, with the caret at the end. A chart or
   table counts as part of its line's row. Excalidraw's own first click decides whose
   double-click it is: math's when it selected the element, on its own or through its
@@ -366,13 +372,17 @@ none. Hover is screen-only.
 - **Enter** splits the line at the caret and continues on the new line below. At the
   end of a line, that opens an empty line.
 - **↑ / ↓** move the edit to the line above or below.
+- **↑ on the first line** goes to the title, and so does the bar's **Title** button, from
+  any line. If the element has no title, this opens an empty one. In the title, **↓** or
+  **Enter** go to the first line, and Esc or a click outside leave. The title keeps what
+  was typed, trimmed; an empty one removes the header. The title has no bar.
 - **Backspace** at the start joins the line to the one above.
 - A **single click on another line** of the element moves the edit there.
-- **The format bar** sits beside the open line, outside the element's box: Bold,
+- **The format bar** sits beside the open line, outside the element's box: Title, then Bold,
   Underline, the five colours and no colour, with the line's format shown pressed.
   **Ctrl+B** and **Ctrl+U** do the same from the field. A press writes the clause into
   the line and keeps the line open, with the caret where it was in the code. Pressing a
-  pressed button takes that format off. A comment line or an empty line has no bar. A
+  pressed button takes that format off. On a comment line or an empty line the bar has Title alone. A
   clause typed by hand shows live, like any other typing.
 
 **Leaving:**
@@ -384,8 +394,8 @@ none. Hover is screen-only.
 - A **click outside**, or starting a drag on the element, also leaves.
 - Leaving always keeps what was typed. There is no cancel.
 - An element left with no text is removed when the edit leaves it, whether new or
-  emptied. An element holding only comments isn't empty; one holding only spaces and
-  blank lines is. The edit leaves the element on Esc, a click outside, a drag, or a
+  emptied. An element holding only comments, or only a title, isn't empty; one holding
+  only spaces and blank lines, with no title, is. The edit leaves the element on Esc, a click outside, a drag, or a
   line opened in another element; moving between its own lines never removes it.
 - The removal is the only undo step, and it doesn't write the line. So Ctrl+Z brings
   an emptied element back with the text the sheet last held, and a new one back as an
@@ -397,7 +407,8 @@ A math element's box always fits its content. The app measures the content and w
 the size to the anchor, live, while typing too.
 
 - **Counts toward width:** the equation (name, `≔` and expression), a solve's guess, a range's
-  step, result values, list summaries, tables, charts, notes, comments and the gutter.
+  step, result values, list summaries, tables, charts, notes, comments, the gutter and
+  the title. The header adds to the height.
 - **Doesn't:** error text past its cap.
 - **A very long line widens the element.** One source line stays one row. You can
   split it yourself with Enter.
@@ -611,6 +622,8 @@ Excalidraw's own selection steps, and a nudge or Link edit that a line commit fo
   removed for being empty is one step, so Ctrl+Z after an empty Add math brings back the
   empty box.
 - **A unit slot or plot popover change** is one line commit.
+- **A title change** is one step, written when the edit leaves the title: adding one,
+  changing it, or removing it. A title left unchanged writes nothing.
 - **A format from the bar or its keys** is one line commit too, written at once with the
   line's typed text, so each press is one step. The field's text undo starts fresh after
   it, because the app rewrote the field.
@@ -647,7 +660,9 @@ Built in M1. Settings fill in as M2 and M5 add them.
 ### The file
 
 A sheet is Excalidraw's own JSON with one extra top-level block, saved as
-`.excalimathpad`. Each anchor's source is in its `customData`.
+`.excalimathpad`. Each anchor's source is in its `customData`, with its title when it has
+one (`"title": "Pipe flow"`). An element without a title stores no `title` key, so the
+format version doesn't change.
 
 ```json
 {
@@ -779,6 +794,8 @@ a small window it floats over the canvas, and closes after a jump or a click on 
 | **Problems** | Errors `●` and warnings `⚠` in one list in reading order, each with its message and "element, line n · name". Comments and notes don't appear |
 | **Settings** | Unit system, and for Custom its kind → unit table. Digits, 2 to 15. Page: A4 or Letter, portrait or landscape |
 
+- **An element with a title is named by it** in Variables and Problems ("Pipe flow, line 3"),
+  in place of its position. Built with the panel (#58).
 - **Clicking a variable or problem jumps to it:** the view scrolls the element into the
   middle, selects it and flashes the line for about 1.5 s. With reduced motion it's a static
   outline that clears on the next click.
@@ -1201,6 +1218,10 @@ Engineer's design gate. Tested on Excalidraw 0.18.1, math.js 15.2 and Chromium.
     tool returns to selection. The button is in `renderTopRightUI` and gives the keyboard back to
     `.excalidraw`, or Esc and M would stay on the button. The ghost is the overlay's, from a capture
     `pointermove` on the box Excalidraw fills.
+  - A title is `customData.title`, written by `writeAnchorTitle` under the same rules as a source write
+    (#64). The header's box comes from the DOM (`[data-title]`, `offsetTop` and `offsetHeight`), and
+    `onHeader` (`lineHit.ts`) says when a point is on it. An edit on the title is a line edit at
+    `TITLE_LINE` (-1), so the one-edit rule and the field are shared.
   - An element left with no text is removed by `removeAnchor` (`src/canvas/mathAnchor.ts`): `isDeleted`
     and the deselect in one `IMMEDIATELY` write, after the same pending-change record a source write makes.
 - **Anything in `src/canvas/` only:** runtime imports of Excalidraw, `exportToSvg`, and the `.excalidraw`
@@ -1592,4 +1613,17 @@ Changes line if it changes behaviour.
   the light and dark themes; the bar sat right of the box, a click on it kept the field focused, and the box's size
   didn't count it. Found: `text-decoration` doesn't reach KaTeX's inline-block boxes, so the underline is a line
   drawn in each cell's background; a bold row is 1 px taller than a plain one.
+- 2026-11-11, [sections 2](#terms), [4](#4-math-element-look-and-editing), [6](#6-undo), [7](#7-file-and-save) and
+  [8](#sheet-panel) (#64, agreed by Matheus, in chat on 2026-11-11, with the
+  [design](https://github.com/matheus-sancha/excalimathpad/issues/64#issuecomment-6792439849) approved): a math element
+  can have a title, shown in a header above its lines, and it is optional ("the user can opt to not add the title"). ↑ on
+  the first line or the bar's Title button opens it, a double-click on the header edits it, and an empty title removes
+  it. So ↑ on the first line no longer stays put, and the bar now shows on every open line, with Title alone where the
+  line takes no format. A title change is one undo step; an element holding only a title isn't empty.
+- 2026-11-11, [section 4](#typeset-grid) (#64, checked in Chromium with real keys and mouse): the Title button opened the
+  title field with the keyboard in it; Enter went to the first line; the header drew bold above the lines with its rule,
+  and the box grew to hold it; a double-click on the header edited the title, and one on a line still edited that line;
+  ↑ twice from line 2 reached the title; two Ctrl+Z took back the change and then the title, and redo brought both back;
+  the title was in the saved file and showed again when it was reopened, clean; emptying it removed the header and kept
+  the element.
 

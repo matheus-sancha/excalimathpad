@@ -71,6 +71,25 @@ describe('sameAnchor', () => {
   })
 })
 
+describe('title', () => {
+  it('is empty unless the anchor carries one', () => {
+    const [titled] = createMathAnchorElements([
+      { id: 'm4', x: 0, y: 0, width: 10, height: 10, title: 'Pipe flow' },
+    ])
+
+    expect(toMathAnchor(anchor).title).toBe('')
+    expect(anchor.customData).not.toHaveProperty('title')
+    expect(toMathAnchor(titled).title).toBe('Pipe flow')
+  })
+
+  // Otherwise an undo that only changes the title would not reach the overlay.
+  it('tells anchors apart', () => {
+    const a = toMathAnchor(anchor)
+
+    expect(sameAnchor(a, { ...a, title: 'Pipe flow' })).toBe(false)
+  })
+})
+
 describe('createMathAnchorElements', () => {
   it('creates unlocked anchors unless asked', () => {
     const [locked] = createMathAnchorElements([
