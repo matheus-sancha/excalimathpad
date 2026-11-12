@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { evaluateSheet, type LineResult } from './evaluate.ts'
+import { evaluateSheet, type LineResult, type TableView } from './evaluate.ts'
 
 /** Evaluates blocks (in reading order) as one sheet; results per block, in order. */
 function sheet(...sources: string[]): LineResult[][] {
@@ -1200,5 +1200,69 @@ describe('a list’s hover (docs/spec-v1.md section 10, #75)', () => {
     expect(preview('x = -1 .. 1\nr(t) = t < 0 ? nope : t\nr(x)')[2]).toBe(
       '1: failed: in r(-1): Undefined symbol nope\n2: 0\n3: 1',
     )
+  })
+})
+
+describe('tables (docs/spec-v1.md section 10, #76)', () => {
+  const lines = (source: string) => evaluateSheet([{ id: 'b', source }]).get('b')!
+  const cells = (table: TableView | null) => table?.rows.map((row) => row.map((cell) => (cell.ok ? cell.text : `! ${cell.message}`)))
+
+  it('draws one column per argument, a list run point by point and a value filling its column', () => {
+    const line = lines('x = 1 .. 3\ntable(x, x / 4, 2)')[1]
+    expect(line.result).toEqual(empty)
+    expect(line.variables).toEqual([])
+    expect(line.table?.columns.map((column) => column.unit)).toEqual(['', '', ''])
+    expect(cells(line.table)).toEqual([
+      ['1', '0.2500', '2'],
+      ['2', '0.5000', '2'],
+      ['3', '0.7500', '2'],
+    ])
+  })
+
+  it('shows each column in its argument’s unit, else its list line’s, else one system unit', () => {
+    const [, , table] = lines('Q = 1 L/s .. 2 L/s step 1 L/s in L/minute\nH = 500 mm .. 1500 mm step 1000 mm\ntable(Q, H, Q in L/s)')
+    expect(table.table?.columns.map((column) => [column.unit, column.slot?.chosen ?? null])).toEqual([
+      ['L / minute', null],
+      ['m', null],
+      ['L / s', 'L/s'],
+    ])
+    expect(cells(table.table)).toEqual([
+      ['60', '0.5000', '1'],
+      ['120', '1.500', '2'],
+    ])
+  })
+
+  it('heads each column with its expression, typeset', () => {
+    const [, table] = lines('Q_s = 1 .. 2\ntable(Q_s, Q_s^2)')
+    expect(table.table?.columns.map((column) => column.header)).toEqual(['{Q}_{s}', '{ {Q}_{s}}^{2}'])
+  })
+
+  it('shows a failed point as a failed cell, and reports failures it worked out itself', () => {
+    const [, , listed, table] = lines('x = -1 .. 1\nr(t) = t < 0 ? nope : t\ny = r(x)\ntable(x, y, r(x))')
+    expect(listed.result.kind).toBe('list')
+    expect(cells(table.table)?.[0]).toEqual([
+      '-1',
+      '! in r(-1): Undefined symbol nope',
+      '! in r(-1): Undefined symbol nope',
+    ])
+    expect(table.result).toEqual(error('1 of 3 points failed. At x = -1: in r(-1): Undefined symbol nope'))
+    expect(lines('x = -1 .. 1\nr(t) = t < 0 ? nope : t\ny = r(x)\ntable(x, y)')[3].result).toEqual(empty)
+  })
+
+  it('needs a list, and lists of one length', () => {
+    expect(block('table(1, 2)\nx = 1 .. 3\nz = 1 .. 4\ntable(x, z)')).toEqual([
+      error('a table needs a list, such as table(Q_s)'),
+      { kind: 'list', text: '3 values, 1 … 3', failed: null },
+      { kind: 'list', text: '4 values, 1 … 4', failed: null },
+      error('x has 3 values, z has 4'),
+    ])
+  })
+
+  it('typesets the line as its call', () => {
+    expect(lines('x = 1 .. 2\ntable(x, 2 x)')[1].typeset).toMatchObject({
+      kind: 'math',
+      name: null,
+      expression: expect.stringContaining('\\mathrm{table}'),
+    })
   })
 })

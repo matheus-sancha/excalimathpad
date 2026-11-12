@@ -21,10 +21,11 @@ import {
 } from './display.ts'
 import { createCalls, isSheetFunction, messageOf, SheetError } from './functions.ts'
 import { readLine, type LineFormat } from './lineForm.ts'
-import { DEFAULT_DIGITS, leadingNumber } from './numbers.ts'
+import { DEFAULT_DIGITS, leadingNumber, tableColumn } from './numbers.ts'
 import { createSolver, LayeredScope, type CompiledSolve, type SolveDetails, type SolveParts, type SolveText } from './solve.ts'
 import { readSolve } from './solveLine.ts'
 import { readRange } from './rangeLine.ts'
+import { readTable } from './tableLine.ts'
 import { AGGREGATES, createRanges, isSheetList, listSummary, SheetList, type Point } from './lists.ts'
 import { lineTex, rangeTex, resultTex, solveTex, textTex, unitTex, type Names } from './typeset.ts'
 import { bodyNames, lineWarnings, solveWarnings, usedNames } from './warnings.ts'
@@ -246,7 +247,27 @@ export interface SheetLine {
    * with its index, `1: 12.04 m`, a gap marked `…`. Null on any other line.
    */
   listPreview: string | null
+  /** A table line's table (section 10), drawn under the line. Null on any other line. */
+  table: TableView | null
 }
+
+/** A table as the grid draws it: its columns, then every row, one cell per column. */
+export interface TableView {
+  columns: readonly TableColumn[]
+  rows: readonly (readonly TableCell[])[]
+}
+
+export interface TableColumn {
+  /** The argument's expression, typeset. */
+  header: string
+  /** The column's unit as a result writes it (`L / s`); empty for plain numbers. */
+  unit: string
+  /** The header's unit slot: the column's chosen unit and the list it offers. Null for a column of plain numbers. */
+  slot: (UnitSlot & { chosen: string | null }) | null
+}
+
+/** A cell: its number in the column's unit and the table's form, or a failed point's message. */
+export type TableCell = { ok: true; text: string } | { ok: false; message: string }
 
 export type { SolveDetails } from './solve.ts'
 
@@ -297,6 +318,21 @@ type ParsedLine =
       display: DisplayUnit | null
       displayText: string | null
       source: string
+    }
+  /** A table line (section 10): `table(arg, …)`, display only. */
+  | {
+      kind: 'table'
+      args: readonly {
+        node: MathNode
+        display: DisplayUnit | null
+        displayText: string | null
+      }[]
+      defines: readonly string[]
+      note: string | null
+      format: LineFormat
+      unknownFormat: string | null
+      display: DisplayUnit | null
+      displayText: string | null
     }
   /** A solve line (section 9): it defines one name, a value or a solve function. */
   | {
@@ -396,6 +432,9 @@ export function evaluateSheet(
   let slot: SheetLine['unitSlot'] = null
   let details: SolveDetails | null = null
   let preview: string | null = null
+  let table: TableView | null = null
+  // The display unit each list was given on the line that defined it, for table columns.
+  const listUnits = new Map<string, { unit: ShownUnit; text: string }>()
   position = 0
   for (const { id, lines } of sheet) {
     results.set(
@@ -407,6 +446,7 @@ export function evaluateSheet(
         slot = null
         details = null
         preview = null
+        table = null
         const result = evaluateLine(line)
         return {
           result,
@@ -416,6 +456,7 @@ export function evaluateSheet(
           unitSlot: slot,
           solveDetails: result.kind === 'value' ? details : null,
           listPreview: result.kind === 'list' ? preview : null,
+          table,
         }
       }),
     )
@@ -486,6 +527,15 @@ export function evaluateSheet(
       // Asked before the line runs: the line itself may assign one of these names.
       const isPlain = (line.kind === 'parsed' && line.plainInputUnits?.every((name) => !scope.has(name))) || false
       lastSolve = null
+      if (line.kind === 'table') {
+        if (line.display !== null) throw new SheetError('a table takes its units on its arguments: table(Q_s in L/s)')
+        const built = runTable(line)
+        table = built.view
+        if (line.unknownFormat !== null) return { kind: 'error', message: `Unknown format ${line.unknownFormat}` }
+        // Points that failed in a column the table worked out itself are its line's error;
+        // a list named from above already shows its own.
+        return built.failed === null ? { kind: 'empty' } : { kind: 'error', message: built.failed }
+      }
       const value: unknown =
         line.kind === 'solve' ? runSolve(line) : line.kind === 'range' ? runRange(line) : runCode(line.node)
       if (line.kind === 'solve' || (line.kind === 'parsed' && isSolveCall(line.node))) details = lastSolve
@@ -505,6 +555,11 @@ export function evaluateSheet(
       try {
         const shown = line.display
         const unit = shown?.kind === 'unit' ? shown.unit : shown?.kind === 'percent' ? 'percent' : null
+        for (const name of line.defines) {
+          if (isSheetList(scope.get(name)) && unit !== null && line.displayText !== null) {
+            listUnits.set(name, { unit, text: line.displayText })
+          } else listUnits.delete(name)
+        }
         if (isSheetList(value)) {
           preview = previewOf(value, unit)
           return { kind: 'list', text: summaryOf(value, unit), failed: failureOf(value) }
@@ -519,7 +574,14 @@ export function evaluateSheet(
         return { kind: 'error', message: error instanceof Error ? error.message : String(error) }
       }
     } catch (error) {
-      const node = line.kind === 'solve' ? line.parts.lhs : line.kind === 'range' ? line.start : line.node
+      const node =
+        line.kind === 'solve'
+          ? line.parts.lhs
+          : line.kind === 'range'
+            ? line.start
+            : line.kind === 'table'
+              ? (line.args[0]?.node ?? new math.ConstantNode(0))
+              : line.node
       const message = messageOf(error, node, (name) => scope.get(name))
       return fail(explain(message, here, definedAt, failed))
     }
@@ -590,6 +652,80 @@ export function evaluateSheet(
     const list = ranges.range(at(line.start), at(line.end), line.step === null ? null : at(line.step), line.name)
     if (line.name !== null) scope.set(line.name, list)
     return list
+  }
+
+  /**
+   * A table line (section 10): each argument a column, a list run point by
+   * point, a single value filling its column. Lists must have one length, and
+   * at least one argument must be a list.
+   */
+  function runTable(line: Extract<ParsedLine, { kind: 'table' }>): { view: TableView; failed: string | null } {
+    if (line.args.length === 0) throw new SheetError('a table needs a list, such as table(Q_s)')
+    const columns = line.args.map((arg) => {
+      const lists = listsIn(arg.node)
+      const value: SheetList | unknown = lists.length > 0 ? iterate(arg.node, new Map()) : arg.node.compile().evaluate(scope)
+      return { arg, value, name: isSymbolNode(arg.node) ? arg.node.name : arg.node.toString() }
+    })
+    const listed = columns.filter((column) => isSheetList(column.value))
+    if (listed.length === 0) throw new SheetError('a table needs a list, such as table(Q_s)')
+    const length = (listed[0].value as SheetList).length
+    const other = listed.find((column) => (column.value as SheetList).length !== length)
+    if (other) {
+      throw new SheetError(`${listed[0].name} has ${length} values, ${other.name} has ${(other.value as SheetList).length}`)
+    }
+    const built = columns.map(({ arg, value }) => {
+      const points: Point[] = isSheetList(value)
+        ? [...value.points]
+        : Array.from({ length }, () => ({ ok: true as const, value }))
+      return buildColumn(arg, points)
+    })
+    const own = columns.find(
+      ({ arg, value }) => isSheetList(value) && !isSymbolNode(arg.node) && failureOf(value) !== null,
+    )
+    return {
+      view: {
+        columns: built.map(({ column }) => column),
+        rows: Array.from({ length }, (_, i) => built.map(({ cells }) => cells[i])),
+      },
+      failed: own ? failureOf(own.value as SheetList) : null,
+    }
+  }
+
+  /** A column's unit, header and cells, in its argument's unit, else its list's, else the sheet's system. */
+  function buildColumn(
+    arg: Extract<ParsedLine, { kind: 'table' }>['args'][number],
+    points: readonly Point[],
+  ): { column: TableColumn; cells: TableCell[] } {
+    const header = tableHeaderTex(arg.node, names)
+    const ok = points.filter((point): point is Extract<Point, { ok: true }> => point.ok)
+    const named = isSymbolNode(arg.node) ? listUnits.get(arg.node.name) : undefined
+    let unit: ShownUnit | null =
+      arg.display?.kind === 'unit' ? arg.display.unit : arg.display?.kind === 'percent' ? 'percent' : (named?.unit ?? null)
+    if (unit === null && ok.length > 0) {
+      // One unit for the whole column: the one the system picks for its largest value.
+      const largest = ok.reduce((a, b) => (magnitude(b.value) > magnitude(a.value) ? b : a))
+      const rest = leadingNumber(display.show(largest.value, null, settings))?.rest.trim() ?? ''
+      const target = rest === '' ? null : display.readTarget(rest)
+      unit = target?.kind === 'unit' ? target.unit : null
+    }
+    const texts = points.map((point) => (point.ok ? display.show(point.value, unit, settings) : null))
+    const first = texts.find((text) => text !== null) ?? ''
+    const unitText = leadingNumber(first)?.rest.trim() ?? ''
+    const numbers = tableColumn(
+      texts.filter((text): text is string => text !== null).map((text) => leadingNumber(text)?.number ?? text),
+      settings.digits,
+    )
+    let k = 0
+    const cells = points.map((point): TableCell => (point.ok ? { ok: true, text: numbers[k++] } : point))
+    // The header's slot offers the first value in each unit; only an `in` on the argument counts as chosen.
+    const offered = ok.length > 0 && unitText !== '' ? display.slot(ok[0].value, settings) : null
+    return { column: { header, unit: unitText, slot: offered && { ...offered, chosen: arg.displayText } }, cells }
+  }
+
+  function magnitude(value: unknown): number {
+    if (typeof value === 'number') return Math.abs(value)
+    if (math.isUnit(value) && value.value !== null) return Math.abs(value.value)
+    return 0
   }
 
   /** The names in a node that hold a list here, in order, each once. */
@@ -717,6 +853,14 @@ function typesetLine(line: ParsedLine, names: Names): TypesetLine {
       return line.comment === null ? { kind: 'blank' } : { kind: 'comment', text: line.comment }
     case 'syntax-error':
       return { kind: 'unparsed', source: line.source }
+    case 'table':
+      return {
+        kind: 'math',
+        name: null,
+        expression: `\\mathrm{table}\\left(${line.args.map((arg) => tableHeaderTex(arg.node, names)).join(',\\;')}\\right)`,
+        note: line.note,
+        format: line.format,
+      }
     case 'range':
       try {
         return { kind: 'math', ...rangeTex(line.name, line, names), note: line.note, format: line.format }
@@ -747,6 +891,14 @@ function typesetLine(line: ParsedLine, names: Names): TypesetLine {
           format: line.format,
         }
       }
+  }
+}
+
+function tableHeaderTex(node: MathNode, names: Names): string {
+  try {
+    return lineTex(node, names).expression
+  } catch {
+    return textTex(node.toString())
   }
 }
 
@@ -812,6 +964,30 @@ function parseLine(text: string): ParsedLine {
   // expression; otherwise the conversion stays math.js's own (ADR 0005).
   const target = form.displayUnit === null ? null : display.readTarget(form.displayUnit)
   const line = target === null ? form.code : form.expression
+  const tableForm = readTable(line)
+  if (tableForm) {
+    try {
+      return {
+        kind: 'table',
+        args: tableForm.args.map(({ expression, displayUnit }) => {
+          const target = displayUnit === null ? null : display.readTarget(displayUnit)
+          return {
+            node: parse(target === null && displayUnit !== null ? `${expression} in ${displayUnit}` : expression),
+            display: target,
+            displayText: target === null ? null : displayUnit,
+          }
+        }),
+        defines: [],
+        note: form.note,
+        format: form.format,
+        unknownFormat: form.unknownFormat,
+        display: target,
+        displayText: target === null ? null : form.displayUnit,
+      }
+    } catch (error) {
+      return { kind: 'syntax-error', message: error instanceof Error ? error.message : String(error), defines: [], source: text }
+    }
+  }
   const range = readSolve(line) === null ? readRange(line) : null
   if (range) {
     try {

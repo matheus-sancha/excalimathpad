@@ -1096,6 +1096,8 @@ The wording of every user-facing message. `<…>` is filled in. Numbers follow
 | Unknown clause | `Unknown plot setting xyz` | M4 |
 | Log axis with zero or negative | `x log needs values above 0` | M4 |
 | All of a series' points failed | `H_s: every point failed. At Q_s = 1 L/s: <message>` | M4 |
+| A table with no list among its arguments | `a table needs a list, such as table(Q_s)` | #76 |
+| `in <unit>` after a whole table line | `a table takes its units on its arguments: table(Q_s in L/s)` | #76 |
 | A range's start, end or step isn't a single number or quantity | `the range's step must be a number or a quantity`, `a range takes single values, not a list` | #74 |
 
 **App**
@@ -1735,3 +1737,12 @@ Changes line if it changes behaviour.
   list's summary shows every point of a list of up to 7, else the first three and the last three with `…` between,
   each as `index: value` in the line's unit; a failed point reads `5: failed: <message>`. It is the problem tip, with
   no dotted underline (that marks solve details). The count is grey and the two values are typeset.
+- 2026-11-12, [section 10](#tables) (#76, Engineer's, for Matheus to confirm on the PR; checked in Chromium with a real
+  mouse): a column with no unit of its own, from its argument or from the line that defined its list, shows in the
+  unit the sheet's system picks for its largest value, so the whole column shares one unit. Cells show the number
+  only; the unit is in the header, in its slot. A header slot's list shows the column's first value in each unit, and
+  choosing one wrote `in cm` onto that argument alone as one undo step. A column counts as whole when every number in
+  it reads whole after rounding to Digits. Points that fail in a column the table works out itself (`r(Q_s)`) make
+  the table line's error, `2 of 8 points failed. At Q_s = 1 L/s: …`, and the table still draws; a list named from
+  above (`H_s`) shows its failures on its own line only. A double-click on a table row opened its line. Two messages
+  are added to section 13: a table with no list, and `in <unit>` after a whole table line.

@@ -145,7 +145,13 @@ server. v1 target: one sheet, for Matheus's own use.
   worked out first and stands in the node as a bound name (`foldAggregates`).
   A function body that names an outside list fails at its definition. A list
   result is `{ kind: 'list', text, failed }`: its summary, and the line's
-  error when points failed.
+  error when points failed. A **table line** (`tableLine.ts`, `table(arg, …)`,
+  each argument with its own `in <unit>`) gives `SheetLine.table`: columns
+  (header TeX, unit, a header unit slot) and every row's cells in the table
+  number form (`tableColumn` in `numbers.ts`: zeros kept, whole columns whole).
+  The overlay draws it as a second grid row inside the line's row; a header
+  slot is `data-unit-slot="line:column"`, and choosing a unit writes it onto
+  that argument (`writeArgumentUnit`).
   App code must evaluate only
   through `evaluateSheet`: math.js functions that depend on the disabled
   names (`help`, `rationalize`, a `parser()`'s methods) no longer work. The

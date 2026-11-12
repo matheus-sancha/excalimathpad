@@ -48,6 +48,8 @@ export interface SheetGestures {
 export interface SlotTarget {
   anchorId: string
   line: number
+  /** A table column's header slot (section 10); undefined for the result's own slot. */
+  column?: number
 }
 
 /**

@@ -363,6 +363,26 @@ describe('MathOverlay', () => {
       expect(cellOf(2, 'result')!.querySelector('[data-unit-slot]')).toBeNull()
     })
 
+    it('draws a table under its line, inside its row, with a unit slot per column header', () => {
+      renderOverlay([anchorWith('x = 1 m .. 3 m step 1 m\nr(t) = t < 2 m ? nope : t\ntable(x, r(x), 2) # note')])
+
+      const row = rowOf('m1', 3)
+      const table = row.querySelector('.math-element__table')!
+      expect(table).not.toBeNull()
+      expect(table.querySelectorAll('thead th')).toHaveLength(3)
+      expect(table.querySelectorAll('tbody tr')).toHaveLength(3)
+      // Slots on the two columns with a unit, keyed by the line's index and the column.
+      expect([...table.querySelectorAll<HTMLElement>('[data-unit-slot]')].map((slot) => slot.dataset.unitSlot)).toEqual([
+        '2:0',
+        '2:1',
+      ])
+      // Numbers split at the point, so a column lines up on it; a failed cell is a red — with its message.
+      const first = table.querySelectorAll('tbody tr')[0]
+      expect(first.querySelector('td.is-whole')).toHaveTextContent('1')
+      expect(first.querySelector('td.is-failed')).toHaveAttribute('data-tip', 'in r(1 m): Undefined symbol nope')
+      expect(cellOf(3, 'note')).toHaveTextContent('note')
+    })
+
     it('marks a list with failed points in the gutter, with the message on hover', () => {
       renderOverlay([anchorWith('x = -1 .. 1\nr(t) = t < 0 ? nope : t\ny = r(x)')])
 

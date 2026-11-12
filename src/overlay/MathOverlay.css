@@ -478,3 +478,50 @@
 .math-element__count {
   color: var(--math-quiet);
 }
+
+/* Section 10, Tables: under the line, inside its row (a second grid row of the
+   row), so it counts toward the box and its line's hit area. */
+.math-element__table-cell {
+  grid-column: 2 / -1;
+  justify-self: start;
+  margin: 2px 0 8px;
+}
+
+.math-element__table {
+  border-collapse: collapse;
+  color: var(--math-result);
+  font-variant-numeric: tabular-nums;
+  line-height: 22px;
+}
+
+.math-element__table th {
+  padding: 0 14px 2px;
+  border-bottom: 1px solid var(--math-rule);
+  color: var(--math-text);
+  font-weight: normal;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.math-element__column-unit {
+  position: relative;
+  margin-left: 6px;
+}
+
+/* The number before the point right-aligned, the rest left-aligned: a column
+   lines up on the decimal point (section 5, Numbers). */
+.math-element__table td.is-whole {
+  padding: 0 0 0 14px;
+  text-align: right;
+}
+
+.math-element__table td.is-rest {
+  padding: 0 14px 0 0;
+  text-align: left;
+}
+
+.math-element__table td.is-failed {
+  padding: 0 14px;
+  color: var(--math-error);
+  text-align: center;
+}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { leadingNumber, numberTex, plainNumbers } from './numbers.ts'
+import { leadingNumber, numberTex, plainNumbers, tableColumn } from './numbers.ts'
 
 describe('plainNumbers (section 5, Numbers)', () => {
   it.each([
@@ -37,5 +37,22 @@ describe('numberTex', () => {
     ['∞', '\\infty'],
   ])('%s as %s', (number, tex) => {
     expect(numberTex(number)).toBe(tex)
+  })
+})
+
+describe('tableColumn (section 5: a table column keeps its zeros)', () => {
+  it('pads to the significant digits, scientific values included; zero stays 0', () => {
+    expect(tableColumn(['24.8', '20', '0.0186', '1.86·10⁵', '0', '-3.5'], 4)).toEqual([
+      '24.80',
+      '20.00',
+      '0.01860',
+      '1.860·10⁵',
+      '0',
+      '-3.500',
+    ])
+  })
+
+  it('keeps a whole-number column whole', () => {
+    expect(tableColumn(['1', '19', '30'], 4)).toEqual(['1', '19', '30'])
   })
 })

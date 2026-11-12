@@ -64,3 +64,25 @@ export function numberTex(number: string): string {
   const power = [...scientific[2]].map((char) => DIGIT[char]).join('')
   return `${scientific[1]} \\cdot 10^{${power}}`
 }
+
+/**
+ * A column of plain numbers as a table shows them (section 5, Numbers): each
+ * padded with trailing zeros to `digits` significant digits (`24.8` → `24.80`,
+ * `1.86·10⁵` → `1.860·10⁵`), unless every number in the column is whole, which
+ * stays whole (`1`, `19`, `30`). Zero stays `0`.
+ */
+export function tableColumn(numbers: readonly string[], digits: number): string[] {
+  const whole = numbers.every((number) => /^-?\d+$/.test(number))
+  return whole ? [...numbers] : numbers.map((number) => padNumber(number, digits))
+}
+
+function padNumber(number: string, digits: number): string {
+  const match = /^(-?)(\d+)(?:\.(\d*))?(·10[⁻⁰¹²³⁴⁵⁶⁷⁸⁹]+)?$/.exec(number)
+  if (!match) return number
+  const [, sign, whole, fraction = '', power = ''] = match
+  const significant = `${whole}${fraction}`.replace(/^0+/, '')
+  if (significant === '') return number
+  const missing = digits - significant.length
+  if (missing <= 0) return number
+  return `${sign}${whole}.${fraction}${'0'.repeat(missing)}${power}`
+}

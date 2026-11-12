@@ -10,7 +10,8 @@ import { evaluateSheet, type SheetLine } from './evaluate.ts'
  * (`pump-sizing.py`) at 4 significant figures, in the unit the reference
  * shows, whatever prefix the sheet picks. It grows each milestone: M2 checks
  * lines 1-13, 16 and 17; M3 adds lines 14-28, the solves; M4 adds line 29, the
- * range table's rows as `Hs(Q_s)` and `Hp(Q_s)`, and the 5" column.
+ * range table's rows as `Hs(Q_s)` and `Hp(Q_s)`, and the 5" column; then
+ * line 30, the table itself.
  */
 
 /** The sheet's lines by their number in the doc (`c`, `1`, ..., `24a`), in order. */
@@ -200,3 +201,29 @@ function pointValues(diameter: string): { hs: string[]; hp: string[] } {
   }
   return { hs: calls('Hs').map(text), hp: calls('Hp').map(text) }
 }
+
+describe('the pump sheet (acceptance, M4: line 30, the table)', () => {
+  const ids = SHEET.map((line) => line.id).filter((id) => id !== '31')
+
+  it.each([
+    ['4"', '102.3 mm', 'hs4'],
+    ['5"', '128.2 mm', 'hs5'],
+  ] as const)('draws 3 columns and 30 rows that match the range table at %s', (_, diameter, column) => {
+    const line = run(ids, { diameter }).get('30')!
+    expect(line.result).toEqual({ kind: 'empty' })
+    expect(line.table?.columns.map((c) => c.unit)).toEqual(['L / s', 'm', 'm'])
+    const rows = line.table!.rows.map((row) =>
+      row.map((cell) => {
+        if (!cell.ok) throw new Error(cell.message)
+        return Number(Number(cell.text).toPrecision(4))
+      }),
+    )
+    expect(rows).toEqual(RANGE_TABLE.map((row) => [row.q, row[column], row.hp]))
+  })
+
+  it('keeps trailing zeros in the table: Hp at 20 L/s reads 20.00', () => {
+    const line = run(ids).get('30')!
+    expect(line.table?.rows[19][2]).toEqual({ ok: true, text: '20.00' })
+    expect(line.table?.rows[0][0]).toEqual({ ok: true, text: '1' })
+  })
+})

@@ -29,6 +29,7 @@ import {
   type SheetLine,
 } from '../math/evaluate.ts'
 import { writeDisplayUnit } from '../math/lineForm.ts'
+import { writeArgumentUnit } from '../math/tableLine.ts'
 import type { DisplaySettings } from '../math/display.ts'
 import {
   applyLineMove,
@@ -211,14 +212,17 @@ export function MathOverlay({
   }, [viewport, anchors, hoverTip])
 
   /** Writes the slot's choice into the line's source, as one line commit; the line stays typeset. */
-  const applyUnit = (anchorId: string, lineIndex: number, unit: string | null) => {
+  const applyUnit = (anchorId: string, lineIndex: number, unit: string | null, column?: number) => {
     setUnitEdit(null)
     focusCanvas()
     const anchor = findAnchor(anchorId)
     if (!anchor) return
     const sourceLines = splitLines(anchor.source)
     if (lineIndex >= sourceLines.length) return
-    const written = writeDisplayUnit(sourceLines[lineIndex], unit)
+    const written =
+      column === undefined
+        ? writeDisplayUnit(sourceLines[lineIndex], unit)
+        : writeArgumentUnit(sourceLines[lineIndex], column, unit)
     if (written === sourceLines[lineIndex]) return
     sourceLines[lineIndex] = written
     writeAnchorSource(api, anchorId, sourceLines.join('\n'))
@@ -343,7 +347,8 @@ export function MathOverlay({
           unitSlots={{
             hovered: slotHover?.anchorId === anchor.id ? slotHover.line : null,
             open: unitEdit?.anchorId === anchor.id ? unitEdit.line : null,
-            apply: (lineIndex, unit) => applyUnit(anchor.id, lineIndex, unit),
+            openColumn: unitEdit?.anchorId === anchor.id ? (unitEdit.column ?? null) : null,
+            apply: (lineIndex, unit, column) => applyUnit(anchor.id, lineIndex, unit, column),
             cancel: () => setUnitEdit(null),
             isUnit: isDisplayUnit,
           }}
@@ -384,7 +389,10 @@ function slotAt(overlay: HTMLElement | null, clientX: number, clientY: number): 
       const box = slot.getBoundingClientRect()
       if (box.width === 0 && box.height === 0) continue
       if (clientX >= box.left && clientX <= box.right && clientY >= box.top && clientY <= box.bottom) {
-        return { anchorId: element.dataset.anchorId, line: Number(slot.dataset.unitSlot) }
+        const [line, column] = (slot.dataset.unitSlot ?? '').split(':')
+        const target: SlotTarget = { anchorId: element.dataset.anchorId, line: Number(line) }
+        if (column !== undefined) target.column = Number(column)
+        return target
       }
     }
   }
