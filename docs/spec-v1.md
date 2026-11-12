@@ -1096,6 +1096,11 @@ The wording of every user-facing message. `<…>` is filled in. Numbers follow
 | Unknown clause | `Unknown plot setting xyz` | M4 |
 | Log axis with zero or negative | `x log needs values above 0` | M4 |
 | All of a series' points failed | `H_s: every point failed. At Q_s = 1 L/s: <message>` | M4 |
+| A plot with no y | `a plot needs x and at least one y: plot(Q_s, Hs(Q_s))` | #77 |
+| A plot's x that isn't a list | `x must be a list: 2 m is a single value` | #77 |
+| A mark that isn't one value of x's kind | `mark 2 s: one value of x's kind` | #77 |
+| An axis range of another kind | `y 0 s .. 4 s: the range must be the axis's kind` | #77 |
+| `in <unit>` after a whole plot line | `a plot takes its units on its arguments: plot(Q_s in L/s, …)` | #77 |
 | A table with no list among its arguments | `a table needs a list, such as table(Q_s)` | #76 |
 | `in <unit>` after a whole table line | `a table takes its units on its arguments: table(Q_s in L/s)` | #76 |
 | A range's start, end or step isn't a single number or quantity | `the range's step must be a number or a quantity`, `a range takes single values, not a list` | #74 |
@@ -1520,8 +1525,14 @@ Changes line if it changes behaviour.
   **Measured in Chromium (#74):** lines 1-29 plus `H_s = Hs(Q_s)` and `H_p = Hp(Q_s)`, so 30 Colebrook solves per
   run besides `Q_op`'s, take about 6 ms (median of 30 runs, dev build), 11 ms at worst. Re-running the whole sheet
   on every keystroke holds.
-- The mark label's position, log scale and `points`, tried only as prototype switches.
-- The clause parser and lazy loading of Observable Plot, not built in the prototype.
+- The mark label's position, log scale and `points`, tried only as prototype switches. **Passed (#77), in Chromium:**
+  the label sits at the top of its guide, above the frame, with a dot where the guide meets each curve; `x log` and
+  `y log` draw log axes fitted to the data (not rounded out to whole decades); `points` puts a dot at every point,
+  and `labels direct` names each series at its line end.
+- The clause parser and lazy loading of Observable Plot, not built in the prototype. **Passed (#77):** the clauses
+  are read in `src/math/plotLine.ts`, with tests for each; Observable Plot 0.6.17 is its own chunk (297 kB, 103 kB
+  gzip) requested once the first plot shows, and the entry grew by 9 kB, the app's own plot code. A placeholder of
+  the chart's size holds the box until it arrives.
 
 **M5**
 
@@ -1746,3 +1757,10 @@ Changes line if it changes behaviour.
   the table line's error, `2 of 8 points failed. At Q_s = 1 L/s: …`, and the table still draws; a list named from
   above (`H_s`) shows its failures on its own line only. A double-click on a table row opened its line. Two messages
   are added to section 13: a table with no list, and `in <unit>` after a whole table line.
+- 2026-11-12, [section 10](#plots) (#77, Engineer's, for Matheus to confirm on the PR; checked in Chromium with a real
+  mouse): series are named by their argument as typed (`Hs(Q_s)`), in the legend (typeset) and in the y title
+  (`Hs(Q_s), Hp(Q_s) [m]`). The y axis takes the first series' unit, chosen as a table column's is. A mark's label is
+  its expression and value in x's unit (`Q_op = 18.81 L / s`). The colours are a fixed list of eight, Excalidraw's
+  blue first. A failed point's × shows its message on hover through the problem tip; points that fail make the plot
+  line's error, as a table's do. A drag from the chart moved the element, and a double-click on it opened the plot
+  line. Five messages are added to section 13.

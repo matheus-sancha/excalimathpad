@@ -1,4 +1,4 @@
-import { act, cleanup, createEvent, fireEvent, render, screen, within } from '@testing-library/react'
+import { act, cleanup, createEvent, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import type { ExcalidrawElement } from '@excalidraw/excalidraw/element/types'
 import type { AppState } from '@excalidraw/excalidraw/types'
@@ -381,6 +381,21 @@ describe('MathOverlay', () => {
       expect(first.querySelector('td.is-whole')).toHaveTextContent('1')
       expect(first.querySelector('td.is-failed')).toHaveAttribute('data-tip', 'in r(1 m): Undefined symbol nope')
       expect(cellOf(3, 'note')).toHaveTextContent('note')
+    })
+
+    it('draws a plot under its line: a placeholder of its size, then the chart, with a × per failed point', async () => {
+      renderOverlay([anchorWith('x = -1 .. 3\nr(t) = t < 0 ? nope : t^2\nplot(x, r(x)), mark 2, size S')])
+
+      const chart = rowOf('m1', 3).querySelector<HTMLElement>('.math-element__plot-chart')!
+      expect(chart.style.width).toBe('360px')
+      expect(chart.style.height).toBe('220px')
+      expect(rowOf('m1', 3).querySelector('.math-element__plot-legend')).toHaveTextContent(/r/)
+      await waitFor(() => expect(chart.querySelector('svg')).not.toBeNull(), { timeout: 5000 })
+      expect(chart).not.toHaveClass('is-loading')
+      const failed = chart.querySelectorAll<SVGElement>('.plot-failed text')
+      expect(failed).toHaveLength(1)
+      expect(failed[0].dataset.tip).toBe('in r(-1): Undefined symbol nope')
+      expect(chart.textContent).toContain('2 = 2')
     })
 
     it('marks a list with failed points in the gutter, with the message on hover', () => {

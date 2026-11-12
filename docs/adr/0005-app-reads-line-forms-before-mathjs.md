@@ -4,7 +4,8 @@
   `src/math/lineForm.ts`; the display unit built (#56), taken off the text there and
   checked as a pure unit by the engine; the solve built (#70), read in
   `src/math/solveLine.ts`; the range built (#74), read in `src/math/rangeLine.ts`; `table(` built (#76), read
-  in `src/math/tableLine.ts`; `plot(` not built yet (M4)
+  in `src/math/tableLine.ts`; `plot(` built (#77), read in
+  `src/math/plotLine.ts`
 - **Amended**: 2026-11-11 (#63): the format clause, read after the comment.
 - **Date**: 2026-11-03
 

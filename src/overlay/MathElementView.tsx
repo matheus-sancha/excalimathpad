@@ -33,6 +33,7 @@ import {
 import { leadingNumber } from '../math/numbers.ts'
 import { texToHtml, useKatexReady } from './katex.ts'
 import { UnitField } from './UnitField.tsx'
+import { PlotChart } from './PlotChart.tsx'
 import { hasText, TITLE_LINE, type LineEdit, type LineMove } from './lineEdit.ts'
 import { sceneToStage, type Viewport } from './viewport.ts'
 
@@ -258,6 +259,7 @@ const EMPTY_LINE: SheetLine = {
   solveDetails: null,
   listPreview: null,
   table: null,
+  plot: null,
 }
 
 /** A row's cells, by line form (section 3, section 4 Problems). */
@@ -365,6 +367,11 @@ function MathCells({
       />
       {typeset.note !== null && <span className="math-element__note">{typeset.note}</span>}
       {line.table !== null && <TableBlock table={line.table} index={index} />}
+      {line.plot !== null && (
+        <div className="math-element__plot-cell">
+          <PlotChart plot={line.plot} />
+        </div>
+      )}
     </>
   )
 }

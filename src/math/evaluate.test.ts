@@ -1266,3 +1266,78 @@ describe('tables (docs/spec-v1.md section 10, #76)', () => {
     })
   })
 })
+
+describe('plots (docs/spec-v1.md section 10, #77)', () => {
+  const plotOf = (source: string) => {
+    const lines = evaluateSheet([{ id: 'b', source }]).get('b')!
+    return lines[lines.length - 1]
+  }
+  const base = 'x = 1 m .. 3 m step 1 m\nsq(t) = t^2 / (1 m)\n'
+
+  it('gives the chart its x values, series and automatic axis titles, in the axes’ units', () => {
+    const line = plotOf(`${base}plot(x in cm, sq(x), x)`)
+    expect(line.result).toEqual(empty)
+    expect(line.variables).toEqual([])
+    expect(line.plot).toMatchObject({
+      x: { label: 'x [cm]', unit: 'cm', values: [100, 200, 300], log: false, domain: null },
+      y: { label: 'sq(x), x [m]', unit: 'm' },
+      series: [
+        { name: 'sq(x)', values: [1, 4, 9] },
+        { name: 'x', values: [1, 2, 3] },
+      ],
+      marks: [],
+      failed: [],
+      width: 480,
+      height: 280,
+      title: null,
+    })
+  })
+
+  it('reads the settings: marks, labels, points, log, ranges, size and title', () => {
+    const line = plotOf(`${base}m0 = 2 m\nplot(x, sq(x)), mark m0, labels direct, points, x log, y 0 m .. 10 m, size S, title "Squares"`)
+    expect(line.plot).toMatchObject({
+      marks: [{ x: 2, label: 'm0 = 2 m' }],
+      labelsDirect: true,
+      points: true,
+      x: { log: true },
+      y: { domain: [0, 10] },
+      width: 360,
+      height: 220,
+      title: 'Squares',
+    })
+  })
+
+  it('draws a single-value y as a horizontal line', () => {
+    expect(plotOf(`${base}plot(x, 2 m)`).plot?.series[0].values).toEqual([2, 2, 2])
+  })
+
+  it('shows a failed point as a gap and a ×, and makes it the line’s error', () => {
+    const line = plotOf('x = -1 .. 1\nr(t) = t < 0 ? nope : t\nplot(x, r(x))')
+    expect(line.plot?.series[0].values).toEqual([null, 0, 1])
+    expect(line.plot?.failed).toEqual([{ x: -1, message: 'in r(-1): Undefined symbol nope' }])
+    expect(line.result).toEqual(error('1 of 3 points failed. At x = -1: in r(-1): Undefined symbol nope'))
+  })
+
+  it.each([
+    [`${base}plot(x, sq(x), 2 kW)`, 'sq(x) is a length, 2 kW is a power: one plot shows one kind'],
+    [`${base}plot(x, sq(x)), wobble`, 'Unknown plot setting wobble'],
+    [`${base}plot(x)`, 'a plot needs x and at least one y: plot(Q_s, Hs(Q_s))'],
+    [`${base}plot(2 m, x)`, 'x must be a list: 2 m is a single value'],
+    [`${base}y = 1 .. 4\nplot(x, y)`, 'x has 3 values, y has 4'],
+    [`${base}plot(x - 1 m, sq(x)), x log`, 'x log needs values above 0'],
+    [`${base}plot(x, sq(x)), mark 2 s`, "mark 2 s: one value of x's kind"],
+    ['x = -1 .. 1\nr(t) = nope\nplot(x, r(x))', 'r(x): every point failed. At x = -1: in r(-1): Undefined symbol nope'],
+  ])('is an error on the line: %s', (source, message) => {
+    const line = plotOf(source)
+    expect(line.result).toEqual(error(message))
+    expect(line.plot).toBeNull()
+  })
+
+  it('typesets the line as its call, clauses hidden', () => {
+    expect(plotOf(`${base}plot(x, sq(x)), mark 2 m`).typeset).toMatchObject({
+      kind: 'math',
+      name: null,
+      expression: expect.not.stringContaining('mark'),
+    })
+  })
+})

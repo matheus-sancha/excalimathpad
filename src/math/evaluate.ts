@@ -26,6 +26,7 @@ import { createSolver, LayeredScope, type CompiledSolve, type SolveDetails, type
 import { readSolve } from './solveLine.ts'
 import { readRange } from './rangeLine.ts'
 import { readTable } from './tableLine.ts'
+import { PLOT_SIZES, readPlot, type PlotClause } from './plotLine.ts'
 import { AGGREGATES, createRanges, isSheetList, listSummary, SheetList, type Point } from './lists.ts'
 import { lineTex, rangeTex, resultTex, solveTex, textTex, unitTex, type Names } from './typeset.ts'
 import { bodyNames, lineWarnings, solveWarnings, usedNames } from './warnings.ts'
@@ -249,6 +250,8 @@ export interface SheetLine {
   listPreview: string | null
   /** A table line's table (section 10), drawn under the line. Null on any other line. */
   table: TableView | null
+  /** A plot line's chart (section 10), drawn under the line. Null on any other line. */
+  plot: PlotView | null
 }
 
 /** A table as the grid draws it: its columns, then every row, one cell per column. */
@@ -264,6 +267,35 @@ export interface TableColumn {
   unit: string
   /** The header's unit slot: the column's chosen unit and the list it offers. Null for a column of plain numbers. */
   slot: (UnitSlot & { chosen: string | null }) | null
+}
+
+/**
+ * A plot as the overlay draws it (section 10, Plots): plain numbers in each
+ * axis's unit, null where a point failed, and its settings from the clauses.
+ */
+export interface PlotView {
+  x: PlotAxis & { values: readonly (number | null)[] }
+  y: PlotAxis
+  series: readonly { name: string; tex: string; values: readonly (number | null)[] }[]
+  /** `mark` clauses: a guide at x, a dot where it meets each curve, its label at the top. */
+  marks: readonly { x: number; label: string }[]
+  /** Points where a series failed: a red × on the x axis, with the message on hover. */
+  failed: readonly { x: number; message: string }[]
+  labelsDirect: boolean
+  points: boolean
+  width: number
+  height: number
+  title: string | null
+}
+
+export interface PlotAxis {
+  /** The automatic title, `Q_s [L/s]`. */
+  label: string
+  /** The unit as a result writes it; empty for plain numbers. */
+  unit: string
+  log: boolean
+  /** An axis range clause, in the axis's unit; null fits the data. */
+  domain: readonly [number, number] | null
 }
 
 /** A cell: its number in the column's unit and the table's form, or a failed point's message. */
@@ -327,6 +359,21 @@ type ParsedLine =
         display: DisplayUnit | null
         displayText: string | null
       }[]
+      defines: readonly string[]
+      note: string | null
+      format: LineFormat
+      unknownFormat: string | null
+      display: DisplayUnit | null
+      displayText: string | null
+    }
+  /** A plot line (section 10): `plot(x, y1, …)` and its clauses, display only. */
+  | {
+      kind: 'plot'
+      args: readonly { node: MathNode; display: DisplayUnit | null; displayText: string | null; text: string }[]
+      clauses: readonly PlotClause[]
+      /** The clauses' expressions, parsed: each mark, and each range's ends. */
+      marks: readonly { node: MathNode; text: string }[]
+      ranges: readonly { axis: 'x' | 'y'; start: MathNode; end: MathNode; text: string }[]
       defines: readonly string[]
       note: string | null
       format: LineFormat
@@ -433,6 +480,7 @@ export function evaluateSheet(
   let details: SolveDetails | null = null
   let preview: string | null = null
   let table: TableView | null = null
+  let plot: PlotView | null = null
   // The display unit each list was given on the line that defined it, for table columns.
   const listUnits = new Map<string, { unit: ShownUnit; text: string }>()
   position = 0
@@ -447,6 +495,7 @@ export function evaluateSheet(
         details = null
         preview = null
         table = null
+        plot = null
         const result = evaluateLine(line)
         return {
           result,
@@ -457,6 +506,7 @@ export function evaluateSheet(
           solveDetails: result.kind === 'value' ? details : null,
           listPreview: result.kind === 'list' ? preview : null,
           table,
+          plot,
         }
       }),
     )
@@ -527,6 +577,15 @@ export function evaluateSheet(
       // Asked before the line runs: the line itself may assign one of these names.
       const isPlain = (line.kind === 'parsed' && line.plainInputUnits?.every((name) => !scope.has(name))) || false
       lastSolve = null
+      if (line.kind === 'plot') {
+        if (line.display !== null) throw new SheetError('a plot takes its units on its arguments: plot(Q_s in L/s, …)')
+        const unknown = line.clauses.find((clause) => clause.kind === 'unknown')
+        if (unknown?.kind === 'unknown') throw new SheetError(`Unknown plot setting ${unknown.text}`)
+        const built = runPlot(line)
+        plot = built.view
+        if (line.unknownFormat !== null) return { kind: 'error', message: `Unknown format ${line.unknownFormat}` }
+        return built.failed === null ? { kind: 'empty' } : { kind: 'error', message: built.failed }
+      }
       if (line.kind === 'table') {
         if (line.display !== null) throw new SheetError('a table takes its units on its arguments: table(Q_s in L/s)')
         const built = runTable(line)
@@ -579,7 +638,7 @@ export function evaluateSheet(
           ? line.parts.lhs
           : line.kind === 'range'
             ? line.start
-            : line.kind === 'table'
+            : line.kind === 'table' || line.kind === 'plot'
               ? (line.args[0]?.node ?? new math.ConstantNode(0))
               : line.node
       const message = messageOf(error, node, (name) => scope.get(name))
@@ -689,6 +748,177 @@ export function evaluateSheet(
       },
       failed: own ? failureOf(own.value as SheetList) : null,
     }
+  }
+
+  /**
+   * A plot line (section 10, Plots): x and each y as for a table's columns,
+   * one kind on y in the first series' unit, the clauses' marks and ranges in
+   * the axes' units. A failed point is a gap and a × on the x axis; a series
+   * whose every point failed is the line's error.
+   */
+  function runPlot(line: Extract<ParsedLine, { kind: 'plot' }>): { view: PlotView; failed: string | null } {
+    if (line.args.length < 2) throw new SheetError('a plot needs x and at least one y: plot(Q_s, Hs(Q_s))')
+    const values = line.args.map((arg) => {
+      const lists = listsIn(arg.node)
+      return lists.length > 0 ? iterate(arg.node, new Map()) : (arg.node.compile().evaluate(scope) as unknown)
+    })
+    const [xArg, ...yArgs] = line.args
+    const xList = values[0]
+    if (!isSheetList(xList)) throw new SheetError(`x must be a list: ${xArg.text} is a single value`)
+    const length = xList.length
+    values.forEach((value, i) => {
+      if (isSheetList(value) && value.length !== length) {
+        throw new SheetError(`${xArg.text} has ${length} values, ${line.args[i].text} has ${value.length}`)
+      }
+    })
+    const pointsOf = (value: unknown): Point[] =>
+      isSheetList(value) ? [...value.points] : Array.from({ length }, () => ({ ok: true as const, value }))
+
+    // Each series' kind: one per plot (section 10).
+    const ys = yArgs.map((arg, i) => ({ arg, points: pointsOf(values[i + 1]) }))
+    ys.forEach(({ arg, points }) => {
+      if (points.every((point) => !point.ok)) {
+        const failure = failureOf(new SheetList(points, { name: xArg.text, list: xList }))
+        throw new SheetError(`${arg.text}: every point failed. ${failure?.replace(/^\d+ of \d+ points failed\. /, '') ?? ''}`)
+      }
+    })
+    const kinds = ys.map(({ points }) => kindName(points.find((point) => point.ok)!))
+    const other = kinds.findIndex((kind) => kind !== kinds[0])
+    if (other !== -1) {
+      throw new SheetError(
+        `${ys[0].arg.text} is ${article(kinds[0])}, ${ys[other].arg.text} is ${article(kinds[other])}: one plot shows one kind`,
+      )
+    }
+
+    const xAxis = axisUnit(xArg, pointsOf(xList))
+    const yAxis = axisUnit(ys[0].arg, ys.flatMap(({ points }) => points))
+    const numbers = (points: readonly Point[], unit: ShownUnit | null) =>
+      points.map((point) => (point.ok ? numberIn(point.value, unit) : null))
+    const x = numbers(xList.points, xAxis.unit)
+    const series = ys.map(({ arg, points }) => ({
+      name: arg.text,
+      tex: tableHeaderTex(arg.node, names),
+      values: numbers(points, yAxis.unit),
+    }))
+
+    const failed: { x: number; message: string }[] = []
+    ys.forEach(({ points }) =>
+      points.forEach((point, i) => {
+        const at = x[i]
+        if (!point.ok && at !== null) failed.push({ x: at, message: point.message })
+      }),
+    )
+    const firstFailed = ys.map(({ points }) => new SheetList(points, { name: xArg.text, list: xList }))
+      .map(failureOf)
+      .find((message) => message !== null)
+
+    const has = (kind: PlotClause['kind']) => line.clauses.some((clause) => clause.kind === kind)
+    const logOn = (axis: 'x' | 'y') =>
+      line.clauses.some((clause) => clause.kind === 'log' && clause.axis === axis)
+    for (const [axis, data] of [
+      ['x', x],
+      ['y', series.flatMap((s) => s.values)],
+    ] as const) {
+      if (logOn(axis) && data.some((v) => v !== null && v <= 0)) throw new SheetError(`${axis} log needs values above 0`)
+    }
+    const domain = (axis: 'x' | 'y'): readonly [number, number] | null => {
+      const range = line.ranges.find((r) => r.axis === axis)
+      if (!range) return null
+      const unit = axis === 'x' ? xAxis : yAxis
+      const end = (node: MathNode) => {
+        const value: unknown = node.compile().evaluate(scope)
+        const n = numberIn(value, unit.unit, unit.reference)
+        if (n === null) throw new SheetError(`${axis} ${range.text}: the range must be the axis's kind`)
+        return n
+      }
+      return [end(range.start), end(range.end)]
+    }
+    const marks = line.marks.map(({ node, text }) => {
+      const value: unknown = node.compile().evaluate(scope)
+      const n = numberIn(value, xAxis.unit, xAxis.reference)
+      if (n === null || isSheetList(value)) throw new SheetError(`mark ${text}: one value of x's kind`)
+      return { x: n, label: `${text} = ${display.show(value, xAxis.unit, settings)}` }
+    })
+    const size = line.clauses.find((clause) => clause.kind === 'size')
+    const title = line.clauses.find((clause) => clause.kind === 'title')
+    const bracket = (unit: string) => (unit === '' ? '' : ` [${unit.replace(/ \/ /g, '/')}]`)
+    return {
+      view: {
+        x: { label: `${xArg.text}${bracket(xAxis.text)}`, unit: xAxis.text, log: logOn('x'), domain: domain('x'), values: x },
+        y: {
+          label: `${series.map((s) => s.name).join(', ')}${bracket(yAxis.text)}`,
+          unit: yAxis.text,
+          log: logOn('y'),
+          domain: domain('y'),
+        },
+        series,
+        marks,
+        failed,
+        labelsDirect: has('labels-direct'),
+        points: has('points'),
+        ...PLOT_SIZES[size?.kind === 'size' ? size.size : 'M'],
+        title: title?.kind === 'title' ? title.text : null,
+      },
+      failed: firstFailed ?? null,
+    }
+  }
+
+  /** An axis's unit: its argument's `in`, else its list line's, else the system's for its largest value. */
+  function axisUnit(
+    arg: { node: MathNode; display: DisplayUnit | null },
+    points: readonly Point[],
+  ): { unit: ShownUnit | null; text: string; reference: unknown } {
+    const ok = points.filter((point): point is Extract<Point, { ok: true }> => point.ok)
+    const named = isSymbolNode(arg.node) ? listUnits.get(arg.node.name) : undefined
+    let unit: ShownUnit | null =
+      arg.display?.kind === 'unit' ? arg.display.unit : arg.display?.kind === 'percent' ? 'percent' : (named?.unit ?? null)
+    if (unit === null && ok.length > 0) {
+      const largest = ok.reduce((a, b) => (magnitude(b.value) > magnitude(a.value) ? b : a))
+      const rest = leadingNumber(display.show(largest.value, null, settings))?.rest.trim() ?? ''
+      const target = rest === '' ? null : display.readTarget(rest)
+      unit = target?.kind === 'unit' ? target.unit : null
+    }
+    const sample = ok[0]?.value
+    const text = sample === undefined ? '' : (leadingNumber(display.show(sample, unit, settings))?.rest.trim() ?? '')
+    return { unit, text, reference: sample }
+  }
+
+  /** A value as a plain number in `unit` (null for none); null if it isn't of `reference`'s kind. */
+  function numberIn(value: unknown, unit: ShownUnit | null, reference?: unknown): number | null {
+    if (reference !== undefined && !sameKind(value, reference)) return null
+    if (typeof value === 'number') return unit === 'percent' ? value * 100 : value
+    if (!math.isUnit(value) || value.value === null) return null
+    if (unit === null || unit === 'percent') {
+      return value.dimensions.every((d) => d === 0) ? value.toNumber('') * (unit === 'percent' ? 100 : 1) : value.value
+    }
+    try {
+      return value.toNumber(unit.formatUnits())
+    } catch {
+      return null
+    }
+  }
+
+  function sameKind(a: unknown, b: unknown): boolean {
+    const dims = (v: unknown) =>
+      math.isUnit(v) && !v.dimensions.every((d) => d === 0) ? v.dimensions.join(',') : typeof v === 'number' || math.isUnit(v) ? '' : null
+    return dims(a) !== null && dims(a) === dims(b)
+  }
+
+  /** A value's kind in words, for the one-kind message: `a length`, `a power`. */
+  function kindName(point: Point): string {
+    if (!point.ok) return 'a failed point'
+    const slot = display.slot(point.value, settings)
+    if (slot === null) return 'a value'
+    if (slot.kind === 'dimensionless') return 'a number'
+    if (slot.kind === null) {
+      return math.isUnit(point.value) ? `in ${point.value.toSI().formatUnits()}` : 'a value'
+    }
+    return slot.kind.replace(/[A-Z]/g, (c) => ` ${c.toLowerCase()}`)
+  }
+
+  function article(kind: string): string {
+    if (kind.startsWith('a ') || kind.startsWith('in ')) return kind
+    return /^[aeiou]/.test(kind) ? `an ${kind}` : `a ${kind}`
   }
 
   /** A column's unit, header and cells, in its argument's unit, else its list's, else the sheet's system. */
@@ -853,6 +1083,14 @@ function typesetLine(line: ParsedLine, names: Names): TypesetLine {
       return line.comment === null ? { kind: 'blank' } : { kind: 'comment', text: line.comment }
     case 'syntax-error':
       return { kind: 'unparsed', source: line.source }
+    case 'plot':
+      return {
+        kind: 'math',
+        name: null,
+        expression: `\\mathrm{plot}\\left(${line.args.map((arg) => tableHeaderTex(arg.node, names)).join(',\\;')}\\right)`,
+        note: line.note,
+        format: line.format,
+      }
     case 'table':
       return {
         kind: 'math',
@@ -964,6 +1202,40 @@ function parseLine(text: string): ParsedLine {
   // expression; otherwise the conversion stays math.js's own (ADR 0005).
   const target = form.displayUnit === null ? null : display.readTarget(form.displayUnit)
   const line = target === null ? form.code : form.expression
+  const plotForm = readPlot(line)
+  if (plotForm) {
+    try {
+      return {
+        kind: 'plot',
+        args: plotForm.args.map(({ expression, displayUnit }) => {
+          const target = displayUnit === null ? null : display.readTarget(displayUnit)
+          return {
+            node: parse(target === null && displayUnit !== null ? `${expression} in ${displayUnit}` : expression),
+            display: target,
+            displayText: target === null ? null : displayUnit,
+            text: expression,
+          }
+        }),
+        clauses: plotForm.clauses,
+        marks: plotForm.clauses.flatMap((clause) =>
+          clause.kind === 'mark' ? [{ node: parse(clause.expression), text: clause.expression }] : [],
+        ),
+        ranges: plotForm.clauses.flatMap((clause) =>
+          clause.kind === 'range'
+            ? [{ axis: clause.axis, start: parse(clause.start), end: parse(clause.end), text: `${clause.start} .. ${clause.end}` }]
+            : [],
+        ),
+        defines: [],
+        note: form.note,
+        format: form.format,
+        unknownFormat: form.unknownFormat,
+        display: target,
+        displayText: target === null ? null : form.displayUnit,
+      }
+    } catch (error) {
+      return { kind: 'syntax-error', message: error instanceof Error ? error.message : String(error), defines: [], source: text }
+    }
+  }
   const tableForm = readTable(line)
   if (tableForm) {
     try {

@@ -11,7 +11,7 @@ import { evaluateSheet, type SheetLine } from './evaluate.ts'
  * shows, whatever prefix the sheet picks. It grows each milestone: M2 checks
  * lines 1-13, 16 and 17; M3 adds lines 14-28, the solves; M4 adds line 29, the
  * range table's rows as `Hs(Q_s)` and `Hp(Q_s)`, and the 5" column; then
- * line 30, the table itself.
+ * line 30, the table itself, and line 31, the plot.
  */
 
 /** The sheet's lines by their number in the doc (`c`, `1`, ..., `24a`), in order. */
@@ -225,5 +225,37 @@ describe('the pump sheet (acceptance, M4: line 30, the table)', () => {
     const line = run(ids).get('30')!
     expect(line.table?.rows[19][2]).toEqual({ ok: true, text: '20.00' })
     expect(line.table?.rows[0][0]).toEqual({ ok: true, text: '1' })
+  })
+})
+
+describe('the pump sheet (acceptance, M4: line 31, the plot)', () => {
+  const ids = SHEET.map((line) => line.id)
+
+  it.each([
+    ['4"', '102.3 mm', 18.81],
+    ['5"', '128.2 mm', 25.21],
+  ] as const)('draws two series that cross at the Q_op mark at %s', (_, diameter, qop) => {
+    const lines = run(ids, { diameter })
+    const line = lines.get('31')!
+    expect(line.result).toEqual({ kind: 'empty' })
+    const plot = line.plot!
+    expect(plot.x).toMatchObject({ label: 'Q_s [L/s]', unit: 'L / s' })
+    expect(plot.y).toMatchObject({ label: 'Hs(Q_s), Hp(Q_s) [m]', unit: 'm' })
+    expect(plot.series.map((s) => s.values.length)).toEqual([30, 30])
+    expect(plot.failed).toEqual([])
+    const [mark] = plot.marks
+    expect(Number(mark.x.toPrecision(4))).toBe(qop)
+    expect(mark.label).toBe(`Q_op = ${qop} L / s`)
+    // The curves cross between the two points either side of the mark.
+    const below = Math.floor(mark.x) - 1
+    const gap = (i: number) => plot.series[0].values[i]! - plot.series[1].values[i]!
+    expect(Math.sign(gap(below))).not.toBe(Math.sign(gap(below + 1)))
+  })
+
+  it('runs every line of the sheet without an error, and only line 6 warns', () => {
+    for (const [id, line] of run(ids)) {
+      expect(line.result.kind, `line ${id}`).not.toBe('error')
+      expect(line.warnings, `line ${id}`).toEqual(id === '6' ? ['K shadows the unit K'] : [])
+    }
   })
 })

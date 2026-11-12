@@ -151,7 +151,13 @@ server. v1 target: one sheet, for Matheus's own use.
   number form (`tableColumn` in `numbers.ts`: zeros kept, whole columns whole).
   The overlay draws it as a second grid row inside the line's row; a header
   slot is `data-unit-slot="line:column"`, and choosing a unit writes it onto
-  that argument (`writeArgumentUnit`).
+  that argument (`writeArgumentUnit`). A **plot line** (`plotLine.ts`:
+  `plot(x, y1, …)`, then clauses) gives `SheetLine.plot`, a `PlotView` of plain
+  numbers in each axis's unit (null for a failed point), marks, failed points
+  and settings. `PlotChart.tsx` draws it under the line with Observable Plot,
+  loaded once behind `import()` (`plotDrawing.ts`), rebuilt only when the view
+  changes; legend and title are HTML, typeset; each failed point's × carries
+  its message as `data-tip`.
   App code must evaluate only
   through `evaluateSheet`: math.js functions that depend on the disabled
   names (`help`, `rationalize`, a `parser()`'s methods) no longer work. The

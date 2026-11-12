@@ -9,12 +9,11 @@ export interface TableForm {
   args: readonly { expression: string; displayUnit: string | null }[]
 }
 
-const HEAD = /^\s*table\s*\(/
-
 /** The line's table form, or null when it isn't a table line. */
 export function readTable(code: string): TableForm | null {
-  const spans = argumentSpans(code)
-  if (spans === null) return null
+  const call = callSpans(code, 'table')
+  if (call === null || !/^\s*(?:@\w*\s*)*(?:#.*)?$/s.test(call.rest)) return null
+  const spans = call.spans
   return {
     args: spans.map(([start, end]) => splitDisplayUnit(code.slice(start, end).trim())),
   }
@@ -26,8 +25,10 @@ export function readTable(code: string): TableForm | null {
  * the rest of the line, its format clause and note included, stays as typed.
  */
 export function writeArgumentUnit(line: string, column: number, unit: string | null): string {
-  const spans = argumentSpans(line)
-  if (spans === null || column >= spans.length) return line
+  const call = callSpans(line, line.trimStart().startsWith('plot') ? 'plot' : 'table')
+  if (call === null) return line
+  const { spans } = call
+  if (column >= spans.length) return line
   const [start, end] = spans[column]
   const raw = line.slice(start, end)
   const lead = /^\s*/.exec(raw)![0]
@@ -37,12 +38,12 @@ export function writeArgumentUnit(line: string, column: number, unit: string | n
 }
 
 /**
- * Where each argument of `table(…)` sits in the text, when the code is a table
- * line: the call's closing bracket ends the code, apart from a format clause
- * and a note.
+ * Where each argument of a leading `name(…)` call sits in the text, and what
+ * follows the call's closing bracket. Null when the text doesn't start with
+ * that call or the bracket never closes.
  */
-function argumentSpans(text: string): [number, number][] | null {
-  const head = HEAD.exec(text)
+export function callSpans(text: string, name: string): { spans: [number, number][]; rest: string } | null {
+  const head = new RegExp(`^\\s*${name}\\s*\\(`).exec(text)
   if (!head) return null
   const spans: [number, number][] = []
   let depth = 0
@@ -66,10 +67,8 @@ function argumentSpans(text: string): [number, number][] | null {
         continue
       }
       spans.push([start, i])
-      // Only a format clause or a note may follow the call.
-      const rest = text.slice(i + 1)
-      if (!/^\s*(?:@\w*\s*)*(?:#.*)?$/s.test(rest)) return null
-      return spans.length === 1 && text.slice(spans[0][0], spans[0][1]).trim() === '' ? [] : spans
+      const empty = spans.length === 1 && text.slice(spans[0][0], spans[0][1]).trim() === ''
+      return { spans: empty ? [] : spans, rest: text.slice(i + 1) }
     }
   }
   return null
