@@ -36,7 +36,7 @@ installs as an offline app. It runs on Chrome and Edge on desktop.
 | Print | Printing a selection, frame or viewport; a scale setting; page guides on the canvas |
 | Editing | Cancelling a line edit; placing the caret at the clicked character |
 | Files | Excalidraw's image export; a supported round trip through plain Excalidraw; several sheets in one window |
-| Platforms | Touch and mobile layouts; browsers other than Chrome and Edge on desktop (a save and open fallback exists, untested) |
+| Platforms | Touch and mobile layouts; browsers other than Chrome and Edge on desktop (a save and open fallback exists, untested); an Obsidian plugin, planned after v1 |
 
 v1 makes no promises on a touch device. A double tap on a math element would still
 add a text label to its anchor, and Add math and Enter need a keyboard or button.
@@ -754,7 +754,8 @@ screen. There is no app bar: the chrome lives inside Excalidraw's own UI slots.
 
 - **☰ menu:** Open… (Ctrl+O), Save (Ctrl+S), Save as… (Ctrl+Shift+S) and Print… (Ctrl+P)
   at the top. Excalidraw's own Open, Save to… and Export image… are removed. Its other
-  items stay: Find on canvas, Help, Reset the canvas, dark mode, canvas background.
+  items stay: Find on canvas, Help, Reset the canvas, dark mode, canvas background. From M4b the
+  menu's last line is the [build stamp](#hosted-build), which is text, not an item.
 - **File name** beside the ☰ button, with `●` while dirty.
 - **Window title:** the name without its extension, with `●` while dirty: `● pump-sizing`.
   An unsaved sheet reads `● Untitled`. While printing, the title drops the mark, so the PDF is
@@ -1022,9 +1023,29 @@ Built in M6. The app installs and works fully offline, and a `.excalimathpad` fi
   102+ on desktop, installed app only). The first launch asks to confirm. The app writes files itself,
   as in [section 7](#7-file-and-save).
 - **Icons:** 192 px and 512 px PNGs, which the repo doesn't have yet.
-- **Hosting:** Cloudflare Pages, free HTTPS, with Cloudflare Access as an optional gate. The app holds
-  no data, so a public URL is acceptable. Fallback: install from `npm run preview` on localhost.
+- **Hosting:** the [hosted build](#hosted-build), which M4b sets up. Fallback: install from
+  `npm run preview` on localhost.
 - The build stays static files with a relative `base`.
+
+### Hosted build
+
+Built in M4b, before M5. The app is served at a public HTTPS address, so Matheus can open it on a second
+machine, the work laptop first.
+
+- **Host:** Cloudflare Pages, public, with no login gate. The app holds no data and sheet files stay on
+  each machine's disk, so a public address is acceptable.
+- **Deploy:** a push to `main` that passes `npm run check` publishes its `dist/` from CI. Nothing else
+  deploys: a pull request publishes nothing, and there are no versions, tags or release notes while
+  Matheus is the only user.
+- **Build stamp:** the ☰ menu's last line shows the build's short commit and date, such as
+  `389dd51 · 2026-11-12`, so two machines can be compared. A local build shows `dev`.
+- **Until M6** there is no service worker: the app needs the network at each launch, a reload takes the
+  newest build, and Excalidraw's fonts aren't yet served from our own origin.
+- **Between machines** a sheet moves as its `.excalimathpad` file. The recovery copy belongs to one
+  browser and doesn't travel.
+- **If the work laptop can't use it**, the fix is chosen from what the check finds, as a new issue: a
+  custom domain if the address is blocked, M6's font self-hosting pulled forward if only the fonts are,
+  or a zip of `dist/` served by a local static server if everything is.
 
 Decided in: [PWA](https://github.com/matheus-sancha/excalimathpad/issues/22),
 [file](https://github.com/matheus-sancha/excalimathpad/issues/12),
@@ -1326,7 +1347,7 @@ Decided in: [acceptance](https://github.com/matheus-sancha/excalimathpad/issues/
 
 ## 16. Milestones and finish line
 
-v1 is built in six milestones, each usable on a real sheet, with a saved typeset sheet first. The existing
+v1 is built in seven milestones, each usable on a real sheet, with a saved typeset sheet first. The existing
 spike is M0, done.
 
 | Milestone | What it lets Matheus do | Sections |
@@ -1335,6 +1356,7 @@ spike is M0, done.
 | **M2 Units & panel** | Read results in the right units and digits, see problems and warnings, change sheet settings | [5](#5-results-units-and-numbers), [8](#8-app-chrome) |
 | **M3 Solve** | Solve an equation on a line, including as a function and a solve calling a solve | [9](#9-solve) |
 | **M4 Ranges & plots** | Run lines over a range, draw tables and plots | [10](#10-ranges-tables-plots) |
+| **M4b Hosted build** | Open the app at a public address on a second machine | [12](#hosted-build) |
 | **M5 Print** | Print the sheet to clean PDF pages | [11](#11-print) |
 | **M6 Offline PWA** | Install the app, work offline, open a `.excalimathpad` file from Windows | [12](#12-offline-pwa) |
 
@@ -1382,6 +1404,26 @@ Lists come first, since tables and plots only show them. The table comes before 
 display of the same lists, and it settles the column units the plot axes reuse. The popover is last: it only
 writes clauses the plot already reads.
 
+**M4b's issue order** (added on 2026-11-12, built before M5):
+
+1. Deploy on merge to Cloudflare Pages (#83)
+2. Build stamp in the ☰ menu (#84)
+3. Work-laptop check (#85)
+
+The deploy comes first, since the other two need an address. The check is Matheus's, by hand, and comes
+last so the stamp can tell him which build each machine runs. It is done before M5 so a blocked laptop is
+known before more is built on it.
+
+**M5's issue order** (M4's five are built, #74 to #78):
+
+1. Page row and page breaks (#80)
+2. Print view and Print… (Ctrl+P) (#81)
+3. The browser's own Print (#82)
+
+The breaks come first: they are one pure function from boxes and the Page setting, so every break rule is
+tested before anything draws a page. Print… comes before the browser's own Print, which builds the same pages
+from a cache and only adds the `beforeprint` route and its fallback.
+
 **Dates:** set a date for M1 when this spec is agreed. Date each later milestone when the previous one lands,
 from how long it really took. The v1 end is a forecast only.
 
@@ -1394,6 +1436,7 @@ lines through `evaluateSheet` and compares with the reference at 4 s.f. It grows
 | M2 | Lines 1-13, 16, 17 | none |
 | M3 | Adds lines 14-28 | none |
 | M4 | Adds lines 29-31, and the 4" and 5" columns | Step 2: edit `D` to 5" on screen |
+| M4b | none | None from the sheet: the work-laptop check (#85) |
 | M5 | none new | Steps 3-4: save and reopen, print to PDF |
 | M6 | none | None from the sheet: finish-line condition 2 checks it |
 
@@ -1533,6 +1576,19 @@ Changes line if it changes behaviour.
   are read in `src/math/plotLine.ts`, with tests for each; Observable Plot 0.6.17 is its own chunk (297 kB, 103 kB
   gzip) requested once the first plot shows, and the entry grew by 9 kB, the app's own plot code. A placeholder of
   the chart's size holds the box until it arrives.
+
+**M4b**
+
+- The deploy command, `wrangler pages deploy dist`, against Cloudflare's current documentation. **Passed
+  (#83):** Wrangler 4's own `pages deploy --help` lists the directory, `--project-name`, `--branch` and
+  `--commit-hash`, and the wrangler-action's README shows the same command. Cloudflare's documentation site
+  couldn't be reached from the build session, so two things stay unread: the token permission the upload
+  needs, and that `--branch=main` makes a deployment the production one. The first real deploy shows both.
+- The address opening through the work laptop's network.
+- Excalidraw's fonts on the work laptop. No asset path is set in `src/`, so they are expected to come from
+  Excalidraw's CDN, a second host a filter could block. Read from the code, not seen in a browser.
+- The file pickers under the work laptop's browser policy, and the download and file-input fallback if they
+  are turned off.
 
 **M5**
 
@@ -1771,3 +1827,10 @@ Changes line if it changes behaviour.
   Enter or when they lose focus, the rest at once; each change was one undo step, written before the format clause and
   the note (`plot(Q_s, Hs(Q_s)), mark Q_d, points, size L, title "System" # curve`), in the popover's order. Esc, or
   focus leaving the popover, closes it.
+- 2026-11-12, [sections 1](#1-what-v1-is-and-what-it-isnt), [8](#8-app-chrome), [12](#hosted-build),
+  [16](#16-milestones-and-finish-line) and [17](#17-verify-first) (agreed by Matheus in chat on 2026-11-12): hosting
+  moves out of M6 into a new milestone, M4b Hosted build, built before M5, so the app can be opened on the work
+  laptop. The site is public Cloudflare Pages with no Access gate, deployed from CI on each merge to `main`, with a
+  build stamp in the ☰ menu and no versioning while Matheus is the only user. What the work laptop allows is
+  unknown, so a by-hand check closes the milestone (#83 to #85). M6 keeps the service worker, manifest, icons,
+  fonts and file association. An Obsidian plugin is planned after v1 and joins "Not in v1".

@@ -79,6 +79,19 @@ describe('the ☰ menu', () => {
     expect(items.some((item) => /Save to|Export image/.test(item ?? ''))).toBe(false)
   })
 
+  it('ends with the build stamp, which is text and not an item', async () => {
+    await mount()
+
+    fireEvent.click(screen.getByTestId('main-menu-trigger'))
+
+    const stamp = screen.getByTestId('build-stamp')
+    expect(stamp.textContent).toBe(__BUILD_STAMP__)
+    expect(stamp.textContent).toMatch(/^(dev|[0-9a-f]{7} · \d{4}-\d{2}-\d{2})$/)
+    expect(stamp.closest('.dropdown-menu')?.lastElementChild?.contains(stamp)).toBe(true)
+    expect(stamp.closest('button, [role="menuitem"]')).toBeNull()
+    expect(stamp.tabIndex).toBe(-1)
+  })
+
   it('Save as… asks for a new file', async () => {
     const { files } = await mount()
 

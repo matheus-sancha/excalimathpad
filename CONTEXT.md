@@ -10,7 +10,12 @@ server. v1 target: one sheet, for Matheus's own use.
 - `index.html` → `src/main.tsx` — the only runtime entry; mounts `App`.
 - `npm run dev | build | preview | test | lint | check` — see `package.json`.
 - `.github/workflows/ci.yml` — runs `npm run check` on pushes to `main`
-  and on pull requests.
+  and on pull requests. On a push to `main` its `deploy` job then publishes
+  that run's `dist/` to Cloudflare Pages (spec section 12, Hosted build); it
+  is skipped while the repository variable `CLOUDFLARE_PAGES_PROJECT` is unset.
+- `buildStamp.ts` (repo root, pure) — the build stamp's text, short commit and
+  date or `dev`. `vite.config.ts` runs it at build time from `GITHUB_SHA` and
+  defines `__BUILD_STAMP__` (typed in `src/buildStamp.d.ts`).
 
 ## Modules
 
@@ -46,7 +51,8 @@ server. v1 target: one sheet, for Matheus's own use.
   the Excalidraw half of the sheet file: `serializeScene`, `loadScene` (no undo
   step, clears history) and `saveKey`, the key dirty is measured by.
   `SheetCanvas` also turns off Excalidraw's own open, save and export and draws
-  the ☰ menu with the app's file items; its handle carries `root`, the box it
+  the ☰ menu with the app's file items and, as its last line, the build stamp
+  (`__BUILD_STAMP__`, plain text); its handle carries `root`, the box it
   shares with the overlay. `fileRoutes.ts` takes the file keys and scene-file
   drops from Excalidraw, and measures the space beside the ☰ button
   (`useBesideMenu`). `layers.ts` records where overlay

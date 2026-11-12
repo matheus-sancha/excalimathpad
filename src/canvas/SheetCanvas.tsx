@@ -293,6 +293,10 @@ function SheetMenu({ fileMenu }: { fileMenu?: FileMenu }) {
       <MainMenu.Separator />
       <MainMenu.DefaultItems.ToggleTheme />
       <MainMenu.DefaultItems.ChangeCanvasBackground />
+      {/* Text, not an item: it takes no focus and no click (section 12, Hosted build). */}
+      <div className="build-stamp" data-testid="build-stamp" title="This build">
+        {__BUILD_STAMP__}
+      </div>
     </MainMenu>
   )
 }

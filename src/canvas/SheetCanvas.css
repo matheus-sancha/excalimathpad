@@ -121,3 +121,12 @@
 .excalidraw .sheet-sidebar .sidebar-tabs-root {
   overflow-y: auto;
 }
+
+/* The build stamp, the ☰ menu's last line (section 12, Hosted build). */
+.excalidraw .build-stamp {
+  padding: 0.5rem 0 0;
+  color: var(--color-gray-50);
+  font-size: 0.6875rem;
+  font-variant-numeric: tabular-nums;
+  user-select: text;
+}
