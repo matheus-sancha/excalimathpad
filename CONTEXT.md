@@ -61,8 +61,13 @@ server. v1 target: one sheet, for Matheus's own use.
   `cancelPlacing`, `isPlacing`) and `watchPlacing`, which turns the placing
   click into a new anchor, selected in the same write, and holds the crosshair.
   `mathAnchor.ts` also has `removeAnchor`, the one-step removal of an element
-  left empty. `SheetCanvas` draws the ∑ Add math button in Excalidraw's
-  top-right slot and the welcome screen.
+  left empty. `SheetCanvas` draws the welcome screen, and the app's two
+  items in Excalidraw's More tools dropdown: Add math and Math Settings, which
+  opens the Sheet panel. `moreTools.ts` finds the open dropdown
+  (`useMoreToolsSlot`, a box of the app's own appended to it), closes it
+  (`closeMoreTools`) and marks its button while it is closed (`markMoreTools`:
+  `data-math-placing`, `data-math-problems` and `--math-problems`). Excalidraw
+  has no slot for it, so `moreTools.excalidraw.test.tsx` pins the class names.
   `anchorSize.ts` writes an anchor's size (`writeAnchorSizes`: `NEVER`, top-left
   kept, the rotated top-left for a rotated anchor) and snaps resize handles back
   (`snapBackResizes`, from `onPointerUp`'s `originalElements`), and says when
@@ -122,6 +127,14 @@ server. v1 target: one sheet, for Matheus's own use.
   `in k(1 s): `, and carries `sheetFunction` (name, parameters); `messageOf`
   rewords math.js's errors (a value called, a function used as a number) in
   section 13's words. `table`, `plot` and `solve` can't be assigned.
+  **Constants** (spec section 5, `constants.ts`, pure data): every math.js
+  constant in groups, some with a short name (`c`, `k`, `R`, `h`), which
+  `registerShortConstants` adds to the namespace once at setup. `h` is the
+  Planck constant, so the hour is `hr`. A short name the sheet also assigns is
+  the sheet's on every line: `SheetScope` (the run's scope) answers math.js
+  "Undefined symbol" for it until its line has run, which `explain` words;
+  the engine's own reads use `holds` and `peek`. `listConstants` gives the
+  Constants tab its rows.
   A **solve line** (spec section 9) is read as text before math.js sees it
   (`solveLine.ts`, pure: `<name>[(<params>)] = solve <lhs> = <rhs>, guess
   <unknown> = <expr>`); its sides and guess are parsed with the captured
@@ -273,7 +286,9 @@ server. v1 target: one sheet, for Matheus's own use.
 
 The core loop: define variables with units, see results inline, edit an input
 and everything downstream recalculates. Engine: math.js, client-side.
-
+ `ConstantsTab` lists
+  `listConstants(settings)`: every built-in constant with its value in the
+  sheet's system.
 - **Math element** — a block of math.js source, one statement per line
   (assignment is plain `=`), anchored at a scene position, plus one
   **result** per line: a value with unit (`20 V`), an error (message), or
@@ -285,7 +300,7 @@ and everything downstream recalculates. Engine: math.js, client-side.
 - **Anchor** — the Excalidraw rectangle that carries a math element's
   position, size, rotation and source. Excalidraw owns it (move, select, delete,
   undo); the app writes only `customData.source`, the only stored copy.
-- **Placing** — the UI mode between Add math (M or the button) and the click
+- **Placing** — the UI mode between Add math (M or the More tools item) and the click
   that creates the anchor. It is Excalidraw's active tool, never in the scene,
   and no undo step. Esc cancels it.
 - **Title** — a math element's optional name: plain text on one line, in
@@ -415,7 +430,7 @@ and everything downstream recalculates. Engine: math.js, client-side.
   `max-content` and rotates about the anchor's centre; `offsetWidth` and
   `offsetHeight` ignore transforms, so they are scene units. A body measuring
   0 × 0 isn't laid out (jsdom) and is never written.
-- **The Add math button hands the keyboard to `.excalidraw`.** A clicked button
+- **The Add math item hands the keyboard to `.excalidraw`.** A clicked button
   keeps focus, and keys aimed at a button are left alone, so Esc wouldn't cancel
   placing and M would do nothing (`App.test.tsx`).
 - **Add math selects the new element in its own write.** Starting the tool

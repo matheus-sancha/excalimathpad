@@ -5,7 +5,7 @@ sketch freely, and put unit-aware math on the sheet that recalculates as
 you edit. Runs entirely in the browser and builds to a static site.
 
 Status: live recalculation across math elements (#3). The sheet opens empty.
-Press M or click ∑ Add math, then click the sheet to place a math element and
+Press M, or choose ∑ Add math under More tools, then click the sheet to place a math element and
 type: `R = 10 kohm`, Enter, `I = 2 mA`, then `U = I * R` (`20 V`) in an element
 below. Edit `I` and `U` updates. Elements read top to bottom, then left to
 right, like Mathcad: each one sees only what is defined above it. An element
@@ -55,6 +55,11 @@ requests deploy nothing. The job is skipped until the repository has:
   name (a direct-upload project, made in Cloudflare first);
 - the Actions **secrets** `CLOUDFLARE_API_TOKEN` (allowed to edit Pages) and
   `CLOUDFLARE_ACCOUNT_ID`.
+
+The app is served at <https://excalimathpad.pages.dev>. To check the two
+secrets from a terminal, set them as environment variables and run
+`npx wrangler@4 pages project list`, which should list the project
+(`wrangler whoami` fails with a token that can only edit Pages).
 
 The ☰ menu's last line is the build stamp, the short commit and date
 (`389dd51 · 2026-11-12`), or `dev` on a build made outside CI.

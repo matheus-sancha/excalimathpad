@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { Excalidraw, FONT_FAMILY, MainMenu, Sidebar, WelcomeScreen } from '@excalidraw/excalidraw'
 import type { ExcalidrawElement } from '@excalidraw/excalidraw/element/types'
 import type { ExcalidrawImperativeAPI, UIOptions } from '@excalidraw/excalidraw/types'
 import '@excalidraw/excalidraw/index.css'
 import { isPlacing, startPlacing } from './addMath.ts'
 import { markMathSelection } from './mathSelection.ts'
+import { closeMoreTools, markMoreTools, useMoreToolsSlot } from './moreTools.ts'
 import './SheetCanvas.css'
 
 /**
@@ -42,15 +44,17 @@ export const SHEET_SIDEBAR_CLASS = 'sheet-sidebar'
 /** Excalidraw's sidebar name for the Sheet panel. */
 export const SHEET_PANEL = 'sheet'
 
-export type SheetPanelTab = 'variables' | 'problems' | 'settings'
+export type SheetPanelTab = 'variables' | 'problems' | 'settings' | 'constants'
 
 /** What fills the Sheet panel (docs/spec-v1.md section 8); the canvas draws its frame. */
 export interface SheetPanelSlot {
-  /** Errors and warnings: the Sheet button's badge. */
+  /** Errors and warnings: the badge on Math Settings and on More tools. */
   problems: number
   variables: ReactNode
   problemsTab: ReactNode
   settings?: ReactNode
+  /** The built-in constants. */
+  constants?: ReactNode
   /** Opened, closed, or moved to another tab. */
   onChange?: (open: boolean, tab: SheetPanelTab) => void
 }
@@ -62,7 +66,7 @@ export interface SheetCanvasProps {
   initialElements?: readonly ExcalidrawElement[]
   /** The app's file items, at the top of the ☰ menu. */
   fileMenu?: FileMenu
-  /** The Sheet button and panel. */
+  /** Math Settings: its More tools item and the panel. */
   sheetPanel?: SheetPanelSlot
 }
 
@@ -89,9 +93,12 @@ const INITIAL_APP_STATE = { currentItemFontFamily: FONT_FAMILY.Nunito }
  */
 export function SheetCanvas({ onReady, initialElements, fileMenu, sheetPanel }: SheetCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null)
-  // The tab the Sheet button opens: the one last shown.
+  // The tab Math Settings opens: the one last shown.
   const lastTab = useRef<SheetPanelTab>('variables')
   const [docked, setDocked] = useState(true)
+  // The same box as `containerRef`, as state, for what waits on it.
+  const [root, setRoot] = useState<HTMLElement | null>(null)
+  const moreTools = useMoreToolsSlot(root)
 
   const forwardWheel = useCallback((event: WheelEvent) => {
     const canvas = containerRef.current?.querySelector('canvas')
@@ -118,6 +125,15 @@ export function SheetCanvas({ onReady, initialElements, fileMenu, sheetPanel }: 
     if (api && root) onReadyRef.current?.({ api, forwardWheel, focusCanvas, root })
   }, [api, forwardWheel, focusCanvas])
 
+  // More tools' button shows placing and the problem count while it is closed.
+  const problems = sheetPanel?.problems ?? 0
+  useEffect(() => {
+    if (!api || !root) return
+    const mark = () => markMoreTools(root, { placing: isPlacing(api.getAppState()), problems })
+    mark()
+    return api.onChange(mark)
+  }, [api, root, problems])
+
   // The reduced panel and the hint, while only math is selected.
   useEffect(() => {
     const root = containerRef.current
@@ -125,30 +141,62 @@ export function SheetCanvas({ onReady, initialElements, fileMenu, sheetPanel }: 
   }, [api])
 
   return (
-    <div ref={containerRef} style={{ width: '100%', height: '100%' }}>
+    <div
+      ref={(node) => {
+        containerRef.current = node
+        setRoot(node)
+      }}
+      style={{ width: '100%', height: '100%' }}
+    >
       <Excalidraw
         excalidrawAPI={setApi}
         initialData={{ elements: initialElements ?? [], appState: INITIAL_APP_STATE }}
         UIOptions={UI_OPTIONS}
+        // Nothing is drawn top right: the app's items go into More tools.
+        // This prop is where Excalidraw hands over its app state on each render.
         renderTopRightUI={(_isMobile, appState) =>
-          api && (
+          api &&
+          root &&
+          moreTools &&
+          createPortal(
             <>
-              <AddMathButton
-                placing={isPlacing(appState)}
-                onPress={() => {
+              <div className="math-tools__heading">Math</div>
+              <MoreToolsItem
+                icon="∑"
+                label="Add math"
+                shortcut="M"
+                pressed={isPlacing(appState)}
+                title="Add math — M"
+                onSelect={() => {
+                  closeMoreTools(root)
                   startPlacing(api)
-                  // The button would keep the keyboard: Esc and M go to the canvas.
+                  // The item would keep the keyboard: Esc and M go to the canvas.
                   focusCanvas()
                 }}
               />
               {sheetPanel && (
-                <SheetButton
-                  open={appState.openSidebar?.name === SHEET_PANEL}
-                  problems={sheetPanel.problems}
-                  onPress={() => api.toggleSidebar({ name: SHEET_PANEL, tab: lastTab.current })}
-                />
+                <MoreToolsItem
+                  icon={<SettingsIcon />}
+                  label="Math Settings"
+                  pressed={appState.openSidebar?.name === SHEET_PANEL}
+                  title="Math Settings: variables, problems and settings"
+                  // `sidebar-trigger`: a floating panel's outside click ignores
+                  // it, rather than closing the panel the item then reopens.
+                  className="sidebar-trigger"
+                  onSelect={() => {
+                    closeMoreTools(root)
+                    api.toggleSidebar({ name: SHEET_PANEL, tab: lastTab.current })
+                  }}
+                >
+                  {sheetPanel.problems > 0 && (
+                    <span className="math-tools__badge" aria-label={`${sheetPanel.problems} problems`}>
+                      {sheetPanel.problems}
+                    </span>
+                  )}
+                </MoreToolsItem>
               )}
-            </>
+            </>,
+            moreTools,
           )
         }
       >
@@ -172,11 +220,13 @@ export function SheetCanvas({ onReady, initialElements, fileMenu, sheetPanel }: 
                   <Sidebar.TabTrigger tab="variables">Variables</Sidebar.TabTrigger>
                   <Sidebar.TabTrigger tab="problems">Problems</Sidebar.TabTrigger>
                   {sheetPanel.settings && <Sidebar.TabTrigger tab="settings">Settings</Sidebar.TabTrigger>}
+                  {sheetPanel.constants && <Sidebar.TabTrigger tab="constants">Constants</Sidebar.TabTrigger>}
                 </Sidebar.TabTriggers>
               </Sidebar.Header>
               <Sidebar.Tab tab="variables">{sheetPanel.variables}</Sidebar.Tab>
               <Sidebar.Tab tab="problems">{sheetPanel.problemsTab}</Sidebar.Tab>
               {sheetPanel.settings && <Sidebar.Tab tab="settings">{sheetPanel.settings}</Sidebar.Tab>}
+              {sheetPanel.constants && <Sidebar.Tab tab="constants">{sheetPanel.constants}</Sidebar.Tab>}
             </Sidebar.Tabs>
           </Sidebar>
         )}
@@ -185,58 +235,56 @@ export function SheetCanvas({ onReady, initialElements, fileMenu, sheetPanel }: 
   )
 }
 
-/**
- * ∑ Add math, the primary button, top right (docs/spec-v1.md section 8). It
- * starts placing, the same as M; pressed again while placing, it keeps placing.
- */
-function AddMathButton({ placing, onPress }: { placing: boolean; onPress: () => void }) {
+function isPanelTab(tab: string | undefined): tab is SheetPanelTab {
+  return tab === 'variables' || tab === 'problems' || tab === 'settings' || tab === 'constants'
+}
+
+/** One item, in the dropdown's own markup so it takes Excalidraw's styles. */
+function MoreToolsItem({
+  icon,
+  label,
+  shortcut,
+  pressed,
+  title,
+  className,
+  onSelect,
+  children,
+}: {
+  icon: ReactNode
+  label: string
+  shortcut?: string
+  pressed: boolean
+  title: string
+  className?: string
+  onSelect: () => void
+  children?: ReactNode
+}) {
+  const classes = ['dropdown-menu-item', 'dropdown-menu-item-base']
+  if (pressed) classes.push('dropdown-menu-item--selected')
+  if (className) classes.push(className)
   return (
-    <button
-      type="button"
-      className="add-math-button"
-      aria-pressed={placing}
-      title="Add math — M"
-      onClick={onPress}
-    >
-      <span aria-hidden="true">∑</span> Add math <kbd>M</kbd>
+    <button type="button" className={classes.join(' ')} aria-pressed={pressed} title={title} onClick={onSelect}>
+      <div className="dropdown-menu-item__icon" aria-hidden="true">
+        {icon}
+      </div>
+      <div className="dropdown-menu-item__text">
+        {label}
+        {children}
+      </div>
+      {shortcut && <div className="dropdown-menu-item__shortcut">{shortcut}</div>}
     </button>
   )
 }
 
-function isPanelTab(tab: string | undefined): tab is SheetPanelTab {
-  return tab === 'variables' || tab === 'problems' || tab === 'settings'
-}
-
-/**
- * Sheet, beside Add math: opens and closes the panel, with a red badge counting
- * errors and warnings while the sheet has any (docs/spec-v1.md section 8). It
- * carries `sidebar-trigger`, so a floating panel's outside click ignores it
- * rather than closing the panel the button then reopens.
- */
-function SheetButton({
-  open,
-  problems,
-  onPress,
-}: {
-  open: boolean
-  problems: number
-  onPress: () => void
-}) {
+/** Math Settings' icon: three sliders, drawn like Excalidraw's own tool icons. */
+function SettingsIcon() {
   return (
-    <button
-      type="button"
-      className="sidebar-trigger sheet-button"
-      aria-pressed={open}
-      title="Sheet: variables, problems and settings"
-      onClick={onPress}
-    >
-      Sheet
-      {problems > 0 && (
-        <span className="sheet-button__badge" aria-label={`${problems} problems`}>
-          {problems}
-        </span>
-      )}
-    </button>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+      <path d="M4 7h9m4 0h3M4 12h3m4 0h9M4 17h11m4 0h1" />
+      <circle cx="15" cy="7" r="2" />
+      <circle cx="9" cy="12" r="2" />
+      <circle cx="17" cy="17" r="2" />
+    </svg>
   )
 }
 
@@ -263,7 +311,7 @@ function SheetWelcome({ fileMenu }: { fileMenu?: FileMenu }) {
   )
 }
 
-export const WELCOME_HINT = 'Press M or click Add math, then click the sheet to place math'
+export const WELCOME_HINT = 'Press M, or choose Add math under More tools, then click the sheet to place math'
 
 /**
  * The ☰ menu: the app's file items first, then the Excalidraw items v1 keeps.

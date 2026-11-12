@@ -1,5 +1,6 @@
-import { useState } from 'react'
-import { typesetUnit } from '../math/evaluate.ts'
+import { useMemo, useState } from 'react'
+import type { DisplaySettings } from '../math/display.ts'
+import { listConstants, typesetUnit } from '../math/evaluate.ts'
 import { texToHtml, useKatexReady } from '../overlay/katex.ts'
 import {
   problemRows,
@@ -97,6 +98,71 @@ export function ProblemsTab({ sheet, onJump }: TabProps) {
             </li>
           ))}
         </ul>
+      )}
+    </div>
+  )
+}
+
+/**
+ * The built-in constants (docs/spec-v1.md section 8, Constants tab): a filter
+ * box, then every constant in its group, each as Mathcad lists one: its
+ * symbol, its value in the sheet's system, then what it is and the names a
+ * line can read it by. Nothing here is the sheet's, so no row jumps.
+ */
+export function ConstantsTab({ settings }: { settings: DisplaySettings }) {
+  const [filter, setFilter] = useState('')
+  const katexReady = useKatexReady()
+  const all = useMemo(() => listConstants(settings), [settings])
+  const wanted = filter.trim().toLowerCase()
+  const groups = all
+    .map((group) => ({
+      ...group,
+      rows: group.rows.filter((row) =>
+        [row.name, row.short ?? '', row.label].some((text) => text.toLowerCase().includes(wanted)),
+      ),
+    }))
+    .filter((group) => group.rows.length > 0)
+  return (
+    <div className="sheet-panel">
+      <input
+        className="sheet-panel__filter"
+        type="search"
+        placeholder="Filter constants"
+        aria-label="Filter constants"
+        value={filter}
+        onChange={(event) => setFilter(event.target.value)}
+      />
+      {groups.length === 0 ? (
+        <p className="sheet-panel__empty">No constant matches.</p>
+      ) : (
+        groups.map((group) => (
+          <section key={group.label} className="sheet-panel__group" aria-label={group.label}>
+            <h3 className="sheet-panel__group-label">{group.label}</h3>
+            <ul className="sheet-panel__list">
+              {group.rows.map((row) => {
+                const names = row.short ? `${row.short} or ${row.name}` : row.name
+                const symbol = katexReady ? texToHtml(row.tex) : null
+                const value = katexReady ? texToHtml(row.valueTex) : null
+                return (
+                  <li
+                    key={row.name}
+                    className="sheet-panel__constant"
+                    aria-label={`${row.label}: ${names} = ${row.value}`}
+                  >
+                    <span className="sheet-panel__constant-symbol">
+                      {symbol === null ? (row.short ?? row.name) : <span dangerouslySetInnerHTML={{ __html: symbol }} />}
+                    </span>
+                    <span className="sheet-panel__constant-value">
+                      {value === null ? row.value : <span dangerouslySetInnerHTML={{ __html: value }} />}
+                    </span>
+                    <span className="sheet-panel__constant-label">{row.label}</span>
+                    <code className="sheet-panel__constant-names">{names}</code>
+                  </li>
+                )
+              })}
+            </ul>
+          </section>
+        ))
       )}
     </div>
   )

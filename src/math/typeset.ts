@@ -55,6 +55,7 @@ const GREEK = [
  * - any other multi-letter base is one italic word (`Re`, not R·e).
  */
 export function nameTex(name: string): string {
+  if (name === 'hbar') return '\\hbar'
   const cut = name.indexOf('_')
   const base = cut === -1 ? name : name.slice(0, cut)
   const sub = cut === -1 ? '' : name.slice(cut + 1)
@@ -81,6 +82,7 @@ function wordTex(word: string): string {
 
 function subscriptTex(sub: string): string {
   if (GREEK.includes(sub)) return `\\${sub}`
+  if (sub === 'inf') return '\\infty'
   if (/^(?:\p{L}|\d+)$/u.test(sub)) return sub
   return `\\mathrm{${sub.replace(/\$/g, '\\$').replace(/_/g, '\\_')}}`
 }

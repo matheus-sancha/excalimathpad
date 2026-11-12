@@ -87,7 +87,7 @@ One name per concept, used the same in conversation, code, tests, docs and the U
 | **Sheet file** | Excalidraw scene JSON + the `excalimathpad` block. The sheet's only durable form |
 | **Dirty** | The scene or settings changed since the last save or open |
 | **Recovery copy** | The whole sheet file, its name and its file handle in IndexedDB. Exists only while dirty |
-| **Sheet panel** | Excalidraw's sidebar with the tabs Variables, Problems and Settings |
+| **Sheet panel** | Excalidraw's sidebar with the tabs Variables, Problems, Settings and Constants |
 | **Title** | A math element's optional name: plain text on one line, shown in a header above its lines. Never evaluated |
 | **Placing** | The UI mode between Add math and the click that creates the anchor |
 | **Print pages** | The sheet laid out for its Page setting. Computed at print time, never stored |
@@ -514,6 +514,11 @@ shows in composed base units (`kg/(m·s)`).
 **The slot's list per kind** is a fixed list in app code. For a pressure: Pa, kPa, MPa,
 mbar, bar, psi, atm.
 
+**Torque is listed with energy.** The two have the same dimension, so a result can't tell
+the app which it is: a torque shows in `J` until a unit is chosen. The energy list, named
+"Energy, torque" in the Settings tab, ends with N·m, kN·m, lbf·ft and lbf·in, and Custom can
+set one of them for every such result on the sheet.
+
 ### App units
 
 A fixed list, registered once at engine setup, so every sheet has the same ones. The
@@ -572,6 +577,31 @@ These rules apply everywhere a number shows: result cells, Variables, list summa
 the slot's list, solve details and print. The exceptions: a solve detail's residual and
 bracket can read as they fall, and plot axis ticks use the chart's own round values.
 
+### Constants
+
+Every constant math.js has is built in, under math.js's name: `pi`, `e`, `gravity`,
+`speedOfLight`, `gasConstant`, about sixty in all. The common ones can also be written by
+a short name, as in Mathcad:
+
+| Short | Constant | Short | Constant |
+|---|---|---|---|
+| `c` | Speed of light | `sigma` | Stefan–Boltzmann constant |
+| `G` | Gravitational constant | `e_c` | Elementary charge |
+| `h` | Planck constant | `epsilon_0`, `mu_0`, `Z_0` | Vacuum permittivity, permeability, impedance |
+| `hbar` | Reduced Planck constant | `m_e`, `m_p`, `m_n`, `m_u` | Electron, proton, neutron and atomic mass |
+| `R` | Molar gas constant | `a_0` | Bohr radius |
+| `k` | Boltzmann constant | `alpha` | Fine-structure constant |
+| `N_A` | Avogadro constant | `R_inf` | Rydberg constant |
+
+- **`g` is the gram.** Standard gravity has no short name: it is `gravity`.
+- **`h` is the Planck constant, so the hour is `hr`.** `2 hr`, `m^3/hr`, `km/hr`. In a display
+  unit, which is read as units only, `in km/h` still means per hour.
+- **A sheet may take a short name** (`R = 10 kohm`, `k = 3`), with no warning. From then on
+  the name is the sheet's on every line: used above its line it is `R is defined below`,
+  and after a failed definition `R has an error above`, never the constant.
+- A constant shows as any result does, in the sheet's unit system and Digits.
+- The list is in the Sheet panel's [Constants tab](#sheet-panel).
+
 ### Warnings
 
 **A name that shadows a unit or built-in** gets an amber `⚠`, in the gutter and the
@@ -584,6 +614,8 @@ Problems tab. The name wins, and the warning doesn't change a result.
 - A parameter that hides a **sheet function** doesn't warn (`f(Re, r)` hides `Re(Q)` on
   purpose).
 - Names that aren't units or built-ins don't change.
+- A constant's short name is free to take: `R`, `k` and `c` don't warn. `h` and `hbar` do,
+  being units as well.
 
 **A function body name not defined above** gets an amber `⚠` on the definition.
 
@@ -744,12 +776,15 @@ Decided in: [file](https://github.com/matheus-sancha/excalimathpad/issues/12),
 
 ## 8. App chrome
 
-Built in M1 (☰ file items, file name, Add math) and M2 (Sheet button and panel). Print…
+Built in M1 (☰ file items, file name, Add math) and M2 (Math Settings and the Sheet panel). Print…
 and the Page row arrive in M5; until then Ctrl+P is the browser's own and prints the
 screen. There is no app bar: the chrome lives inside Excalidraw's own UI slots.
 
 ```
-☰  ● pump-sizing.excalimathpad                  ∑ Add math (M) · Library · Sheet ②
+☰  ● pump-sizing.excalimathpad      [ Excalidraw's toolbar … More tools ② ]      Library
+                                                    Math
+                                                    ∑ Add math        M
+                                                    Math Settings ②
 ```
 
 - **☰ menu:** Open… (Ctrl+O), Save (Ctrl+S), Save as… (Ctrl+Shift+S) and Print… (Ctrl+P)
@@ -760,17 +795,21 @@ screen. There is no app bar: the chrome lives inside Excalidraw's own UI slots.
 - **Window title:** the name without its extension, with `●` while dirty: `● pump-sizing`.
   An unsaved sheet reads `● Untitled`. While printing, the title drops the mark, so the PDF is
   named `pump-sizing.pdf`, because Save as PDF names the file from the title.
-- **∑ Add math** is the primary button, labelled with its shortcut **M**. It reads as
-  pressed while placing.
-- **Sheet** opens and closes the panel, with a red badge counting errors and warnings
-  while the sheet has problems.
+- **More tools**, Excalidraw's own dropdown at the end of its toolbar, holds the app's two
+  items under a **Math** heading, below Excalidraw's. The app has no buttons of its own on
+  the canvas. Choosing an item closes the dropdown.
+- **∑ Add math** is the first, labelled with its shortcut **M**. It reads as pressed while
+  placing, and so does the More tools button, as it does for Excalidraw's Frame tool.
+- **Math Settings** opens and closes the Sheet panel, and reads as pressed while it is open.
+  It carries a red badge counting errors and warnings while the sheet has problems; the
+  More tools button carries the same badge, so the count shows with the dropdown closed.
 - An empty untitled sheet shows Excalidraw's welcome screen: the app's name, the hint
-  "Press M or click Add math, then click the sheet to place math", and Open… (Ctrl+O).
+  "Press M, or choose Add math under More tools, then click the sheet to place math", and Open… (Ctrl+O).
   Excalidraw's own logo and collaboration items are left out.
 
 ### Add math
 
-Pressing Add math or **M** turns the cursor into a crosshair with a ghost box. The next
+Choosing Add math or pressing **M** turns the cursor into a crosshair with a ghost box. The next
 click on the canvas places the element there, selected, with its first line open for
 typing. It can be placed on top of an existing element. **Esc** before clicking cancels.
 Placing isn't in the scene and isn't an undo step until the click.
@@ -785,7 +824,9 @@ Placing isn't in the scene and isn't an undo step until the click.
 
 ### Sheet panel
 
-Excalidraw's docked sidebar. Open at launch on a wide window, on Variables, or on Problems
+Excalidraw's docked sidebar, opened by Math Settings. Its four tabs, the dock button and
+the close button all fit its width (the panel is 384 px wide, since Excalidraw's own 302 px is too narrow for four tabs), so the close button is never cut by the window. Open at
+launch on a wide window, on Variables, or on Problems
 if the opened sheet has any. Open or closed is remembered per browser, not in the file. On
 a small window it floats over the canvas, and closes after a jump or a click on the canvas.
 
@@ -794,6 +835,7 @@ a small window it floats over the canvas, and closes after a jump or a click on 
 | **Variables** | A filter box, then every name in reading order, grouped by element, labelled by the element's position. Row: typeset name, value, unit, in the unit system and Digits. A name defined twice appears twice. A line with an error shows "error". A list shows its summary (`30 values, 1 … 30 L/s`). A function shows its signature, `H_s(Q)`, with `function` or `solve function` as the value and a blank unit. Comments and notes don't appear |
 | **Problems** | Errors `●` and warnings `⚠` in one list in reading order, each with its message and "element, line n · name". Comments and notes don't appear |
 | **Settings** | Unit system, and for Custom its kind → unit table. Digits, 2 to 15. Page: A4 or Letter, portrait or landscape |
+| **Constants** | A filter box, then every [built-in constant](#constants) in its group. Row: its symbol typeset and its value in the unit system and Digits, then what it is and the names a line reads it by (`c or speedOfLight`). The filter matches names and descriptions. Nothing here is the sheet's, so a row doesn't jump |
 
 - **An element with a title is named by it** in Variables and Problems ("Pipe flow, line 3"),
   in place of its position. Built with the panel (#58).
@@ -1582,8 +1624,14 @@ Changes line if it changes behaviour.
 - The deploy command, `wrangler pages deploy dist`, against Cloudflare's current documentation. **Passed
   (#83):** Wrangler 4's own `pages deploy --help` lists the directory, `--project-name`, `--branch` and
   `--commit-hash`, and the wrangler-action's README shows the same command. Cloudflare's documentation site
-  couldn't be reached from the build session, so two things stay unread: the token permission the upload
-  needs, and that `--branch=main` makes a deployment the production one. The first real deploy shows both.
+  couldn't be reached from the build session, so the first deploy settled the rest, on 2026-11-12: a token
+  with the one permission Account, Cloudflare Pages, Edit uploaded the build, and with `--branch=main` it was
+  served at `excalimathpad.pages.dev`, the production address, where Matheus read the stamp
+  `c42e72e · 2026-11-12`. The project was made with `wrangler pages project create excalimathpad
+  --production-branch=main`.
+- A token that can only edit Pages fails `wrangler whoami`, which reads account details. **Found (#83):**
+  `wrangler pages project list`, with `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` set, is the check
+  that matches the deploy.
 - The address opening through the work laptop's network.
 - Excalidraw's fonts on the work laptop. No asset path is set in `src/`, so they are expected to come from
   Excalidraw's CDN, a second host a filter could block. Read from the code, not seen in a browser.
@@ -1834,3 +1882,24 @@ Changes line if it changes behaviour.
   build stamp in the ☰ menu and no versioning while Matheus is the only user. What the work laptop allows is
   unknown, so a by-hand check closes the milestone (#83 to #85). M6 keeps the service worker, manifest, icons,
   fonts and file association. An Obsidian plugin is planned after v1 and joins "Not in v1".
+- 2026-11-12, [section 8](#8-app-chrome) (asked for by Matheus in chat on 2026-11-12): Add math and the Sheet button
+  leave the canvas's top right and become two items in Excalidraw's More tools dropdown, under a Math heading. Sheet
+  is renamed Math Settings; the panel it opens keeps its name in this spec, Sheet panel. The Engineer's additions, for
+  Matheus to confirm on the PR: the More tools button carries the problem badge and reads as selected while placing,
+  since the items are out of sight while the dropdown is closed; the welcome hint reads "Press M, or choose Add math
+  under More tools, then click the sheet to place math". Excalidraw has no slot for More tools, so the items are
+  drawn into the dropdown's own box, pinned by contract tests. The panel's close button was cut by the window on a
+  wide window: the tabs now give way so the header fits.
+- 2026-11-12, [section 5](#unit-systems) (asked for by Matheus in chat on 2026-11-12): the unit slot's list for an
+  energy also offers the torque units N·m, kN·m, lbf·ft and lbf·in, and the kind reads "Energy, torque" in the
+  Settings tab. A torque still shows in `J` by default, since it has energy's dimension.
+- 2026-11-12, [sections 5](#constants) and [8](#sheet-panel) (asked for by Matheus in chat on 2026-11-12: a
+  Constants list in the panel, in Mathcad's format; "Use g for grams and hr (hrs) for hour. Keep gravity";
+  "Everything on the engine"): the Sheet panel gains a Constants tab listing every built-in constant. The common ones
+  take Mathcad's short names, `c`, `G`, `h`, `hbar`, `R`, `k`, `N_A`, `sigma` and the rest of the table in section 5.
+  `g` stays the gram and gravity stays `gravity`; `h` is the Planck constant, so the hour is written `hr`, and the
+  unit slot's lists read `m^3/hr`, `km/hr`, `kg/hr`. The short names are the Engineer's, from memory of Mathcad's
+  list, which couldn't be read from the build session: for Matheus to confirm on the PR. Also the Engineer's: a
+  sheet's own `R` or `k` is an error above its line, where a unit's name would fall back with a warning, because a
+  line that quietly read the gas constant would give a wrong number; taking a short name doesn't warn; the panel
+  is 384 px wide so four tabs fit. `hbar` no longer reads as the hectobar.

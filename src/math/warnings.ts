@@ -11,7 +11,8 @@ import {
  * warning never changes a result: the name wins, and the line's value still
  * shows. Pure: what the sheet and the engine know comes in as `WarningFacts`.
  *
- * - **A name that shadows a unit or built-in:** a variable, a function name or
+ * - **A name that shadows a unit or built-in** (a constant's short name aside,
+ *   unless it is also a unit, as `h` is)**:** a variable, a function name or
  *   a parameter named like one of math.js's units (the app units included) or
  *   built-ins. A parameter that hides a sheet function doesn't warn
  *   (`f(Re, r)` hides `Re(Q)` on purpose).
@@ -30,6 +31,8 @@ export interface WarningFacts {
   isUnit(name: string): boolean
   /** A name math.js has built in (`pi`, `sqrt`). */
   isBuiltIn(name: string): boolean
+  /** A constant's short name (`c`, `k`, `R`): a sheet may take it without a warning. */
+  isShortConstant(name: string): boolean
   /** The name has a value in the sheet's scope before this line runs. */
   inScope(name: string): boolean
   /** The value it has there is a function the sheet defined. */
@@ -49,15 +52,20 @@ export function lineWarnings(node: MathNode, facts: WarningFacts): string[] {
   }
   const what = (name: string) => (facts.isUnit(name) ? 'the unit' : 'the built-in')
   const clashes = (name: string) => facts.isUnit(name) || facts.isBuiltIn(name)
+  // A short constant the sheet also defines is the sheet's name: used before
+  // its line it is an error, not the constant (see `SheetScope`).
+  const taken = (name: string) => facts.isShortConstant(name) && (facts.definedAbove(name) || facts.definedBelow(name))
 
   for (const { name, parameter } of definedNames(node)) {
     if (!clashes(name)) continue
     if (parameter && facts.isSheetFunction(name)) continue
+    // `R`, `k`, `c` are everyday variable names: taking one is no problem to flag.
+    if (facts.isShortConstant(name) && !facts.isUnit(name)) continue
     add(`${name} shadows ${what(name)} ${name}`)
   }
 
   for (const name of usedNames(node)) {
-    if (!clashes(name) || facts.inScope(name)) continue
+    if (!clashes(name) || facts.inScope(name) || taken(name)) continue
     if (facts.failed(name)) add(`${name} reads as ${what(name)} ${name} here: its definition failed`)
     else if (facts.definedBelow(name)) {
       add(`${name} reads as ${what(name)} ${name} here: the variable is defined below`)
@@ -67,7 +75,7 @@ export function lineWarnings(node: MathNode, facts: WarningFacts): string[] {
   for (const definition of functionDefinitions(node)) {
     const own = new Set([definition.name, ...definition.params])
     for (const name of bodyNames(definition.expr)) {
-      if (own.has(name) || clashes(name)) continue
+      if (own.has(name) || (clashes(name) && !taken(name))) continue
       if (facts.inScope(name) || facts.definedAbove(name)) continue
       add(`${name} isn't defined above this line`)
     }
@@ -99,6 +107,7 @@ export function solveWarnings(parts: SolveWarningParts, facts: WarningFacts): st
   }
   const what = (name: string) => (facts.isUnit(name) ? 'the unit' : 'the built-in')
   const clashes = (name: string) => facts.isUnit(name) || facts.isBuiltIn(name)
+  const taken = (name: string) => facts.isShortConstant(name) && (facts.definedAbove(name) || facts.definedBelow(name))
   const { name, params, unknown } = parts
   const defined = [
     { name, parameter: false },
@@ -108,12 +117,13 @@ export function solveWarnings(parts: SolveWarningParts, facts: WarningFacts): st
   for (const entry of defined) {
     if (!clashes(entry.name)) continue
     if (entry.parameter && facts.isSheetFunction(entry.name)) continue
+    if (facts.isShortConstant(entry.name) && !facts.isUnit(entry.name)) continue
     add(`${entry.name} shadows ${what(entry.name)} ${entry.name}`)
   }
   const sides = [parts.lhs, parts.rhs, parts.guess]
   if (params === null) {
     for (const used of sides.flatMap(usedNames)) {
-      if (used === unknown || !clashes(used) || facts.inScope(used)) continue
+      if (used === unknown || !clashes(used) || facts.inScope(used) || taken(used)) continue
       if (facts.failed(used)) add(`${used} reads as ${what(used)} ${used} here: its definition failed`)
       else if (facts.definedBelow(used)) {
         add(`${used} reads as ${what(used)} ${used} here: the variable is defined below`)
@@ -123,7 +133,7 @@ export function solveWarnings(parts: SolveWarningParts, facts: WarningFacts): st
   }
   const own = new Set([name, ...params, unknown])
   for (const used of sides.flatMap(bodyNames)) {
-    if (own.has(used) || clashes(used)) continue
+    if (own.has(used) || (clashes(used) && !taken(used))) continue
     if (facts.inScope(used) || facts.definedAbove(used)) continue
     add(`${used} isn't defined above this line`)
   }
