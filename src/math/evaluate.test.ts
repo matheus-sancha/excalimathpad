@@ -867,6 +867,17 @@ describe('unit slot (docs/spec-v1.md section 5)', () => {
   const slots = (source: string) =>
     evaluateSheet([{ id: 'b', source }]).get('b')!.map((line) => line.unitSlot)
 
+  it('offers torque units for a torque, which has energy’s dimension', () => {
+    const slot = slots('F = 100 N\nr = 0.5 m\nT = F * r')[2]!
+    const options = new Map(slot.options.map((option) => [option.unit, option.text]))
+
+    expect(options.get('N m')).toBe('50 N m')
+    expect(options.get('kN m')).toBe('0.05 kN m')
+    expect(options.get('lbf ft')).toBe('36.88 lbf ft')
+    expect(options.get('lbf in')).toBe('442.5 lbf in')
+    expect(options.get('J')).toBe('50 J')
+  })
+
   it('offers the units of the result’s kind, each with the value in it, and Sheet units', () => {
     const [slot] = slots('dP = 45430 Pa * 1')
     expect(slot).toMatchObject({ kind: 'pressure', system: '45.43 kPa', chosen: null })

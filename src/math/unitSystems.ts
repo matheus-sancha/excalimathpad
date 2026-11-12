@@ -169,7 +169,7 @@ export const KIND_LABELS: Record<Kind, string> = {
   acceleration: 'Acceleration',
   force: 'Force',
   pressure: 'Pressure',
-  energy: 'Energy',
+  energy: 'Energy, torque',
   power: 'Power',
   density: 'Density',
   dynamicViscosity: 'Dynamic viscosity',
@@ -195,7 +195,9 @@ export const SLOT_UNITS: Record<Kind, readonly string[]> = {
   acceleration: ['m/s^2', 'ft/s^2'],
   force: ['N', 'kN', 'MN', 'lbf', 'kgf', 'tonf', 'tf'],
   pressure: ['Pa', 'kPa', 'MPa', 'mbar', 'bar', 'psi', 'atm'],
-  energy: ['J', 'kJ', 'MJ', 'kWh', 'BTU', 'kcal'],
+  // Torque has energy's dimension, so its units are offered here too: a
+  // result can't tell the app which of the two it is.
+  energy: ['J', 'kJ', 'MJ', 'kWh', 'BTU', 'kcal', 'N m', 'kN m', 'lbf ft', 'lbf in'],
   power: ['W', 'kW', 'MW', 'hp', 'BTU/h'],
   density: ['kg/m^3', 'g/cm^3', 'lbm/ft^3'],
   dynamicViscosity: ['Pa s', 'mPa s', 'cP', 'poise'],

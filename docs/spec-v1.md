@@ -514,6 +514,11 @@ shows in composed base units (`kg/(m·s)`).
 **The slot's list per kind** is a fixed list in app code. For a pressure: Pa, kPa, MPa,
 mbar, bar, psi, atm.
 
+**Torque is listed with energy.** The two have the same dimension, so a result can't tell
+the app which it is: a torque shows in `J` until a unit is chosen. The energy list, named
+"Energy, torque" in the Settings tab, ends with N·m, kN·m, lbf·ft and lbf·in, and Custom can
+set one of them for every such result on the sheet.
+
 ### App units
 
 A fixed list, registered once at engine setup, so every sheet has the same ones. The
@@ -1857,3 +1862,6 @@ Changes line if it changes behaviour.
   under More tools, then click the sheet to place math". Excalidraw has no slot for More tools, so the items are
   drawn into the dropdown's own box, pinned by contract tests. The panel's close button was cut by the window on a
   wide window: the tabs now give way so the header fits.
+- 2026-11-12, [section 5](#unit-systems) (asked for by Matheus in chat on 2026-11-12): the unit slot's list for an
+  energy also offers the torque units N·m, kN·m, lbf·ft and lbf·in, and the kind reads "Energy, torque" in the
+  Settings tab. A torque still shows in `J` by default, since it has energy's dimension.
