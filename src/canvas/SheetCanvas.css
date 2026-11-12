@@ -1,58 +1,17 @@
-/* ∑ Add math (docs/spec-v1.md section 8): the primary button, in Excalidraw's
-   top-right slot, drawn in its own colours so it follows the theme. */
-.add-math-button {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.375rem;
-  height: var(--lg-button-size, 2.25rem);
-  padding: 0 0.75rem;
-  border: 1px solid transparent;
-  border-radius: var(--border-radius-lg, 0.75rem);
-  background: var(--color-primary, #6965db);
-  color: var(--color-surface-lowest, #fff);
-  font: inherit;
-  font-size: 0.875rem;
+/* Add math and Math Settings (docs/spec-v1.md section 8) are items in
+   Excalidraw's More tools dropdown, in its own markup and styles. The heading
+   matches Excalidraw's "Generate". */
+.excalidraw .math-tools__heading {
+  margin: 6px 0;
+  font-size: 14px;
   font-weight: 600;
-  white-space: nowrap;
-  cursor: pointer;
 }
 
-.add-math-button:hover {
-  background: var(--color-primary-darker, #5b57d1);
-}
-
-.add-math-button[aria-pressed='true'] {
-  background: var(--color-primary-darkest, #4a47b1);
-}
-
-.sheet-button {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  height: var(--lg-button-size, 2.25rem);
-  margin-left: 0.5rem;
-  padding: 0 0.75rem;
-  border: 0;
-  border-radius: var(--border-radius-lg, 0.75rem);
-  background: var(--island-bg-color, #fff);
-  box-shadow: var(--shadow-island, 0 0 0 1px rgba(0, 0, 0, 0.1));
-  color: var(--color-on-surface, #1e1e1e);
-  font: inherit;
-  font-size: 0.875rem;
-  white-space: nowrap;
-  cursor: pointer;
-}
-
-.sheet-button:hover,
-.sheet-button[aria-pressed='true'] {
-  background: var(--color-surface-primary-container, #e0dfff);
-}
-
-/* Section 8: a red badge counting errors and warnings. */
-.sheet-button__badge {
+/* Section 8: a red badge counting errors and warnings, on Math Settings. */
+.excalidraw .math-tools__badge,
+[data-math-problems] .App-toolbar__extra-tools-trigger::after {
   min-width: 1.125rem;
   height: 1.125rem;
-  margin-left: 0.375rem;
   padding: 0 0.25rem;
   box-sizing: border-box;
   border-radius: 0.5625rem;
@@ -64,14 +23,30 @@
   text-align: center;
 }
 
-.add-math-button kbd {
-  padding: 0 0.3125rem;
-  border: 1px solid currentColor;
-  border-radius: 0.25rem;
-  font: inherit;
-  font-size: 0.75rem;
-  line-height: 1.125rem;
-  opacity: 0.85;
+.excalidraw .math-tools__badge {
+  display: inline-block;
+  margin-left: 0.375rem;
+}
+
+/* While More tools is closed its items are out of sight, so its button
+   carries the same count, and reads as selected while Add math is placing,
+   as it does for Excalidraw's own Frame tool. */
+[data-math-problems] .App-toolbar__extra-tools-trigger {
+  position: relative;
+  overflow: visible;
+}
+
+[data-math-problems] .App-toolbar__extra-tools-trigger::after {
+  content: var(--math-problems);
+  position: absolute;
+  top: -0.375rem;
+  right: -0.375rem;
+  pointer-events: none;
+}
+
+[data-math-placing] .App-toolbar__extra-tools-trigger {
+  background: var(--color-primary-light);
+  color: var(--color-primary);
 }
 
 /* The reduced panel (docs/spec-v1.md section 4, Selected math element): while
@@ -109,10 +84,30 @@
   background: var(--default-bg-color);
 }
 
+/* Three labelled tabs, the dock button and the close button have to fit the
+   panel's fixed width, so the tabs give way: they shrink, and their padding is
+   small enough that the close button stays inside the window. */
+.excalidraw .sheet-sidebar .sidebar__header {
+  gap: 0.25rem;
+}
+
+.excalidraw .sheet-sidebar .sidebar-triggers {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.excalidraw .sheet-sidebar .sidebar__header__buttons {
+  flex: none;
+}
+
 .excalidraw .sheet-sidebar .sidebar-tab-trigger {
+  flex: 0 1 auto;
+  min-width: 0;
   width: auto;
   height: 2rem;
-  padding: 0 0.75rem;
+  padding: 0 0.4375rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
   border: none;
   font-size: 0.8125rem;
   white-space: nowrap;

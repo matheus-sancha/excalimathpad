@@ -16,7 +16,18 @@ const renderApp = (props: Parameters<typeof App>[0] = {}) => {
 
 const mathElements = () => screen.queryAllByRole('list', { name: 'Lines' })
 const lineField = () => screen.queryByRole<HTMLInputElement>('textbox', { name: 'Line source' })
-const addMath = () => screen.findByRole('button', { name: /Add math/ })
+
+/** Opens Excalidraw's More tools, where Add math and Math Settings are (section 8). */
+async function openMoreTools() {
+  if (!document.querySelector('.math-tools')) fireEvent.click(await screen.findByTitle('More tools'))
+  await waitFor(() => expect(document.querySelector('.math-tools button')).not.toBeNull())
+}
+const addMath = async () => {
+  await openMoreTools()
+  return screen.getByRole('button', { name: /Add math/ })
+}
+/** More tools' button reads as selected while placing, the dropdown being closed. */
+const placing = () => document.querySelector('[data-math-placing]') !== null
 
 /** The app, loaded and holding its clean mark. */
 async function ready() {
@@ -68,14 +79,16 @@ describe('App', () => {
   })
 
   describe('Add math (docs/spec-v1.md section 8)', () => {
-    it('the button starts placing, and the click places an element ready to type in', async () => {
+    it('the item starts placing and closes More tools, and the click places an element ready to type in', async () => {
       renderApp()
       await ready()
-      const button = await addMath()
-      expect(button).toHaveAttribute('aria-pressed', 'false')
+      const item = await addMath()
+      expect(item).toHaveAttribute('aria-pressed', 'false')
+      expect(placing()).toBe(false)
 
-      fireEvent.click(button)
-      expect(button).toHaveAttribute('aria-pressed', 'true')
+      fireEvent.click(item)
+      await waitFor(() => expect(document.querySelector('.math-tools')).toBeNull())
+      expect(placing()).toBe(true)
       // The keyboard goes back to the canvas, so Esc and M reach it.
       expect(document.activeElement).toHaveClass('excalidraw')
 
@@ -83,37 +96,39 @@ describe('App', () => {
 
       expect(mathElements()).toHaveLength(1)
       expect(lineField()).toHaveFocus()
-      expect(button).toHaveAttribute('aria-pressed', 'false')
+      expect(placing()).toBe(false)
       expect(screen.queryByText(WELCOME_HINT)).toBeNull()
       await waitFor(() => expect(document.title).toBe('● Untitled'))
     })
 
-    it('pressed again while placing, the button keeps placing', async () => {
+    it('chosen again while placing, the item reads as pressed and keeps placing', async () => {
       renderApp()
       await ready()
-      const button = await addMath()
 
-      fireEvent.click(button)
-      fireEvent.click(button)
+      fireEvent.click(await addMath())
+      await waitFor(() => expect(document.querySelector('.math-tools')).toBeNull())
+      const again = await addMath()
+      expect(again).toHaveAttribute('aria-pressed', 'true')
+      fireEvent.click(again)
 
-      expect(button).toHaveAttribute('aria-pressed', 'true')
+      expect(placing()).toBe(true)
     })
 
     it('M starts placing too, and Esc cancels with the sheet still clean', async () => {
       renderApp()
       await ready()
-      const button = await addMath()
+      await screen.findByTitle('More tools')
       const canvas = document.querySelector('.excalidraw')!
 
       act(() => {
         fireEvent.keyDown(canvas, { key: 'm' })
       })
-      expect(button).toHaveAttribute('aria-pressed', 'true')
+      expect(placing()).toBe(true)
 
       act(() => {
         fireEvent.keyDown(canvas, { key: 'Escape' })
       })
-      expect(button).toHaveAttribute('aria-pressed', 'false')
+      expect(placing()).toBe(false)
       expect(mathElements()).toHaveLength(0)
       expect(document.title).toBe('Untitled')
     })
@@ -143,18 +158,26 @@ describe('App', () => {
     })
   })
 
-  describe('the Sheet panel (docs/spec-v1.md section 8)', () => {
-    const sheetButton = () => screen.findByRole('button', { name: /^Sheet/ })
+  describe('Math Settings (docs/spec-v1.md section 8)', () => {
+    const sheetButton = async () => {
+      await openMoreTools()
+      return screen.getByRole('button', { name: /^Math Settings/ })
+    }
     const problemSheet = () =>
       createMathAnchorElements([
         { id: 'm1', x: 100, y: 100, width: 300, height: 72, source: 'K = 5.4\nx = 1 m + 1 s', title: 'Pipe flow' },
       ])
 
-    it('the button carries a red badge counting errors and warnings', async () => {
+    it('the item and the More tools button carry a red badge counting errors and warnings', async () => {
       renderApp({ initialElements: problemSheet() })
       await ready()
 
-      await waitFor(async () => expect(await sheetButton()).toHaveTextContent('Sheet2'))
+      // With More tools closed, its button shows the count.
+      await waitFor(() => expect(document.querySelector('[data-math-problems]')).not.toBeNull())
+      const root = document.querySelector<HTMLElement>('[data-math-problems]')!
+      expect(root.style.getPropertyValue('--math-problems')).toBe('"2"')
+
+      expect(await sheetButton()).toHaveTextContent('Math Settings2')
       expect(screen.getByLabelText('2 problems')).toBeInTheDocument()
     })
 
@@ -163,7 +186,24 @@ describe('App', () => {
       await ready()
       await screen.findAllByRole('list', { name: 'Lines' })
 
-      expect(await sheetButton()).toHaveTextContent(/^Sheet$/)
+      expect(await sheetButton()).toHaveTextContent(/^Math Settings$/)
+      expect(document.querySelector('[data-math-problems]')).toBeNull()
+    })
+
+    it('the item reads as pressed while the panel is open, and choosing it closes the panel and More tools', async () => {
+      renderApp({ initialElements: sampleSheet() })
+      await ready()
+      await screen.findAllByRole('list', { name: 'Lines' })
+
+      fireEvent.click(await sheetButton())
+      await waitFor(() => expect(document.querySelector('.math-tools')).toBeNull())
+      expect(document.querySelector('.sheet-sidebar')).not.toBeNull()
+
+      const item = await sheetButton()
+      expect(item).toHaveAttribute('aria-pressed', 'true')
+      fireEvent.click(item)
+      await waitFor(() => expect(document.querySelector('.sheet-sidebar')).toBeNull())
+      expect(document.querySelector('.math-tools')).toBeNull()
     })
 
     it('opens on Variables: names in reading order, by element, values in the system', async () => {

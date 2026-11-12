@@ -744,12 +744,15 @@ Decided in: [file](https://github.com/matheus-sancha/excalimathpad/issues/12),
 
 ## 8. App chrome
 
-Built in M1 (☰ file items, file name, Add math) and M2 (Sheet button and panel). Print…
+Built in M1 (☰ file items, file name, Add math) and M2 (Math Settings and the Sheet panel). Print…
 and the Page row arrive in M5; until then Ctrl+P is the browser's own and prints the
 screen. There is no app bar: the chrome lives inside Excalidraw's own UI slots.
 
 ```
-☰  ● pump-sizing.excalimathpad                  ∑ Add math (M) · Library · Sheet ②
+☰  ● pump-sizing.excalimathpad      [ Excalidraw's toolbar … More tools ② ]      Library
+                                                    Math
+                                                    ∑ Add math        M
+                                                    Math Settings ②
 ```
 
 - **☰ menu:** Open… (Ctrl+O), Save (Ctrl+S), Save as… (Ctrl+Shift+S) and Print… (Ctrl+P)
@@ -760,17 +763,21 @@ screen. There is no app bar: the chrome lives inside Excalidraw's own UI slots.
 - **Window title:** the name without its extension, with `●` while dirty: `● pump-sizing`.
   An unsaved sheet reads `● Untitled`. While printing, the title drops the mark, so the PDF is
   named `pump-sizing.pdf`, because Save as PDF names the file from the title.
-- **∑ Add math** is the primary button, labelled with its shortcut **M**. It reads as
-  pressed while placing.
-- **Sheet** opens and closes the panel, with a red badge counting errors and warnings
-  while the sheet has problems.
+- **More tools**, Excalidraw's own dropdown at the end of its toolbar, holds the app's two
+  items under a **Math** heading, below Excalidraw's. The app has no buttons of its own on
+  the canvas. Choosing an item closes the dropdown.
+- **∑ Add math** is the first, labelled with its shortcut **M**. It reads as pressed while
+  placing, and so does the More tools button, as it does for Excalidraw's Frame tool.
+- **Math Settings** opens and closes the Sheet panel, and reads as pressed while it is open.
+  It carries a red badge counting errors and warnings while the sheet has problems; the
+  More tools button carries the same badge, so the count shows with the dropdown closed.
 - An empty untitled sheet shows Excalidraw's welcome screen: the app's name, the hint
-  "Press M or click Add math, then click the sheet to place math", and Open… (Ctrl+O).
+  "Press M, or choose Add math under More tools, then click the sheet to place math", and Open… (Ctrl+O).
   Excalidraw's own logo and collaboration items are left out.
 
 ### Add math
 
-Pressing Add math or **M** turns the cursor into a crosshair with a ghost box. The next
+Choosing Add math or pressing **M** turns the cursor into a crosshair with a ghost box. The next
 click on the canvas places the element there, selected, with its first line open for
 typing. It can be placed on top of an existing element. **Esc** before clicking cancels.
 Placing isn't in the scene and isn't an undo step until the click.
@@ -785,7 +792,9 @@ Placing isn't in the scene and isn't an undo step until the click.
 
 ### Sheet panel
 
-Excalidraw's docked sidebar. Open at launch on a wide window, on Variables, or on Problems
+Excalidraw's docked sidebar, opened by Math Settings. Its three tabs, the dock button and
+the close button all fit its width, so the close button is never cut by the window. Open at
+launch on a wide window, on Variables, or on Problems
 if the opened sheet has any. Open or closed is remembered per browser, not in the file. On
 a small window it floats over the canvas, and closes after a jump or a click on the canvas.
 
@@ -1840,3 +1849,11 @@ Changes line if it changes behaviour.
   build stamp in the ☰ menu and no versioning while Matheus is the only user. What the work laptop allows is
   unknown, so a by-hand check closes the milestone (#83 to #85). M6 keeps the service worker, manifest, icons,
   fonts and file association. An Obsidian plugin is planned after v1 and joins "Not in v1".
+- 2026-11-12, [section 8](#8-app-chrome) (asked for by Matheus in chat on 2026-11-12): Add math and the Sheet button
+  leave the canvas's top right and become two items in Excalidraw's More tools dropdown, under a Math heading. Sheet
+  is renamed Math Settings; the panel it opens keeps its name in this spec, Sheet panel. The Engineer's additions, for
+  Matheus to confirm on the PR: the More tools button carries the problem badge and reads as selected while placing,
+  since the items are out of sight while the dropdown is closed; the welcome hint reads "Press M, or choose Add math
+  under More tools, then click the sheet to place math". Excalidraw has no slot for More tools, so the items are
+  drawn into the dropdown's own box, pinned by contract tests. The panel's close button was cut by the window on a
+  wide window: the tabs now give way so the header fits.
