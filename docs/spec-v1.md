@@ -1579,7 +1579,11 @@ Changes line if it changes behaviour.
 
 **M4b**
 
-- The deploy command, `wrangler pages deploy dist`, against Cloudflare's current documentation.
+- The deploy command, `wrangler pages deploy dist`, against Cloudflare's current documentation. **Passed
+  (#83):** Wrangler 4's own `pages deploy --help` lists the directory, `--project-name`, `--branch` and
+  `--commit-hash`, and the wrangler-action's README shows the same command. Cloudflare's documentation site
+  couldn't be reached from the build session, so two things stay unread: the token permission the upload
+  needs, and that `--branch=main` makes a deployment the production one. The first real deploy shows both.
 - The address opening through the work laptop's network.
 - Excalidraw's fonts on the work laptop. No asset path is set in `src/`, so they are expected to come from
   Excalidraw's CDN, a second host a filter could block. Read from the code, not seen in a browser.

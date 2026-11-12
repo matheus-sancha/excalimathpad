@@ -45,6 +45,20 @@ npm run preview    # serve dist/ locally to check the build
 from any static host or sub-path (GitHub Pages, Netlify, an S3 bucket, a local
 folder server). There is no backend.
 
+### The hosted build
+
+A push to `main` that passes `npm run check` publishes its `dist/` to
+Cloudflare Pages (the `deploy` job in `.github/workflows/ci.yml`). Pull
+requests deploy nothing. The job is skipped until the repository has:
+
+- the Actions **variable** `CLOUDFLARE_PAGES_PROJECT`, the Pages project's
+  name (a direct-upload project, made in Cloudflare first);
+- the Actions **secrets** `CLOUDFLARE_API_TOKEN` (allowed to edit Pages) and
+  `CLOUDFLARE_ACCOUNT_ID`.
+
+The ☰ menu's last line is the build stamp, the short commit and date
+(`389dd51 · 2026-11-12`), or `dev` on a build made outside CI.
+
 ## Checks
 
 ```bash
