@@ -1764,3 +1764,10 @@ Changes line if it changes behaviour.
   blue first. A failed point's × shows its message on hover through the problem tip; points that fail make the plot
   line's error, as a table's do. A drag from the chart moved the element, and a double-click on it opened the plot
   line. Five messages are added to section 13.
+- 2026-11-12, [section 10](#plots) (#78, Engineer's, for Matheus to confirm on the PR; checked in Chromium with a real
+  mouse): the ⚙ sits at the chart's top right while its row is hovered. A drag that starts on it moved the element and
+  opened nothing; a click opened the popover. The popover's Mark field takes several marks separated by `;`; an axis
+  range is written only once both ends are filled; size M, the default, is written as no clause. Text fields write on
+  Enter or when they lose focus, the rest at once; each change was one undo step, written before the format clause and
+  the note (`plot(Q_s, Hs(Q_s)), mark Q_d, points, size L, title "System" # curve`), in the popover's order. Esc, or
+  focus leaving the popover, closes it.

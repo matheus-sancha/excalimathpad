@@ -19,6 +19,7 @@ import {
   type LineResult,
   type SheetLine,
   type SolveDetails,
+  type PlotView,
   type TableView,
   type TypesetLine,
 } from '../math/evaluate.ts'
@@ -34,6 +35,9 @@ import { leadingNumber } from '../math/numbers.ts'
 import { texToHtml, useKatexReady } from './katex.ts'
 import { UnitField } from './UnitField.tsx'
 import { PlotChart } from './PlotChart.tsx'
+import { PlotSettings } from './PlotSettings.tsx'
+import { GEAR } from './useSheetGestures.ts'
+import { readPlot, type PlotClause } from '../math/plotLine.ts'
 import { hasText, TITLE_LINE, type LineEdit, type LineMove } from './lineEdit.ts'
 import { sceneToStage, type Viewport } from './viewport.ts'
 
@@ -69,6 +73,8 @@ export interface UnitSlots {
   openColumn?: number | null
   /** Writes the chosen unit (null for Sheet units) into the line, or into a table column's argument, as one line commit. */
   apply: (line: number, unit: string | null, column?: number) => void
+  /** Writes a plot line's clauses (its ⚙ popover), as one line commit; the popover stays open. */
+  applyPlot?: (line: number, clauses: PlotClause[]) => void
   cancel: () => void
   /** Whether typed text is a unit the line can show in. */
   isUnit: (text: string) => boolean
@@ -367,11 +373,7 @@ function MathCells({
       />
       {typeset.note !== null && <span className="math-element__note">{typeset.note}</span>}
       {line.table !== null && <TableBlock table={line.table} index={index} />}
-      {line.plot !== null && (
-        <div className="math-element__plot-cell">
-          <PlotChart plot={line.plot} />
-        </div>
-      )}
+      {line.plot !== null && <PlotCell plot={line.plot} source={fallback} index={index} />}
     </>
   )
 }
@@ -446,6 +448,36 @@ function TableBlock({ table, index }: { table: TableView; index: number }) {
           ))}
         </tbody>
       </table>
+    </div>
+  )
+}
+
+/**
+ * A plot line's chart, with its ⚙ (section 10, Plots): the ⚙ shows while the
+ * row is hovered and opens the settings popover on `click`, as a unit slot
+ * does (it is found by `data-unit-slot="line:gear"`); the popover writes the
+ * line's clauses.
+ */
+function PlotCell({ plot, source, index }: { plot: PlotView; source: string; index: number }) {
+  const slots = useContext(SlotsContext)
+  const open = slots.open === index && slots.openColumn === GEAR
+  const form = readLine(source)
+  const clauses = form.kind === 'code' ? (readPlot(form.code)?.clauses ?? []) : []
+  return (
+    <div className="math-element__plot-cell">
+      <PlotChart plot={plot} />
+      {(slots.hovered === index || open) && (
+        <span className={`math-element__gear${open ? ' is-open' : ''}`} data-unit-slot={`${index}:gear`}>
+          ⚙
+        </span>
+      )}
+      {open && (
+        <PlotSettings
+          clauses={clauses}
+          onChange={(next) => slots.applyPlot?.(index, next)}
+          onClose={slots.cancel}
+        />
+      )}
     </div>
   )
 }

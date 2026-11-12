@@ -157,7 +157,10 @@ server. v1 target: one sheet, for Matheus's own use.
   and settings. `PlotChart.tsx` draws it under the line with Observable Plot,
   loaded once behind `import()` (`plotDrawing.ts`), rebuilt only when the view
   changes; legend and title are HTML, typeset; each failed point's × carries
-  its message as `data-tip`.
+  its message as `data-tip`. Its ⚙ (`data-unit-slot="line:gear"`, the slot
+  target's column `GEAR`) opens `PlotSettings.tsx` on the canvas's click, as a
+  unit slot does; each change hands back the clause list, which the overlay
+  writes with `writePlotClauses` as one line commit.
   App code must evaluate only
   through `evaluateSheet`: math.js functions that depend on the disabled
   names (`help`, `rationalize`, a `parser()`'s methods) no longer work. The

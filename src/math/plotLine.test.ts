@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { readPlot, splitClauses } from './plotLine.ts'
+import { readPlot, splitClauses, writePlotClauses } from './plotLine.ts'
 
 describe('readPlot (docs/spec-v1.md section 10, Plots)', () => {
   it('reads the arguments, each with its own unit, and the clauses', () => {
@@ -44,5 +44,27 @@ describe('readPlot (docs/spec-v1.md section 10, Plots)', () => {
 
   it('splits clauses at top-level commas only', () => {
     expect(splitClauses(' mark max(a, b), title "a, b"')).toEqual(['mark max(a, b)', 'title "a, b"'])
+  })
+})
+
+describe('writePlotClauses (the ⚙ popover)', () => {
+  it('replaces the clauses, keeping the call, format and note as typed', () => {
+    expect(
+      writePlotClauses('plot(Q_s, Hs(Q_s)), mark Q_op @bold # curves', [
+        { kind: 'mark', expression: 'Q_op' },
+        { kind: 'log', axis: 'x' },
+        { kind: 'title', text: 'Say "hi"' },
+      ]),
+    ).toBe('plot(Q_s, Hs(Q_s)), mark Q_op, x log, title "Say \\"hi\\"" @bold # curves')
+  })
+
+  it('takes every clause off, and leaves other lines alone', () => {
+    expect(writePlotClauses('plot(x, y), points', [])).toBe('plot(x, y)')
+    expect(writePlotClauses('y = 2', [{ kind: 'points' }])).toBe('y = 2')
+  })
+
+  it('writes clauses that read back the same', () => {
+    const clauses = readPlot('plot(x, y), mark a, labels direct, points, y log, x 0 .. 10, size S, title "T, U"')!.clauses
+    expect(readPlot(writePlotClauses('plot(x, y)', clauses))!.clauses).toEqual(clauses)
   })
 })

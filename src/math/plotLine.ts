@@ -1,4 +1,4 @@
-import { splitDisplayUnit } from './lineForm.ts'
+import { codeLength, splitDisplayUnit } from './lineForm.ts'
 import { callSpans } from './tableLine.ts'
 
 /**
@@ -81,4 +81,41 @@ export const PLOT_SIZES: Record<PlotSize, { width: number; height: number }> = {
   S: { width: 360, height: 220 },
   M: { width: 480, height: 280 },
   L: { width: 640, height: 360 },
+}
+
+/** A clause as the source writes it. */
+export function clauseText(clause: PlotClause): string {
+  switch (clause.kind) {
+    case 'mark':
+      return `mark ${clause.expression}`
+    case 'labels-direct':
+      return 'labels direct'
+    case 'points':
+      return 'points'
+    case 'log':
+      return `${clause.axis} log`
+    case 'range':
+      return `${clause.axis} ${clause.start} .. ${clause.end}`
+    case 'size':
+      return `size ${clause.size}`
+    case 'title':
+      return `title "${clause.text.replace(/["\\]/g, (c) => `\\${c}`)}"`
+    case 'unknown':
+      return clause.text
+  }
+}
+
+/**
+ * The line with its plot clauses replaced by `clauses` (the ⚙ popover, section
+ * 10). The call, the format clause and the note stay exactly as typed; the
+ * clauses go after the call, before the format and the `#` (section 3). A line
+ * that isn't a plot line comes back unchanged.
+ */
+export function writePlotClauses(line: string, clauses: readonly PlotClause[]): string {
+  const end = codeLength(line)
+  const code = line.slice(0, end)
+  const call = callSpans(code, 'plot')
+  if (call === null) return line
+  const head = code.slice(0, code.length - call.rest.length)
+  return `${head}${clauses.map((clause) => `, ${clauseText(clause)}`).join('')}${line.slice(end)}`
 }

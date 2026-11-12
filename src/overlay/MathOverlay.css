@@ -576,3 +576,77 @@
   display: block;
   overflow: visible;
 }
+
+/* Section 10: the plot's ⚙, at the chart's top right while the row is hovered.
+   It takes no pointer events: the canvas's click opens it, as a unit slot's. */
+.math-element__plot-cell {
+  position: relative;
+}
+
+.math-element__gear {
+  position: absolute;
+  top: 0;
+  right: 0;
+  padding: 0 4px;
+  border-radius: 4px;
+  color: var(--math-quiet);
+  font: 16px/22px system-ui, 'Segoe UI', sans-serif;
+  outline: 1px dashed var(--math-rule);
+}
+
+.math-element__gear.is-open {
+  color: var(--math-result);
+}
+
+/* The popover takes pointer events and the keyboard (section 14). Screen only. */
+.math-plot-settings {
+  position: absolute;
+  top: 26px;
+  right: 0;
+  z-index: 1;
+  display: grid;
+  gap: 6px;
+  min-width: 300px;
+  padding: 10px 12px;
+  border: 1px solid var(--math-rule);
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 4px 16px rgb(0 0 0 / 14%);
+  color: var(--math-text);
+  font: 13px/20px system-ui, 'Segoe UI', sans-serif;
+  pointer-events: auto;
+}
+
+.math-plot-settings__row {
+  display: grid;
+  grid-template-columns: 90px 1fr;
+  align-items: center;
+  gap: 8px;
+}
+
+.math-plot-settings__label {
+  color: var(--math-quiet);
+}
+
+.math-plot-settings__controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.math-plot-settings input:not([type='checkbox']) {
+  width: 100%;
+  min-width: 0;
+  font: inherit;
+}
+
+.math-plot-settings__dots {
+  color: var(--math-quiet);
+}
+
+@media print {
+  .math-element__gear,
+  .math-plot-settings {
+    display: none;
+  }
+}
