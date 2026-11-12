@@ -1382,6 +1382,16 @@ Lists come first, since tables and plots only show them. The table comes before 
 display of the same lists, and it settles the column units the plot axes reuse. The popover is last: it only
 writes clauses the plot already reads.
 
+**M5's issue order** (M4's five are built, #74 to #78):
+
+1. Page row and page breaks (#80)
+2. Print view and Print… (Ctrl+P) (#81)
+3. The browser's own Print (#82)
+
+The breaks come first: they are one pure function from boxes and the Page setting, so every break rule is
+tested before anything draws a page. Print… comes before the browser's own Print, which builds the same pages
+from a cache and only adds the `beforeprint` route and its fallback.
+
 **Dates:** set a date for M1 when this spec is agreed. Date each later milestone when the previous one lands,
 from how long it really took. The v1 end is a forecast only.
 
