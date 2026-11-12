@@ -11,7 +11,7 @@ import { sceneFileFor } from './canvas/sceneFile.ts'
 import { jumpToAnchor, SIDEBAR_DOCKS_ABOVE } from './canvas/selection.ts'
 import { MathOverlay, type EvaluatedElement, type FlashLine } from './overlay/MathOverlay.tsx'
 import { rememberedOpen, rememberOpen } from './panel/panelMemory.ts'
-import { ProblemsTab, VariablesTab } from './panel/SheetPanel.tsx'
+import { ConstantsTab, ProblemsTab, VariablesTab } from './panel/SheetPanel.tsx'
 import { SettingsTab } from './panel/SettingsTab.tsx'
 import { DEFAULT_SETTINGS } from './file/sheetFormat.ts'
 import { problemCount, type PanelTarget } from './panel/sheetPanel.ts'
@@ -130,6 +130,7 @@ export default function App({ files, recovery, initialElements }: AppProps = {})
             variables: <VariablesTab sheet={sheet ?? []} onJump={jump} />,
             problemsTab: <ProblemsTab sheet={sheet ?? []} onJump={jump} />,
             settings: file && <SettingsTab settings={settings} onChange={file.session.setSettings} />,
+            constants: <ConstantsTab settings={settings} />,
             // Remembered per browser; a floating panel closes by itself, so
             // only a wide window's choice counts.
             onChange: (open) => {

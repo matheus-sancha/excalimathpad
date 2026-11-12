@@ -158,3 +158,40 @@
 .sheet-settings__kinds td {
   padding: 2px 4px;
 }
+
+/* The Constants tab (section 8): the symbol and its value on one line, as
+   Mathcad lists a constant, then what it is and the names to type. */
+.sheet-panel__constant {
+  display: grid;
+  grid-template-columns: minmax(2.5rem, auto) 1fr;
+  column-gap: 8px;
+  row-gap: 1px;
+  align-items: baseline;
+  padding: 5px 6px;
+  border-radius: 6px;
+}
+
+.sheet-panel__constant + .sheet-panel__constant {
+  border-top: 1px solid var(--default-border-color, #dee2e6);
+  border-radius: 0;
+}
+
+.sheet-panel__constant-value {
+  text-align: right;
+  overflow-x: auto;
+  white-space: nowrap;
+}
+
+.sheet-panel__constant-label {
+  grid-column: 1 / -1;
+  color: var(--color-gray-60, #495057);
+  font-size: 12px;
+}
+
+.sheet-panel__constant-names {
+  grid-column: 1 / -1;
+  color: var(--color-gray-50, #868e96);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+  user-select: all;
+}

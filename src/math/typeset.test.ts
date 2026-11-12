@@ -74,7 +74,7 @@ describe('typeset lines', () => {
   })
 
   it('sets a quantity inline, with a thin space', () => {
-    expect(math(typeset('Q = 50 m^3/h')[0]).expression).toBe('50\\,{\\mathrm{m}}^{3}/\\mathrm{h}')
+    expect(math(typeset('Q = 50 m^3/hr')[0]).expression).toBe('50\\,{\\mathrm{m}}^{3}/\\mathrm{hr}')
     expect(math(typeset('mu = 1.002 kg/(m s)')[0]).expression).toBe(
       '1.002\\,\\mathrm{kg}/\\left(\\mathrm{m}\\,\\mathrm{s}\\right)',
     )
@@ -183,7 +183,7 @@ describe('typesetResult (section 4: from the result’s plain text)', () => {
     ['a negative number', '-2.5', '-2.5'],
     ['a value with a unit', '20 V', '20\\,\\mathrm{V}'],
     ['a prefixed power', '600 mm^2', '600\\,{\\mathrm{mm}}^{2}'],
-    ['a compound unit', '60 mi / h', '60\\,\\mathrm{mi}/\\mathrm{h}'],
+    ['a compound unit', '60 mi / hr', '60\\,\\mathrm{mi}/\\mathrm{hr}'],
     ['micro', '6 uA', '6\\,\\mathrm{\\mu A}'],
     ['scientific notation (section 5)', '1.235·10⁴ m', '1.235 \\cdot 10^{4}\\,\\mathrm{m}'],
     ['a negative exponent', '-4.399·10⁻⁴', '-4.399 \\cdot 10^{-4}'],

@@ -12,6 +12,7 @@ import {
   type MathNode,
 } from 'mathjs'
 import { APP_UNITS } from './appUnits.ts'
+import { CONSTANT_GROUPS, SHORT_CONSTANTS } from './constants.ts'
 import {
   createDisplay,
   type DisplaySettings,
@@ -74,6 +75,26 @@ function registerAppUnits() {
   }
 }
 registerAppUnits()
+
+/**
+ * The constants' short names (docs/spec-v1.md section 5, Constants): `c`, `k`,
+ * `R` and the rest, each the same value as math.js's own long name. They join
+ * the namespace once, before `import` is disabled, so a line reads one as it
+ * reads `pi`: the sheet's own variable of that name wins, and the name wins
+ * over a unit (`h` is Planck's constant, so the hour is `hr`).
+ */
+function registerShortConstants() {
+  const namespace = math as unknown as Record<string, unknown>
+  for (const short of SHORT_CONSTANTS.keys()) {
+    if (short in namespace) throw new Error(`${short} is already a math.js name`)
+  }
+  // `override`: math.js refuses a name that is also a unit (`h`, `hbar`) without it.
+  math.import(
+    Object.fromEntries([...SHORT_CONSTANTS].map(([short, name]) => [short, namespace[name]])),
+    { override: true },
+  )
+}
+registerShortConstants()
 
 // Keep our own reference before hardening: the `parse` that expressions can
 // see is disabled below; this one stays usable. The sheet parses each line
@@ -170,8 +191,40 @@ for (const name of TYPED_MUTATORS) {
  */
 const TYPED_STUB = disabled('typed')
 
-function newSheetScope(): Map<string, unknown> {
-  return new Map<string, unknown>([['typed', TYPED_STUB]])
+/**
+ * The sheet's scope for one run. A constant's short name (`R`, `k`, `h`) that
+ * the sheet also assigns somewhere is the sheet's name on every line: until
+ * its line has run, or after it failed, math.js finds it here and gets
+ * "Undefined symbol", which `explain` words as "defined below" or "has an
+ * error above". Without this the line would quietly read the constant.
+ *
+ * `has` and `get` are what math.js calls. The engine's own reads use `holds`
+ * and `peek`, which only see what a line really assigned.
+ */
+class SheetScope extends Map<string, unknown> {
+  private readonly taken: ReadonlySet<string>
+
+  constructor(taken: ReadonlySet<string>) {
+    super([['typed', TYPED_STUB]])
+    this.taken = taken
+  }
+
+  holds(name: string): boolean {
+    return super.has(name)
+  }
+
+  peek(name: string): unknown {
+    return super.get(name)
+  }
+
+  override has(name: string): boolean {
+    return super.has(name) || this.taken.has(name)
+  }
+
+  override get(name: string): unknown {
+    if (!super.has(name) && this.taken.has(name)) throw new Error(`Undefined symbol ${name}`)
+    return super.get(name)
+  }
 }
 
 /**
@@ -456,11 +509,11 @@ export function evaluateSheet(
     }
   }
 
-  const scope = newSheetScope()
+  const scope = new SheetScope(new Set([...definedAt.keys()].filter((name) => SHORT_CONSTANTS.has(name))))
   // Each function the sheet defines is wrapped, to word its errors (section 13).
   const calls = createCalls(
     (value) => display.show(value, null, settings),
-    (name) => scope.get(name),
+    (name) => scope.peek(name),
   )
   // How a solve writes values in its messages and details.
   const solveText: SolveText = {
@@ -517,10 +570,10 @@ export function evaluateSheet(
   function variablesOf(line: ParsedLine): SheetVariable[] {
     if (line.kind === 'blank') return []
     return line.defines.map((name): SheetVariable => {
-      if (line.kind === 'syntax-error' || failed.has(name) || !scope.has(name)) {
+      if (line.kind === 'syntax-error' || failed.has(name) || !scope.holds(name)) {
         return { name, kind: 'error' }
       }
-      const value = scope.get(name)
+      const value = scope.peek(name)
       if (isSheetList(value)) return { name, kind: 'list', text: summaryOf(value, null) }
       if (isSheetFunction(value)) {
         const { params, solve } = value.sheetFunction
@@ -540,8 +593,9 @@ export function evaluateSheet(
     const facts = {
       isUnit: (name: string) => math.Unit.isValuelessUnit(name),
       isBuiltIn: (name: string) => name in math,
-      inScope: (name: string) => scope.has(name),
-      isSheetFunction: (name: string) => typeof scope.get(name) === 'function',
+      isShortConstant: (name: string) => SHORT_CONSTANTS.has(name),
+      inScope: (name: string) => scope.holds(name),
+      isSheetFunction: (name: string) => typeof scope.peek(name) === 'function',
       definedAbove: (name: string) => at(name).some((position) => position < here),
       definedBelow: (name: string) => at(name).some((position) => position > here),
       failed: (name: string) => failed.has(name),
@@ -575,7 +629,7 @@ export function evaluateSheet(
     }
     try {
       // Asked before the line runs: the line itself may assign one of these names.
-      const isPlain = (line.kind === 'parsed' && line.plainInputUnits?.every((name) => !scope.has(name))) || false
+      const isPlain = (line.kind === 'parsed' && line.plainInputUnits?.every((name) => !scope.holds(name))) || false
       lastSolve = null
       if (line.kind === 'plot') {
         if (line.display !== null) throw new SheetError('a plot takes its units on its arguments: plot(Q_s in L/s, …)')
@@ -615,7 +669,7 @@ export function evaluateSheet(
         const shown = line.display
         const unit = shown?.kind === 'unit' ? shown.unit : shown?.kind === 'percent' ? 'percent' : null
         for (const name of line.defines) {
-          if (isSheetList(scope.get(name)) && unit !== null && line.displayText !== null) {
+          if (isSheetList(scope.peek(name)) && unit !== null && line.displayText !== null) {
             listUnits.set(name, { unit, text: line.displayText })
           } else listUnits.delete(name)
         }
@@ -641,7 +695,7 @@ export function evaluateSheet(
             : line.kind === 'table' || line.kind === 'plot'
               ? (line.args[0]?.node ?? new math.ConstantNode(0))
               : line.node
-      const message = messageOf(error, node, (name) => scope.get(name))
+      const message = messageOf(error, node, (name) => scope.peek(name))
       return fail(explain(message, here, definedAt, failed))
     }
   }
@@ -649,7 +703,7 @@ export function evaluateSheet(
   function runCode(node: MathNode): unknown {
     // Section 10: a function body can't reach a list from outside.
     for (const { params, expr } of functionDefinitions(node)) {
-      const outside = bodyNames(expr).find((name) => !params.includes(name) && isSheetList(scope.get(name)))
+      const outside = bodyNames(expr).find((name) => !params.includes(name) && isSheetList(scope.peek(name)))
       if (outside !== undefined) throw new SheetError(`pass ${outside} as an argument`)
     }
     const bound = new Map<string, unknown>()
@@ -670,7 +724,7 @@ export function evaluateSheet(
     }
     for (const definition of functionDefinitions(node)) {
       const { name, params, expr } = definition
-      const fn = scope.get(name) as (...args: unknown[]) => unknown
+      const fn = scope.peek(name) as (...args: unknown[]) => unknown
       scope.set(name, calls.wrap({ name, params }, expr, fn))
     }
     return value
@@ -960,7 +1014,7 @@ export function evaluateSheet(
 
   /** The names in a node that hold a list here, in order, each once. */
   function listsIn(node: MathNode, bound?: ReadonlyMap<string, unknown>): string[] {
-    return [...new Set(usedNames(node))].filter((name) => !bound?.has(name) && isSheetList(scope.get(name)))
+    return [...new Set(usedNames(node))].filter((name) => !bound?.has(name) && isSheetList(scope.peek(name)))
   }
 
   /**
@@ -970,7 +1024,7 @@ export function evaluateSheet(
    */
   function iterate(expression: MathNode, bound: ReadonlyMap<string, unknown>): SheetList {
     const names = listsIn(expression, bound)
-    const lists = names.map((name) => scope.get(name) as SheetList)
+    const lists = names.map((name) => scope.peek(name) as SheetList)
     const length = lists[0].length
     const other = lists.findIndex((list) => list.length !== length)
     if (other !== -1) {
@@ -1009,7 +1063,7 @@ export function evaluateSheet(
     return node.transform((child) => {
       if (!isFunctionNode(child) || !isSymbolNode(child.fn)) return child
       const name = child.fn.name
-      if (!(AGGREGATES as readonly string[]).includes(name) || scope.has(name)) return child
+      if (!(AGGREGATES as readonly string[]).includes(name) || scope.holds(name)) return child
       if (!child.args.some((arg) => listsIn(arg).length > 0)) return child
       const values = child.args.flatMap((arg) => {
         if (listsIn(arg).length === 0) return [arg.compile().evaluate(scope) as unknown]
@@ -1072,7 +1126,7 @@ export function evaluateSheet(
   function isSolveCall(node: MathNode): boolean {
     const call = isAssignmentNode(node) && !node.index ? node.value : node
     if (!isFunctionNode(call) || !isSymbolNode(call.fn)) return false
-    const fn = scope.get(call.fn.name)
+    const fn = scope.peek(call.fn.name)
     return isSheetFunction(fn) && fn.sheetFunction.solve === true
   }
 }
@@ -1153,7 +1207,8 @@ const ENGINE_NAMES: Omit<Names, 'isSheetName'> = {
       return false
     }
   },
-  isBuiltIn: (name) => name in math,
+  // A short constant shows as a name does (`N_A`, `epsilon_0`), not as math.js writes symbols.
+  isBuiltIn: (name) => name in math && !SHORT_CONSTANTS.has(name),
 }
 
 /**
@@ -1171,6 +1226,48 @@ export function typesetResult(text: string): string {
 export function isDisplayUnit(text: string): boolean {
   const target = display.readTarget(text)
   return target?.kind === 'unit' || target?.kind === 'percent'
+}
+
+/** A built-in constant as the Constants tab lists it (docs/spec-v1.md section 8). */
+export interface ConstantRow {
+  /** math.js's name, and the short one if it has one: what a line can read. */
+  name: string
+  short: string | null
+  label: string
+  /** The name to show, typeset: the short one where there is one. */
+  tex: string
+  /** Its value in the sheet's system, as a result reads, and typeset. */
+  value: string
+  valueTex: string
+}
+
+export interface ConstantRowGroup {
+  label: string
+  rows: ConstantRow[]
+}
+
+/** Every built-in constant with its value in the sheet's settings, in the tab's groups. */
+export function listConstants(settings: DisplaySettings = DEFAULT_DISPLAY): ConstantRowGroup[] {
+  const namespace = math as unknown as Record<string, unknown>
+  const names: Names = { ...ENGINE_NAMES, isSheetName: () => false }
+  return CONSTANT_GROUPS.map(({ label, constants }) => ({
+    label,
+    rows: constants.map(({ name, short, label }) => {
+      let value: string
+      try {
+        value = display.show(namespace[name], null, settings)
+      } catch {
+        value = String(namespace[name])
+      }
+      let tex: string
+      try {
+        tex = lineTex(parse(short ?? name), names).expression
+      } catch {
+        tex = textTex(short ?? name)
+      }
+      return { name, short: short ?? null, label, tex, value, valueTex: typesetResult(value) }
+    }),
+  }))
 }
 
 /** A unit's text, as a result writes it (`kohm`, `m^3 / s`), typeset (`k\Omega`); plain text if it isn't one. */

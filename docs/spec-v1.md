@@ -87,7 +87,7 @@ One name per concept, used the same in conversation, code, tests, docs and the U
 | **Sheet file** | Excalidraw scene JSON + the `excalimathpad` block. The sheet's only durable form |
 | **Dirty** | The scene or settings changed since the last save or open |
 | **Recovery copy** | The whole sheet file, its name and its file handle in IndexedDB. Exists only while dirty |
-| **Sheet panel** | Excalidraw's sidebar with the tabs Variables, Problems and Settings |
+| **Sheet panel** | Excalidraw's sidebar with the tabs Variables, Problems, Settings and Constants |
 | **Title** | A math element's optional name: plain text on one line, shown in a header above its lines. Never evaluated |
 | **Placing** | The UI mode between Add math and the click that creates the anchor |
 | **Print pages** | The sheet laid out for its Page setting. Computed at print time, never stored |
@@ -577,6 +577,31 @@ These rules apply everywhere a number shows: result cells, Variables, list summa
 the slot's list, solve details and print. The exceptions: a solve detail's residual and
 bracket can read as they fall, and plot axis ticks use the chart's own round values.
 
+### Constants
+
+Every constant math.js has is built in, under math.js's name: `pi`, `e`, `gravity`,
+`speedOfLight`, `gasConstant`, about sixty in all. The common ones can also be written by
+a short name, as in Mathcad:
+
+| Short | Constant | Short | Constant |
+|---|---|---|---|
+| `c` | Speed of light | `sigma` | Stefan–Boltzmann constant |
+| `G` | Gravitational constant | `e_c` | Elementary charge |
+| `h` | Planck constant | `epsilon_0`, `mu_0`, `Z_0` | Vacuum permittivity, permeability, impedance |
+| `hbar` | Reduced Planck constant | `m_e`, `m_p`, `m_n`, `m_u` | Electron, proton, neutron and atomic mass |
+| `R` | Molar gas constant | `a_0` | Bohr radius |
+| `k` | Boltzmann constant | `alpha` | Fine-structure constant |
+| `N_A` | Avogadro constant | `R_inf` | Rydberg constant |
+
+- **`g` is the gram.** Standard gravity has no short name: it is `gravity`.
+- **`h` is the Planck constant, so the hour is `hr`.** `2 hr`, `m^3/hr`, `km/hr`. In a display
+  unit, which is read as units only, `in km/h` still means per hour.
+- **A sheet may take a short name** (`R = 10 kohm`, `k = 3`), with no warning. From then on
+  the name is the sheet's on every line: used above its line it is `R is defined below`,
+  and after a failed definition `R has an error above`, never the constant.
+- A constant shows as any result does, in the sheet's unit system and Digits.
+- The list is in the Sheet panel's [Constants tab](#sheet-panel).
+
 ### Warnings
 
 **A name that shadows a unit or built-in** gets an amber `⚠`, in the gutter and the
@@ -589,6 +614,8 @@ Problems tab. The name wins, and the warning doesn't change a result.
 - A parameter that hides a **sheet function** doesn't warn (`f(Re, r)` hides `Re(Q)` on
   purpose).
 - Names that aren't units or built-ins don't change.
+- A constant's short name is free to take: `R`, `k` and `c` don't warn. `h` and `hbar` do,
+  being units as well.
 
 **A function body name not defined above** gets an amber `⚠` on the definition.
 
@@ -797,8 +824,8 @@ Placing isn't in the scene and isn't an undo step until the click.
 
 ### Sheet panel
 
-Excalidraw's docked sidebar, opened by Math Settings. Its three tabs, the dock button and
-the close button all fit its width, so the close button is never cut by the window. Open at
+Excalidraw's docked sidebar, opened by Math Settings. Its four tabs, the dock button and
+the close button all fit its width (the panel is 384 px wide, since Excalidraw's own 302 px is too narrow for four tabs), so the close button is never cut by the window. Open at
 launch on a wide window, on Variables, or on Problems
 if the opened sheet has any. Open or closed is remembered per browser, not in the file. On
 a small window it floats over the canvas, and closes after a jump or a click on the canvas.
@@ -808,6 +835,7 @@ a small window it floats over the canvas, and closes after a jump or a click on 
 | **Variables** | A filter box, then every name in reading order, grouped by element, labelled by the element's position. Row: typeset name, value, unit, in the unit system and Digits. A name defined twice appears twice. A line with an error shows "error". A list shows its summary (`30 values, 1 … 30 L/s`). A function shows its signature, `H_s(Q)`, with `function` or `solve function` as the value and a blank unit. Comments and notes don't appear |
 | **Problems** | Errors `●` and warnings `⚠` in one list in reading order, each with its message and "element, line n · name". Comments and notes don't appear |
 | **Settings** | Unit system, and for Custom its kind → unit table. Digits, 2 to 15. Page: A4 or Letter, portrait or landscape |
+| **Constants** | A filter box, then every [built-in constant](#constants) in its group. Row: its symbol typeset and its value in the unit system and Digits, then what it is and the names a line reads it by (`c or speedOfLight`). The filter matches names and descriptions. Nothing here is the sheet's, so a row doesn't jump |
 
 - **An element with a title is named by it** in Variables and Problems ("Pipe flow, line 3"),
   in place of its position. Built with the panel (#58).
@@ -1865,3 +1893,13 @@ Changes line if it changes behaviour.
 - 2026-11-12, [section 5](#unit-systems) (asked for by Matheus in chat on 2026-11-12): the unit slot's list for an
   energy also offers the torque units N·m, kN·m, lbf·ft and lbf·in, and the kind reads "Energy, torque" in the
   Settings tab. A torque still shows in `J` by default, since it has energy's dimension.
+- 2026-11-12, [sections 5](#constants) and [8](#sheet-panel) (asked for by Matheus in chat on 2026-11-12: a
+  Constants list in the panel, in Mathcad's format; "Use g for grams and hr (hrs) for hour. Keep gravity";
+  "Everything on the engine"): the Sheet panel gains a Constants tab listing every built-in constant. The common ones
+  take Mathcad's short names, `c`, `G`, `h`, `hbar`, `R`, `k`, `N_A`, `sigma` and the rest of the table in section 5.
+  `g` stays the gram and gravity stays `gravity`; `h` is the Planck constant, so the hour is written `hr`, and the
+  unit slot's lists read `m^3/hr`, `km/hr`, `kg/hr`. The short names are the Engineer's, from memory of Mathcad's
+  list, which couldn't be read from the build session: for Matheus to confirm on the PR. Also the Engineer's: a
+  sheet's own `R` or `k` is an error above its line, where a unit's name would fall back with a warning, because a
+  line that quietly read the gas constant would give a wrong number; taking a short name doesn't warn; the panel
+  is 384 px wide so four tabs fit. `hbar` no longer reads as the hectobar.

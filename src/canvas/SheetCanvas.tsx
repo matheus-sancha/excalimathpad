@@ -44,7 +44,7 @@ export const SHEET_SIDEBAR_CLASS = 'sheet-sidebar'
 /** Excalidraw's sidebar name for the Sheet panel. */
 export const SHEET_PANEL = 'sheet'
 
-export type SheetPanelTab = 'variables' | 'problems' | 'settings'
+export type SheetPanelTab = 'variables' | 'problems' | 'settings' | 'constants'
 
 /** What fills the Sheet panel (docs/spec-v1.md section 8); the canvas draws its frame. */
 export interface SheetPanelSlot {
@@ -53,6 +53,8 @@ export interface SheetPanelSlot {
   variables: ReactNode
   problemsTab: ReactNode
   settings?: ReactNode
+  /** The built-in constants. */
+  constants?: ReactNode
   /** Opened, closed, or moved to another tab. */
   onChange?: (open: boolean, tab: SheetPanelTab) => void
 }
@@ -218,11 +220,13 @@ export function SheetCanvas({ onReady, initialElements, fileMenu, sheetPanel }: 
                   <Sidebar.TabTrigger tab="variables">Variables</Sidebar.TabTrigger>
                   <Sidebar.TabTrigger tab="problems">Problems</Sidebar.TabTrigger>
                   {sheetPanel.settings && <Sidebar.TabTrigger tab="settings">Settings</Sidebar.TabTrigger>}
+                  {sheetPanel.constants && <Sidebar.TabTrigger tab="constants">Constants</Sidebar.TabTrigger>}
                 </Sidebar.TabTriggers>
               </Sidebar.Header>
               <Sidebar.Tab tab="variables">{sheetPanel.variables}</Sidebar.Tab>
               <Sidebar.Tab tab="problems">{sheetPanel.problemsTab}</Sidebar.Tab>
               {sheetPanel.settings && <Sidebar.Tab tab="settings">{sheetPanel.settings}</Sidebar.Tab>}
+              {sheetPanel.constants && <Sidebar.Tab tab="constants">{sheetPanel.constants}</Sidebar.Tab>}
             </Sidebar.Tabs>
           </Sidebar>
         )}
@@ -232,7 +236,7 @@ export function SheetCanvas({ onReady, initialElements, fileMenu, sheetPanel }: 
 }
 
 function isPanelTab(tab: string | undefined): tab is SheetPanelTab {
-  return tab === 'variables' || tab === 'problems' || tab === 'settings'
+  return tab === 'variables' || tab === 'problems' || tab === 'settings' || tab === 'constants'
 }
 
 /** One item, in the dropdown's own markup so it takes Excalidraw's styles. */

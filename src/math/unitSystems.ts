@@ -189,22 +189,22 @@ export const SLOT_UNITS: Record<Kind, readonly string[]> = {
   length: ['mm', 'cm', 'm', 'km', 'in', 'ft', 'yd', 'mi'],
   area: ['mm^2', 'cm^2', 'm^2', 'km^2', 'in^2', 'ft^2'],
   volume: ['mL', 'L', 'm^3', 'in^3', 'ft^3', 'gal'],
-  volumeFlow: ['L/s', 'L/minute', 'm^3/s', 'm^3/h', 'ft^3/s', 'gpm', 'cfm'],
-  massFlow: ['kg/s', 'kg/h', 'tonne/h', 'lbm/s', 'lbm/h'],
-  velocity: ['mm/s', 'm/s', 'km/h', 'ft/s', 'mi/h'],
+  volumeFlow: ['L/s', 'L/minute', 'm^3/s', 'm^3/hr', 'ft^3/s', 'gpm', 'cfm'],
+  massFlow: ['kg/s', 'kg/hr', 'tonne/hr', 'lbm/s', 'lbm/hr'],
+  velocity: ['mm/s', 'm/s', 'km/hr', 'ft/s', 'mi/hr'],
   acceleration: ['m/s^2', 'ft/s^2'],
   force: ['N', 'kN', 'MN', 'lbf', 'kgf', 'tonf', 'tf'],
   pressure: ['Pa', 'kPa', 'MPa', 'mbar', 'bar', 'psi', 'atm'],
   // Torque has energy's dimension, so its units are offered here too: a
   // result can't tell the app which of the two it is.
   energy: ['J', 'kJ', 'MJ', 'kWh', 'BTU', 'kcal', 'N m', 'kN m', 'lbf ft', 'lbf in'],
-  power: ['W', 'kW', 'MW', 'hp', 'BTU/h'],
+  power: ['W', 'kW', 'MW', 'hp', 'BTU/hr'],
   density: ['kg/m^3', 'g/cm^3', 'lbm/ft^3'],
   dynamicViscosity: ['Pa s', 'mPa s', 'cP', 'poise'],
   kinematicViscosity: ['m^2/s', 'mm^2/s', 'cSt', 'St'],
   frequency: ['Hz', 'kHz', 'rpm'],
   mass: ['g', 'kg', 'tonne', 'lbm'],
-  time: ['ms', 's', 'minute', 'h', 'day'],
+  time: ['ms', 's', 'minute', 'hr', 'day'],
   temperature: ['K', 'degC', 'degF', 'degR'],
 }
 

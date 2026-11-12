@@ -291,10 +291,10 @@ describe('evaluateSheet', () => {
       const otherUnits = [
         'p = 1 psi',
         'unit("2 bar")',
-        't = 2 h\nl = 3 ft',
+        't = 2 hr\nl = 3 ft',
         'w = 4 lbm\nx = 5 mmHg to psi',
       ].join('\n')
-      const check = 'F = (2 kg) / (3 m * s^2)\nQ = 10 m^3 / h\nA = 2 m^2\nQ\nA\nQ / A'
+      const check = 'F = (2 kg) / (3 m * s^2)\nQ = 10 m^3 / hr\nA = 2 m^2\nQ\nA\nQ / A'
       const expected = [
         value('0.6667 Pa'),
         empty,
@@ -334,7 +334,7 @@ describe('evaluateSheet', () => {
           '2 cm * 3 cm',
           'x = 2 cm\nx * x',
           '1 psi',
-          '60 mi / h',
+          '60 mi / hr',
           '5 ft * 2 ft to ft^2',
         ]
 
@@ -1093,7 +1093,7 @@ describe('solve functions and nested solves (docs/spec-v1.md section 9, #71)', (
   })
 
   it('warns on a guess name not defined above, but not on the unknown or the parameters', () => {
-    expect(warnings('r(a) = solve x^2 = a, guess x = a / k')[0]).toEqual(["k isn't defined above this line"])
+    expect(warnings('r(a) = solve x^2 = a, guess x = a / q')[0]).toEqual(["q isn't defined above this line"])
     expect(warnings(colebrook)[0]).toEqual([])
   })
 })
@@ -1350,5 +1350,75 @@ describe('plots (docs/spec-v1.md section 10, #77)', () => {
       name: null,
       expression: expect.not.stringContaining('mark'),
     })
+  })
+})
+
+describe('constants (docs/spec-v1.md section 5)', () => {
+  const run = (source: string) => evaluateSheet([{ id: 'b', source }]).get('b')!
+  const results = (source: string) => run(source).map((line) => line.result)
+  const warningsOf = (source: string) => run(source).map((line) => line.warnings)
+  const text = (source: string) => results(source).map((r) => (r.kind === 'value' ? r.text : r.kind === 'error' ? r.message : r.kind))
+
+  it('reads a short name as the same value as math.js’s long one', async () => {
+    const { SHORT_CONSTANTS } = await import('./constants.ts')
+    for (const [short, name] of SHORT_CONSTANTS) {
+      const [a, b] = text(`${short}\n${name}`)
+      expect(a, short).toBe(b)
+    }
+    expect(text('c\nR\nk\nN_A\nsigma')).toEqual([
+      '2.998·10⁵ km / s',
+      '8.314 (kg m^2) / (s^2 K mol)',
+      '1.381·10⁻²³ (kg m^2) / (s^2 K)',
+      '6.022·10²³ mol^-1',
+      '5.67·10⁻⁸ kg / (s^3 K^4)',
+    ])
+  })
+
+  it('keeps g the gram and gravity the constant; h is Planck’s constant and hr the hour', () => {
+    expect(text('5 g\ngravity\nh\n2 hr\n90 km/hr')).toEqual([
+      '5 g',
+      '9.807 m / s^2',
+      '6.626·10⁻³⁴ (kg m^2) / s',
+      '7200 s',
+      '25 m / s',
+    ])
+  })
+
+  it('still takes h as the hour in a display unit, which is read as units only', () => {
+    expect(text('v = 25 m/s in km/h')).toEqual(['90 km / h'])
+  })
+
+  it('lets a sheet take a short name, with no warning', () => {
+    expect(text('R = 10 kohm\nI = 2 mA\nI * R')).toEqual(['empty', 'empty', '20 V'])
+    expect(warningsOf('R = 10 kohm\nk = 3\nc = 2 m\nf(k) = k * 2')).toEqual([[], [], [], []])
+  })
+
+  it('a short name the sheet defines is the sheet’s on every line: an error above its line, never the constant', () => {
+    expect(text('2 * R\nR = 10 ohm\n2 * R')).toEqual(['R is defined below', 'empty', '20 ohm'])
+    expect(text('k = 1 +\nk * 2')).toEqual(['Unexpected end of expression (char 8)', 'k has an error above'])
+    expect(warningsOf('2 * R\nR = 10 ohm')).toEqual([[], []])
+    // A function body binds late, so the warning says the name comes later.
+    expect(warningsOf('f(x) = k * x\nk = 2\nf(3)')).toEqual([["k isn't defined above this line"], [], []])
+  })
+
+  it('lists every constant once, each one a name math.js has, with its value', async () => {
+    const { listConstants } = await import('./evaluate.ts')
+    const rows = listConstants().flatMap((group) => group.rows)
+    expect(new Set(rows.map((row) => row.name)).size).toBe(rows.length)
+    expect(rows.length).toBeGreaterThan(55)
+    for (const row of rows) {
+      expect(text(row.name)[0], row.name).toBe(row.value)
+      expect(row.value, row.name).not.toMatch(/undefined|object/)
+    }
+    const c = rows.find((row) => row.name === 'speedOfLight')!
+    expect(c).toMatchObject({ short: 'c', label: 'Speed of light in vacuum', value: '2.998·10⁵ km / s', tex: 'c' })
+    expect(rows.find((row) => row.short === 'hbar')!.tex).toBe('\\hbar')
+    expect(rows.find((row) => row.short === 'R_inf')!.tex).toBe('{R}_{\\infty}')
+  })
+
+  it('shows the list in the sheet’s system', async () => {
+    const { listConstants } = await import('./evaluate.ts')
+    const uscs = listConstants({ units: { system: 'uscs', custom: {} }, digits: 4 }).flatMap((group) => group.rows)
+    expect(uscs.find((row) => row.name === 'gravity')!.value).toBe('32.17 ft / s^2')
   })
 })

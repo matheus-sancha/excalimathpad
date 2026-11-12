@@ -206,6 +206,30 @@ describe('App', () => {
       expect(document.querySelector('.math-tools')).toBeNull()
     })
 
+    it('Constants lists the built-in constants with their values, and filters by name or description', async () => {
+      renderApp({ initialElements: sampleSheet() })
+      await ready()
+      await screen.findAllByRole('list', { name: 'Lines' })
+      fireEvent.click(await sheetButton())
+
+      // Radix's tabs switch on mouse down.
+      fireEvent.mouseDown(await screen.findByRole('tab', { name: 'Constants' }))
+
+      expect(await screen.findByLabelText('Speed of light in vacuum: c or speedOfLight = 2.998·10⁵ km / s')).toBeInTheDocument()
+      expect(screen.getByLabelText('Standard acceleration of gravity: gravity = 9.807 m / s^2')).toBeInTheDocument()
+      expect(screen.getByRole('region', { name: 'Mathematical' })).toBeInTheDocument()
+
+      fireEvent.change(screen.getByRole('searchbox', { name: 'Filter constants' }), { target: { value: 'boltz' } })
+      const rows = Array.from(document.querySelectorAll('.sheet-panel__constant'), (row) => row.getAttribute('aria-label'))
+      expect(rows).toEqual([
+        'Boltzmann constant: k or boltzmann = 1.381·10⁻²³ (kg m^2) / (s^2 K)',
+        'Stefan–Boltzmann constant: sigma or stefanBoltzmann = 5.67·10⁻⁸ kg / (s^3 K^4)',
+      ])
+
+      fireEvent.change(screen.getByRole('searchbox', { name: 'Filter constants' }), { target: { value: 'zzz' } })
+      expect(screen.getByText('No constant matches.')).toBeInTheDocument()
+    })
+
     it('opens on Variables: names in reading order, by element, values in the system', async () => {
       renderApp({ initialElements: sampleSheet() })
       await ready()

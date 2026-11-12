@@ -84,9 +84,15 @@
   background: var(--default-bg-color);
 }
 
-/* Three labelled tabs, the dock button and the close button have to fit the
-   panel's fixed width, so the tabs give way: they shrink, and their padding is
-   small enough that the close button stays inside the window. */
+/* Four labelled tabs, the dock button and the close button have to fit the
+   panel, so it is wider than Excalidraw's 302px (set inline on the container,
+   hence `!important`; the canvas's docked width reads the same variable), and
+   the tabs give way: they shrink, and their padding is small enough that the
+   close button stays inside the window. */
+.excalidraw.excalidraw-container {
+  --right-sidebar-width: 384px !important;
+}
+
 .excalidraw .sheet-sidebar .sidebar__header {
   gap: 0.25rem;
 }

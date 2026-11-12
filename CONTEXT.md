@@ -127,6 +127,14 @@ server. v1 target: one sheet, for Matheus's own use.
   `in k(1 s): `, and carries `sheetFunction` (name, parameters); `messageOf`
   rewords math.js's errors (a value called, a function used as a number) in
   section 13's words. `table`, `plot` and `solve` can't be assigned.
+  **Constants** (spec section 5, `constants.ts`, pure data): every math.js
+  constant in groups, some with a short name (`c`, `k`, `R`, `h`), which
+  `registerShortConstants` adds to the namespace once at setup. `h` is the
+  Planck constant, so the hour is `hr`. A short name the sheet also assigns is
+  the sheet's on every line: `SheetScope` (the run's scope) answers math.js
+  "Undefined symbol" for it until its line has run, which `explain` words;
+  the engine's own reads use `holds` and `peek`. `listConstants` gives the
+  Constants tab its rows.
   A **solve line** (spec section 9) is read as text before math.js sees it
   (`solveLine.ts`, pure: `<name>[(<params>)] = solve <lhs> = <rhs>, guess
   <unknown> = <expr>`); its sides and guess are parsed with the captured
@@ -278,7 +286,9 @@ server. v1 target: one sheet, for Matheus's own use.
 
 The core loop: define variables with units, see results inline, edit an input
 and everything downstream recalculates. Engine: math.js, client-side.
-
+ `ConstantsTab` lists
+  `listConstants(settings)`: every built-in constant with its value in the
+  sheet's system.
 - **Math element** — a block of math.js source, one statement per line
   (assignment is plain `=`), anchored at a scene position, plus one
   **result** per line: a value with unit (`20 V`), an error (message), or
