@@ -204,7 +204,12 @@ server. v1 target: one sheet, for Matheus's own use.
   its hovered row (an empty one for a plain input or a dimensionless value).
   The gestures find a slot from the slots' screen boxes (`slotAt`), open its
   field on the canvas's click when the element hasn't moved, and follow hover
-  from `pointerMove`; `UnitField` (the field and list, one of the overlay's
+  from `pointerMove`; `suggest.ts` (pure) is the suggestions while a line is
+  typed (spec section 4): `wordAt`, `suggest` and `accept` over the sheet's
+  names above the line (`sheetNames`), the constants, a fixed list of functions
+  and the units; `MathOverlay` builds the sources for the open line and
+  `LineField` draws the list and takes its keys (Tab, ↓ ↑, Enter, Esc);
+  `UnitField` (the field and list, one of the overlay's
   controls that take pointer events) hands back a unit, and `MathOverlay`
   writes it with `writeDisplayUnit` as one line commit. The engine gives each
   line its `unitSlot` (kind, chosen unit, value in the system and in each

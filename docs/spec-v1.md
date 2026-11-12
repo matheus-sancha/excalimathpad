@@ -385,6 +385,28 @@ none. Hover is screen-only.
   pressed button takes that format off. On a comment line or an empty line the bar has Title alone. A
   clause typed by hand shows live, like any other typing.
 
+**Suggestions:** while a name is typed, a list under the field offers the names that start
+with it, from the first letter, at most eight.
+
+- **From four places:** the sheet's names defined above the line, the nearest first, each
+  with its value (`speed` · `3 m/s`) or signature (`H_s(Q)`); the functions and line forms
+  (`sqrt`, `solve`, `plot`); the [constants](#constants), by short and long name, with what
+  they are and their value; and the units, with their kind.
+- **Order:** names with the same capitals as typed come first; then the sheet's names; then
+  the rest, shorter names first.
+- **Keys:** **Tab** takes the highlighted name, or the first if none is. **↓** moves the
+  highlight into the list and **↑** back out of it. **Enter** takes a highlighted name;
+  with nothing highlighted it splits the line as always, so typing and Enter work as
+  without a list. **Esc** closes the list and keeps the line open; a second Esc leaves. A
+  click on a name takes it. **↑** with nothing highlighted moves to the line above.
+- **Taking a name** replaces the typed word. A function adds its bracket (`sqrt(`), and
+  `solve`, `guess` and `step` a space. It is typing: the field's own Ctrl+Z takes it back.
+- **No list** where there is nothing to complete: inside a word, after a number (`10k`),
+  in a comment, in a quoted plot title, on the element's title, after a name typed in full,
+  or after a unit typed in full (`3 m/s`), where one more letter brings it back.
+- **After `in` or `to`** the list holds units only.
+- The list is screen only: it never changes the element's size, the scene or print.
+
 **Leaving:**
 
 - **Esc** goes back to typeset with the element still selected. A second **Esc**
@@ -1903,3 +1925,9 @@ Changes line if it changes behaviour.
   sheet's own `R` or `k` is an error above its line, where a unit's name would fall back with a warning, because a
   line that quietly read the gas constant would give a wrong number; taking a short name doesn't warn; the panel
   is 384 px wide so four tabs fit. `hbar` no longer reads as the hectobar.
+- 2026-11-13, [section 4](#while-editing-a-line) (asked for by Matheus in chat on 2026-11-12: "a suggestion text
+  based on the user writing, kind like google search bar", shown "Automatically"): a list of suggestions under the
+  open line. The Engineer's choices, for Matheus to confirm on the PR: nothing is highlighted until ↓, so Enter still
+  splits the line and Tab takes the first name; the first Esc closes the list only; no list after a unit typed in
+  full, where it would stand in the way of ↓ and Tab on nearly every line; shorter names come before longer ones
+  after the sheet's own; the functions offered are a fixed list of everyday ones, not all of math.js's.
