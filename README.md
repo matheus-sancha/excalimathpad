@@ -56,6 +56,11 @@ requests deploy nothing. The job is skipped until the repository has:
 - the Actions **secrets** `CLOUDFLARE_API_TOKEN` (allowed to edit Pages) and
   `CLOUDFLARE_ACCOUNT_ID`.
 
+The app is served at <https://excalimathpad.pages.dev>. To check the two
+secrets from a terminal, set them as environment variables and run
+`npx wrangler@4 pages project list`, which should list the project
+(`wrangler whoami` fails with a token that can only edit Pages).
+
 The ☰ menu's last line is the build stamp, the short commit and date
 (`389dd51 · 2026-11-12`), or `dev` on a build made outside CI.
 

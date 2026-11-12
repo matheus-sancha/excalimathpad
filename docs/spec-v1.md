@@ -1582,8 +1582,14 @@ Changes line if it changes behaviour.
 - The deploy command, `wrangler pages deploy dist`, against Cloudflare's current documentation. **Passed
   (#83):** Wrangler 4's own `pages deploy --help` lists the directory, `--project-name`, `--branch` and
   `--commit-hash`, and the wrangler-action's README shows the same command. Cloudflare's documentation site
-  couldn't be reached from the build session, so two things stay unread: the token permission the upload
-  needs, and that `--branch=main` makes a deployment the production one. The first real deploy shows both.
+  couldn't be reached from the build session, so the first deploy settled the rest, on 2026-11-12: a token
+  with the one permission Account, Cloudflare Pages, Edit uploaded the build, and with `--branch=main` it was
+  served at `excalimathpad.pages.dev`, the production address, where Matheus read the stamp
+  `c42e72e · 2026-11-12`. The project was made with `wrangler pages project create excalimathpad
+  --production-branch=main`.
+- A token that can only edit Pages fails `wrangler whoami`, which reads account details. **Found (#83):**
+  `wrangler pages project list`, with `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` set, is the check
+  that matches the deploy.
 - The address opening through the work laptop's network.
 - Excalidraw's fonts on the work laptop. No asset path is set in `src/`, so they are expected to come from
   Excalidraw's CDN, a second host a filter could block. Read from the code, not seen in a browser.
