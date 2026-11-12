@@ -48,7 +48,12 @@ export interface SheetGestures {
 export interface SlotTarget {
   anchorId: string
   line: number
+  /** A table column's header slot (section 10), or `GEAR` for a plot's ⚙; undefined for the result's own slot. */
+  column?: number
 }
+
+/** The column a plot's ⚙ stands for in a slot target (section 10). */
+export const GEAR = -1
 
 /**
  * The stage's math gestures (docs/spec-v1.md section 4, section 14): double-click

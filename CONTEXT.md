@@ -134,6 +134,33 @@ server. v1 target: one sheet, for Matheus's own use.
   solve's details (method, iterations, residual in SI, bracket) ride on its
   line's `solveDetails`, and on a line that is just one call to a solve
   function.
+  **Lists** (spec section 10, `lists.ts`): a `SheetList` holds point results
+  (a value or an error) and the first list its line ran over, to name a failed
+  point. A range line is read as text (`rangeLine.ts`, `[name =] a .. b [step
+  s]`) and `createRanges` steps it in SI numbers, in the start's unit. A line
+  whose names include a list runs once per point (`iterate` in `evaluate.ts`):
+  each list name bound to its i-th value in a `LayeredScope`, lists paired,
+  one compiled expression, no math.js matrices; a point that throws fails
+  alone. An aggregate (`min`, `max`, `sum`, `mean`, `count`) over a list is
+  worked out first and stands in the node as a bound name (`foldAggregates`).
+  A function body that names an outside list fails at its definition. A list
+  result is `{ kind: 'list', text, failed }`: its summary, and the line's
+  error when points failed. A **table line** (`tableLine.ts`, `table(arg, …)`,
+  each argument with its own `in <unit>`) gives `SheetLine.table`: columns
+  (header TeX, unit, a header unit slot) and every row's cells in the table
+  number form (`tableColumn` in `numbers.ts`: zeros kept, whole columns whole).
+  The overlay draws it as a second grid row inside the line's row; a header
+  slot is `data-unit-slot="line:column"`, and choosing a unit writes it onto
+  that argument (`writeArgumentUnit`). A **plot line** (`plotLine.ts`:
+  `plot(x, y1, …)`, then clauses) gives `SheetLine.plot`, a `PlotView` of plain
+  numbers in each axis's unit (null for a failed point), marks, failed points
+  and settings. `PlotChart.tsx` draws it under the line with Observable Plot,
+  loaded once behind `import()` (`plotDrawing.ts`), rebuilt only when the view
+  changes; legend and title are HTML, typeset; each failed point's × carries
+  its message as `data-tip`. Its ⚙ (`data-unit-slot="line:gear"`, the slot
+  target's column `GEAR`) opens `PlotSettings.tsx` on the canvas's click, as a
+  unit slot does; each change hands back the clause list, which the overlay
+  writes with `writePlotClauses` as one line commit.
   App code must evaluate only
   through `evaluateSheet`: math.js functions that depend on the disabled
   names (`help`, `rationalize`, a `parser()`'s methods) no longer work. The
@@ -173,8 +200,10 @@ server. v1 target: one sheet, for Matheus's own use.
   details** (spec section 4) use the same tip: a value with `solveDetails`
   sits in a `math-element__detailed` span, dotted underline, whose `data-tip`
   reads `Brent, 5 iterations`, the residual and the bracket. A solve line's
-  guess is its own TeX (`TypesetLine.guess`), set small and grey after the
-  expression.
+  guess and a range's step are their own TeX (`TypesetLine.aside`), set small
+  and grey after the expression. A list's summary (`math-element__summary`)
+  typesets its first and last values after the count, and its `data-tip` is
+  the line's `listPreview`: three points from each end with their index.
   `MathOverlay` subscribes to the scene (`onChange`, `onScrollChange`) and
   places each element from its anchor's scene position via `viewport.ts`
   (`sceneToStage`, pure). It reads source from the anchors and holds the sheet's

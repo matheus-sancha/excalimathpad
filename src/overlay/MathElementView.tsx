@@ -19,6 +19,8 @@ import {
   type LineResult,
   type SheetLine,
   type SolveDetails,
+  type PlotView,
+  type TableView,
   type TypesetLine,
 } from '../math/evaluate.ts'
 import {
@@ -32,6 +34,10 @@ import {
 import { leadingNumber } from '../math/numbers.ts'
 import { texToHtml, useKatexReady } from './katex.ts'
 import { UnitField } from './UnitField.tsx'
+import { PlotChart } from './PlotChart.tsx'
+import { PlotSettings } from './PlotSettings.tsx'
+import { GEAR } from './useSheetGestures.ts'
+import { readPlot, type PlotClause } from '../math/plotLine.ts'
 import { hasText, TITLE_LINE, type LineEdit, type LineMove } from './lineEdit.ts'
 import { sceneToStage, type Viewport } from './viewport.ts'
 
@@ -63,8 +69,12 @@ export interface UnitSlots {
   hovered: number | null
   /** The row whose unit field is open. */
   open: number | null
-  /** Writes the chosen unit (null for Sheet units) into the line, as one line commit. */
-  apply: (line: number, unit: string | null) => void
+  /** The table column whose header field is open on that row; null for the result's own. */
+  openColumn?: number | null
+  /** Writes the chosen unit (null for Sheet units) into the line, or into a table column's argument, as one line commit. */
+  apply: (line: number, unit: string | null, column?: number) => void
+  /** Writes a plot line's clauses (its ⚙ popover), as one line commit; the popover stays open. */
+  applyPlot?: (line: number, clauses: PlotClause[]) => void
   cancel: () => void
   /** Whether typed text is a unit the line can show in. */
   isUnit: (text: string) => boolean
@@ -253,6 +263,9 @@ const EMPTY_LINE: SheetLine = {
   variables: [],
   unitSlot: null,
   solveDetails: null,
+  listPreview: null,
+  table: null,
+  plot: null,
 }
 
 /** A row's cells, by line form (section 3, section 4 Problems). */
@@ -316,7 +329,7 @@ function MathCells({
   const name = typeset.name === null ? null : texToHtml(typeset.name)
   const defines = texToHtml(DEFINES)
   const expression = texToHtml(typeset.expression)
-  const guess = typeset.guess === undefined ? null : texToHtml(typeset.guess)
+  const aside = typeset.aside === undefined ? null : texToHtml(typeset.aside)
   // TeX KaTeX couldn't render: the line's source, as text, rather than nothing.
   const cells =
     expression === null || (typeset.name !== null && name === null) ? (
@@ -340,9 +353,9 @@ function MathCells({
         <span className="math-element__expression">
           <Html html={expression} />
         </span>
-        {guess !== null && (
-          <span className="math-element__guess">
-            <Html html={guess} />
+        {aside !== null && (
+          <span className="math-element__aside">
+            <Html html={aside} />
           </span>
         )}
       </span>
@@ -351,10 +364,128 @@ function MathCells({
     <>
       <Gutter result={result} warnings={warnings} />
       {cells}
-      <ResultCell result={result} slot={line.unitSlot} index={index} details={line.solveDetails} />
+      <ResultCell
+        result={result}
+        slot={line.unitSlot}
+        index={index}
+        details={line.solveDetails}
+        preview={line.listPreview}
+      />
       {typeset.note !== null && <span className="math-element__note">{typeset.note}</span>}
+      {line.table !== null && <TableBlock table={line.table} index={index} />}
+      {line.plot !== null && <PlotCell plot={line.plot} source={fallback} index={index} />}
     </>
   )
+}
+
+/**
+ * A table line's table (section 10), under the line and inside its row, so it
+ * counts toward the box and a double-click on it opens the line. One column
+ * per argument, headed by its expression and its unit in a slot; numbers line
+ * up on the decimal point; a failed cell is a red — with its message on hover.
+ */
+function TableBlock({ table, index }: { table: TableView; index: number }) {
+  const slots = useContext(SlotsContext)
+  return (
+    <div className="math-element__table-cell">
+      <table className="math-element__table">
+        <thead>
+          <tr>
+            {table.columns.map((column, c) => {
+              const header = texToHtml(column.header)
+              const unit = column.unit === '' ? null : texToHtml(typesetUnit(column.unit))
+              const open = column.slot !== null && slots.open === index && slots.openColumn === c
+              return (
+                <th key={c} colSpan={2}>
+                  {header === null ? column.header : <Html html={header} />}
+                  {column.slot !== null && (
+                    <span className="math-element__column-unit">
+                      <SlotBox
+                        index={index}
+                        column={c}
+                        chosen={column.slot.chosen !== null}
+                        hovered={slots.hovered === index}
+                        unitHtml={unit}
+                        unitText={column.unit}
+                      />
+                      {open && (
+                        <UnitField
+                          slot={column.slot}
+                          isUnit={slots.isUnit}
+                          onApply={(chosen) => slots.apply(index, chosen, c)}
+                          onCancel={slots.cancel}
+                        />
+                      )}
+                    </span>
+                  )}
+                </th>
+              )
+            })}
+          </tr>
+        </thead>
+        <tbody>
+          {table.rows.map((row, r) => (
+            <tr key={r}>
+              {row.map((cell, c) => {
+                if (!cell.ok) {
+                  return (
+                    <td key={c} colSpan={2} className="is-failed" data-tip={cell.message} data-tip-when="details">
+                      —
+                    </td>
+                  )
+                }
+                const [whole, rest] = splitDecimal(cell.text)
+                return [
+                  <td key={`${c}w`} className="is-whole">
+                    {whole}
+                  </td>,
+                  <td key={`${c}r`} className="is-rest">
+                    {rest}
+                  </td>,
+                ]
+              })}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+/**
+ * A plot line's chart, with its ⚙ (section 10, Plots): the ⚙ shows while the
+ * row is hovered and opens the settings popover on `click`, as a unit slot
+ * does (it is found by `data-unit-slot="line:gear"`); the popover writes the
+ * line's clauses.
+ */
+function PlotCell({ plot, source, index }: { plot: PlotView; source: string; index: number }) {
+  const slots = useContext(SlotsContext)
+  const open = slots.open === index && slots.openColumn === GEAR
+  const form = readLine(source)
+  const clauses = form.kind === 'code' ? (readPlot(form.code)?.clauses ?? []) : []
+  return (
+    <div className="math-element__plot-cell">
+      <PlotChart plot={plot} />
+      {(slots.hovered === index || open) && (
+        <span className={`math-element__gear${open ? ' is-open' : ''}`} data-unit-slot={`${index}:gear`}>
+          ⚙
+        </span>
+      )}
+      {open && (
+        <PlotSettings
+          clauses={clauses}
+          onChange={(next) => slots.applyPlot?.(index, next)}
+          onClose={slots.cancel}
+        />
+      )}
+    </div>
+  )
+}
+
+/** `12.04` as `12` and `.04`, so a column lines up on the decimal point; `1.860·10⁵` as `1` and `.860·10⁵`. */
+function splitDecimal(text: string): [string, string] {
+  const match = /^(-?\d+)(.*)$/s.exec(text)
+  return match ? [match[1], match[2]] : [text, '']
 }
 
 /** `≔`, Mathcad's definition sign, in KaTeX's font (`\coloneqq`). */
@@ -373,12 +504,14 @@ function Html({ html }: { html: string }) {
  * never carry it.
  */
 function Gutter({ result, warnings }: { result: LineResult; warnings: readonly string[] }) {
-  const error = result.kind === 'error'
+  // A list's failed points are the line's error (section 10).
+  const message = result.kind === 'error' ? result.message : result.kind === 'list' ? result.failed : null
+  const error = message !== null
   const warned = !error && warnings.length > 0
   return (
     <span
       className={`math-element__gutter${warned ? ' is-warning' : ''}`}
-      data-tip={error ? result.message : warned ? warnings.join('\n') : undefined}
+      data-tip={error ? message : warned ? warnings.join('\n') : undefined}
       data-warnings={warnings.length > 0 ? warnings.join('\n') : undefined}
     >
       {error ? '●' : warned ? '⚠' : ''}
@@ -398,12 +531,14 @@ function ResultCell({
   slot = null,
   index = -1,
   details = null,
+  preview = null,
 }: {
   result: LineResult
   plain?: boolean
   slot?: SheetLine['unitSlot']
   index?: number
   details?: SolveDetails | null
+  preview?: string | null
 }) {
   const slots = useContext(SlotsContext)
   let content: ReactNode = null
@@ -422,11 +557,21 @@ function ResultCell({
   } else if (result.kind === 'error') {
     text = result.message
     content = result.message
+  } else if (result.kind === 'list') {
+    // Section 10: one row high, as a summary, its points on hover; no unit slot.
+    text = result.text
+    content = plain ? (
+      result.text
+    ) : (
+      <span className="math-element__summary" data-tip={preview ?? undefined} data-tip-when="details">
+        <SummaryContent text={result.text} />
+      </span>
+    )
   } else if (slot && slots.hovered === index && !plain) {
     // A plain input: an empty slot on hover (section 5, Unit slot).
     content = <SlotBox index={index} chosen={false} hovered unitHtml={null} />
   }
-  const open = slot !== null && slots.open === index && !plain
+  const open = slot !== null && slots.open === index && (slots.openColumn ?? null) === null && !plain
   return (
     <span
       className={`math-element__result is-${result.kind}`}
@@ -454,6 +599,29 @@ function detailsText({ method, iterations, residual, bracket }: SolveDetails): s
     `Residual: ${residual}`,
     `Bracket: ${bracket}`,
   ].join('\n')
+}
+
+/**
+ * A list's summary (section 10): the count as text, then the first and last
+ * values typeset, `30 values, 12.04 … 33.18 m`.
+ */
+function SummaryContent({ text }: { text: string }) {
+  const comma = text.indexOf(', ')
+  if (comma === -1) return <>{text}</>
+  const values = text.slice(comma + 2).split(' … ')
+  const typeset = values.map((value) => texToHtml(typesetResult(value)))
+  if (typeset.some((html) => html === null)) return <>{text}</>
+  return (
+    <>
+      <span className="math-element__count">{text.slice(0, comma + 1)} </span>
+      {typeset.map((html, i) => (
+        <span key={i}>
+          {i > 0 && ' … '}
+          <Html html={html!} />
+        </span>
+      ))}
+    </>
+  )
 }
 
 /**
@@ -493,12 +661,14 @@ function ValueContent({ text, slot, index }: { text: string; slot: SheetLine['un
  */
 function SlotBox({
   index,
+  column,
   chosen,
   hovered,
   unitHtml,
   unitText = '',
 }: {
   index: number
+  column?: number
   chosen: boolean
   hovered: boolean
   unitHtml: string | null
@@ -509,7 +679,7 @@ function SlotBox({
       className={`math-element__unit${chosen ? ' is-chosen' : ''}${hovered ? ' is-hovered' : ''}${
         unitText === '' ? ' is-empty' : ''
       }`}
-      data-unit-slot={index}
+      data-unit-slot={column === undefined ? index : `${index}:${column}`}
     >
       {unitHtml === null ? unitText : <Html html={unitHtml} />}
     </span>

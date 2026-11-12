@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { evaluateSheet, type LineResult } from './evaluate.ts'
+import { evaluateSheet, type LineResult, type TableView } from './evaluate.ts'
 
 /** Evaluates blocks (in reading order) as one sheet; results per block, in order. */
 function sheet(...sources: string[]): LineResult[][] {
@@ -1084,5 +1084,260 @@ describe('solve functions and nested solves (docs/spec-v1.md section 9, #71)', (
   it('warns on a guess name not defined above, but not on the unknown or the parameters', () => {
     expect(warnings('r(a) = solve x^2 = a, guess x = a / k')[0]).toEqual(["k isn't defined above this line"])
     expect(warnings(colebrook)[0]).toEqual([])
+  })
+})
+
+describe('ranges and lists (docs/spec-v1.md section 10, #74)', () => {
+  const list = (text: string, failed: string | null = null): LineResult => ({ kind: 'list', text, failed })
+  const variables = (source: string) => evaluateSheet([{ id: 'b', source }]).get('b')!.map((line) => line.variables)
+
+  it('makes a list from a range: the end included when the steps land on it', () => {
+    expect(block('n = 1 .. 10\nx = 0 .. 1 step 0.1\nQ_s = 1 L/s .. 30 L/s step 1 L/s')).toEqual([
+      list('10 values, 1 … 10'),
+      list('11 values, 0 … 1'),
+      list('30 values, 1 … 30 L / s'),
+    ])
+  })
+
+  it('stops at the last point before the end, and counts down with a negative step', () => {
+    expect(block('a = 0 .. 1 step 0.3\nb = 10 .. 1 step -3')).toEqual([
+      list('4 values, 0 … 0.9'),
+      list('4 values, 10 … 1'),
+    ])
+  })
+
+  it('needs a step with units, the same kind throughout, and one that reaches the end', () => {
+    expect(block('a = 1 m .. 3 m\nb = 1 .. 3 step 1 m\nc = 1 .. 3 step 0\nd = 1 .. 3 step -1')).toEqual([
+      error('a range with units needs a step, such as "step 1 m"'),
+      error('start, end and step must be the same kind'),
+      error('step 0 never reaches the end'),
+      error('step -1 never reaches the end'),
+    ])
+  })
+
+  it('refuses more than 10,000 points', () => {
+    expect(block('big = 1 .. 10001\nok = 1 .. 10000')).toEqual([
+      error('big has more than 10,000 points'),
+      list('10000 values, 1 … 1·10⁴'),
+    ])
+  })
+
+  it('runs a line that mentions a list once per point, functions included', () => {
+    expect(block('x = 1 .. 3\nsq(t) = t^2\ny = sq(x)\nx^2 + 1')).toEqual([
+      list('3 values, 1 … 3'),
+      empty,
+      list('3 values, 1 … 9'),
+      list('3 values, 2 … 10'),
+    ])
+  })
+
+  it('pairs several lists point by point, and refuses different lengths', () => {
+    expect(block('a = 1 .. 3\nb = 10 .. 30 step 10\na + b\nc = 1 .. 4\na + c')).toEqual([
+      list('3 values, 1 … 3'),
+      list('3 values, 10 … 30'),
+      list('3 values, 11 … 33'),
+      list('4 values, 1 … 4'),
+      error('a has 3 values, c has 4'),
+    ])
+  })
+
+  it('takes the whole list in an aggregate: min, max, sum, mean, count', () => {
+    expect(block('h = 1 m .. 4 m step 1 m\nmin(h)\nmax(h)\nsum(h)\nmean(h)\ncount(h)\nmax(h * 2) + 1 m')).toEqual([
+      list('4 values, 1 … 4 m'),
+      value('1 m'),
+      value('4 m'),
+      value('10 m'),
+      value('2.5 m'),
+      value('4'),
+      value('9 m'),
+    ])
+  })
+
+  it('leaves aggregates on plain values to math.js', () => {
+    expect(block('max(1, 5, 3)')).toEqual([value('5')])
+  })
+
+  it('fails only the failed point, names it, and fails an aggregate over it', () => {
+    expect(block('x = -1 .. 2\nr(t) = 1 / sqrt(t) + (t < 0 ? missing : 0)\ny = r(x)\nmax(y)')).toEqual([
+      list('4 values, -1 … 2'),
+      empty,
+      list('3 of 4 values, ∞ … 0.7071', '1 of 4 points failed. At x = -1: in r(-1): Undefined symbol missing'),
+      error('y has a failed point'),
+    ])
+  })
+
+  it('carries a failed input point to the lines below, without shifting the others', () => {
+    const [, , , twice] = block('x = -1 .. 1\nr(t) = t < 0 ? missing : t\ny = r(x)\ny * 2')
+    // The input point itself failed, so there is no value to name it by.
+    expect(twice).toEqual(list('2 of 3 values, 0 … 2', '1 of 3 points failed. At point 1: in r(-1): Undefined symbol missing'))
+  })
+
+  it('keeps a function body from reaching an outside list', () => {
+    expect(block('Q_s = 1 .. 3\ng(x) = x + Q_s\nh(x, Q_s) = x + Q_s')).toEqual([
+      list('3 values, 1 … 3'),
+      error('pass Q_s as an argument'),
+      empty,
+    ])
+  })
+
+  it('shows a list in its display unit, and in Variables as its summary', () => {
+    expect(block('Q_s = 1 L/s .. 2 L/s step 1 L/s in L/minute')).toEqual([list('2 values, 60 … 120 L / minute')])
+    expect(variables('Q_s = 1 L/s .. 2 L/s step 1 L/s')).toEqual([
+      [{ name: 'Q_s', kind: 'list', text: '2 values, 1 … 2 L / s' }],
+    ])
+  })
+})
+
+describe('a list’s hover (docs/spec-v1.md section 10, #75)', () => {
+  const preview = (source: string) => evaluateSheet([{ id: 'b', source }]).get('b')!.map((line) => line.listPreview)
+
+  it('shows every point of a short list with its index, in the line’s unit', () => {
+    expect(preview('x = 1 m .. 3 m step 1 m in cm\ny = 2')).toEqual(['1: 100 cm\n2: 200 cm\n3: 300 cm', null])
+  })
+
+  it('shows three points from each end of a long one, and a failed point’s message', () => {
+    expect(preview('x = 1 .. 30')[0]).toBe('1: 1\n2: 2\n3: 3\n…\n28: 28\n29: 29\n30: 30')
+    expect(preview('x = -1 .. 1\nr(t) = t < 0 ? nope : t\nr(x)')[2]).toBe(
+      '1: failed: in r(-1): Undefined symbol nope\n2: 0\n3: 1',
+    )
+  })
+})
+
+describe('tables (docs/spec-v1.md section 10, #76)', () => {
+  const lines = (source: string) => evaluateSheet([{ id: 'b', source }]).get('b')!
+  const cells = (table: TableView | null) => table?.rows.map((row) => row.map((cell) => (cell.ok ? cell.text : `! ${cell.message}`)))
+
+  it('draws one column per argument, a list run point by point and a value filling its column', () => {
+    const line = lines('x = 1 .. 3\ntable(x, x / 4, 2)')[1]
+    expect(line.result).toEqual(empty)
+    expect(line.variables).toEqual([])
+    expect(line.table?.columns.map((column) => column.unit)).toEqual(['', '', ''])
+    expect(cells(line.table)).toEqual([
+      ['1', '0.2500', '2'],
+      ['2', '0.5000', '2'],
+      ['3', '0.7500', '2'],
+    ])
+  })
+
+  it('shows each column in its argument’s unit, else its list line’s, else one system unit', () => {
+    const [, , table] = lines('Q = 1 L/s .. 2 L/s step 1 L/s in L/minute\nH = 500 mm .. 1500 mm step 1000 mm\ntable(Q, H, Q in L/s)')
+    expect(table.table?.columns.map((column) => [column.unit, column.slot?.chosen ?? null])).toEqual([
+      ['L / minute', null],
+      ['m', null],
+      ['L / s', 'L/s'],
+    ])
+    expect(cells(table.table)).toEqual([
+      ['60', '0.5000', '1'],
+      ['120', '1.500', '2'],
+    ])
+  })
+
+  it('heads each column with its expression, typeset', () => {
+    const [, table] = lines('Q_s = 1 .. 2\ntable(Q_s, Q_s^2)')
+    expect(table.table?.columns.map((column) => column.header)).toEqual(['{Q}_{s}', '{ {Q}_{s}}^{2}'])
+  })
+
+  it('shows a failed point as a failed cell, and reports failures it worked out itself', () => {
+    const [, , listed, table] = lines('x = -1 .. 1\nr(t) = t < 0 ? nope : t\ny = r(x)\ntable(x, y, r(x))')
+    expect(listed.result.kind).toBe('list')
+    expect(cells(table.table)?.[0]).toEqual([
+      '-1',
+      '! in r(-1): Undefined symbol nope',
+      '! in r(-1): Undefined symbol nope',
+    ])
+    expect(table.result).toEqual(error('1 of 3 points failed. At x = -1: in r(-1): Undefined symbol nope'))
+    expect(lines('x = -1 .. 1\nr(t) = t < 0 ? nope : t\ny = r(x)\ntable(x, y)')[3].result).toEqual(empty)
+  })
+
+  it('needs a list, and lists of one length', () => {
+    expect(block('table(1, 2)\nx = 1 .. 3\nz = 1 .. 4\ntable(x, z)')).toEqual([
+      error('a table needs a list, such as table(Q_s)'),
+      { kind: 'list', text: '3 values, 1 … 3', failed: null },
+      { kind: 'list', text: '4 values, 1 … 4', failed: null },
+      error('x has 3 values, z has 4'),
+    ])
+  })
+
+  it('typesets the line as its call', () => {
+    expect(lines('x = 1 .. 2\ntable(x, 2 x)')[1].typeset).toMatchObject({
+      kind: 'math',
+      name: null,
+      expression: expect.stringContaining('\\mathrm{table}'),
+    })
+  })
+})
+
+describe('plots (docs/spec-v1.md section 10, #77)', () => {
+  const plotOf = (source: string) => {
+    const lines = evaluateSheet([{ id: 'b', source }]).get('b')!
+    return lines[lines.length - 1]
+  }
+  const base = 'x = 1 m .. 3 m step 1 m\nsq(t) = t^2 / (1 m)\n'
+
+  it('gives the chart its x values, series and automatic axis titles, in the axes’ units', () => {
+    const line = plotOf(`${base}plot(x in cm, sq(x), x)`)
+    expect(line.result).toEqual(empty)
+    expect(line.variables).toEqual([])
+    expect(line.plot).toMatchObject({
+      x: { label: 'x [cm]', unit: 'cm', values: [100, 200, 300], log: false, domain: null },
+      y: { label: 'sq(x), x [m]', unit: 'm' },
+      series: [
+        { name: 'sq(x)', values: [1, 4, 9] },
+        { name: 'x', values: [1, 2, 3] },
+      ],
+      marks: [],
+      failed: [],
+      width: 480,
+      height: 280,
+      title: null,
+    })
+  })
+
+  it('reads the settings: marks, labels, points, log, ranges, size and title', () => {
+    const line = plotOf(`${base}m0 = 2 m\nplot(x, sq(x)), mark m0, labels direct, points, x log, y 0 m .. 10 m, size S, title "Squares"`)
+    expect(line.plot).toMatchObject({
+      marks: [{ x: 2, label: 'm0 = 2 m' }],
+      labelsDirect: true,
+      points: true,
+      x: { log: true },
+      y: { domain: [0, 10] },
+      width: 360,
+      height: 220,
+      title: 'Squares',
+    })
+  })
+
+  it('draws a single-value y as a horizontal line', () => {
+    expect(plotOf(`${base}plot(x, 2 m)`).plot?.series[0].values).toEqual([2, 2, 2])
+  })
+
+  it('shows a failed point as a gap and a ×, and makes it the line’s error', () => {
+    const line = plotOf('x = -1 .. 1\nr(t) = t < 0 ? nope : t\nplot(x, r(x))')
+    expect(line.plot?.series[0].values).toEqual([null, 0, 1])
+    expect(line.plot?.failed).toEqual([{ x: -1, message: 'in r(-1): Undefined symbol nope' }])
+    expect(line.result).toEqual(error('1 of 3 points failed. At x = -1: in r(-1): Undefined symbol nope'))
+  })
+
+  it.each([
+    [`${base}plot(x, sq(x), 2 kW)`, 'sq(x) is a length, 2 kW is a power: one plot shows one kind'],
+    [`${base}plot(x, sq(x)), wobble`, 'Unknown plot setting wobble'],
+    [`${base}plot(x)`, 'a plot needs x and at least one y: plot(Q_s, Hs(Q_s))'],
+    [`${base}plot(2 m, x)`, 'x must be a list: 2 m is a single value'],
+    [`${base}y = 1 .. 4\nplot(x, y)`, 'x has 3 values, y has 4'],
+    [`${base}plot(x - 1 m, sq(x)), x log`, 'x log needs values above 0'],
+    [`${base}plot(x, sq(x)), mark 2 s`, "mark 2 s: one value of x's kind"],
+    ['x = -1 .. 1\nr(t) = nope\nplot(x, r(x))', 'r(x): every point failed. At x = -1: in r(-1): Undefined symbol nope'],
+  ])('is an error on the line: %s', (source, message) => {
+    const line = plotOf(source)
+    expect(line.result).toEqual(error(message))
+    expect(line.plot).toBeNull()
+  })
+
+  it('typesets the line as its call, clauses hidden', () => {
+    expect(plotOf(`${base}plot(x, sq(x)), mark 2 m`).typeset).toMatchObject({
+      kind: 'math',
+      name: null,
+      expression: expect.not.stringContaining('mark'),
+    })
   })
 })

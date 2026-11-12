@@ -29,6 +29,8 @@ import {
   type SheetLine,
 } from '../math/evaluate.ts'
 import { writeDisplayUnit } from '../math/lineForm.ts'
+import { writeArgumentUnit } from '../math/tableLine.ts'
+import { writePlotClauses, type PlotClause } from '../math/plotLine.ts'
 import type { DisplaySettings } from '../math/display.ts'
 import {
   applyLineMove,
@@ -44,7 +46,7 @@ import { MathElementView } from './MathElementView.tsx'
 import { PlacingGhost } from './PlacingGhost.tsx'
 import { readingOrder } from './readingOrder.ts'
 import { useAnchorSizes } from './useAnchorSizes.ts'
-import { useSheetGestures, type SlotTarget } from './useSheetGestures.ts'
+import { GEAR, useSheetGestures, type SlotTarget } from './useSheetGestures.ts'
 import type { Viewport } from './viewport.ts'
 import './MathOverlay.css'
 
@@ -211,14 +213,29 @@ export function MathOverlay({
   }, [viewport, anchors, hoverTip])
 
   /** Writes the slot's choice into the line's source, as one line commit; the line stays typeset. */
-  const applyUnit = (anchorId: string, lineIndex: number, unit: string | null) => {
+  const applyUnit = (anchorId: string, lineIndex: number, unit: string | null, column?: number) => {
     setUnitEdit(null)
     focusCanvas()
     const anchor = findAnchor(anchorId)
     if (!anchor) return
     const sourceLines = splitLines(anchor.source)
     if (lineIndex >= sourceLines.length) return
-    const written = writeDisplayUnit(sourceLines[lineIndex], unit)
+    const written =
+      column === undefined
+        ? writeDisplayUnit(sourceLines[lineIndex], unit)
+        : writeArgumentUnit(sourceLines[lineIndex], column, unit)
+    if (written === sourceLines[lineIndex]) return
+    sourceLines[lineIndex] = written
+    writeAnchorSource(api, anchorId, sourceLines.join('\n'))
+  }
+
+  /** Writes a plot's clauses from its popover, as one line commit; the popover stays open. */
+  const applyPlot = (anchorId: string, lineIndex: number, clauses: PlotClause[]) => {
+    const anchor = findAnchor(anchorId)
+    if (!anchor) return
+    const sourceLines = splitLines(anchor.source)
+    if (lineIndex >= sourceLines.length) return
+    const written = writePlotClauses(sourceLines[lineIndex], clauses)
     if (written === sourceLines[lineIndex]) return
     sourceLines[lineIndex] = written
     writeAnchorSource(api, anchorId, sourceLines.join('\n'))
@@ -343,7 +360,9 @@ export function MathOverlay({
           unitSlots={{
             hovered: slotHover?.anchorId === anchor.id ? slotHover.line : null,
             open: unitEdit?.anchorId === anchor.id ? unitEdit.line : null,
-            apply: (lineIndex, unit) => applyUnit(anchor.id, lineIndex, unit),
+            openColumn: unitEdit?.anchorId === anchor.id ? (unitEdit.column ?? null) : null,
+            apply: (lineIndex, unit, column) => applyUnit(anchor.id, lineIndex, unit, column),
+            applyPlot: (lineIndex, clauses) => applyPlot(anchor.id, lineIndex, clauses),
             cancel: () => setUnitEdit(null),
             isUnit: isDisplayUnit,
           }}
@@ -384,7 +403,11 @@ function slotAt(overlay: HTMLElement | null, clientX: number, clientY: number): 
       const box = slot.getBoundingClientRect()
       if (box.width === 0 && box.height === 0) continue
       if (clientX >= box.left && clientX <= box.right && clientY >= box.top && clientY <= box.bottom) {
-        return { anchorId: element.dataset.anchorId, line: Number(slot.dataset.unitSlot) }
+        const [line, column] = (slot.dataset.unitSlot ?? '').split(':')
+        const target: SlotTarget = { anchorId: element.dataset.anchorId, line: Number(line) }
+        // A plot's ⚙ (section 10) opens its popover the way a slot opens its field.
+        if (column !== undefined) target.column = column === 'gear' ? GEAR : Number(column)
+        return target
       }
     }
   }

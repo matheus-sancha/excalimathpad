@@ -16,15 +16,20 @@ import {
   createDisplay,
   type DisplaySettings,
   type DisplayUnit,
+  type ShownUnit,
   type UnitSlot,
 } from './display.ts'
-import { createCalls, isSheetFunction, messageOf } from './functions.ts'
+import { createCalls, isSheetFunction, messageOf, SheetError } from './functions.ts'
 import { readLine, type LineFormat } from './lineForm.ts'
-import { DEFAULT_DIGITS } from './numbers.ts'
+import { DEFAULT_DIGITS, leadingNumber, tableColumn } from './numbers.ts'
 import { createSolver, LayeredScope, type CompiledSolve, type SolveDetails, type SolveParts, type SolveText } from './solve.ts'
 import { readSolve } from './solveLine.ts'
-import { lineTex, resultTex, solveTex, textTex, unitTex, type Names } from './typeset.ts'
-import { lineWarnings, solveWarnings } from './warnings.ts'
+import { readRange } from './rangeLine.ts'
+import { readTable } from './tableLine.ts'
+import { PLOT_SIZES, readPlot, type PlotClause } from './plotLine.ts'
+import { AGGREGATES, createRanges, isSheetList, listSummary, SheetList, type Point } from './lists.ts'
+import { lineTex, rangeTex, resultTex, solveTex, textTex, unitTex, type Names } from './typeset.ts'
+import { bodyNames, lineWarnings, solveWarnings, usedNames } from './warnings.ts'
 
 /**
  * The math engine: math.js with units, fully client-side.
@@ -85,6 +90,9 @@ const display = createDisplay(math, parse)
 
 /** Solve lines' residuals and runs (docs/spec-v1.md section 9), on the same engine. */
 const solver = createSolver(math)
+
+/** Ranges (docs/spec-v1.md section 10), on the same engine. */
+const ranges = createRanges(math)
 
 /** How results show when the sheet sets nothing: SI with prefixes, 4 digits. */
 export const DEFAULT_DISPLAY: DisplaySettings = {
@@ -181,6 +189,12 @@ export type LineResult =
   | { kind: 'empty' }
   | { kind: 'value'; text: string }
   | { kind: 'error'; message: string }
+  /**
+   * A list (section 10): its one-row summary, `30 values, 12.04 … 33.18 m`.
+   * `failed` is the line's problem when points failed, `1 of 30 points
+   * failed. At Q_s = 0 L/s: …`; the other points keep their values.
+   */
+  | { kind: 'list'; text: string; failed: string | null }
 
 /**
  * A line as the grid shows it (docs/spec-v1.md section 4), with its cells' TeX.
@@ -197,8 +211,8 @@ export type TypesetLine =
       note: string | null
       /** Bold, underline and highlight colour, for the whole row. */
       format: LineFormat
-      /** A solve line's guess (section 4), set small and grey after the expression. */
-      guess?: string
+      /** A solve line's guess or a range's step (section 4), set small and grey after the expression. */
+      aside?: string
     }
   | { kind: 'unparsed'; source: string }
 
@@ -229,7 +243,63 @@ export interface SheetLine {
    * a solve function. Null everywhere else. Never saved.
    */
   solveDetails: SolveDetails | null
+  /**
+   * A list result's hover (section 10): the first and last few points, each
+   * with its index, `1: 12.04 m`, a gap marked `…`. Null on any other line.
+   */
+  listPreview: string | null
+  /** A table line's table (section 10), drawn under the line. Null on any other line. */
+  table: TableView | null
+  /** A plot line's chart (section 10), drawn under the line. Null on any other line. */
+  plot: PlotView | null
 }
+
+/** A table as the grid draws it: its columns, then every row, one cell per column. */
+export interface TableView {
+  columns: readonly TableColumn[]
+  rows: readonly (readonly TableCell[])[]
+}
+
+export interface TableColumn {
+  /** The argument's expression, typeset. */
+  header: string
+  /** The column's unit as a result writes it (`L / s`); empty for plain numbers. */
+  unit: string
+  /** The header's unit slot: the column's chosen unit and the list it offers. Null for a column of plain numbers. */
+  slot: (UnitSlot & { chosen: string | null }) | null
+}
+
+/**
+ * A plot as the overlay draws it (section 10, Plots): plain numbers in each
+ * axis's unit, null where a point failed, and its settings from the clauses.
+ */
+export interface PlotView {
+  x: PlotAxis & { values: readonly (number | null)[] }
+  y: PlotAxis
+  series: readonly { name: string; tex: string; values: readonly (number | null)[] }[]
+  /** `mark` clauses: a guide at x, a dot where it meets each curve, its label at the top. */
+  marks: readonly { x: number; label: string }[]
+  /** Points where a series failed: a red × on the x axis, with the message on hover. */
+  failed: readonly { x: number; message: string }[]
+  labelsDirect: boolean
+  points: boolean
+  width: number
+  height: number
+  title: string | null
+}
+
+export interface PlotAxis {
+  /** The automatic title, `Q_s [L/s]`. */
+  label: string
+  /** The unit as a result writes it; empty for plain numbers. */
+  unit: string
+  log: boolean
+  /** An axis range clause, in the axis's unit; null fits the data. */
+  domain: readonly [number, number] | null
+}
+
+/** A cell: its number in the column's unit and the table's form, or a failed point's message. */
+export type TableCell = { ok: true; text: string } | { ok: false; message: string }
 
 export type { SolveDetails } from './solve.ts'
 
@@ -237,6 +307,8 @@ export type SheetVariable =
   | { name: string; kind: 'value'; text: string }
   | { name: string; kind: 'function'; params: readonly string[]; solve: boolean }
   | { name: string; kind: 'error' }
+  /** A list, by its summary (section 8). */
+  | { name: string; kind: 'list'; text: string }
 
 /** One math element's source, as the sheet sees it. */
 export interface SheetBlock {
@@ -262,6 +334,51 @@ type ParsedLine =
       /** The line's trailing `in <unit>`, read outside the sheet's scope, or null. */
       display: DisplayUnit | null
       /** That unit as typed. */
+      displayText: string | null
+    }
+  /** A range line (section 10): `[name =] start .. end [step s]`. */
+  | {
+      kind: 'range'
+      name: string | null
+      start: MathNode
+      end: MathNode
+      step: MathNode | null
+      defines: readonly string[]
+      note: string | null
+      format: LineFormat
+      unknownFormat: string | null
+      display: DisplayUnit | null
+      displayText: string | null
+      source: string
+    }
+  /** A table line (section 10): `table(arg, …)`, display only. */
+  | {
+      kind: 'table'
+      args: readonly {
+        node: MathNode
+        display: DisplayUnit | null
+        displayText: string | null
+      }[]
+      defines: readonly string[]
+      note: string | null
+      format: LineFormat
+      unknownFormat: string | null
+      display: DisplayUnit | null
+      displayText: string | null
+    }
+  /** A plot line (section 10): `plot(x, y1, …)` and its clauses, display only. */
+  | {
+      kind: 'plot'
+      args: readonly { node: MathNode; display: DisplayUnit | null; displayText: string | null; text: string }[]
+      clauses: readonly PlotClause[]
+      /** The clauses' expressions, parsed: each mark, and each range's ends. */
+      marks: readonly { node: MathNode; text: string }[]
+      ranges: readonly { axis: 'x' | 'y'; start: MathNode; end: MathNode; text: string }[]
+      defines: readonly string[]
+      note: string | null
+      format: LineFormat
+      unknownFormat: string | null
+      display: DisplayUnit | null
       displayText: string | null
     }
   /** A solve line (section 9): it defines one name, a value or a solve function. */
@@ -361,6 +478,11 @@ export function evaluateSheet(
   // The slot and solve details of the line being evaluated, set by `evaluateLine`.
   let slot: SheetLine['unitSlot'] = null
   let details: SolveDetails | null = null
+  let preview: string | null = null
+  let table: TableView | null = null
+  let plot: PlotView | null = null
+  // The display unit each list was given on the line that defined it, for table columns.
+  const listUnits = new Map<string, { unit: ShownUnit; text: string }>()
   position = 0
   for (const { id, lines } of sheet) {
     results.set(
@@ -371,6 +493,9 @@ export function evaluateSheet(
         if (line.kind !== 'blank') line.defines.forEach((name) => assigned.add(name))
         slot = null
         details = null
+        preview = null
+        table = null
+        plot = null
         const result = evaluateLine(line)
         return {
           result,
@@ -379,6 +504,9 @@ export function evaluateSheet(
           variables: variablesOf(line),
           unitSlot: slot,
           solveDetails: result.kind === 'value' ? details : null,
+          listPreview: result.kind === 'list' ? preview : null,
+          table,
+          plot,
         }
       }),
     )
@@ -393,6 +521,7 @@ export function evaluateSheet(
         return { name, kind: 'error' }
       }
       const value = scope.get(name)
+      if (isSheetList(value)) return { name, kind: 'list', text: summaryOf(value, null) }
       if (isSheetFunction(value)) {
         const { params, solve } = value.sheetFunction
         return { name, kind: 'function', params, solve: solve === true }
@@ -439,7 +568,8 @@ export function evaluateSheet(
     const reserved = line.defines.find((name) => RESERVED.includes(name))
     if (reserved !== undefined) return fail(`${reserved} is a line form: choose another name`)
     // `in <unit>` belongs on the line that calls a function (section 3).
-    const definesFunction = line.kind === 'solve' ? line.params !== null : isFunctionAssignmentNode(line.node)
+    const definesFunction =
+      line.kind === 'solve' ? line.params !== null : line.kind === 'parsed' && isFunctionAssignmentNode(line.node)
     if (line.display !== null && definesFunction) {
       return fail("Set a function's display unit on the line that calls it")
     }
@@ -447,8 +577,27 @@ export function evaluateSheet(
       // Asked before the line runs: the line itself may assign one of these names.
       const isPlain = (line.kind === 'parsed' && line.plainInputUnits?.every((name) => !scope.has(name))) || false
       lastSolve = null
-      const value: unknown = line.kind === 'solve' ? runSolve(line) : runCode(line.node)
-      if (line.kind === 'solve' || isSolveCall(line.node)) details = lastSolve
+      if (line.kind === 'plot') {
+        if (line.display !== null) throw new SheetError('a plot takes its units on its arguments: plot(Q_s in L/s, …)')
+        const unknown = line.clauses.find((clause) => clause.kind === 'unknown')
+        if (unknown?.kind === 'unknown') throw new SheetError(`Unknown plot setting ${unknown.text}`)
+        const built = runPlot(line)
+        plot = built.view
+        if (line.unknownFormat !== null) return { kind: 'error', message: `Unknown format ${line.unknownFormat}` }
+        return built.failed === null ? { kind: 'empty' } : { kind: 'error', message: built.failed }
+      }
+      if (line.kind === 'table') {
+        if (line.display !== null) throw new SheetError('a table takes its units on its arguments: table(Q_s in L/s)')
+        const built = runTable(line)
+        table = built.view
+        if (line.unknownFormat !== null) return { kind: 'error', message: `Unknown format ${line.unknownFormat}` }
+        // Points that failed in a column the table worked out itself are its line's error;
+        // a list named from above already shows its own.
+        return built.failed === null ? { kind: 'empty' } : { kind: 'error', message: built.failed }
+      }
+      const value: unknown =
+        line.kind === 'solve' ? runSolve(line) : line.kind === 'range' ? runRange(line) : runCode(line.node)
+      if (line.kind === 'solve' || (line.kind === 'parsed' && isSolveCall(line.node))) details = lastSolve
       line.defines.forEach((name) => failed.delete(name))
       // Reported after the line ran, so its value still reaches the lines
       // below, as for an unknown display unit (section 3).
@@ -465,6 +614,15 @@ export function evaluateSheet(
       try {
         const shown = line.display
         const unit = shown?.kind === 'unit' ? shown.unit : shown?.kind === 'percent' ? 'percent' : null
+        for (const name of line.defines) {
+          if (isSheetList(scope.get(name)) && unit !== null && line.displayText !== null) {
+            listUnits.set(name, { unit, text: line.displayText })
+          } else listUnits.delete(name)
+        }
+        if (isSheetList(value)) {
+          preview = previewOf(value, unit)
+          return { kind: 'list', text: summaryOf(value, unit), failed: failureOf(value) }
+        }
         const text = display.show(value, unit, settings)
         const offered = display.slot(value, settings)
         slot = offered && { ...offered, chosen: line.displayText }
@@ -475,14 +633,41 @@ export function evaluateSheet(
         return { kind: 'error', message: error instanceof Error ? error.message : String(error) }
       }
     } catch (error) {
-      const node = line.kind === 'solve' ? line.parts.lhs : line.node
+      const node =
+        line.kind === 'solve'
+          ? line.parts.lhs
+          : line.kind === 'range'
+            ? line.start
+            : line.kind === 'table' || line.kind === 'plot'
+              ? (line.args[0]?.node ?? new math.ConstantNode(0))
+              : line.node
       const message = messageOf(error, node, (name) => scope.get(name))
       return fail(explain(message, here, definedAt, failed))
     }
   }
 
   function runCode(node: MathNode): unknown {
-    const value: unknown = node.compile().evaluate(scope)
+    // Section 10: a function body can't reach a list from outside.
+    for (const { params, expr } of functionDefinitions(node)) {
+      const outside = bodyNames(expr).find((name) => !params.includes(name) && isSheetList(scope.get(name)))
+      if (outside !== undefined) throw new SheetError(`pass ${outside} as an argument`)
+    }
+    const bound = new Map<string, unknown>()
+    const folded = foldAggregates(node, bound)
+    const assigned = isAssignmentNode(folded) && !folded.index ? folded : null
+    const expression = assigned ? assigned.value : folded
+    if (listsIn(expression).length > 0 && !isBlockNode(folded) && !isFunctionAssignmentNode(folded)) {
+      const list = iterate(expression, bound)
+      if (assigned) scope.set(assigned.name, list)
+      return list
+    }
+    let value: unknown
+    if (bound.size === 0) value = folded.compile().evaluate(scope)
+    else {
+      const local = new LayeredScope(scope, bound)
+      value = folded.compile().evaluate(local)
+      for (const name of definedNames(folded)) scope.set(name, local.get(name))
+    }
     for (const definition of functionDefinitions(node)) {
       const { name, params, expr } = definition
       const fn = scope.get(name) as (...args: unknown[]) => unknown
@@ -516,6 +701,373 @@ export function evaluateSheet(
     return wrapped
   }
 
+  /** A range line (section 10): its list, assigned to its name if it has one. */
+  function runRange(line: Extract<ParsedLine, { kind: 'range' }>): SheetList {
+    const at = (node: MathNode): unknown => {
+      const value: unknown = node.compile().evaluate(scope)
+      if (isSheetList(value)) throw new SheetError('a range takes single values, not a list')
+      return value
+    }
+    const list = ranges.range(at(line.start), at(line.end), line.step === null ? null : at(line.step), line.name)
+    if (line.name !== null) scope.set(line.name, list)
+    return list
+  }
+
+  /**
+   * A table line (section 10): each argument a column, a list run point by
+   * point, a single value filling its column. Lists must have one length, and
+   * at least one argument must be a list.
+   */
+  function runTable(line: Extract<ParsedLine, { kind: 'table' }>): { view: TableView; failed: string | null } {
+    if (line.args.length === 0) throw new SheetError('a table needs a list, such as table(Q_s)')
+    const columns = line.args.map((arg) => {
+      const lists = listsIn(arg.node)
+      const value: SheetList | unknown = lists.length > 0 ? iterate(arg.node, new Map()) : arg.node.compile().evaluate(scope)
+      return { arg, value, name: isSymbolNode(arg.node) ? arg.node.name : arg.node.toString() }
+    })
+    const listed = columns.filter((column) => isSheetList(column.value))
+    if (listed.length === 0) throw new SheetError('a table needs a list, such as table(Q_s)')
+    const length = (listed[0].value as SheetList).length
+    const other = listed.find((column) => (column.value as SheetList).length !== length)
+    if (other) {
+      throw new SheetError(`${listed[0].name} has ${length} values, ${other.name} has ${(other.value as SheetList).length}`)
+    }
+    const built = columns.map(({ arg, value }) => {
+      const points: Point[] = isSheetList(value)
+        ? [...value.points]
+        : Array.from({ length }, () => ({ ok: true as const, value }))
+      return buildColumn(arg, points)
+    })
+    const own = columns.find(
+      ({ arg, value }) => isSheetList(value) && !isSymbolNode(arg.node) && failureOf(value) !== null,
+    )
+    return {
+      view: {
+        columns: built.map(({ column }) => column),
+        rows: Array.from({ length }, (_, i) => built.map(({ cells }) => cells[i])),
+      },
+      failed: own ? failureOf(own.value as SheetList) : null,
+    }
+  }
+
+  /**
+   * A plot line (section 10, Plots): x and each y as for a table's columns,
+   * one kind on y in the first series' unit, the clauses' marks and ranges in
+   * the axes' units. A failed point is a gap and a × on the x axis; a series
+   * whose every point failed is the line's error.
+   */
+  function runPlot(line: Extract<ParsedLine, { kind: 'plot' }>): { view: PlotView; failed: string | null } {
+    if (line.args.length < 2) throw new SheetError('a plot needs x and at least one y: plot(Q_s, Hs(Q_s))')
+    const values = line.args.map((arg) => {
+      const lists = listsIn(arg.node)
+      return lists.length > 0 ? iterate(arg.node, new Map()) : (arg.node.compile().evaluate(scope) as unknown)
+    })
+    const [xArg, ...yArgs] = line.args
+    const xList = values[0]
+    if (!isSheetList(xList)) throw new SheetError(`x must be a list: ${xArg.text} is a single value`)
+    const length = xList.length
+    values.forEach((value, i) => {
+      if (isSheetList(value) && value.length !== length) {
+        throw new SheetError(`${xArg.text} has ${length} values, ${line.args[i].text} has ${value.length}`)
+      }
+    })
+    const pointsOf = (value: unknown): Point[] =>
+      isSheetList(value) ? [...value.points] : Array.from({ length }, () => ({ ok: true as const, value }))
+
+    // Each series' kind: one per plot (section 10).
+    const ys = yArgs.map((arg, i) => ({ arg, points: pointsOf(values[i + 1]) }))
+    ys.forEach(({ arg, points }) => {
+      if (points.every((point) => !point.ok)) {
+        const failure = failureOf(new SheetList(points, { name: xArg.text, list: xList }))
+        throw new SheetError(`${arg.text}: every point failed. ${failure?.replace(/^\d+ of \d+ points failed\. /, '') ?? ''}`)
+      }
+    })
+    const kinds = ys.map(({ points }) => kindName(points.find((point) => point.ok)!))
+    const other = kinds.findIndex((kind) => kind !== kinds[0])
+    if (other !== -1) {
+      throw new SheetError(
+        `${ys[0].arg.text} is ${article(kinds[0])}, ${ys[other].arg.text} is ${article(kinds[other])}: one plot shows one kind`,
+      )
+    }
+
+    const xAxis = axisUnit(xArg, pointsOf(xList))
+    const yAxis = axisUnit(ys[0].arg, ys.flatMap(({ points }) => points))
+    const numbers = (points: readonly Point[], unit: ShownUnit | null) =>
+      points.map((point) => (point.ok ? numberIn(point.value, unit) : null))
+    const x = numbers(xList.points, xAxis.unit)
+    const series = ys.map(({ arg, points }) => ({
+      name: arg.text,
+      tex: tableHeaderTex(arg.node, names),
+      values: numbers(points, yAxis.unit),
+    }))
+
+    const failed: { x: number; message: string }[] = []
+    ys.forEach(({ points }) =>
+      points.forEach((point, i) => {
+        const at = x[i]
+        if (!point.ok && at !== null) failed.push({ x: at, message: point.message })
+      }),
+    )
+    const firstFailed = ys.map(({ points }) => new SheetList(points, { name: xArg.text, list: xList }))
+      .map(failureOf)
+      .find((message) => message !== null)
+
+    const has = (kind: PlotClause['kind']) => line.clauses.some((clause) => clause.kind === kind)
+    const logOn = (axis: 'x' | 'y') =>
+      line.clauses.some((clause) => clause.kind === 'log' && clause.axis === axis)
+    for (const [axis, data] of [
+      ['x', x],
+      ['y', series.flatMap((s) => s.values)],
+    ] as const) {
+      if (logOn(axis) && data.some((v) => v !== null && v <= 0)) throw new SheetError(`${axis} log needs values above 0`)
+    }
+    const domain = (axis: 'x' | 'y'): readonly [number, number] | null => {
+      const range = line.ranges.find((r) => r.axis === axis)
+      if (!range) return null
+      const unit = axis === 'x' ? xAxis : yAxis
+      const end = (node: MathNode) => {
+        const value: unknown = node.compile().evaluate(scope)
+        const n = numberIn(value, unit.unit, unit.reference)
+        if (n === null) throw new SheetError(`${axis} ${range.text}: the range must be the axis's kind`)
+        return n
+      }
+      return [end(range.start), end(range.end)]
+    }
+    const marks = line.marks.map(({ node, text }) => {
+      const value: unknown = node.compile().evaluate(scope)
+      const n = numberIn(value, xAxis.unit, xAxis.reference)
+      if (n === null || isSheetList(value)) throw new SheetError(`mark ${text}: one value of x's kind`)
+      return { x: n, label: `${text} = ${display.show(value, xAxis.unit, settings)}` }
+    })
+    const size = line.clauses.find((clause) => clause.kind === 'size')
+    const title = line.clauses.find((clause) => clause.kind === 'title')
+    const bracket = (unit: string) => (unit === '' ? '' : ` [${unit.replace(/ \/ /g, '/')}]`)
+    return {
+      view: {
+        x: { label: `${xArg.text}${bracket(xAxis.text)}`, unit: xAxis.text, log: logOn('x'), domain: domain('x'), values: x },
+        y: {
+          label: `${series.map((s) => s.name).join(', ')}${bracket(yAxis.text)}`,
+          unit: yAxis.text,
+          log: logOn('y'),
+          domain: domain('y'),
+        },
+        series,
+        marks,
+        failed,
+        labelsDirect: has('labels-direct'),
+        points: has('points'),
+        ...PLOT_SIZES[size?.kind === 'size' ? size.size : 'M'],
+        title: title?.kind === 'title' ? title.text : null,
+      },
+      failed: firstFailed ?? null,
+    }
+  }
+
+  /** An axis's unit: its argument's `in`, else its list line's, else the system's for its largest value. */
+  function axisUnit(
+    arg: { node: MathNode; display: DisplayUnit | null },
+    points: readonly Point[],
+  ): { unit: ShownUnit | null; text: string; reference: unknown } {
+    const ok = points.filter((point): point is Extract<Point, { ok: true }> => point.ok)
+    const named = isSymbolNode(arg.node) ? listUnits.get(arg.node.name) : undefined
+    let unit: ShownUnit | null =
+      arg.display?.kind === 'unit' ? arg.display.unit : arg.display?.kind === 'percent' ? 'percent' : (named?.unit ?? null)
+    if (unit === null && ok.length > 0) {
+      const largest = ok.reduce((a, b) => (magnitude(b.value) > magnitude(a.value) ? b : a))
+      const rest = leadingNumber(display.show(largest.value, null, settings))?.rest.trim() ?? ''
+      const target = rest === '' ? null : display.readTarget(rest)
+      unit = target?.kind === 'unit' ? target.unit : null
+    }
+    const sample = ok[0]?.value
+    const text = sample === undefined ? '' : (leadingNumber(display.show(sample, unit, settings))?.rest.trim() ?? '')
+    return { unit, text, reference: sample }
+  }
+
+  /** A value as a plain number in `unit` (null for none); null if it isn't of `reference`'s kind. */
+  function numberIn(value: unknown, unit: ShownUnit | null, reference?: unknown): number | null {
+    if (reference !== undefined && !sameKind(value, reference)) return null
+    if (typeof value === 'number') return unit === 'percent' ? value * 100 : value
+    if (!math.isUnit(value) || value.value === null) return null
+    if (unit === null || unit === 'percent') {
+      return value.dimensions.every((d) => d === 0) ? value.toNumber('') * (unit === 'percent' ? 100 : 1) : value.value
+    }
+    try {
+      return value.toNumber(unit.formatUnits())
+    } catch {
+      return null
+    }
+  }
+
+  function sameKind(a: unknown, b: unknown): boolean {
+    const dims = (v: unknown) =>
+      math.isUnit(v) && !v.dimensions.every((d) => d === 0) ? v.dimensions.join(',') : typeof v === 'number' || math.isUnit(v) ? '' : null
+    return dims(a) !== null && dims(a) === dims(b)
+  }
+
+  /** A value's kind in words, for the one-kind message: `a length`, `a power`. */
+  function kindName(point: Point): string {
+    if (!point.ok) return 'a failed point'
+    const slot = display.slot(point.value, settings)
+    if (slot === null) return 'a value'
+    if (slot.kind === 'dimensionless') return 'a number'
+    if (slot.kind === null) {
+      return math.isUnit(point.value) ? `in ${point.value.toSI().formatUnits()}` : 'a value'
+    }
+    return slot.kind.replace(/[A-Z]/g, (c) => ` ${c.toLowerCase()}`)
+  }
+
+  function article(kind: string): string {
+    if (kind.startsWith('a ') || kind.startsWith('in ')) return kind
+    return /^[aeiou]/.test(kind) ? `an ${kind}` : `a ${kind}`
+  }
+
+  /** A column's unit, header and cells, in its argument's unit, else its list's, else the sheet's system. */
+  function buildColumn(
+    arg: Extract<ParsedLine, { kind: 'table' }>['args'][number],
+    points: readonly Point[],
+  ): { column: TableColumn; cells: TableCell[] } {
+    const header = tableHeaderTex(arg.node, names)
+    const ok = points.filter((point): point is Extract<Point, { ok: true }> => point.ok)
+    const named = isSymbolNode(arg.node) ? listUnits.get(arg.node.name) : undefined
+    let unit: ShownUnit | null =
+      arg.display?.kind === 'unit' ? arg.display.unit : arg.display?.kind === 'percent' ? 'percent' : (named?.unit ?? null)
+    if (unit === null && ok.length > 0) {
+      // One unit for the whole column: the one the system picks for its largest value.
+      const largest = ok.reduce((a, b) => (magnitude(b.value) > magnitude(a.value) ? b : a))
+      const rest = leadingNumber(display.show(largest.value, null, settings))?.rest.trim() ?? ''
+      const target = rest === '' ? null : display.readTarget(rest)
+      unit = target?.kind === 'unit' ? target.unit : null
+    }
+    const texts = points.map((point) => (point.ok ? display.show(point.value, unit, settings) : null))
+    const first = texts.find((text) => text !== null) ?? ''
+    const unitText = leadingNumber(first)?.rest.trim() ?? ''
+    const numbers = tableColumn(
+      texts.filter((text): text is string => text !== null).map((text) => leadingNumber(text)?.number ?? text),
+      settings.digits,
+    )
+    let k = 0
+    const cells = points.map((point): TableCell => (point.ok ? { ok: true, text: numbers[k++] } : point))
+    // The header's slot offers the first value in each unit; only an `in` on the argument counts as chosen.
+    const offered = ok.length > 0 && unitText !== '' ? display.slot(ok[0].value, settings) : null
+    return { column: { header, unit: unitText, slot: offered && { ...offered, chosen: arg.displayText } }, cells }
+  }
+
+  function magnitude(value: unknown): number {
+    if (typeof value === 'number') return Math.abs(value)
+    if (math.isUnit(value) && value.value !== null) return Math.abs(value.value)
+    return 0
+  }
+
+  /** The names in a node that hold a list here, in order, each once. */
+  function listsIn(node: MathNode, bound?: ReadonlyMap<string, unknown>): string[] {
+    return [...new Set(usedNames(node))].filter((name) => !bound?.has(name) && isSheetList(scope.get(name)))
+  }
+
+  /**
+   * An expression run once per point (section 10, iterating line): each list
+   * name bound to its i-th value, lists paired point by point. A point whose
+   * input failed, or whose run throws, fails alone.
+   */
+  function iterate(expression: MathNode, bound: ReadonlyMap<string, unknown>): SheetList {
+    const names = listsIn(expression, bound)
+    const lists = names.map((name) => scope.get(name) as SheetList)
+    const length = lists[0].length
+    const other = lists.findIndex((list) => list.length !== length)
+    if (other !== -1) {
+      throw new SheetError(`${names[0]} has ${length} values, ${names[other]} has ${lists[other].length}`)
+    }
+    const code = expression.compile()
+    const points: Point[] = []
+    for (let i = 0; i < length; i++) {
+      const own = new Map(bound)
+      let input: Point | null = null
+      lists.forEach((list, k) => {
+        const point = list.points[i]
+        if (!point.ok) input ??= point
+        else own.set(names[k], point.value)
+      })
+      if (input !== null) {
+        points.push(input)
+        continue
+      }
+      const local = new LayeredScope(scope, own)
+      try {
+        points.push({ ok: true, value: code.evaluate(local) })
+      } catch (error) {
+        points.push({ ok: false, message: messageOf(error, expression, (name) => local.get(name)) })
+      }
+    }
+    return new SheetList(points, { name: names[0], list: lists[0] })
+  }
+
+  /**
+   * Aggregates over a list (section 10): `max(H_s)` takes the whole list. Each
+   * such call is worked out first and stands in the node as a bound name, so
+   * the rest of the line sees one value. A failed point fails the aggregate.
+   */
+  function foldAggregates(node: MathNode, bound: Map<string, unknown>): MathNode {
+    return node.transform((child) => {
+      if (!isFunctionNode(child) || !isSymbolNode(child.fn)) return child
+      const name = child.fn.name
+      if (!(AGGREGATES as readonly string[]).includes(name) || scope.has(name)) return child
+      if (!child.args.some((arg) => listsIn(arg).length > 0)) return child
+      const values = child.args.flatMap((arg) => {
+        if (listsIn(arg).length === 0) return [arg.compile().evaluate(scope) as unknown]
+        const items = iterate(arg, new Map()).values()
+        if (items === null) throw new SheetError(`${isSymbolNode(arg) ? arg.name : arg.toString()} has a failed point`)
+        return items
+      })
+      const key = `__aggregate${bound.size}`
+      const aggregate = (math as unknown as Record<string, (...args: unknown[]) => unknown>)[name]
+      bound.set(key, name === 'count' ? values.length : aggregate(...values))
+      return new math.SymbolNode(key)
+    })
+  }
+
+  /** A list's summary in the sheet's number form, in `unit` if the line chose one. */
+  function summaryOf(list: SheetList, unit: ShownUnit | null): string {
+    return listSummary(
+      list,
+      (value) => display.show(value, unit, settings),
+      (value, like) => {
+        const target = like === '' ? null : display.readTarget(like)
+        return display.show(value, target?.kind === 'unit' ? target.unit : unit, settings)
+      },
+    )
+  }
+
+  /** The hover of a list's summary: three points from each end, with their index. */
+  function previewOf(list: SheetList, unit: ShownUnit | null): string {
+    const row = (i: number) => {
+      const point = list.points[i]
+      return `${i + 1}: ${point.ok ? display.show(point.value, unit, settings) : `failed: ${point.message}`}`
+    }
+    const n = list.length
+    if (n <= 7) return list.points.map((_, i) => row(i)).join('\n')
+    return [row(0), row(1), row(2), '…', row(n - 3), row(n - 2), row(n - 1)].join('\n')
+  }
+
+  /** One value of a list in the unit its summary ends with, so `0 L/s` reads as the list does. */
+  function likeList(list: SheetList, value: unknown): string {
+    const last = [...list.points].reverse().find((point) => point.ok)
+    if (!last?.ok) return display.show(value, null, settings)
+    const unit = leadingNumber(display.show(last.value, null, settings))?.rest.trim() ?? ''
+    const target = unit === '' ? null : display.readTarget(unit)
+    return display.show(value, target?.kind === 'unit' ? target.unit : null, settings)
+  }
+
+  /** `1 of 30 points failed. At Q_s = 0 L/s: …`, or null when none did. */
+  function failureOf(list: SheetList): string | null {
+    const failed = list.points.filter((point) => !point.ok).length
+    if (failed === 0) return null
+    const i = list.points.findIndex((point) => !point.ok)
+    const point = list.points[i] as Extract<Point, { ok: false }>
+    const origin = list.origin
+    const input = origin?.list.points[i]
+    const where = origin && input?.ok ? `At ${origin.name} = ${likeList(origin.list, input.value)}` : `At point ${i + 1}`
+    return `${failed} of ${list.length} points failed. ${where}: ${point.message}`
+  }
+
   /** `f_d = f(Re_d, eps/D)` or `f(…)`: the line is just one call to a solve function. */
   function isSolveCall(node: MathNode): boolean {
     const call = isAssignmentNode(node) && !node.index ? node.value : node
@@ -531,6 +1083,28 @@ function typesetLine(line: ParsedLine, names: Names): TypesetLine {
       return line.comment === null ? { kind: 'blank' } : { kind: 'comment', text: line.comment }
     case 'syntax-error':
       return { kind: 'unparsed', source: line.source }
+    case 'plot':
+      return {
+        kind: 'math',
+        name: null,
+        expression: `\\mathrm{plot}\\left(${line.args.map((arg) => tableHeaderTex(arg.node, names)).join(',\\;')}\\right)`,
+        note: line.note,
+        format: line.format,
+      }
+    case 'table':
+      return {
+        kind: 'math',
+        name: null,
+        expression: `\\mathrm{table}\\left(${line.args.map((arg) => tableHeaderTex(arg.node, names)).join(',\\;')}\\right)`,
+        note: line.note,
+        format: line.format,
+      }
+    case 'range':
+      try {
+        return { kind: 'math', ...rangeTex(line.name, line, names), note: line.note, format: line.format }
+      } catch {
+        return { kind: 'math', name: null, expression: textTex(line.source), note: line.note, format: line.format }
+      }
     case 'solve': {
       const inLine: Names = {
         ...names,
@@ -555,6 +1129,14 @@ function typesetLine(line: ParsedLine, names: Names): TypesetLine {
           format: line.format,
         }
       }
+  }
+}
+
+function tableHeaderTex(node: MathNode, names: Names): string {
+  try {
+    return lineTex(node, names).expression
+  } catch {
+    return textTex(node.toString())
   }
 }
 
@@ -620,6 +1202,90 @@ function parseLine(text: string): ParsedLine {
   // expression; otherwise the conversion stays math.js's own (ADR 0005).
   const target = form.displayUnit === null ? null : display.readTarget(form.displayUnit)
   const line = target === null ? form.code : form.expression
+  const plotForm = readPlot(line)
+  if (plotForm) {
+    try {
+      return {
+        kind: 'plot',
+        args: plotForm.args.map(({ expression, displayUnit }) => {
+          const target = displayUnit === null ? null : display.readTarget(displayUnit)
+          return {
+            node: parse(target === null && displayUnit !== null ? `${expression} in ${displayUnit}` : expression),
+            display: target,
+            displayText: target === null ? null : displayUnit,
+            text: expression,
+          }
+        }),
+        clauses: plotForm.clauses,
+        marks: plotForm.clauses.flatMap((clause) =>
+          clause.kind === 'mark' ? [{ node: parse(clause.expression), text: clause.expression }] : [],
+        ),
+        ranges: plotForm.clauses.flatMap((clause) =>
+          clause.kind === 'range'
+            ? [{ axis: clause.axis, start: parse(clause.start), end: parse(clause.end), text: `${clause.start} .. ${clause.end}` }]
+            : [],
+        ),
+        defines: [],
+        note: form.note,
+        format: form.format,
+        unknownFormat: form.unknownFormat,
+        display: target,
+        displayText: target === null ? null : form.displayUnit,
+      }
+    } catch (error) {
+      return { kind: 'syntax-error', message: error instanceof Error ? error.message : String(error), defines: [], source: text }
+    }
+  }
+  const tableForm = readTable(line)
+  if (tableForm) {
+    try {
+      return {
+        kind: 'table',
+        args: tableForm.args.map(({ expression, displayUnit }) => {
+          const target = displayUnit === null ? null : display.readTarget(displayUnit)
+          return {
+            node: parse(target === null && displayUnit !== null ? `${expression} in ${displayUnit}` : expression),
+            display: target,
+            displayText: target === null ? null : displayUnit,
+          }
+        }),
+        defines: [],
+        note: form.note,
+        format: form.format,
+        unknownFormat: form.unknownFormat,
+        display: target,
+        displayText: target === null ? null : form.displayUnit,
+      }
+    } catch (error) {
+      return { kind: 'syntax-error', message: error instanceof Error ? error.message : String(error), defines: [], source: text }
+    }
+  }
+  const range = readSolve(line) === null ? readRange(line) : null
+  if (range) {
+    try {
+      return {
+        kind: 'range',
+        name: range.name,
+        start: parse(range.start),
+        end: parse(range.end),
+        step: range.step === null ? null : parse(range.step),
+        defines: range.name === null ? [] : [range.name],
+        note: form.note,
+        format: form.format,
+        unknownFormat: form.unknownFormat,
+        display: target,
+        displayText: target === null ? null : form.displayUnit,
+        source: line,
+      }
+    } catch (error) {
+      return {
+        kind: 'syntax-error',
+        message: error instanceof Error ? error.message : String(error),
+        defines: range.name === null ? [] : [range.name],
+        source: text,
+      }
+    }
+  }
   const solve = readSolve(line)
   if (solve?.kind === 'malformed') {
     return { kind: 'syntax-error', message: solve.message, defines: [solve.name], source: text }

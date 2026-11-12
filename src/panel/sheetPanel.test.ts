@@ -52,6 +52,19 @@ describe('Variables (docs/spec-v1.md section 8)', () => {
     expect(rows[1]).toMatchObject({ name: 'bad', value: 'error', unit: '', kind: 'error' })
   })
 
+  it('shows a list by its summary, with no unit (section 10)', () => {
+    const rows = variableGroups(sheetOf({ source: 'Q_s = 1 L/s .. 30 L/s step 1 L/s' }))[0].rows
+    expect(rows[0]).toMatchObject({ name: 'Q_s', value: '30 values, 1 … 30 L / s', unit: '', kind: 'value' })
+  })
+
+  it('lists a list’s failed points as the line’s error', () => {
+    const rows = problemRows(sheetOf({ source: 'x = -1 .. 1\nr(t) = t < 0 ? nope : t\ny = r(x)' }))
+    // The body's missing name also warns on the definition.
+    expect(rows.filter((row) => row.severity === 'error')).toEqual([
+      expect.objectContaining({ line: 2, message: '1 of 3 points failed. At x = -1: in r(-1): Undefined symbol nope' }),
+    ])
+  })
+
   it('shows a solve function as "solve function"', () => {
     const rows = variableGroups(sheetOf({ source: 'f(Re, r) = solve f = Re * r, guess f = 1' }))[0].rows
     expect(rows[0]).toMatchObject({ name: 'f', value: 'solve function', unit: '', kind: 'function' })

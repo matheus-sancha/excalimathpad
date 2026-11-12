@@ -1,4 +1,4 @@
-import { act, cleanup, createEvent, fireEvent, render, screen, within } from '@testing-library/react'
+import { act, cleanup, createEvent, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import type { ExcalidrawElement } from '@excalidraw/excalidraw/element/types'
 import type { AppState } from '@excalidraw/excalidraw/types'
@@ -340,7 +340,7 @@ describe('MathOverlay', () => {
       renderOverlay([anchorWith('x = solve x^2 = 2, guess x = 1\ny = x\nf(a) = solve u^2 = a, guess u = 1\nf_d = f(4)')])
 
       expect(cellOf(1, 'expression')).toHaveTextContent(/solve/)
-      expect(rowOf('m1', 1).querySelector('.math-element__guess')).toHaveTextContent(/guess/)
+      expect(rowOf('m1', 1).querySelector('.math-element__aside')).toHaveTextContent(/guess/)
       const detailed = cellOf(1, 'result')!.querySelector<HTMLElement>('.math-element__detailed')!
       expect(detailed.dataset.tip).toMatch(/^Brent, \d+ iterations\nResidual: .+\nBracket: 1\.41421356237\d* \.\. 1\.41421356237/)
       expect(detailed).toHaveAttribute('data-tip-when', 'details')
@@ -349,6 +349,64 @@ describe('MathOverlay', () => {
       expect(rowOf('m1', 3).querySelector('[data-tip-when="details"]')).toBeNull()
       // A line that is just one call to a solve function has them.
       expect(cellOf(4, 'result')!.querySelector('.math-element__detailed')).not.toBeNull()
+    })
+
+    it('typesets a range with its step aside, and a list’s summary with its points on hover', () => {
+      renderOverlay([anchorWith('x = 1 m .. 3 m step 1 m\ny = x * 2')])
+
+      expect(rowOf('m1', 1).querySelector('.math-element__aside')).toHaveTextContent(/step/)
+      const summary = cellOf(2, 'result')!.querySelector<HTMLElement>('.math-element__summary')!
+      expect(cellOf(2, 'result')).toHaveClass('is-list')
+      expect(summary.querySelector('.math-element__count')).toHaveTextContent('3 values,')
+      expect(summary.dataset.tip).toBe('1: 2 m\n2: 4 m\n3: 6 m')
+      // No unit slot on a list.
+      expect(cellOf(2, 'result')!.querySelector('[data-unit-slot]')).toBeNull()
+    })
+
+    it('draws a table under its line, inside its row, with a unit slot per column header', () => {
+      renderOverlay([anchorWith('x = 1 m .. 3 m step 1 m\nr(t) = t < 2 m ? nope : t\ntable(x, r(x), 2) # note')])
+
+      const row = rowOf('m1', 3)
+      const table = row.querySelector('.math-element__table')!
+      expect(table).not.toBeNull()
+      expect(table.querySelectorAll('thead th')).toHaveLength(3)
+      expect(table.querySelectorAll('tbody tr')).toHaveLength(3)
+      // Slots on the two columns with a unit, keyed by the line's index and the column.
+      expect([...table.querySelectorAll<HTMLElement>('[data-unit-slot]')].map((slot) => slot.dataset.unitSlot)).toEqual([
+        '2:0',
+        '2:1',
+      ])
+      // Numbers split at the point, so a column lines up on it; a failed cell is a red — with its message.
+      const first = table.querySelectorAll('tbody tr')[0]
+      expect(first.querySelector('td.is-whole')).toHaveTextContent('1')
+      expect(first.querySelector('td.is-failed')).toHaveAttribute('data-tip', 'in r(1 m): Undefined symbol nope')
+      expect(cellOf(3, 'note')).toHaveTextContent('note')
+    })
+
+    it('draws a plot under its line: a placeholder of its size, then the chart, with a × per failed point', async () => {
+      renderOverlay([anchorWith('x = -1 .. 3\nr(t) = t < 0 ? nope : t^2\nplot(x, r(x)), mark 2, size S')])
+
+      const chart = rowOf('m1', 3).querySelector<HTMLElement>('.math-element__plot-chart')!
+      expect(chart.style.width).toBe('360px')
+      expect(chart.style.height).toBe('220px')
+      expect(rowOf('m1', 3).querySelector('.math-element__plot-legend')).toHaveTextContent(/r/)
+      await waitFor(() => expect(chart.querySelector('svg')).not.toBeNull(), { timeout: 5000 })
+      expect(chart).not.toHaveClass('is-loading')
+      const failed = chart.querySelectorAll<SVGElement>('.plot-failed text')
+      expect(failed).toHaveLength(1)
+      expect(failed[0].dataset.tip).toBe('in r(-1): Undefined symbol nope')
+      expect(chart.textContent).toContain('2 = 2')
+    })
+
+    it('marks a list with failed points in the gutter, with the message on hover', () => {
+      renderOverlay([anchorWith('x = -1 .. 1\nr(t) = t < 0 ? nope : t\ny = r(x)')])
+
+      expect(cellOf(3, 'gutter')).toHaveTextContent('●')
+      expect(cellOf(3, 'gutter')).toHaveAttribute(
+        'data-tip',
+        '1 of 3 points failed. At x = -1: in r(-1): Undefined symbol nope',
+      )
+      expect(cellOf(3, 'result')).toHaveTextContent(/2 of 3 values/)
     })
 
     it('shows the error mark, not the warning, on a line with both', () => {

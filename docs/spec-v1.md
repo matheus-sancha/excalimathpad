@@ -1096,6 +1096,14 @@ The wording of every user-facing message. `<…>` is filled in. Numbers follow
 | Unknown clause | `Unknown plot setting xyz` | M4 |
 | Log axis with zero or negative | `x log needs values above 0` | M4 |
 | All of a series' points failed | `H_s: every point failed. At Q_s = 1 L/s: <message>` | M4 |
+| A plot with no y | `a plot needs x and at least one y: plot(Q_s, Hs(Q_s))` | #77 |
+| A plot's x that isn't a list | `x must be a list: 2 m is a single value` | #77 |
+| A mark that isn't one value of x's kind | `mark 2 s: one value of x's kind` | #77 |
+| An axis range of another kind | `y 0 s .. 4 s: the range must be the axis's kind` | #77 |
+| `in <unit>` after a whole plot line | `a plot takes its units on its arguments: plot(Q_s in L/s, …)` | #77 |
+| A table with no list among its arguments | `a table needs a list, such as table(Q_s)` | #76 |
+| `in <unit>` after a whole table line | `a table takes its units on its arguments: table(Q_s in L/s)` | #76 |
+| A range's start, end or step isn't a single number or quantity | `the range's step must be a number or a quantity`, `a range takes single values, not a list` | #74 |
 
 **App**
 
@@ -1362,6 +1370,18 @@ Settings tab.
 The engine comes first, so the nested solve, the open risk below, surfaces in the first two issues; the
 typeset form and the hover are built on values that are already right.
 
+**M4's issue order** (M3's three are built, #70 to #72):
+
+1. Ranges and lists, with the pump sheet's `Hs(Q_s)`, `Hp(Q_s)` and 5" column in CI (#74)
+2. Range typeset and list hover (#75)
+3. Tables (#76)
+4. Plots (#77)
+5. Plot settings popover (#78)
+
+Lists come first, since tables and plots only show them. The table comes before the plot: it is the simpler
+display of the same lists, and it settles the column units the plot axes reuse. The popover is last: it only
+writes clauses the plot already reads.
+
 **Dates:** set a date for M1 when this spec is agreed. Date each later milestone when the previous one lands,
 from how long it really took. The v1 end is a forecast only.
 
@@ -1502,8 +1522,17 @@ Changes line if it changes behaviour.
   91-row sweep took 30 ms in the research, so it's probably fine, but measure it. **Measured (#71), in Node under
   Vitest:** lines 1-28 run in about 8 ms (median of 20), 9 ms at 5"; with the 30 `Hs` calls added, about 11 ms
   (38 ms at worst). The pump sheet's CI test pins the whole run under 200 ms. M4 measures the table in the browser.
-- The mark label's position, log scale and `points`, tried only as prototype switches.
-- The clause parser and lazy loading of Observable Plot, not built in the prototype.
+  **Measured in Chromium (#74):** lines 1-29 plus `H_s = Hs(Q_s)` and `H_p = Hp(Q_s)`, so 30 Colebrook solves per
+  run besides `Q_op`'s, take about 6 ms (median of 30 runs, dev build), 11 ms at worst. Re-running the whole sheet
+  on every keystroke holds.
+- The mark label's position, log scale and `points`, tried only as prototype switches. **Passed (#77), in Chromium:**
+  the label sits at the top of its guide, above the frame, with a dot where the guide meets each curve; `x log` and
+  `y log` draw log axes fitted to the data (not rounded out to whole decades); `points` puts a dot at every point,
+  and `labels direct` names each series at its line end.
+- The clause parser and lazy loading of Observable Plot, not built in the prototype. **Passed (#77):** the clauses
+  are read in `src/math/plotLine.ts`, with tests for each; Observable Plot 0.6.17 is its own chunk (297 kB, 103 kB
+  gzip) requested once the first plot shows, and the entry grew by 9 kB, the app's own plot code. A placeholder of
+  the chart's size holds the box until it arrives.
 
 **M5**
 
@@ -1708,3 +1737,37 @@ Changes line if it changes behaviour.
   `Bracket: 0.01864160794462 .. 0.01864160794463`, both at 13 significant digits so the bracket's ends differ. It is
   the problem tip: the same 500 ms rest, the same hiding, and a press or drag from the value still selects and moves
   the element. The dotted underline sits under the value and its unit, and print drops it.
+- 2026-11-11, [section 10](#ranges-and-lists) (#74, Engineer's, for Matheus to confirm on the PR): a list's summary
+  writes the unit as results do (`30 values, 1 … 30 L / s`); the first value is shown in the last one's unit. A
+  failed point is named by the first list the line runs over, in that list's unit (`At Q_s = 0 L / s: …`); when the
+  point failed already in that list, by its position (`At point 1: …`). Two messages the table didn't have are added
+  to it: a range's start, end or step that isn't a single number or quantity. An aggregate name the sheet defines as
+  a function (`max(x) = …`) is the sheet's function, not the aggregate. A bare range (`1 .. 10`, no name) shows its
+  summary too.
+- 2026-11-11, [section 10](#ranges-and-lists) (#75, Engineer's, for Matheus to confirm on the PR): the hover on a
+  list's summary shows every point of a list of up to 7, else the first three and the last three with `…` between,
+  each as `index: value` in the line's unit; a failed point reads `5: failed: <message>`. It is the problem tip, with
+  no dotted underline (that marks solve details). The count is grey and the two values are typeset.
+- 2026-11-12, [section 10](#tables) (#76, Engineer's, for Matheus to confirm on the PR; checked in Chromium with a real
+  mouse): a column with no unit of its own, from its argument or from the line that defined its list, shows in the
+  unit the sheet's system picks for its largest value, so the whole column shares one unit. Cells show the number
+  only; the unit is in the header, in its slot. A header slot's list shows the column's first value in each unit, and
+  choosing one wrote `in cm` onto that argument alone as one undo step. A column counts as whole when every number in
+  it reads whole after rounding to Digits. Points that fail in a column the table works out itself (`r(Q_s)`) make
+  the table line's error, `2 of 8 points failed. At Q_s = 1 L/s: …`, and the table still draws; a list named from
+  above (`H_s`) shows its failures on its own line only. A double-click on a table row opened its line. Two messages
+  are added to section 13: a table with no list, and `in <unit>` after a whole table line.
+- 2026-11-12, [section 10](#plots) (#77, Engineer's, for Matheus to confirm on the PR; checked in Chromium with a real
+  mouse): series are named by their argument as typed (`Hs(Q_s)`), in the legend (typeset) and in the y title
+  (`Hs(Q_s), Hp(Q_s) [m]`). The y axis takes the first series' unit, chosen as a table column's is. A mark's label is
+  its expression and value in x's unit (`Q_op = 18.81 L / s`). The colours are a fixed list of eight, Excalidraw's
+  blue first. A failed point's × shows its message on hover through the problem tip; points that fail make the plot
+  line's error, as a table's do. A drag from the chart moved the element, and a double-click on it opened the plot
+  line. Five messages are added to section 13.
+- 2026-11-12, [section 10](#plots) (#78, Engineer's, for Matheus to confirm on the PR; checked in Chromium with a real
+  mouse): the ⚙ sits at the chart's top right while its row is hovered. A drag that starts on it moved the element and
+  opened nothing; a click opened the popover. The popover's Mark field takes several marks separated by `;`; an axis
+  range is written only once both ends are filled; size M, the default, is written as no clause. Text fields write on
+  Enter or when they lose focus, the rest at once; each change was one undo step, written before the format clause and
+  the note (`plot(Q_s, Hs(Q_s)), mark Q_d, points, size L, title "System" # curve`), in the popover's order. Esc, or
+  focus leaving the popover, closes it.

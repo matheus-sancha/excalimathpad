@@ -456,8 +456,8 @@
   }
 }
 
-/* Section 4, Solve line: the guess, small and grey after the equation, inside the expression cell. */
-.math-element__guess {
+/* Section 4: a solve's guess or a range's step, small and grey after the equation, inside the expression cell. */
+.math-element__aside {
   margin-left: 14px;
   color: var(--math-quiet);
   font-size: 0.75em;
@@ -471,5 +471,182 @@
 @media print {
   .math-element__detailed {
     border-bottom: none;
+  }
+}
+
+/* Section 10: a list's count, quieter than its values. */
+.math-element__count {
+  color: var(--math-quiet);
+}
+
+/* Section 10, Tables: under the line, inside its row (a second grid row of the
+   row), so it counts toward the box and its line's hit area. */
+.math-element__table-cell {
+  grid-column: 2 / -1;
+  justify-self: start;
+  margin: 2px 0 8px;
+}
+
+.math-element__table {
+  border-collapse: collapse;
+  color: var(--math-result);
+  font-variant-numeric: tabular-nums;
+  line-height: 22px;
+}
+
+.math-element__table th {
+  padding: 0 14px 2px;
+  border-bottom: 1px solid var(--math-rule);
+  color: var(--math-text);
+  font-weight: normal;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.math-element__column-unit {
+  position: relative;
+  margin-left: 6px;
+}
+
+/* The number before the point right-aligned, the rest left-aligned: a column
+   lines up on the decimal point (section 5, Numbers). */
+.math-element__table td.is-whole {
+  padding: 0 0 0 14px;
+  text-align: right;
+}
+
+.math-element__table td.is-rest {
+  padding: 0 14px 0 0;
+  text-align: left;
+}
+
+.math-element__table td.is-failed {
+  padding: 0 14px;
+  color: var(--math-error);
+  text-align: center;
+}
+
+/* Section 10, Plots: the chart under its line, inside its row, as a table is. */
+.math-element__plot-cell {
+  grid-column: 2 / -1;
+  justify-self: start;
+  margin: 4px 0 8px;
+}
+
+.math-element__plot {
+  color: var(--math-text);
+  font: 12px/16px system-ui, 'Segoe UI', sans-serif;
+}
+
+.math-element__plot-title {
+  margin-bottom: 2px;
+  font-weight: 600;
+  text-align: center;
+}
+
+.math-element__plot-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  justify-content: center;
+  margin-bottom: 2px;
+  font-size: 15px;
+}
+
+.math-element__plot-key {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.math-element__plot-swatch {
+  display: inline-block;
+  width: 16px;
+  height: 3px;
+  border-radius: 1px;
+}
+
+/* Until Observable Plot loads, the chart's own size holds the box (section 10). */
+.math-element__plot-chart.is-loading {
+  border-radius: 4px;
+  background: repeating-linear-gradient(135deg, transparent 0 8px, rgb(134 142 150 / 8%) 8px 16px);
+}
+
+.math-element__plot-chart svg {
+  display: block;
+  overflow: visible;
+}
+
+/* Section 10: the plot's ⚙, at the chart's top right while the row is hovered.
+   It takes no pointer events: the canvas's click opens it, as a unit slot's. */
+.math-element__plot-cell {
+  position: relative;
+}
+
+.math-element__gear {
+  position: absolute;
+  top: 0;
+  right: 0;
+  padding: 0 4px;
+  border-radius: 4px;
+  color: var(--math-quiet);
+  font: 16px/22px system-ui, 'Segoe UI', sans-serif;
+  outline: 1px dashed var(--math-rule);
+}
+
+.math-element__gear.is-open {
+  color: var(--math-result);
+}
+
+/* The popover takes pointer events and the keyboard (section 14). Screen only. */
+.math-plot-settings {
+  position: absolute;
+  top: 26px;
+  right: 0;
+  z-index: 1;
+  display: grid;
+  gap: 6px;
+  min-width: 300px;
+  padding: 10px 12px;
+  border: 1px solid var(--math-rule);
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 4px 16px rgb(0 0 0 / 14%);
+  color: var(--math-text);
+  font: 13px/20px system-ui, 'Segoe UI', sans-serif;
+  pointer-events: auto;
+}
+
+.math-plot-settings__row {
+  display: grid;
+  grid-template-columns: 90px 1fr;
+  align-items: center;
+  gap: 8px;
+}
+
+.math-plot-settings__label {
+  color: var(--math-quiet);
+}
+
+.math-plot-settings__controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.math-plot-settings input:not([type='checkbox']) {
+  width: 100%;
+  min-width: 0;
+  font: inherit;
+}
+
+.math-plot-settings__dots {
+  color: var(--math-quiet);
+}
+
+@media print {
+  .math-element__gear,
+  .math-plot-settings {
+    display: none;
   }
 }
