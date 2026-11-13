@@ -173,6 +173,8 @@
    wide as what is typed. */
 .math-element__field-cell {
   display: grid;
+  /* The suggestions hang under it. */
+  position: relative;
 }
 
 .math-element__field-cell.is-empty-element {
@@ -647,6 +649,69 @@
 @media print {
   .math-element__gear,
   .math-plot-settings {
+    display: none;
+  }
+}
+
+/* Suggestions while a line is typed (section 4, While editing a line): a list
+   under the field, in the unit slot's look. It takes pointer events, so an
+   entry can be clicked; it is out of the flow, so the element's size and its
+   anchor don't change. Screen only: never printed. */
+.math-suggest {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 3;
+  box-sizing: border-box;
+  min-width: 220px;
+  max-width: 420px;
+  margin: 3px 0 0;
+  padding: 3px;
+  border: 1px solid var(--math-rule);
+  border-radius: 6px;
+  background: #fff;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 14%);
+  color: var(--math-text);
+  font: 13px/20px system-ui, 'Segoe UI', sans-serif;
+  list-style: none;
+  pointer-events: auto;
+}
+
+.math-suggest__option {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 16px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.math-suggest__option.is-highlighted,
+.math-suggest__option:hover {
+  background: #e7f5ff;
+}
+
+.math-suggest__name {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12.5px;
+}
+
+.math-suggest__detail {
+  overflow: hidden;
+  color: #868e96;
+  font-size: 12px;
+  text-overflow: ellipsis;
+}
+
+.math-suggest__option.is-variable .math-suggest__detail {
+  color: var(--math-result);
+  font-variant-numeric: tabular-nums;
+}
+
+@media print {
+  .math-suggest {
     display: none;
   }
 }

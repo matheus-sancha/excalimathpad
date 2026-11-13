@@ -39,6 +39,7 @@ import { PlotSettings } from './PlotSettings.tsx'
 import { GEAR } from './useSheetGestures.ts'
 import { readPlot, type PlotClause } from '../math/plotLine.ts'
 import { hasText, TITLE_LINE, type LineEdit, type LineMove } from './lineEdit.ts'
+import type { Suggested, Suggestion } from './suggest.ts'
 import { sceneToStage, type Viewport } from './viewport.ts'
 
 export interface MathElementViewProps {
@@ -61,7 +62,12 @@ export interface MathElementViewProps {
   flash?: { line: number; key: number } | null
   /** The unit slots (section 5): which row is hovered, which slot's field is open. */
   unitSlots?: UnitSlots
+  /** The suggestions for the open line's text and caret (section 4); none on the title. */
+  suggest?: Suggest | null
 }
+
+/** What the open line offers for a text and caret: the names that start with the word there. */
+export type Suggest = (text: string, caret: number) => Suggested | null
 
 /** What the result cells need for their unit slots. */
 export interface UnitSlots {
@@ -89,6 +95,8 @@ const NO_SLOTS: UnitSlots = {
 }
 
 const SlotsContext = createContext<UnitSlots>(NO_SLOTS)
+
+const SuggestContext = createContext<Suggest | null>(null)
 
 /**
  * One math element as a worksheet block (docs/spec-v1.md section 4, Typeset
@@ -120,6 +128,7 @@ export function MathElementView({
   forwardWheel,
   flash = null,
   unitSlots = NO_SLOTS,
+  suggest = null,
 }: MathElementViewProps) {
   const rootRef = useRef<HTMLDivElement>(null)
   const katexReady = useKatexReady()
@@ -169,6 +178,7 @@ export function MathElementView({
             onBlur={() => onBlurLine(TITLE_LINE)}
           />
         )}
+        <SuggestContext.Provider value={suggest}>
         <SlotsContext.Provider value={unitSlots}>
           <ol className="math-element__grid" aria-label="Lines">
             {splitLines(source).map((text, i) => {
@@ -205,6 +215,7 @@ export function MathElementView({
             })}
           </ol>
         </SlotsContext.Provider>
+        </SuggestContext.Provider>
       </div>
     </div>
   )
@@ -852,6 +863,34 @@ function LineField({
   // Only what the field opens with: from then on the text and caret are the user's.
   const [opening] = useState(edit)
 
+  // Suggestions for the word at the caret (section 4), on a line only: the
+  // title is prose. Nothing is highlighted until ↓, so Enter still commits.
+  const suggest = useContext(SuggestContext)
+  const offers = label === 'Line source' ? suggest : null
+  const [list, setList] = useState<{ suggested: Suggested; highlight: number | null } | null>(null)
+  // The input a suggestion writes doesn't ask for another list.
+  const accepting = useRef(false)
+  const refresh = (field: HTMLInputElement) => {
+    if (accepting.current || !offers) return setList(null)
+    const suggested = offers(field.value, field.selectionStart ?? field.value.length)
+    setList(suggested && { suggested, highlight: null })
+  }
+  const acceptSuggestion = (item: Suggestion) => {
+    const field = fieldRef.current
+    if (!field || !list) return
+    const { from, to } = list.suggested
+    accepting.current = true
+    field.focus()
+    field.setSelectionRange(from, to)
+    // `insertText` keeps the field's own Ctrl+Z; where it isn't there, write the text and say so.
+    if (!document.execCommand?.('insertText', false, item.insert)) {
+      field.setRangeText(item.insert, from, to, 'end')
+      field.dispatchEvent(new Event('input', { bubbles: true }))
+    }
+    accepting.current = false
+    setList(null)
+  }
+
   useLayoutEffect(() => {
     const field = fieldRef.current
     field?.focus()
@@ -878,6 +917,34 @@ function LineField({
       event.preventDefault()
       run()
     }
+    if (list) {
+      const { items } = list.suggested
+      const { highlight } = list
+      const plain = !event.ctrlKey && !event.metaKey && !event.altKey
+      switch (event.key) {
+        case 'ArrowDown':
+          return take(() => setList({ ...list, highlight: Math.min((highlight ?? -1) + 1, items.length - 1) }))
+        case 'ArrowUp':
+          // From the top of the list, ↑ goes back to the text; with nothing
+          // highlighted it moves to the line above, as without a list.
+          if (highlight === null) break
+          return take(() => setList({ ...list, highlight: highlight === 0 ? null : highlight - 1 }))
+        case 'Tab':
+          if (!plain || event.shiftKey) break
+          return take(() => acceptSuggestion(items[highlight ?? 0]))
+        case 'Enter':
+          if (highlight === null) break
+          return take(() => acceptSuggestion(items[highlight]))
+        case 'Escape':
+          // The first Esc closes the list; the line stays open.
+          return take(() => setList(null))
+        case 'ArrowLeft':
+        case 'ArrowRight':
+        case 'Home':
+        case 'End':
+          setList(null)
+      }
+    }
     if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && onFormat) {
       const key = event.key.toLowerCase()
       if (key === 'b') return take(() => onFormat(({ bold }) => ({ bold: !bold })))
@@ -900,21 +967,57 @@ function LineField({
   }
 
   return (
-    <input
-      ref={fieldRef}
-      className="math-element__field"
-      aria-label={label}
-      defaultValue={opening.text}
-      spellCheck={false}
-      autoCapitalize="off"
-      autoComplete="off"
-      onInput={(event) => onType(event.currentTarget.value)}
-      onKeyDown={onKeyDown}
-      onMouseDown={onMouseDown}
-      onBlur={(event) => {
-        // The window lost focus, not the field: the edit hasn't left its line.
-        if (document.activeElement !== event.currentTarget) onBlur()
-      }}
-    />
+    <>
+      <input
+        ref={fieldRef}
+        className="math-element__field"
+        aria-label={label}
+        aria-autocomplete={offers ? 'list' : undefined}
+        aria-expanded={offers ? list !== null : undefined}
+        aria-controls={list ? SUGGEST_LIST_ID : undefined}
+        aria-activedescendant={list && list.highlight !== null ? `${SUGGEST_LIST_ID}-${list.highlight}` : undefined}
+        defaultValue={opening.text}
+        spellCheck={false}
+        autoCapitalize="off"
+        autoComplete="off"
+        onInput={(event) => {
+          onType(event.currentTarget.value)
+          refresh(event.currentTarget)
+        }}
+        onKeyDown={onKeyDown}
+        onMouseDown={(event) => {
+          setList(null)
+          onMouseDown(event)
+        }}
+        onBlur={(event) => {
+          setList(null)
+          // The window lost focus, not the field: the edit hasn't left its line.
+          if (document.activeElement !== event.currentTarget) onBlur()
+        }}
+      />
+      {list && (
+        <ul className="math-suggest" id={SUGGEST_LIST_ID} role="listbox" aria-label="Suggestions">
+          {list.suggested.items.map((item, i) => (
+            <li
+              key={`${item.kind}:${item.name}`}
+              id={`${SUGGEST_LIST_ID}-${i}`}
+              role="option"
+              aria-selected={i === list.highlight}
+              className={`math-suggest__option is-${item.kind}${i === list.highlight ? ' is-highlighted' : ''}`}
+              // Chosen on `mousedown`, so the field keeps the keyboard and the line stays open.
+              onMouseDown={(event) => {
+                event.preventDefault()
+                acceptSuggestion(item)
+              }}
+            >
+              <span className="math-suggest__name">{item.name}</span>
+              <span className="math-suggest__detail">{item.detail}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </>
   )
 }
+
+const SUGGEST_LIST_ID = 'math-suggest-list'

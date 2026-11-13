@@ -134,6 +134,106 @@ describe('App', () => {
     })
   })
 
+  describe('suggestions while typing (docs/spec-v1.md section 4)', () => {
+    /** A new element with its first line open, the app loaded. */
+    async function openLine() {
+      renderApp()
+      await ready()
+      fireEvent.click(await addMath())
+      clickOnCanvas({ clientX: 300, clientY: 400 })
+      return lineField()!
+    }
+    const type = (text: string) => fireEvent.input(lineField()!, { target: { value: text } })
+    const key = (name: string) => fireEvent.keyDown(lineField()!, { key: name })
+    const options = () =>
+      screen.queryAllByRole('option').map((option) => [
+        option.querySelector('.math-suggest__name')!.textContent,
+        option.querySelector('.math-suggest__detail')!.textContent,
+      ])
+
+    it('lists the names that start with the word, and Tab takes the first', async () => {
+      await openLine()
+
+      type('y = sq')
+      expect(screen.getByRole('listbox', { name: 'Suggestions' })).toBeInTheDocument()
+      expect(options()).toEqual([
+        ['sqrt', 'square root'],
+        ['SQRT2', 'Square root of 2 · 1.414'],
+        ['SQRT1_2', 'Square root of ½ · 0.7071'],
+      ])
+      // Nothing is highlighted until ↓.
+      expect(screen.queryByRole('option', { selected: true })).toBeNull()
+
+      key('Tab')
+
+      expect(lineField()).toHaveValue('y = sqrt(')
+      expect(lineField()).toHaveFocus()
+      expect(screen.queryByRole('listbox')).toBeNull()
+    })
+
+    it('↓ highlights and Enter takes the highlighted name, on the same line', async () => {
+      await openLine()
+      type('y = gra')
+
+      key('ArrowDown')
+      key('ArrowDown')
+      expect(screen.getByRole('option', { selected: true })).toHaveTextContent('gravitationConstant')
+      key('Enter')
+
+      expect(lineField()).toHaveValue('y = gravitationConstant')
+      expect(linesOf(screen.getByRole('list', { name: 'Lines' }))).toHaveLength(1)
+    })
+
+    it('Enter with nothing highlighted commits the line, as without a list', async () => {
+      await openLine()
+      type('y = gra')
+
+      key('Enter')
+
+      expect(screen.queryByRole('listbox')).toBeNull()
+      expect(linesOf(screen.getByRole('list', { name: 'Lines' }))).toHaveLength(2)
+      expect(lineField()).toHaveValue('')
+    })
+
+    it('the first Esc closes the list and keeps the line open', async () => {
+      await openLine()
+      type('y = gra')
+
+      key('Escape')
+      expect(screen.queryByRole('listbox')).toBeNull()
+      expect(lineField()).toHaveValue('y = gra')
+
+      key('Escape')
+      expect(lineField()).toBeNull()
+    })
+
+    it('offers the sheet’s names from the lines above, with their values, and a click takes one', async () => {
+      await openLine()
+      type('speed = 3 m/s')
+      expect(screen.queryByRole('listbox')).toBeNull()
+      key('Enter')
+
+      type('E = sp')
+      expect(options()).toEqual([
+        ['speed', '3 m / s'],
+        ['speedOfLight', 'Speed of light in vacuum · 2.998·10⁵ km / s'],
+      ])
+
+      fireEvent.mouseDown(screen.getAllByRole('option')[0])
+
+      expect(lineField()).toHaveValue('E = speed')
+      expect(lineField()).toHaveFocus()
+    })
+
+    it('offers only units after in', async () => {
+      await openLine()
+
+      type('v = 2 m/s in k')
+
+      expect(options().map(([name]) => name)).toEqual(['kg', 'kJ', 'km', 'kN', 'kV', 'kW', 'kgf', 'kHz'])
+    })
+  })
+
   describe('anchor style (docs/spec-v1.md section 4)', () => {
     // A hand-edited file, or one saved before the style was fixed.
     it('restores a changed style, and the sheet stays clean', async () => {

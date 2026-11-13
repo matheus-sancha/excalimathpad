@@ -24,6 +24,7 @@ import {
   DEFAULT_DISPLAY,
   evaluateSheet,
   isDisplayUnit,
+  listConstants,
   splitLines,
   type SheetBlock,
   type SheetLine,
@@ -45,6 +46,10 @@ import { HoverTip, useHoverTip, type TipTarget } from './HoverTip.tsx'
 import { MathElementView } from './MathElementView.tsx'
 import { PlacingGhost } from './PlacingGhost.tsx'
 import { readingOrder } from './readingOrder.ts'
+import { constantSuggestions, FUNCTION_SUGGESTIONS, sheetNames, suggest, unitSuggestions } from './suggest.ts'
+
+/** The unit names offered while typing: fixed, so made once. */
+const UNIT_NAMES = unitSuggestions()
 import { useAnchorSizes } from './useAnchorSizes.ts'
 import { GEAR, useSheetGestures, type SlotTarget } from './useSheetGestures.ts'
 import type { Viewport } from './viewport.ts'
@@ -175,6 +180,7 @@ export function MathOverlay({
     () => evaluateSheet(JSON.parse(sheetKey) as SheetBlock[], settings),
     [sheetKey, settings],
   )
+  const constantNames = useMemo(() => constantSuggestions(listConstants(settings)), [settings])
 
   // The panel's view of the same run: titles name elements, so they count too.
   const titlesKey = JSON.stringify(anchors.map(({ id, title }) => [id, title]))
@@ -308,6 +314,19 @@ export function MathOverlay({
     keepClean,
   })
 
+  // Suggestions for the open line (section 4): the sheet's names above it,
+  // then the constants, functions and units. None on a title.
+  const suggestForEdit =
+    edit && edit.lineIndex !== TITLE_LINE
+      ? ((sheet) => (text: string, caret: number) =>
+          suggest(text, caret, { sheet, constants: constantNames, functions: FUNCTION_SUGGESTIONS, units: UNIT_NAMES }))(
+          sheetNames(
+            readingOrder(anchors).map((id) => ({ id, lines: lines.get(id) ?? [] })),
+            edit,
+          ),
+        )
+      : null
+
   const leaveLine = (anchorId: string, lineIndex: number) => {
     const current = editRef.current
     if (current?.anchorId === anchorId && current.lineIndex === lineIndex) {
@@ -357,6 +376,7 @@ export function MathOverlay({
           onBlurLine={(lineIndex) => leaveLine(anchor.id, lineIndex)}
           forwardWheel={forwardWheel}
           flash={flash?.anchorId === anchor.id ? flash : null}
+          suggest={edit?.anchorId === anchor.id ? suggestForEdit : null}
           unitSlots={{
             hovered: slotHover?.anchorId === anchor.id ? slotHover.line : null,
             open: unitEdit?.anchorId === anchor.id ? unitEdit.line : null,
