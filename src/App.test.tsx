@@ -330,6 +330,30 @@ describe('App', () => {
       expect(screen.getByText('No constant matches.')).toBeInTheDocument()
     })
 
+    // Excalidraw runs its letter shortcuts on a key from any field it doesn't
+    // count as writable, and only `text`, `number` and `password` inputs are.
+    it.each([
+      ['Variables', 'Filter names'],
+      ['Constants', 'Filter constants'],
+    ])("the %s filter keeps its keys from Excalidraw's shortcuts (#99)", async (tab, label) => {
+      renderApp({ initialElements: sampleSheet() })
+      await ready()
+      await screen.findAllByRole('list', { name: 'Lines' })
+      fireEvent.click(await sheetButton())
+      fireEvent.mouseDown(await screen.findByRole('tab', { name: tab }))
+      const filter = await screen.findByRole<HTMLInputElement>('searchbox', { name: label })
+      filter.focus()
+
+      // S opens Excalidraw's stroke colour picker, which takes the keyboard;
+      // Space is its pan key, which it stops from typing.
+      fireEvent.keyDown(filter, { key: 's', code: 'KeyS' })
+      const space = fireEvent.keyDown(filter, { key: ' ', code: 'Space' })
+
+      expect(space).toBe(true)
+      expect(document.querySelector('.color-picker-content')).toBeNull()
+      expect(filter).toHaveFocus()
+    })
+
     it('opens on Variables: names in reading order, by element, values in the system', async () => {
       renderApp({ initialElements: sampleSheet() })
       await ready()

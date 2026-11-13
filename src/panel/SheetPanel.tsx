@@ -30,7 +30,10 @@ export function VariablesTab({ sheet, onJump }: TabProps) {
     <div className="sheet-panel">
       <input
         className="sheet-panel__filter"
-        type="search"
+        // Not `type="search"`: Excalidraw counts only text, number and password
+        // inputs as fields, and runs its shortcuts on keys from any other.
+        type="text"
+        role="searchbox"
         placeholder="Filter names"
         aria-label="Filter names"
         value={filter}
@@ -126,7 +129,10 @@ export function ConstantsTab({ settings }: { settings: DisplaySettings }) {
     <div className="sheet-panel">
       <input
         className="sheet-panel__filter"
-        type="search"
+        // Not `type="search"`: Excalidraw counts only text, number and password
+        // inputs as fields, and runs its shortcuts on keys from any other.
+        type="text"
+        role="searchbox"
         placeholder="Filter constants"
         aria-label="Filter constants"
         value={filter}

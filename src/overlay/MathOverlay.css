@@ -41,7 +41,8 @@
    so the result and note columns line up across the element's rows and each row
    keeps a box of its own for the line hit (offsetTop, offsetHeight). The
    equation spans the three columns the open field also spans. The note column
-   is flexible, so a comment line, which spans the row, widens only it. */
+   is flexible, so a comment line, which spans the row, widens only it (and
+   by 320px at most: it wraps). */
 .math-element__grid {
   display: grid;
   grid-template-columns: auto auto auto auto auto minmax(auto, 1fr);
@@ -164,9 +165,20 @@
   padding-left: 12px;
 }
 
-/* From the row's left edge, ignoring the columns. */
+/* From the row's left edge, ignoring the columns, and wrapped at the
+   element's width (#98): the math lines and their notes set that width, so a
+   long comment adds rows and never sticks out past the results and notes.
+   `min-width: 100%` fills the row and counts as nothing when the grid sizes
+   its columns. What a comment does ask for is its own width up to 320px, so
+   prose beside short math, or alone, isn't broken into a thin column. */
 .math-element__comment {
   grid-column: 2 / -1;
+  box-sizing: border-box;
+  width: 320px;
+  max-width: max-content;
+  min-width: 100%;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 /* The field and a hidden copy of its text share one cell, so the cell is as

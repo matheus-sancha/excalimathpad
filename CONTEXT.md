@@ -457,6 +457,15 @@ and everything downstream recalculates. Engine: math.js, client-side.
 - **The format bar never takes focus.** Its buttons prevent `mousedown` and
   are out of the tab order: a blur leaves the line. It is absolutely placed,
   so the measured body, and so the anchor, never includes it.
+- **A field inside Excalidraw's container is `type="text"`.** Excalidraw
+  runs its letter shortcuts on a key from any input that isn't text, number
+  or password, so a `type="search"` filter in the Sheet panel lost the
+  keyboard to its colour picker on `s` (#99, `App.test.tsx`).
+- **A comment's cell is `width: 320px; max-width: max-content; min-width:
+  100%`** (`MathOverlay.css`). The percentage fills the row and counts as
+  nothing when the grid sizes its columns, so a comment wraps at the width the
+  math sets and asks for at most 320 px itself (#98). jsdom lays nothing out:
+  check a change here in Chromium.
 - **Underline is drawn, not `text-decoration`.** KaTeX's boxes are
   inline-blocks, which a decoration doesn't reach; bold is set on `.katex`
   itself, because KaTeX sets its own font there.
