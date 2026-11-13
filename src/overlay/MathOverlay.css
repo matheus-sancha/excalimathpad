@@ -437,10 +437,6 @@
   outline-style: dashed;
 }
 
-.math-element__unit.is-chosen {
-  color: #0c8599;
-}
-
 /* The unit field and its list (section 14: it takes pointer events). */
 .math-unit-field {
   position: absolute;

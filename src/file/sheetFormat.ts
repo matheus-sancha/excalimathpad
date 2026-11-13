@@ -10,6 +10,8 @@ export const FORMAT = 1
 /** The file extension of a sheet, and what Save as suggests. */
 export const SHEET_EXTENSION = '.excalimathpad'
 
+import { TEXT_COLORS, type TextColor } from '../math/lineForm.ts'
+
 export type UnitSystemName = 'si-prefixed' | 'si-base' | 'uscs'
 
 export interface SheetSettings {
@@ -20,12 +22,15 @@ export interface SheetSettings {
   }
   /** Significant digits, 2 to 15. */
   digits: number
+  /** The colour of every result's number and unit (section 4, Colours and rules, M4c). */
+  resultColor: TextColor
   page: { size: 'A4' | 'Letter'; orientation: 'portrait' | 'landscape' }
 }
 
 export const DEFAULT_SETTINGS: SheetSettings = {
   units: { system: 'si-prefixed', custom: {} },
   digits: 4,
+  resultColor: 'blue',
   page: { size: 'A4', orientation: 'portrait' },
 }
 
@@ -119,6 +124,7 @@ export function readSettings(value: unknown): SheetSettings {
       (settings.digits as number) <= 15
         ? (settings.digits as number)
         : defaults.digits,
+    resultColor: oneOf(settings.resultColor, TEXT_COLORS, defaults.resultColor),
     page: {
       size: oneOf(page.size, ['A4', 'Letter'], defaults.page.size),
       orientation: oneOf(page.orientation, ['portrait', 'landscape'], defaults.page.orientation),

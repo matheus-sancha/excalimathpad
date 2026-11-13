@@ -220,8 +220,8 @@ server. v1 target: one sheet, for Matheus's own use.
   at full. In Excalidraw's dark theme the
   overlay takes its canvas filter.
   The **unit slot** (spec section 5): a result's unit is drawn in its own
-  `[data-unit-slot]` span, tinted when the line has `in <unit>`, outlined on
-  its hovered row (an empty one for a plain input or a dimensionless value).
+  `[data-unit-slot]` span, outlined on its hovered row (a chosen unit has no
+  mark, from M4c) (an empty one for a plain input or a dimensionless value).
   The gestures find a slot from the slots' screen boxes (`slotAt`), open its
   field on the canvas's click when the element hasn't moved, and follow hover
   from `pointerMove`; `suggest.ts` (pure) is the suggestions while a line is
@@ -305,7 +305,9 @@ server. v1 target: one sheet, for Matheus's own use.
   out through `onEvaluated`) into Variables groups and Problems rows;
   `SheetPanel.tsx` renders them, and a click asks App to jump.
   `panelMemory.ts` keeps open/closed in `localStorage`. `SettingsTab.tsx`
-  edits the unit system, Custom's kind → unit table and Digits through the
+  edits the unit system, Custom's kind → unit table, Digits and the Result
+  colour (`settings.resultColor`, one of the six text colours; App hands it to
+  `MathOverlay`, which sets `--math-result` on the overlay) through the
   session's `setSettings` (saved with the sheet, dirty, not in undo); App
   hands the session's settings to `MathOverlay`, which evaluates with them. App does the jump
   (`jumpToAnchor` in `canvas/selection.ts`: scroll, select with `NEVER`) and

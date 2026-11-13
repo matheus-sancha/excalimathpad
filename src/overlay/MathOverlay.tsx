@@ -5,6 +5,7 @@ import {
   useRef,
   useState,
   useSyncExternalStore,
+  type CSSProperties,
   type Ref,
 } from 'react'
 import type { ExcalidrawImperativeAPI } from '@excalidraw/excalidraw/types'
@@ -29,7 +30,7 @@ import {
   type SheetBlock,
   type SheetLine,
 } from '../math/evaluate.ts'
-import { writeDisplayUnit } from '../math/lineForm.ts'
+import { writeDisplayUnit, type TextColor } from '../math/lineForm.ts'
 import { writeArgumentUnit } from '../math/tableLine.ts'
 import { writePlotClauses, type PlotClause } from '../math/plotLine.ts'
 import type { DisplaySettings } from '../math/display.ts'
@@ -96,6 +97,18 @@ export interface MathOverlayProps {
   flash?: FlashLine | null
   /** How results show: the sheet's unit system and Digits (section 5). */
   settings?: DisplaySettings
+  /** The sheet's result colour (section 4, Colours and rules, M4c). */
+  resultColor?: TextColor
+}
+
+/** The six text colours' values (section 4, Colours and rules). */
+const TEXT_COLOR_VALUES: Record<TextColor, string> = {
+  black: '#1e1e1e',
+  blue: '#1971c2',
+  red: '#e03131',
+  green: '#2f9e44',
+  orange: '#e8590c',
+  gray: '#868e96',
 }
 
 /** One math element as evaluated: what the Sheet panel lists. */
@@ -152,6 +165,7 @@ export function MathOverlay({
   onEvaluated,
   flash = null,
   settings = DEFAULT_DISPLAY,
+  resultColor = 'blue',
 }: MathOverlayProps) {
   const overlayRef = useRef<HTMLDivElement>(null)
   const store = useMemo(() => createSceneStore(api), [api])
@@ -341,10 +355,14 @@ export function MathOverlay({
       ref={overlayRef}
       className="math-overlay"
       // In Excalidraw's dark theme, math darkens with the canvas's own filter.
-      style={{
-        zIndex: ABOVE_DRAWING_BELOW_UI_Z_INDEX,
-        filter: dark ? DARK_THEME_FILTER : undefined,
-      }}
+      style={
+        {
+          zIndex: ABOVE_DRAWING_BELOW_UI_Z_INDEX,
+          filter: dark ? DARK_THEME_FILTER : undefined,
+          // Every result's number and unit, list summaries and table cells (a line's own text colour wins).
+          '--math-result': TEXT_COLOR_VALUES[resultColor],
+        } as CSSProperties
+      }
     >
       {anchors.map((anchor) => (
         <MathElementView

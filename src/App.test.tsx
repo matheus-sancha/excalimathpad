@@ -422,6 +422,34 @@ describe('App', () => {
       expect(resultsOf(element)).toBe('45430 Pa 45.43 kPa')
     })
 
+    it('Settings: the Result colour recolours every result at once, dirty and outside undo (M4c, #108)', async () => {
+      renderApp({
+        initialElements: createMathAnchorElements([
+          { id: 'm1', x: 100, y: 100, width: 300, height: 48, source: 'p = 2 Pa * 1\nq = 3 Pa * 1 @text-green' },
+        ]),
+      })
+      await ready()
+      const overlay = () => document.querySelector<HTMLElement>('.math-overlay')!
+      await waitFor(() => expect(overlay().style.getPropertyValue('--math-result')).toBe('#1971c2'))
+
+      fireEvent.click(await sheetButton())
+      fireEvent.mouseDown(await screen.findByRole('tab', { name: 'Settings' }))
+      expect(await screen.findByLabelText('Result colour')).toHaveValue('blue')
+      fireEvent.change(screen.getByLabelText('Result colour'), { target: { value: 'red' } })
+
+      await waitFor(() => expect(overlay().style.getPropertyValue('--math-result')).toBe('#e03131'))
+      await waitFor(() => expect(document.title).toBe('● Untitled'))
+      // A line's own text colour wins on its line.
+      expect(document.querySelector('[data-anchor-id="m1"] [data-line="1"]')).toHaveClass('is-text-green')
+
+      act(() => {
+        document
+          .querySelector('.excalidraw')!
+          .dispatchEvent(new KeyboardEvent('keydown', { key: 'z', ctrlKey: true, bubbles: true, cancelable: true }))
+      })
+      expect(overlay().style.getPropertyValue('--math-result')).toBe('#e03131')
+    })
+
     it('Settings: Custom changes the unit for a chosen kind', async () => {
       renderApp({
         initialElements: createMathAnchorElements([

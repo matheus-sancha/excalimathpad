@@ -419,7 +419,6 @@ function TableBlock({ table, index }: { table: TableView; index: number }) {
                       <SlotBox
                         index={index}
                         column={c}
-                        chosen={column.slot.chosen !== null}
                         hovered={slots.hovered === index}
                         unitHtml={unit}
                         unitText={column.unit}
@@ -604,7 +603,7 @@ function ResultCell({
     )
   } else if (slot && slots.hovered === index && !plain) {
     // A plain input: an empty slot on hover (section 5, Unit slot).
-    content = <SlotBox index={index} chosen={false} hovered unitHtml={null} />
+    content = <SlotBox index={index} hovered unitHtml={null} />
   }
   const open = slot !== null && slots.open === index && (slots.openColumn ?? null) === null && !plain
   return (
@@ -713,7 +712,6 @@ function ValueContent({ text, slot, index }: { text: string; slot: SheetLine['un
       {(unit !== '' || slots.hovered === index) && (
         <SlotBox
           index={index}
-          chosen={slot.chosen !== null}
           hovered={slots.hovered === index}
           unitHtml={unitHtml}
           unitText={unit}
@@ -725,27 +723,25 @@ function ValueContent({ text, slot, index }: { text: string; slot: SheetLine['un
 
 /**
  * The unit slot (section 5): the result's unit, outlined while its row is
- * hovered, tinted when chosen. It takes no pointer events: the canvas's own
+ * hovered. A chosen unit has no mark (M4c). It takes no pointer events: the canvas's own
  * click opens it (section 14), found by `data-unit-slot`.
  */
 function SlotBox({
   index,
   column,
-  chosen,
   hovered,
   unitHtml,
   unitText = '',
 }: {
   index: number
   column?: number
-  chosen: boolean
   hovered: boolean
   unitHtml: string | null
   unitText?: string
 }) {
   return (
     <span
-      className={`math-element__unit${chosen ? ' is-chosen' : ''}${hovered ? ' is-hovered' : ''}${
+      className={`math-element__unit${hovered ? ' is-hovered' : ''}${
         unitText === '' ? ' is-empty' : ''
       }`}
       data-unit-slot={column === undefined ? index : `${index}:${column}`}
