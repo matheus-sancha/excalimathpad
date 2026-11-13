@@ -288,7 +288,8 @@ Built in M1. Hover details arrive with M3; the unit slot with M2.
   style as a comment line. A plain input's empty result cell keeps its note in line
   with the others.
 - **Comment line:** plain literal text from the row's left edge, ignoring the
-  columns. No formatting, typeset math or `##` headings.
+  columns. A comment longer than the element is wide wraps onto more rows, so it never
+  sticks out past the results and notes. No formatting, typeset math or `##` headings.
 - **Title:** optional. An element with a title shows it in a **header** at the top of its
   box, above the lines: bold plain text on one line, with a thin rule under it. It is
   never evaluated and takes no format or typeset math. An element with no title has no
@@ -431,8 +432,11 @@ the size to the anchor, live, while typing too.
 - **Counts toward width:** the equation (name, `≔` and expression), a solve's guess, a range's
   step, result values, list summaries, tables, charts, notes, comments, the gutter and
   the title. The header adds to the height.
-- **Doesn't:** error text past its cap.
-- **A very long line widens the element.** One source line stays one row. You can
+- **Doesn't:** error text past its cap, and a comment past 320 px: the math lines and their
+  notes set the width a comment wraps at, and a comment asks for at most 320 px itself, so
+  prose alone or beside short math isn't broken into a thin column.
+- **A very long line widens the element.** One source line of math stays one row; a comment
+  line wraps. You can
   split it yourself with Enter.
 - **The top-left corner stays put,** and the box grows right and down. An upright
   element's size change can't change reading order or re-run the sheet. A rotated
@@ -1931,3 +1935,12 @@ Changes line if it changes behaviour.
   splits the line and Tab takes the first name; the first Esc closes the list only; no list after a unit typed in
   full, where it would stand in the way of ↓ and Tab on nearly every line; shorter names come before longer ones
   after the sheet's own; the functions offered are a fixed list of everyday ones, not all of math.js's.
+- 2026-11-13, [section 4](#typeset-grid) and [Size](#size) (#98, from Matheus's batch #88, "Text using '#' is
+  overflowing the results columns"; he chose wrapping in chat): a comment line wraps at the element's width
+  where it ran on through and past the results column. The Engineer's choice, for Matheus to confirm on the PR:
+  a comment still asks for up to 320 px, the error cap's number. Checked in Chromium: beside wide math, beside
+  `x = 2`, and alone. The open field stays one line. His other half, "the user can adjust the width of the block
+  and the text adjust accordingly", reopens the box that always fits its content and is a ticket on the map (#90).
+- 2026-11-13, [section 8](#sheet-panel) (#99, defect): the Variables and Constants filters are text fields.
+  As search fields, Excalidraw ran its shortcuts on what was typed: `s` opened its stroke colours and took the
+  keyboard, and a space wasn't typed.
