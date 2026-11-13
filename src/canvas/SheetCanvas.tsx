@@ -175,25 +175,28 @@ export function SheetCanvas({ onReady, initialElements, fileMenu, sheetPanel }: 
                 }}
               />
               {sheetPanel && (
-                <MoreToolsItem
-                  icon={<SettingsIcon />}
-                  label="Math Settings"
-                  pressed={appState.openSidebar?.name === SHEET_PANEL}
-                  title="Math Settings: variables, problems and settings"
-                  // `sidebar-trigger`: a floating panel's outside click ignores
-                  // it, rather than closing the panel the item then reopens.
-                  className="sidebar-trigger"
-                  onSelect={() => {
-                    closeMoreTools(root)
-                    api.toggleSidebar({ name: SHEET_PANEL, tab: lastTab.current })
-                  }}
-                >
-                  {sheetPanel.problems > 0 && (
-                    <span className="math-tools__badge" aria-label={`${sheetPanel.problems} problems`}>
-                      {sheetPanel.problems}
-                    </span>
-                  )}
-                </MoreToolsItem>
+                // `sidebar-trigger` on a wrapper with no box: a floating panel's
+                // outside click ignores the item (Excalidraw checks `closest`),
+                // rather than closing the panel the item then reopens. On the
+                // item itself Excalidraw's button styles hid its label (#102).
+                <div className="math-tools__trigger sidebar-trigger">
+                  <MoreToolsItem
+                    icon={<SettingsIcon />}
+                    label="Math Settings"
+                    pressed={appState.openSidebar?.name === SHEET_PANEL}
+                    title="Math Settings: variables, problems and settings"
+                    onSelect={() => {
+                      closeMoreTools(root)
+                      api.toggleSidebar({ name: SHEET_PANEL, tab: lastTab.current })
+                    }}
+                  >
+                    {sheetPanel.problems > 0 && (
+                      <span className="math-tools__badge" aria-label={`${sheetPanel.problems} problems`}>
+                        {sheetPanel.problems}
+                      </span>
+                    )}
+                  </MoreToolsItem>
+                </div>
               )}
             </>,
             moreTools,
@@ -246,7 +249,6 @@ function MoreToolsItem({
   shortcut,
   pressed,
   title,
-  className,
   onSelect,
   children,
 }: {
@@ -255,13 +257,11 @@ function MoreToolsItem({
   shortcut?: string
   pressed: boolean
   title: string
-  className?: string
   onSelect: () => void
   children?: ReactNode
 }) {
   const classes = ['dropdown-menu-item', 'dropdown-menu-item-base']
   if (pressed) classes.push('dropdown-menu-item--selected')
-  if (className) classes.push(className)
   return (
     <button type="button" className={classes.join(' ')} aria-pressed={pressed} title={title} onClick={onSelect}>
       <div className="dropdown-menu-item__icon" aria-hidden="true">

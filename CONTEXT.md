@@ -64,7 +64,10 @@ server. v1 target: one sheet, for Matheus's own use.
   left empty. `SheetCanvas` draws the welcome screen, and the app's two
   items in Excalidraw's More tools dropdown: Add math and Math Settings, which
   opens the Sheet panel. `moreTools.ts` finds the open dropdown
-  (`useMoreToolsSlot`, a box of the app's own appended to it), closes it
+  (`useMoreToolsSlot`, a box of the app's own appended to it; Math Settings
+  sits in a `display: contents` wrapper carrying `sidebar-trigger`, so a
+  floating panel's outside click ignores it without Excalidraw's square-button
+  style, whose `line-height: 0` hid its label, #102), closes it
   (`closeMoreTools`) and marks its button while it is closed (`markMoreTools`:
   `data-math-placing`, `data-math-problems` and `--math-problems`). Excalidraw
   has no slot for it, so `moreTools.excalidraw.test.tsx` pins the class names.

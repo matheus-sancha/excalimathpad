@@ -281,6 +281,19 @@ describe('App', () => {
       expect(screen.getByLabelText('2 problems')).toBeInTheDocument()
     })
 
+    it('keeps the item clear of Excalidraw’s square-button style, which hid its label, and still a sidebar trigger (#102)', async () => {
+      renderApp({ initialElements: problemSheet() })
+      await ready()
+
+      const item = await sheetButton()
+      // Excalidraw's `.excalidraw .sidebar-trigger` sets `line-height: 0` and a fixed button look;
+      // on the item it collapsed the label to no height (seen in Chromium).
+      expect(item.matches('.excalidraw .sidebar-trigger')).toBe(false)
+      expect(item.querySelector('.dropdown-menu-item__text')).toHaveTextContent('Math Settings2')
+      // A floating panel's outside click finds it through `closest`, so it doesn't close and reopen.
+      expect(item.querySelector('.dropdown-menu-item__text')!.closest('.sidebar-trigger')).not.toBeNull()
+    })
+
     it('has no badge while the sheet has no problems', async () => {
       renderApp({ initialElements: sampleSheet() })
       await ready()
