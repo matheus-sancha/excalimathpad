@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { evaluateSheet, type LineResult, type TableView } from './evaluate.ts'
+import { evaluateSheet, type LineResult, type SheetLine, type TableView } from './evaluate.ts'
 
 /** Evaluates blocks (in reading order) as one sheet; results per block, in order. */
 function sheet(...sources: string[]): LineResult[][] {
@@ -1564,5 +1564,86 @@ describe('constants (docs/spec-v1.md section 5)', () => {
     const { listConstants } = await import('./evaluate.ts')
     const uscs = listConstants({ units: { system: 'uscs', custom: {} }, digits: 4 }).flatMap((group) => group.rows)
     expect(uscs.find((row) => row.name === 'gravity')!.value).toBe('32.17 ft / s^2')
+  })
+})
+
+describe('rules: conditional formats (docs/spec-v1.md section 3, A rule; #109)', () => {
+  const lines = (source: string) => evaluateSheet([{ id: 'b', source }]).get('b')!
+  const formatOf = (line: SheetLine) => (line.typeset.kind === 'math' ? line.typeset.format : null)
+  const RULES = '@text-blue @text-red if v > 3 m/s @text-orange if v > 2 m/s'
+
+  it('applies the first true rule, left to right, else the plain format', () => {
+    for (const [speed, colour] of [['3.4', 'red'], ['2.5', 'orange'], ['1.0', 'blue']] as const) {
+      const [, line] = lines(`u = ${speed} m/s\nv = u * 1 ${RULES}`)
+      expect(formatOf(line)?.textColor, `${speed} m/s`).toBe(colour)
+      expect(line.warnings).toEqual([])
+    }
+  })
+
+  it('decides each property on its own, with any number of rules', () => {
+    const [line] = lines('v = 4 @bold if v > 3 @yellow if v > 5 @red if v > 1 @underline')
+    expect(formatOf(line)).toEqual({ bold: true, underline: true, color: 'red', textColor: null })
+  })
+
+  it('reads any name above, the line’s own name and result; a limit follows its variable', () => {
+    expect(formatOf(lines('a = 10\nsigma = 12 @text-red if sigma > a')[1])?.textColor).toBe('red')
+    expect(formatOf(lines('a = 20\nsigma = 12 @text-red if sigma > a')[1])?.textColor).toBeNull()
+    expect(formatOf(lines('2 + 3 @text-red if result > 4')[0])?.textColor).toBe('red')
+    // `result` is the line's value, even on a sheet that defines a variable `result`.
+    expect(formatOf(lines('result = 100\n2 + 3 @text-red if result > 4')[1])?.textColor).toBe('red')
+    expect(formatOf(lines('D = 102.3 mm @text-red if D > 100 mm')[0])?.textColor).toBe('red')
+  })
+
+  it('never changes a value on the sheet: the scope after a line with rules is the same', () => {
+    const without = lines('v = 4\nw = v * 2\nv')
+    // A condition that assigns inside: it runs in its own layer, so `v` stays 4 below.
+    const withRules = lines('v = 4 @red if (v = 9) > 0 @bold if v > 3\nw = v * 2\nv')
+    expect(withRules.map((line) => line.result)).toEqual(without.map((line) => line.result))
+    expect(formatOf(withRules[0])).toMatchObject({ bold: true, color: 'red' })
+  })
+
+  it('makes a condition that can’t be decided a warning, keeps the result and the other formats', () => {
+    const [, kind, notBool, assign, missing] = lines(
+      'v = 4 m/s\nv * 1 @bold @text-red if v > 3 kg\nv * 1 @text-red if v\nv * 1 @text-red if v = 3\nv * 1 @text-red if q > 1',
+    )
+    expect(kind.result).toEqual(value('4 m / s'))
+    expect(kind.warnings).toEqual(['if v > 3 kg: Units do not match'])
+    expect(formatOf(kind)).toMatchObject({ bold: true, textColor: null })
+    expect(notBool.warnings).toEqual(['if v: not true or false'])
+    expect(assign.warnings).toEqual(["if v = 3: a rule can't assign; write =="])
+    expect(missing.warnings).toEqual(['if q > 1: Undefined symbol q'])
+  })
+
+  it('makes a misspelt word the line’s error, and runs no rules on a line in error', () => {
+    expect(lines('v = 4 @blod if v > 3')[0].result).toEqual(error('Unknown format @blod'))
+    const [line] = lines('v = q @text-red if v > 3')
+    expect(line.result.kind).toBe('error')
+    expect(line.warnings).toEqual([])
+  })
+
+  it('needs a value for result: a function definition has none', () => {
+    const [line] = lines('f(x) = x^2 @text-red if result > 3')
+    expect(line.warnings).toEqual(['if result > 3: a rule needs a value'])
+  })
+
+  it('tests a list per point: the summary takes the format only if every point is true, with the count on hover', () => {
+    const [, some, all] = lines('Q_s = 1 .. 4\nv = Q_s * 1 @text-red if v > 2\nw = Q_s * 1 @text-red if result > 0')
+    expect(formatOf(some)?.textColor).toBeNull()
+    expect(some.listPreview).toContain('@text-red if v > 2: 2 of 4 points')
+    expect(formatOf(all)?.textColor).toBe('red')
+  })
+
+  it('highlights the table rows whose point is true, and reads the list names there', () => {
+    const [, , line] = lines('Q_s = 1 .. 4\nv = Q_s * 1\ntable(Q_s, v) @red if v > 2')
+    expect(line.table?.rowFormats.map((format) => format?.color ?? null)).toEqual([null, null, 'red', 'red'])
+    expect(formatOf(line)?.color).toBeNull()
+    expect(lines('Q_s = 1 .. 2\ntable(Q_s) @red if result > 1')[1].warnings).toEqual([
+      'if result > 1: a table has no result; use its list names',
+    ])
+  })
+
+  it('reports a warning once per rule, not once per point', () => {
+    const [, line] = lines('Q_s = 1 .. 4\nv = Q_s * 1 @text-red if v > 3 kg')
+    expect(line.warnings).toEqual(['if v > 3 kg: Units do not match'])
   })
 })

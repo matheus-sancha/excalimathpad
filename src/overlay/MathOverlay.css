@@ -591,6 +591,23 @@
   text-align: left;
 }
 
+/* A table row a rule made true (section 10, M4c): its band, text colour and weight. */
+.math-element__table tr.is-yellow td { background: #fff3bf; }
+.math-element__table tr.is-green td { background: #d3f9d8; }
+.math-element__table tr.is-blue td { background: #d0ebff; }
+.math-element__table tr.is-red td { background: #ffe3e3; }
+.math-element__table tr.is-gray td { background: #e9ecef; }
+.math-element__table tr.is-bold td { font-weight: bold; }
+.math-element__table tr.is-underline td:not(.is-failed) { text-decoration: underline; }
+.math-element__table tr.is-text-black { --math-line: #1e1e1e; }
+.math-element__table tr.is-text-blue { --math-line: #1971c2; }
+.math-element__table tr.is-text-red { --math-line: #e03131; }
+.math-element__table tr.is-text-green { --math-line: #2f9e44; }
+.math-element__table tr.is-text-orange { --math-line: #e8590c; }
+.math-element__table tr.is-text-gray { --math-line: #868e96; }
+.math-element__table tr.is-text-color td:not(.is-failed) { color: var(--math-line); }
+.math-element__table tr[class*='is-'] td { print-color-adjust: exact; }
+
 .math-element__table td.is-failed {
   padding: 0 14px;
   color: var(--math-error);

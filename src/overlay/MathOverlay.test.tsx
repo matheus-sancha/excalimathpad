@@ -1449,6 +1449,19 @@ describe('line format (docs/spec-v1.md section 4: bold, underline, highlight)', 
     expect(scene.sourceOf('m1')).toBe('v = 4 @bold @text-red if v > 3')
   })
 
+  it('draws a rule’s format as a plain one would, its warning in the gutter, and a table row it made true (#109)', () => {
+    renderOverlay([
+      anchorWith('v = 4 m/s @text-red if v > 3 m/s\nw = 1 m/s @bold @text-red if w > 3 kg\nx = 1 .. 3\ntable(x) @yellow if x > 2'),
+    ])
+
+    expect(rowOf('m1', 1)).toHaveClass('is-text-red')
+    expect(rowOf('m1', 2)).toHaveClass('is-bold')
+    expect(rowOf('m1', 2)).not.toHaveClass('is-text-red')
+    expect(rowOf('m1', 2).querySelector('[data-tip]')?.getAttribute('data-tip')).toContain('if w > 3 kg: Units do not match')
+    const rows = rowOf('m1', 4).querySelectorAll('tbody tr')
+    expect([...rows].map((row) => row.classList.contains('is-yellow'))).toEqual([false, false, true])
+  })
+
   it('Ctrl+B and Ctrl+U toggle bold and underline from the field', () => {
     const { scene } = renderOverlay([anchorWith('x = 2')])
     openLine(1)

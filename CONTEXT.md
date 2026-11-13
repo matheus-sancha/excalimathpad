@@ -87,7 +87,13 @@ server. v1 target: one sheet, for Matheus's own use.
   composes the plain words back for the bar in a fixed order and keeps every
   rule. A math line carries its `LineFormat` (bold, underline, highlight, text
   colour); an unknown clause word is the line's error, reported after the line
-  ran. `typeset.ts` is the
+  ran. After a line runs, `runRules` (in `evaluate.ts`) tests its rules in a
+  `LayeredScope` over the scope with `result` bound, so a condition never
+  reaches the next line; the first true rule wins per property over the plain
+  format (`resolveRules`), and the typeset format is the result. A condition
+  that can't be decided is one warning per rule. On a list it runs per point
+  (the summary takes the format only if all are true; the hover counts them);
+  on a table, per row (`TableView.rowFormats`). `typeset.ts` is the
   `toTex` handler of spec section 4, Typesetting names; a name counts as the
   sheet's from the line that assigns it down. `typesetResult` sets a result's
   `math.format` text as number and unit. A plain

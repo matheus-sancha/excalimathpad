@@ -440,7 +440,7 @@ function TableBlock({ table, index }: { table: TableView; index: number }) {
         </thead>
         <tbody>
           {table.rows.map((row, r) => (
-            <tr key={r}>
+            <tr key={r} className={formatClasses(table.rowFormats[r] ?? NO_FORMAT).trim() || undefined}>
               {row.map((cell, c) => {
                 if (!cell.ok) {
                   return (

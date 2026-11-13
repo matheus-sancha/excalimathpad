@@ -7,11 +7,12 @@
   in `src/math/tableLine.ts`; `plot(` built (#77), read in
   `src/math/plotLine.ts`; the index built (#104), read after the parse in
   `src/math/indexes.ts`; the solved value's `for` range built (#105), read in
-  `src/math/solveLine.ts`
+  `src/math/solveLine.ts`; rules built (#109), read in `src/math/lineForm.ts` and run after
+  the line in `src/math/evaluate.ts`
 - **Amended**: 2026-11-11 (#63): the format clause, read after the comment.
   2026-11-13 (M4c; #92, #94): rules in the format clause, a solved value's
-  `for` range, and the index. The index (#104) and the `for` range (#105) are built;
-  the rules are not yet.
+  `for` range, and the index. The index (#104), the `for` range (#105) and the rules
+  (#109) are built.
 - **Date**: 2026-11-03
 
 ## Context

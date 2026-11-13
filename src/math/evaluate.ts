@@ -21,7 +21,7 @@ import {
   type UnitSlot,
 } from './display.ts'
 import { createCalls, isSheetFunction, messageOf, SheetError } from './functions.ts'
-import { readLine, type LineFormat } from './lineForm.ts'
+import { applyFormatWord, NO_FORMAT, readLine, type FormatRule, type FormatWord, type LineFormat } from './lineForm.ts'
 import { DEFAULT_DIGITS, leadingNumber, tableColumn } from './numbers.ts'
 import { createSolver, LayeredScope, type CompiledSolve, type SolveDetails, type SolveParts, type SolveText } from './solve.ts'
 import { readSolve } from './solveLine.ts'
@@ -329,6 +329,8 @@ export interface SheetLine {
 export interface TableView {
   columns: readonly TableColumn[]
   rows: readonly (readonly TableCell[])[]
+  /** Each row's format from the line's rules (section 10, M4c), or null when no rule is true there. */
+  rowFormats: readonly (LineFormat | null)[]
 }
 
 export interface TableColumn {
@@ -401,6 +403,7 @@ type ParsedLine =
       plainInputUnits: readonly string[] | null
       note: string | null
       format: LineFormat
+      rules: readonly FormatRule[]
       unknownFormat: string | null
       /** The line's trailing `in <unit>`, read outside the sheet's scope, or null. */
       display: DisplayUnit | null
@@ -417,6 +420,7 @@ type ParsedLine =
       defines: readonly string[]
       note: string | null
       format: LineFormat
+      rules: readonly FormatRule[]
       unknownFormat: string | null
       display: DisplayUnit | null
       displayText: string | null
@@ -433,6 +437,7 @@ type ParsedLine =
       defines: readonly string[]
       note: string | null
       format: LineFormat
+      rules: readonly FormatRule[]
       unknownFormat: string | null
       display: DisplayUnit | null
       displayText: string | null
@@ -448,6 +453,7 @@ type ParsedLine =
       defines: readonly string[]
       note: string | null
       format: LineFormat
+      rules: readonly FormatRule[]
       unknownFormat: string | null
       display: DisplayUnit | null
       displayText: string | null
@@ -462,6 +468,7 @@ type ParsedLine =
       defines: readonly string[]
       note: string | null
       format: LineFormat
+      rules: readonly FormatRule[]
       unknownFormat: string | null
       display: DisplayUnit | null
       displayText: string | null
@@ -550,6 +557,8 @@ export function evaluateSheet(
   let slot: SheetLine['unitSlot'] = null
   let details: SolveDetails | null = null
   let preview: string | null = null
+  // The value the line being evaluated computed, for its rules.
+  let lineValue: unknown = undefined
   let table: TableView | null = null
   let plot: PlotView | null = null
   // The display unit each list was given on the line that defined it, for table columns.
@@ -567,10 +576,18 @@ export function evaluateSheet(
         preview = null
         table = null
         plot = null
+        lineValue = undefined
         const result = evaluateLine(line)
+        let typeset = typesetLine(line, names)
+        const ruled = runRules(line, result, position - 1)
+        if (ruled !== null) {
+          if (typeset.kind === 'math') typeset = { ...typeset, format: ruled.format }
+          warnings.push(...ruled.warnings)
+          if (ruled.counts.length > 0 && preview !== null) preview = [preview, ...ruled.counts].join('\n')
+        }
         return {
           result,
-          typeset: typesetLine(line, names),
+          typeset,
           warnings,
           variables: variablesOf(line),
           unitSlot: slot,
@@ -583,6 +600,133 @@ export function evaluateSheet(
     )
   }
   return results
+
+  /**
+   * A line's rules (section 3, A rule; section 10, per point), run after the
+   * line, in a layer over the scope with `result` bound, so nothing a
+   * condition does reaches the next line. The first true rule wins for each
+   * of bold, underline, highlight and text colour; with none, the plain
+   * format. A condition that can't be decided is a warning, once per rule,
+   * and the rule is skipped. A line whose own result is an error runs none.
+   * Null when the line has no rules.
+   */
+  function runRules(
+    line: ParsedLine,
+    result: LineResult,
+    here: number,
+  ): { format: LineFormat; warnings: string[]; counts: string[] } | null {
+    if (line.kind === 'blank' || line.kind === 'syntax-error' || line.rules.length === 0) return null
+    if (result.kind === 'error') return { format: line.format, warnings: [], counts: [] }
+    const warnings: string[] = []
+    const warn = (rule: FormatRule, message: string) => {
+      const text = `if ${rule.condition}: ${message}`
+      if (!warnings.includes(text)) warnings.push(text)
+    }
+    const conditions = line.rules.map((rule) => {
+      try {
+        if (rule.condition === '') throw new SheetError('not true or false')
+        const node = parseSheet(rule.condition)
+        if (isAssignmentNode(node) || isFunctionAssignmentNode(node)) throw new SheetError("a rule can't assign; write ==")
+        return { rule, node, code: node.compile(), usesResult: usedNames(node).includes('result'), skipped: false }
+      } catch (error) {
+        warn(rule, error instanceof Error ? error.message : String(error))
+        return null
+      }
+    })
+    /** One condition at one point: true, false, or skipped with its warning. */
+    const decide = (index: number, own: Map<string, unknown>): boolean => {
+      const condition = conditions[index]
+      if (condition === null || condition.skipped) return false
+      try {
+        const value = condition.code.evaluate(new LayeredScope(scope, own))
+        if (typeof value === 'boolean') return value
+        throw new SheetError('not true or false')
+      } catch (error) {
+        const raw = messageOf(error, condition.node, (name) => own.get(name) ?? scope.peek(name))
+        // Section 13: units of different kinds in a comparison read as the sheet words it.
+        const message = /^Cannot compare units|actual: Unit/.test(raw) ? 'Units do not match' : raw
+        warn(condition.rule, explain(message, here, definedAt, failed))
+        condition.skipped = true
+        return false
+      }
+    }
+    const skip = (index: number, message: string) => {
+      const condition = conditions[index]
+      if (condition === null || condition.skipped) return
+      warn(condition.rule, message)
+      condition.skipped = true
+    }
+    /** The lists a condition names, each bound to its `i`-th point; null where a point failed. */
+    const pointOf = (index: number, i: number, length: number, extra?: [string, Point]): Map<string, unknown> | null => {
+      const condition = conditions[index]
+      const own = new Map<string, unknown>()
+      if (extra !== undefined) {
+        if (!extra[1].ok) return null
+        own.set(extra[0], extra[1].value)
+      }
+      if (condition === null) return own
+      for (const name of listsIn(condition.node, own)) {
+        const list = scope.peek(name) as SheetList
+        if (list.length !== length) {
+          skip(index, `${name} has ${list.length} values, the line has ${length}`)
+          return null
+        }
+        const point = list.points[i]
+        if (!point.ok) return null
+        own.set(name, point.value)
+      }
+      return own
+    }
+    const truths = (decided: (index: number) => boolean) => line.rules.map((_, index) => decided(index))
+
+    if (line.kind === 'table' && table !== null) {
+      // A table row whose point is true takes the format; the line's own row keeps its plain format.
+      const view: TableView = table
+      conditions.forEach((condition, index) => {
+        if (condition?.usesResult) skip(index, 'a table has no result; use its list names')
+      })
+      const length = view.rows.length
+      table = {
+        ...view,
+        rowFormats: Array.from({ length }, (_, i) => {
+          const truth = truths((index) => {
+            const own = pointOf(index, i, length)
+            return own !== null && decide(index, own)
+          })
+          return truth.some(Boolean) ? resolveRules(NO_FORMAT, line.rules, truth) : null
+        }),
+      }
+      return { format: line.format, warnings, counts: [] }
+    }
+
+    const value = lineValue
+    if (isSheetList(value)) {
+      // Per point; the one-row summary, or roots written out, only if every point is true.
+      const length = value.length
+      const counts = line.rules.map(() => 0)
+      line.rules.forEach((_, index) => {
+        for (let i = 0; i < length; i++) {
+          const own = pointOf(index, i, length, ['result', value.points[i]])
+          if (own !== null && decide(index, own)) counts[index]++
+        }
+      })
+      const truth = counts.map((count, index) => count === length && !conditions[index]?.skipped)
+      const shown = line.rules.flatMap((rule, index) =>
+        conditions[index] === null || conditions[index]!.skipped ? [] : [`${rule.text}: ${counts[index]} of ${length} points`],
+      )
+      return { format: resolveRules(line.format, line.rules, truth), warnings, counts: shown }
+    }
+
+    const single = value !== undefined && typeof value !== 'function'
+    const truth = truths((index) => {
+      if (!single && conditions[index]?.usesResult) {
+        skip(index, 'a rule needs a value')
+        return false
+      }
+      return decide(index, single ? new Map([['result', value]]) : new Map())
+    })
+    return { format: resolveRules(line.format, line.rules, truth), warnings, counts: [] }
+  }
 
   /** Read right after the line ran: a failed line has removed its names. */
   function variablesOf(line: ParsedLine): SheetVariable[] {
@@ -669,6 +813,7 @@ export function evaluateSheet(
       }
       const value: unknown =
         line.kind === 'solve' ? runSolve(line) : line.kind === 'range' ? runRange(line) : runCode(line.node)
+      lineValue = value
       if (line.kind === 'solve' || (line.kind === 'parsed' && isSolveCall(line.node))) details = lastSolve
       line.defines.forEach((name) => failed.delete(name))
       // Reported after the line ran, so its value still reaches the lines
@@ -835,6 +980,7 @@ export function evaluateSheet(
       view: {
         columns: built.map(({ column }) => column),
         rows: Array.from({ length }, (_, i) => built.map(({ cells }) => cells[i])),
+        rowFormats: Array.from({ length }, () => null),
       },
       failed: own ? failureOf(own.value as SheetList) : null,
     }
@@ -1201,6 +1347,20 @@ export function evaluateSheet(
   }
 }
 
+/** The plain format with the first true rule applied for each property it sets (section 3, A rule). */
+function resolveRules(plain: LineFormat, rules: readonly FormatRule[], truth: readonly boolean[]): LineFormat {
+  const property = (word: FormatWord) => (word.kind === 'highlight' ? 'color' : word.kind === 'text' ? 'textColor' : word.kind)
+  const decided = new Set<string>()
+  let format = plain
+  rules.forEach((rule, index) => {
+    const key = property(rule.word)
+    if (decided.has(key) || !truth[index]) return
+    decided.add(key)
+    format = applyFormatWord(format, rule.word)
+  })
+  return format
+}
+
 function typesetLine(line: ParsedLine, names: Names): TypesetLine {
   switch (line.kind) {
     case 'blank':
@@ -1395,6 +1555,7 @@ function parseLine(text: string): ParsedLine {
         defines: [],
         note: form.note,
         format: form.format,
+        rules: form.rules,
         unknownFormat: form.unknownFormat,
         display: target,
         displayText: target === null ? null : form.displayUnit,
@@ -1419,6 +1580,7 @@ function parseLine(text: string): ParsedLine {
         defines: [],
         note: form.note,
         format: form.format,
+        rules: form.rules,
         unknownFormat: form.unknownFormat,
         display: target,
         displayText: target === null ? null : form.displayUnit,
@@ -1439,6 +1601,7 @@ function parseLine(text: string): ParsedLine {
         defines: range.name === null ? [] : [range.name],
         note: form.note,
         format: form.format,
+        rules: form.rules,
         unknownFormat: form.unknownFormat,
         display: target,
         displayText: target === null ? null : form.displayUnit,
@@ -1479,6 +1642,7 @@ function parseLine(text: string): ParsedLine {
         defines: [solve.name],
         note: form.note,
         format: form.format,
+        rules: form.rules,
         unknownFormat: form.unknownFormat,
         display: target,
         displayText: target === null ? null : form.displayUnit,
@@ -1501,6 +1665,7 @@ function parseLine(text: string): ParsedLine {
       plainInputUnits: plainInputUnits(node),
       note: form.note,
       format: form.format,
+      rules: form.rules,
       unknownFormat: form.unknownFormat,
       display: target,
       displayText: target === null ? null : form.displayUnit,
