@@ -7,6 +7,8 @@
   in `src/math/tableLine.ts`; `plot(` built (#77), read in
   `src/math/plotLine.ts`
 - **Amended**: 2026-11-11 (#63): the format clause, read after the comment.
+  2026-11-13 (M4c, not built yet; #92, #94): rules in the format clause, a solved value's
+  `for` range, and the index.
 - **Date**: 2026-11-03
 
 ## Context
@@ -31,6 +33,18 @@ goes to math.js:
 3. **Display unit:** take off a trailing top-level `in` or `to` whose target is a pure unit,
    read outside the sheet's scope.
 4. **Form:** recognise `= solve`, `..`, `table(` and `plot(`, and take off their clauses.
+
+Amended on 2026-11-13 for M4c, decided by Matheus (#92, #94):
+
+- **Step 2 takes everything from the first `@` outside a string,** where it took the trailing
+  `@` words: a format word can be followed by `if <condition>`, which makes it a rule. The
+  condition is ordinary math.js, compiled with the captured `parse` and evaluated after the
+  line has run, with `result` bound to the line's value. It never changes the scope.
+- **A solved value's clause is `for <unknown> = <from> .. <to>`,** and `guess` stays the solve
+  function's. The `..` inside a solve line's clause belongs to the solve, not to a range line.
+- **5. Index:** `name[…]` is the app's, read before math.js: one value out of a list, counting
+  from 1. Lists are the app's own (see the engineering rules), so math.js's matrix index never
+  sees them.
 
 What the app writes into a line (a display unit, plot clauses, a format) is text in that same line, in
 front of any `#`. So split, join, copy, paste, undo and save carry it, and one line stays one
@@ -62,7 +76,7 @@ Engineering rules (Engineer's):
 - `@` was chosen for the format clause because math.js rejects it: `U = I * R @bold` is a syntax
   error there, where `style bold`, `[bold]`, `| bold` and `!bold` all parse as math (tried on
   math.js 15.2).
-- `#`, `@`, `..`, `step`, `guess` and `= solve` have to stay unambiguous against math.js's own grammar,
+- `#`, `@`, `..`, `step`, `guess`, `for`, `if` after an `@` word, `name[…]` and `= solve` have to stay unambiguous against math.js's own grammar,
   and a math.js upgrade could clash with them. The pump sheet's CI test covers every form.
 - A name directly before `(` stays a function call, because that's math.js's rule: `f_d (L_p/D)`
   errors when `f_d` is a number, with a readable message. Making it multiply would let a mistyped
