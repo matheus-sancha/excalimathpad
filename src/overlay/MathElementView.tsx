@@ -568,6 +568,25 @@ function ResultCell({
   } else if (result.kind === 'error') {
     text = result.message
     content = result.message
+  } else if (result.kind === 'roots') {
+    // Section 9, Roots: written out in one row, the unit once in its slot, or a summary; details on hover.
+    text = result.text
+    if (plain) content = result.text
+    else {
+      const inner = result.written ? (
+        <RootsContent text={result.text} slot={slot} index={index} />
+      ) : (
+        <SummaryContent text={result.text} />
+      )
+      content =
+        details === null ? (
+          inner
+        ) : (
+          <span className="math-element__detailed" data-tip={detailsText(details)} data-tip-when="details">
+            {inner}
+          </span>
+        )
+    }
   } else if (result.kind === 'list') {
     // Section 10: one row high, as a summary, its points on hover; no unit slot.
     text = result.text
@@ -643,6 +662,28 @@ function SummaryContent({ text }: { text: string }) {
           <Html html={html!} />
         </span>
       ))}
+    </>
+  )
+}
+
+/**
+ * A solved value's roots written out (section 9, Roots): `1, 2, 3 m`, each
+ * number typeset, the unit once, after the last, in the line's slot.
+ */
+function RootsContent({ text, slot, index }: { text: string; slot: SheetLine['unitSlot']; index: number }) {
+  const parts = text.split(', ')
+  const last = parts[parts.length - 1]
+  const earlier = parts.slice(0, -1).map((part) => texToHtml(typesetResult(part)))
+  if (earlier.some((html) => html === null)) return <>{text}</>
+  return (
+    <>
+      {earlier.map((html, i) => (
+        <span key={i}>
+          <Html html={html!} />
+          {', '}
+        </span>
+      ))}
+      <ValueContent text={last} slot={slot} index={index} />
     </>
   )
 }

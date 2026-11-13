@@ -145,7 +145,7 @@ describe('solve lines (section 4: keyword form, guess small after it)', () => {
     const line = math(typeset('Hp(Q) = 2 Q\nHs(Q) = Q + 1\nQ_op = solve Hp(Q) = Hs(Q), for Q = 1 L/s .. 30 L/s in L/s')[2])
     expect(line.name).toBe('{Q}_{\\mathrm{op}}')
     expect(line.expression).toBe('\\mathrm{solve}\\;\\mathit{Hp}\\left( Q\\right)=\\mathit{Hs}\\left( Q\\right)')
-    expect(line.aside).toBe('\\text{for }Q=1\\,\\mathrm{L}/\\mathrm{s}\\ldots 30\\,\\mathrm{L}/\\mathrm{s}')
+    expect(line.aside).toBe('Q=1\\,\\mathrm{L}/\\mathrm{s}\\ldots 30\\,\\mathrm{L}/\\mathrm{s}')
     expect(() => render(line.aside!)).not.toThrow()
   })
 

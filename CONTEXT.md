@@ -240,9 +240,13 @@ server. v1 target: one sheet, for Matheus's own use.
   canvas or a scene or viewport change hides it. Screen only. A **solve's
   details** (spec section 4) use the same tip: a value with `solveDetails`
   sits in a `math-element__detailed` span, dotted underline, whose `data-tip`
-  reads `Brent, 5 iterations`, the residual and the bracket. A solve line's
-  guess and a range's step are their own TeX (`TypesetLine.aside`), set small
-  and grey after the expression. A list's summary (`math-element__summary`)
+  reads `Brent, 5 iterations`, the residual and the bracket; a range solve's
+  reads `Scan + Brent, roots found in 1 .. 30 L / s`, the 200 points and each
+  root with its residual. A solved value with several roots is a `roots`
+  result: up to five written out (`RootsContent`, the unit once in the last
+  root's slot), else a count summary (`13 roots, …`), with the details on
+  hover. A solve line's range or guess and a range's step are their own TeX
+  (`TypesetLine.aside`), set small and grey after the expression. A list's summary (`math-element__summary`)
   typesets its first and last values after the count, and its `data-tip` is
   the line's `listPreview`: three points from each end with their index.
   `MathOverlay` subscribes to the scene (`onChange`, `onScrollChange`) and

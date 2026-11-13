@@ -921,13 +921,37 @@ describe('solve, the value form: a search range (docs/spec-v1.md section 9, #70,
     expect(block('x = solve x^2 = 2, for x = 0 .. 10\nx * 10')).toEqual([value('1.414'), value('14.14')])
   })
 
+  const roots = (text: string, written = true): LineResult => ({ kind: 'roots', text, written })
+
   it('gives every root found in the range, ascending: several are a list', () => {
-    expect(block('x_r = solve x^3 - 6x^2 + 11x = 6, for x = 0 .. 10\nx_r[2]\nx_r * 2')).toEqual([
-      list('3 values, 1 … 3'),
+    expect(block('x_r = solve x^3 - 6x^2 + 11x = 6, for x = 0 .. 10\nx_r[2]\nx_r * 2\nmax(x_r)')).toEqual([
+      roots('1, 2, 3'),
       value('2'),
       list('3 values, 2 … 6'),
+      value('3'),
     ])
-    expect(block('x = solve x^2 = 4, for x = -10 .. 10')).toEqual([list('2 values, -2 … 2')])
+    expect(block('x = solve x^2 = 4, for x = -10 .. 10')).toEqual([roots('-2, 2')])
+    const variables = (source: string) => lines(source).map((line) => line.variables)
+    expect(variables('x_r = solve x^2 = 4, for x = -10 .. 10')).toEqual([
+      [{ name: 'x_r', kind: 'list', text: '2 values, -2 … 2' }],
+    ])
+  })
+
+  it('writes up to five roots out, the unit once and Digits on each; six or more show the count', () => {
+    // Van der Waals, CO2 at 280 K and 5.5 MPa (docs/research/all-roots-solve.md).
+    const vdw = [
+      'R_g = 0.08314 L bar/(mol K)',
+      'V_m = solve R_g * 280 K / (V - 0.04267 L/mol) - 3.64 L^2 bar/mol^2 / V^2 = 55 bar, for V = 0.05 L/mol .. 5 L/mol in L/mol',
+    ].join('\n')
+    expect(block(vdw)[1]).toEqual(roots('0.07994, 0.1492, 0.2368 L / mol'))
+    expect(block('x = solve sin(x) = 0.5, for x = 0 .. 40')).toEqual([roots('13 roots, 0.5236 … 38.22', false)])
+  })
+
+  it('offers the unit slot on roots written out, in the last root’s unit', () => {
+    const [line] = lines('x = solve x^2 = 4 m^2, for x = -10 m .. 10 m in cm')
+    expect(line.result).toEqual(roots('-200, 200 cm'))
+    expect(line.unitSlot).toMatchObject({ chosen: 'cm' })
+    expect(line.solveDetails?.method).toBe('scan')
   })
 
   it('gives the unknown the low end’s dimension, and shows in the unit system or `in <unit>`', () => {

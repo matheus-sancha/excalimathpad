@@ -246,6 +246,7 @@
 .math-element__row.is-underline .math-element__equation,
 .math-element__row.is-underline .math-element__source,
 .math-element__row.is-underline .math-element__result.is-value .math-element__tex,
+.math-element__row.is-underline .math-element__result.is-roots .math-element__tex,
 .math-element__row.is-underline .math-element__note {
   background: linear-gradient(currentColor, currentColor) no-repeat 0 calc(100% - 2px) / 100% 1px;
   /* Under the text only, not under a cell's padding. */

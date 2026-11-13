@@ -132,7 +132,7 @@ export function solveTex(
     expression: `\\mathrm{solve}\\;${toTex(parts.lhs, names)}=${toTex(parts.rhs, names)}`,
     aside:
       parts.range !== null
-        ? `\\text{for }${nameTex(parts.unknown)}=${toTex(parts.range.from, names)}\\ldots ${toTex(parts.range.to, names)}`
+        ? `${nameTex(parts.unknown)}=${toTex(parts.range.from, names)}\\ldots ${toTex(parts.range.to, names)}`
         : `\\text{guess }${nameTex(parts.unknown)}=${parts.guess === null ? '' : toTex(parts.guess, names)}`,
   }
 }

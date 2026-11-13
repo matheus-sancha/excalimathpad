@@ -125,6 +125,9 @@ const solver = createSolver(math)
 const ranges = createRanges(math)
 
 /** How results show when the sheet sets nothing: SI with prefixes, 4 digits. */
+/** A solved value writes out this many roots at most; more show a summary (section 9, Roots). */
+const MAX_WRITTEN_ROOTS = 5
+
 export const DEFAULT_DISPLAY: DisplaySettings = {
   units: { system: 'si-prefixed', custom: {} },
   digits: DEFAULT_DIGITS,
@@ -257,6 +260,12 @@ export type LineResult =
    * failed. At Q_s = 0 L/s: …`; the other points keep their values.
    */
   | { kind: 'list'; text: string; failed: string | null }
+  /**
+   * A solved value's roots (section 9, Roots), when it found several: up to
+   * five written out, `0.07996, 0.1491, 0.2369 L / mol`, else a summary with
+   * the count, `13 roots, 0.5236 … 38.22`.
+   */
+  | { kind: 'roots'; text: string; written: boolean }
 
 /**
  * A line as the grid shows it (docs/spec-v1.md section 4), with its cells' TeX.
@@ -565,7 +574,7 @@ export function evaluateSheet(
           warnings,
           variables: variablesOf(line),
           unitSlot: slot,
-          solveDetails: result.kind === 'value' ? details : null,
+          solveDetails: result.kind === 'value' || result.kind === 'roots' ? details : null,
           listPreview: result.kind === 'list' ? preview : null,
           table,
           plot,
@@ -681,6 +690,16 @@ export function evaluateSheet(
           if (isSheetList(scope.peek(name)) && unit !== null && line.displayText !== null) {
             listUnits.set(name, { unit, text: line.displayText })
           } else listUnits.delete(name)
+        }
+        if (isSheetList(value) && line.kind === 'solve') {
+          // Section 9, Roots: written out up to five, the unit once, in the last root's slot.
+          const roots = value.values() ?? []
+          const written = roots.length <= MAX_WRITTEN_ROOTS
+          if (written) {
+            const offered = display.slot(roots[roots.length - 1], settings)
+            slot = offered && { ...offered, chosen: line.displayText }
+          }
+          return { kind: 'roots', text: rootsSummary(value, unit), written }
         }
         if (isSheetList(value)) {
           preview = previewOf(value, unit)
@@ -1124,6 +1143,21 @@ export function evaluateSheet(
         return display.show(value, target?.kind === 'unit' ? target.unit : unit, settings)
       },
     )
+  }
+
+  /** A solved value's roots: written out, `1, 2, 3 m`, the unit once; or a summary with the count. */
+  function rootsSummary(list: SheetList, unit: ShownUnit | null): string {
+    const values = list.values() ?? []
+    if (values.length > MAX_WRITTEN_ROOTS) return summaryOf(list, unit).replace(/^(\d+) values/, '$1 roots')
+    const last = display.show(values[values.length - 1], unit, settings)
+    const lastUnit = leadingNumber(last)?.rest.trim() ?? ''
+    const target = lastUnit === '' ? null : display.readTarget(lastUnit)
+    const numbers = values.slice(0, -1).map((value) => {
+      const text = display.show(value, target?.kind === 'unit' ? target.unit : unit, settings)
+      const split = leadingNumber(text)
+      return split !== null && split.rest.trim() === lastUnit ? split.number : text
+    })
+    return [...numbers, last].join(', ')
   }
 
   /** The hover of a list's summary: three points from each end, with their index. */

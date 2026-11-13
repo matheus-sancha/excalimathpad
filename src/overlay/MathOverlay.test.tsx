@@ -340,7 +340,7 @@ describe('MathOverlay', () => {
       renderOverlay([anchorWith('x = solve x^2 = 2, for x = 0 .. 10\ny = x\nf(a) = solve u^2 = a, guess u = 1\nf_d = f(4)')])
 
       expect(cellOf(1, 'expression')).toHaveTextContent(/solve/)
-      expect(rowOf('m1', 1).querySelector('.math-element__aside')).toHaveTextContent(/for/)
+      expect(rowOf('m1', 1).querySelector('.math-element__aside')).toHaveTextContent(/x=0…10/)
       expect(rowOf('m1', 3).querySelector('.math-element__aside')).toHaveTextContent(/guess/)
       const detailed = cellOf(1, 'result')!.querySelector<HTMLElement>('.math-element__detailed')!
       expect(detailed.dataset.tip).toMatch(/^Scan \+ Brent, roots found in 0 \.\. 10\n200 points\nRoot 1: 1\.41421356237\d*, residual .+/)
@@ -353,6 +353,22 @@ describe('MathOverlay', () => {
       expect(rowOf('m1', 3).querySelector('[data-tip-when="details"]')).toBeNull()
       // A line that is just one call to a solve function has them.
       expect(cellOf(4, 'result')!.querySelector('.math-element__detailed')).not.toBeNull()
+    })
+
+    it('writes up to five roots out in one row, the unit in its slot, else the count; details on hover (#106)', () => {
+      renderOverlay([
+        anchorWith('x_r = solve x^3 - 6 m x^2 + 11 m^2 x = 6 m^3, for x = 0 m .. 10 m\ny = solve sin(y) = 0.5, for y = 0 .. 40'),
+      ])
+
+      const written = cellOf(1, 'result')!
+      expect(written).toHaveAttribute('data-text', '1, 2, 3 m')
+      expect(written.querySelectorAll('[data-unit-slot]')).toHaveLength(1)
+      expect(written.querySelector<HTMLElement>('.math-element__detailed')!.dataset.tip).toMatch(
+        /^Scan \+ Brent, roots found in 0 \.\. 10 m\n200 points\nRoot 1: 1 m, residual .+\nRoot 2: 2/,
+      )
+      const summary = cellOf(2, 'result')!
+      expect(summary).toHaveTextContent(/^13 roots,/)
+      expect(summary.querySelector('.math-element__detailed')).not.toBeNull()
     })
 
     it('typesets a range with its step aside, and a list’s summary with its points on hover', () => {
