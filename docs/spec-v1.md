@@ -1739,7 +1739,7 @@ Evidence: [`excalidraw-gestures.md`](research/excalidraw-gestures.md).
 | No built-in shortcut for M | M leaves the tool unchanged when not intercepted | #45, `addMath.excalidraw.test.tsx` |
 | `.excalidraw` takes focus | Enter works after leaving an edit | #43, `gestures.excalidraw.test.tsx` |
 | A `NEVER` write updates the captured copy | A line commit after size writes is one step (control: an uncaptured size change is a second step) | #44, `anchorSize.excalidraw.test.tsx` |
-| Resize handles can be let go of and put back | A handle drag snaps back, `x` and `y` too, and leaves undo nothing (control: without it, the anchor resizes) | #44, `anchorSize.excalidraw.test.tsx` |
+| Resize handles set the chosen width | From M4c (#110): a width drag stores `customData.width`, keeps the top and height, and is one undo step with Excalidraw's resize; below the floor it goes back to automatic; a height-only drag snaps back (control: without it, the anchor resizes) | #44, #110, `anchorSize.excalidraw.test.tsx` |
 | `sizeWritesWait`'s app-state flags | Set while a shape is drawn, an element dragged, a handle held or the text editor open; clear afterwards | #44, `anchorSize.excalidraw.test.tsx` |
 | The dark theme is `--theme-filter` | The overlay's filter is one of the package's `--theme-filter` values | #44, `layers.test.ts` |
 | Order of the panel's children in `.panelColumn` | The reduced panel hides what comes before Opacity | #46, `mathSelection.excalidraw.test.tsx` |
@@ -2103,10 +2103,20 @@ Changes line if it changes behaviour.
   (`evaluate.test.ts`, nested solves).
 - Re-wrapping live while a resize handle is dragged: Excalidraw's frame and the overlay's layout in step
   mid-drag, with the frame held at the floor. If they can't be, re-wrap on release, where the snap-back
-  runs today.
+  runs today. **Re-wraps on release (#110):** size writes wait while Excalidraw resizes
+  (`sizeWritesWait`), so the overlay keeps the stored width until the handle is let go, then lays out at
+  the new one. Checked in Chromium with real mouse input: an element with `x = 2` and a long comment,
+  dragged to 762 px, ran the comment on two rows with the math at the left; dragged to 256 px, between
+  the floor and 320 px, the comment wrapped to it; dragged below the floor, it went back to automatic.
 - Excalidraw's resize and the stored `customData.width` landing in one undo step, and Ctrl+Z restoring
-  the width before it, or automatic.
+  the width before it, or automatic. **Passed (#110):** a `NEVER` write in `onPointerUp` lands in the
+  resize's own step; one Ctrl+Z restored the width before it, and automatic for a first width
+  (`anchorSize.excalidraw.test.tsx`, and in Chromium).
 - A left handle, a rotated element and a group, each setting the width and discarding the height.
+  **Passed for a left handle and a group (#110),** in `anchorSize.excalidraw.test.tsx` against the
+  installed package: a left handle moves the left edge with the right edge in place, and a group resize
+  sets the anchor's width and keeps the drawing's resize. A rotated element keeps Excalidraw's own
+  geometry along its axis, and the height is then refit to the content; not checked by hand.
 - The six text colours under the dark theme's filter, on the canvas and on each highlight: still readable.
 - A text colour reaching KaTeX's glyphs in the equation and the result, as bold had to (#63).
 - The suggestions list after `@`.

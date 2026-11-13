@@ -1,8 +1,8 @@
 import { useEffect, useLayoutEffect, useRef } from 'react'
 import {
   fitsContent,
+  settleResizes,
   sizeWritesWait,
-  snapBackResizes,
   writeAnchorSizes,
   type ContentSize,
 } from '../canvas/anchorSize.ts'
@@ -18,6 +18,32 @@ export interface AnchorSizes {
   anchors: () => readonly MathAnchor[]
   /** Runs a size or style write; the sheet keeps its clean mark through it (`SheetSession.keepClean`). */
   keepClean: (write: () => void) => void
+}
+
+/** An element holding only comments has a floor of about this (section 4, Chosen width). */
+const COMMENTS_ONLY_FLOOR = 120
+
+/**
+ * An element's floor (section 4, Chosen width): the width its math lines need,
+ * with comments asking for nothing. Measured by laying the body out at no
+ * width for a moment, as a chosen width does; 0 when it isn't laid out (jsdom).
+ */
+export function floorOf(root: HTMLElement | null, id: string): number {
+  const body = [...(root?.querySelectorAll<HTMLElement>('.math-element__body') ?? [])].find(
+    (candidate) => candidate.closest<HTMLElement>('[data-anchor-id]')?.dataset.anchorId === id,
+  )
+  if (!body) return 0
+  const { width, minWidth } = body.style
+  const had = body.classList.contains('has-chosen-width')
+  body.classList.add('has-chosen-width')
+  body.style.width = '0px'
+  body.style.minWidth = 'max-content'
+  const floor = body.offsetWidth
+  body.style.width = width
+  body.style.minWidth = minWidth
+  if (!had) body.classList.remove('has-chosen-width')
+  if (floor === 0) return 0
+  return body.querySelector('.math-element__row:not(.is-comment):not(.is-blank)') ? floor : Math.max(floor, COMMENTS_ONLY_FLOOR)
 }
 
 /**
@@ -83,7 +109,9 @@ export function useAnchorSizes(sizes: AnchorSizes) {
       restoreStyles()
       if (waiting) measure.current()
     })
-    const offPointerUp = snapBackResizes(api, (write) => latest.current.keepClean(write))
+    const offPointerUp = settleResizes(api, (write) => latest.current.keepClean(write), (id) =>
+      floorOf(latest.current.overlay(), id),
+    )
     return () => {
       offChange()
       offPointerUp()

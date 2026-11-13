@@ -161,15 +161,17 @@ export function MathElementView({
       }}
     >
       <div
-        className="math-element__body"
-        style={
-          anchor.angle
+        className={`math-element__body${anchor.chosenWidth !== null ? ' has-chosen-width' : ''}`}
+        style={{
+          // Section 4, Chosen width: never below the content, so the laid-out width is the larger.
+          ...(anchor.chosenWidth !== null ? { width: anchor.chosenWidth, minWidth: 'max-content' } : {}),
+          ...(anchor.angle
             ? {
                 transform: `rotate(${anchor.angle}rad)`,
                 transformOrigin: `${anchor.width / 2}px ${anchor.height / 2}px`,
               }
-            : undefined
-        }
+            : {}),
+        }}
       >
         {(anchor.title !== '' || edit?.lineIndex === TITLE_LINE) && (
           <Header

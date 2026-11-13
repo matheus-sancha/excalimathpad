@@ -69,9 +69,13 @@ server. v1 target: one sheet, for Matheus's own use.
   `data-math-placing`, `data-math-problems` and `--math-problems`). Excalidraw
   has no slot for it, so `moreTools.excalidraw.test.tsx` pins the class names.
   `anchorSize.ts` writes an anchor's size (`writeAnchorSizes`: `NEVER`, top-left
-  kept, the rotated top-left for a rotated anchor) and snaps resize handles back
-  (`snapBackResizes`, from `onPointerUp`'s `originalElements`), and says when
-  a size write waits (`sizeWritesWait`). The only module that imports
+  kept, the rotated top-left for a rotated anchor) and settles a resize on
+  release (`settleResizes`, from `onPointerUp`'s `originalElements`): a width
+  at or above the element's floor becomes its **chosen width**
+  (`customData.width`, `MathAnchor.chosenWidth`), with Excalidraw's `x` kept
+  and the top and height put back, written `NEVER` so it lands in the resize's
+  own undo step; below the floor it goes back to automatic; a height-only drag
+  snaps back. It also says when a size write waits (`sizeWritesWait`). The only module that imports
   Excalidraw at runtime; tests may too, and other modules may import its
   types. This is ADR 0001's engineering rule as amended in ADR 0002. Depends
   on: `@excalidraw/excalidraw`.
@@ -465,7 +469,10 @@ and everything downstream recalculates. Engine: math.js, client-side.
   (drag, resize, rotation, new shape, text or line editor); its flags are
   contract-tested.
 - **The body is measured, not the anchor.** `.math-element__body` is
-  `max-content` and rotates about the anchor's centre; `offsetWidth` and
+  `max-content` (with a chosen width, that width and `min-width: max-content`,
+  its comments asking for nothing, so the laid-out width is never below the
+  floor; `floorOf` in `useAnchorSizes.ts` measures the floor by laying the body
+  out at no width for a moment) and rotates about the anchor's centre; `offsetWidth` and
   `offsetHeight` ignore transforms, so they are scene units. A body measuring
   0 × 0 isn't laid out (jsdom) and is never written.
 - **The Add math item hands the keyboard to `.excalidraw`.** A clicked button
@@ -550,8 +557,11 @@ and everything downstream recalculates. Engine: math.js, client-side.
   it. Reading order is by top, so it doesn't change.
 - Opacity set on a math element becomes Excalidraw's default for the next
   shape drawn, as for any element. A new math element starts at 100.
-- Resizing an anchor by a handle snaps back but still marks the sheet dirty:
-  Excalidraw changes the scene while the handle moves (spec section 4).
+- A height-only drag of a handle snaps back but still marks the sheet dirty:
+  Excalidraw changes the scene while the handle moves (spec section 4). A
+  width change marks it dirty because it changes the sheet.
+- A chosen width re-wraps comments on release, not while the handle moves:
+  the overlay lays the body out from the stored width (spec section 17).
 
 ## Decisions
 

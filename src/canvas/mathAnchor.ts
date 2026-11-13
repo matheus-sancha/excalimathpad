@@ -56,6 +56,11 @@ export interface MathAnchor {
   title: string
   /** 0 to 100, Excalidraw's scale. The element's math is drawn at it (section 4). */
   opacity: number
+  /**
+   * The width set with the resize handles (section 4, Chosen width, M4c), in
+   * scene units; null for an automatic element. Stored in `customData.width`.
+   */
+  chosenWidth: number | null
 }
 
 export function isMathAnchor(element: ExcalidrawElement): boolean {
@@ -70,6 +75,12 @@ export function isMathAnchor(element: ExcalidrawElement): boolean {
 function readSource(element: ExcalidrawElement): string {
   const source: unknown = element.customData?.source
   return typeof source === 'string' ? source : ''
+}
+
+/** A chosen width is a positive number; anything else is automatic. */
+function readChosenWidth(element: ExcalidrawElement): number | null {
+  const width: unknown = element.customData?.width
+  return typeof width === 'number' && Number.isFinite(width) && width > 0 ? width : null
 }
 
 /** As for the source: anything but a string is no title. A title is one line. */
@@ -91,6 +102,7 @@ export function toMathAnchor(element: ExcalidrawElement): MathAnchor {
     opacity,
     source: readSource(element),
     title: readTitle(element),
+    chosenWidth: readChosenWidth(element),
   }
 }
 
@@ -106,22 +118,24 @@ export function sameAnchor(a: MathAnchor, b: MathAnchor): boolean {
     a.locked === b.locked &&
     a.opacity === b.opacity &&
     a.source === b.source &&
-    a.title === b.title
+    a.title === b.title &&
+    a.chosenWidth === b.chosenWidth
   )
 }
 
 /** Builds the scene elements for new anchors (e.g. for `initialData`). */
 export function createMathAnchorElements(
   anchors: ReadonlyArray<
-    Omit<MathAnchor, 'angle' | 'source' | 'locked' | 'opacity' | 'title'> & {
+    Omit<MathAnchor, 'angle' | 'source' | 'locked' | 'opacity' | 'title' | 'chosenWidth'> & {
       source?: string
       title?: string
       locked?: boolean
+      chosenWidth?: number
     }
   >,
 ) {
   return convertToExcalidrawElements(
-    anchors.map(({ id, x, y, width, height, source = '', locked = false, title }) => ({
+    anchors.map(({ id, x, y, width, height, source = '', locked = false, title, chosenWidth }) => ({
       type: 'rectangle' as const,
       id,
       x,
@@ -130,7 +144,12 @@ export function createMathAnchorElements(
       height,
       ...ANCHOR_STYLE,
       locked,
-      customData: { kind: MATH_ANCHOR_KIND, source, ...(title ? { title } : {}) },
+      customData: {
+        kind: MATH_ANCHOR_KIND,
+        source,
+        ...(title ? { title } : {}),
+        ...(chosenWidth ? { width: chosenWidth } : {}),
+      },
     })),
     // Keep our ids: callers refer to their anchors by them.
     { regenerateIds: false },

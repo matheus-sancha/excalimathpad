@@ -181,6 +181,14 @@
   overflow-wrap: anywhere;
 }
 
+/* A chosen width (section 4, Chosen width, M4c) replaces a comment's own
+   request: it asks for nothing, fills its row and wraps at the element's
+   width, whatever the math needs. */
+.math-element__body.has-chosen-width .math-element__comment {
+  width: 0;
+  max-width: none;
+}
+
 /* The field and a hidden copy of its text share one cell, so the cell is as
    wide as what is typed. */
 .math-element__field-cell {

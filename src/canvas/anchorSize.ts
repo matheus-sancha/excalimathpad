@@ -6,7 +6,7 @@ import { isMathAnchor } from './mathAnchor.ts'
 /**
  * A math element's box always fits its content (docs/spec-v1.md section 4,
  * Size). The overlay measures the content; this writes the size to the anchor
- * and snaps Excalidraw's resize handles back. Every write is
+ * and settles Excalidraw's resize handles (`settleResizes`). Every write is
  * `newElementWith` + `CaptureUpdateAction.NEVER` (section 14), so it adds no
  * undo step, and it also updates Excalidraw's last captured copy of the anchor,
  * so a line commit after it is still one step.
@@ -104,31 +104,64 @@ export function sizeWritesWait(app: AppState): boolean {
   )
 }
 
-/** The slice of Excalidraw's API snapping back needs. */
-export type SnapBackApi = SizeWriteApi & Pick<ExcalidrawImperativeAPI, 'onPointerUp'>
+/** The slice of Excalidraw's API settling a resize needs. */
+export type ResizeApi = SizeWriteApi & Pick<ExcalidrawImperativeAPI, 'onPointerUp'>
 
 /**
- * Resize handles snap back to the fit, in place (section 4, Gestures): when a
- * resize ends, each math anchor it changed gets back the `x`, `y`, `width` and
- * `height` it had when the press began, whether it was resized alone, with
- * other elements, in a group, or rotated. Drawings keep their resize. The
- * rotate handle is left alone. `write` wraps the write (the sheet keeps its
- * clean mark through it). Returns the unsubscribe.
+ * What a resize handle does to a math element (section 4, Chosen width, M4c),
+ * when it is let go. A handle changes the width only:
+ *
+ * - **Width changed, at or above the floor:** the dragged width becomes the
+ *   chosen width, in `customData.width`. Excalidraw's own `x` is kept, so a left
+ *   handle moves the left edge; the top and the height go back to what they
+ *   were, and the content's height follows at the next size write.
+ * - **Below the floor:** the element goes back to automatic, its chosen width
+ *   forgotten, and its box back where it was.
+ * - **Width unchanged** (a top or bottom handle): the box goes back, as the
+ *   snap-back always did.
+ *
+ * The write is `NEVER`, made while Excalidraw is still finishing the gesture,
+ * so it lands in the resize's own undo step: one Ctrl+Z restores the width
+ * before it, or automatic (`anchorSize.excalidraw.test.tsx`). A snap-back that
+ * changes nothing runs through `keepClean`; a width change marks the sheet
+ * dirty. Drawings keep their resize, and the rotate handle is left alone.
+ * `floorOf` measures an element's floor in scene units (0 when it can't).
+ * Returns the unsubscribe.
  */
-export function snapBackResizes(api: SnapBackApi, write: (run: () => void) => void): () => void {
+export function settleResizes(
+  api: ResizeApi,
+  keepClean: (run: () => void) => void,
+  floorOf: (id: string) => number,
+): () => void {
   return api.onPointerUp((_tool, pointerDown) => {
     const { resize, originalElements } = pointerDown
     if (!resize.isResizing || resize.handleType === 'rotation') return
     let changed = false
+    let widthSet = false
     const elements = api.getSceneElementsIncludingDeleted().map((element) => {
       const original = originalElements.get(element.id)
       if (!original || !isMathAnchor(element) || sameBox(element, original)) return element
       changed = true
       const { x, y, width, height } = original
-      return newElementWith(element, { x, y, width, height })
+      const back = { x, y, width, height }
+      if (Math.abs(element.width - original.width) <= SIZE_TOLERANCE) return newElementWith(element, back)
+      const { width: _chosen, ...automatic } = element.customData ?? {}
+      widthSet = true
+      if (element.width < floorOf(element.id) - SIZE_TOLERANCE) {
+        return newElementWith(element, { ...back, customData: automatic })
+      }
+      return newElementWith(element, {
+        x: element.x,
+        y: element.angle ? element.y : y,
+        width: element.width,
+        height: element.angle ? element.height : height,
+        customData: { ...automatic, width: element.width },
+      })
     })
     if (!changed) return
-    write(() => api.updateScene({ elements, captureUpdate: CaptureUpdateAction.NEVER }))
+    const run = () => api.updateScene({ elements, captureUpdate: CaptureUpdateAction.NEVER })
+    if (widthSet) run()
+    else keepClean(run)
   })
 }
 

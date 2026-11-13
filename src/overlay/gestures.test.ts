@@ -20,6 +20,7 @@ const anchor = (props: Partial<MathAnchor> = {}): MathAnchor => ({
   locked: false,
   title: '',
   opacity: 100,
+  chosenWidth: null,
   ...props,
 })
 

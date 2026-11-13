@@ -371,6 +371,21 @@ describe('MathOverlay', () => {
       expect(summary.querySelector('.math-element__detailed')).not.toBeNull()
     })
 
+    it('lays a chosen width out as the body’s width, never below its content (M4c, #110)', () => {
+      renderOverlay([
+        createMathAnchorElements([{ id: 'm1', ...box, source: 'x = 2\n# a long comment', chosenWidth: 480 }])[0],
+        createMathAnchorElements([{ id: 'm2', ...box, y: 400, source: 'y = 3' }])[0],
+      ])
+
+      const body = elementOf('m1')!.querySelector<HTMLElement>('.math-element__body')!
+      expect(body).toHaveClass('has-chosen-width')
+      expect(body.style.width).toBe('480px')
+      expect(body.style.minWidth).toBe('max-content')
+      const automatic = elementOf('m2')!.querySelector<HTMLElement>('.math-element__body')!
+      expect(automatic).not.toHaveClass('has-chosen-width')
+      expect(automatic.style.width).toBe('')
+    })
+
     it('typesets a range with its step aside, and a list’s summary with its points on hover', () => {
       renderOverlay([anchorWith('x = 1 m .. 3 m step 1 m\ny = x * 2')])
 

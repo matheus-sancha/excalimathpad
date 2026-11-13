@@ -10,6 +10,7 @@ const at = (id: string, x: number, y: number, more: Partial<MathAnchor> = {}): M
   height: 40,
   source: '',
   angle: 0,
+  chosenWidth: null,
   locked: false,
   title: '',
   opacity: 100,
