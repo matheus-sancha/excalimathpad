@@ -28,10 +28,11 @@ installs as an offline app. It runs on Chrome and Edge on desktop.
 
 | Area | Left out |
 |---|---|
-| Solve | Systems of equations; bounds or intervals on the unknown; a tolerance setting |
+| Solve | Systems of equations; a search with no range written (every root of a polynomial); a solve function over a range; complex roots; a setting for the tolerance or the search points |
 | Units | Units defined by a sheet; scaled display units (`1000 Pa`) |
 | Numbers | Digits per result; thousands separators |
-| Lists | Two lists forming a grid (cartesian product) |
+| Lists | Two lists forming a grid (cartesian product); lists of lists |
+| Formats | A rule builder in the format bar; text size, italic or alignment on a line; a colour picker or hex colours; rules on a title |
 | Plots | A second y axis; zoom, pan or hover values on curves; renamed axis titles; chosen colours |
 | Print | Printing a selection, frame or viewport; a scale setting; page guides on the canvas |
 | Editing | Cancelling a line edit; placing the caret at the clicked character |
@@ -55,9 +56,9 @@ One name per concept, used the same in conversation, code, tests, docs and the U
 | **Sheet** | All live math elements in reading order, plus drawings and settings. The unit of evaluation |
 | **Reading order** | By the top of each anchor's visual bounds, then its left, then its id. Derived, never stored |
 | **Math element** | A block of source lines anchored at a scene position, shown as a typeset grid |
-| **Anchor** | The marked Excalidraw rectangle that carries a math element. Its `customData` holds `kind`, `source` and an optional `title` |
+| **Anchor** | The marked Excalidraw rectangle that carries a math element. Its `customData` holds `kind`, `source` and, each optional, `title`, `titleFormat` and `width` |
 | **Line** | One string of an element's source: one statement. See [section 3](#3-sheet-lines-every-form) for its forms |
-| **Typeset row** | One line on screen: *gutter · equation (name · `≔` · expression, plus guess or step) · result · note* |
+| **Typeset row** | One line on screen: *gutter · equation (name · `≔` · expression, plus guess, search range or step) · result · note* |
 | **Line edit** | The one line shown as raw source, held as *anchor id + line index*. UI state |
 | **Line commit** | The moment an edit leaves a line whose text differs from the scene. Writes the source once |
 | **Result** | What a line computes: a value with unit, a list, an error, or empty |
@@ -71,24 +72,35 @@ One name per concept, used the same in conversation, code, tests, docs and the U
 | **App units** | The fixed list of extra units every sheet has, such as `cP` |
 | **Digits** | Significant digits for every number shown. One per sheet |
 | **Function definition** | A line that defines one name with parameters |
-| **Solve line** | A line with `= solve`. Defines a **solved value** or, with parameters, a **solve function** |
+| **Solve line** | A line with `= solve`. Defines a **solved value**, searched over a range, or, with parameters, a **solve function**, started from a guess |
 | **Equation, residual** | `lhs = rhs` on a solve line. The solver sees `lhs - rhs` |
 | **Unknown** | A name bound only inside its own solve line's equation |
-| **Guess** | An expression evaluated each time the solve runs. It gives the search's start and the unknown's dimension |
-| **Solve details** | Method, iterations, final residual and bracket. Shown on hover, never saved |
+| **Guess** | A solve function's `guess <unknown> = <expr>`, evaluated each time the solve runs. It gives the search's start and the unknown's dimension |
+| **Search range** | A solved value's `for <unknown> = <from> .. <to>`, evaluated each time the solve runs. It gives the span searched and the unknown's dimension |
+| **Roots** | What a solved value holds: the roots found in its search range, ascending. One root is a single value; several are a list |
+| **Solve details** | For a guess: method, iterations, final residual and bracket. For a range: method, range, points, the residual at each root and the crossings rejected. Shown on hover, never saved |
 | **Range** | `a .. b step s`. Evaluates to a list |
-| **List** | An ordered sequence of point results (value or error), all of one kind |
-| **Iterating line** | A line that mentions a list outside an aggregate. Runs once per point |
+| **List** | An ordered sequence of point results (value or error), all of one kind. It comes from a range, an iterating line or a solved value with several roots |
+| **Iterating line** | A line that mentions a list outside an aggregate or an index. Runs once per point |
+| **Index** | `x_r[2]`: one value taken out of a list, counting from 1 |
 | **Aggregate** | `min`, `max`, `sum`, `mean`, `count`. Takes a list, gives one value |
 | **Table line, plot line** | `table(…)` and `plot(…)`. Display only; each defines no name and draws under itself |
-| **Clause** | A comma-separated setting after a plot line or solve line, such as `mark Q_op` or `guess Q = 15 L/s` |
+| **Clause** | A comma-separated setting after a plot line or solve line, such as `mark Q_op`, `guess f = 0.02` or `for Q = 1 L/s .. 30 L/s` |
 | **Series, mark** | One list drawn on a plot; a value of the x kind drawn as a guide, dot and label |
 | **Comment line, note** | A line starting with `#`; the text after `#` on a line with code |
+| **Format** | A line's `@` words, after its code and before its note: bold, underline, one text colour, one highlight |
+| **Plain format, rule** | A format word with no `if`, which always applies; `@word if <condition>`, which applies while its condition is true |
+| **Text colour, highlight** | One of six colours for a line's or title's text; one of five soft bands behind a row or a header |
+| **Result colour** | One per sheet: the text colour of every result's number and unit. Blue by default |
 | **Sheet file** | Excalidraw scene JSON + the `excalimathpad` block. The sheet's only durable form |
 | **Dirty** | The scene or settings changed since the last save or open |
 | **Recovery copy** | The whole sheet file, its name and its file handle in IndexedDB. Exists only while dirty |
 | **Sheet panel** | Excalidraw's sidebar with the tabs Variables, Problems, Settings and Constants |
 | **Title** | A math element's optional name: plain text on one line, shown in a header above its lines. Never evaluated |
+| **Title format** | How a title looks: bold, italic, underline, alignment, size, text colour and highlight. Stored beside the title, never in its text |
+| **Chosen width** | A math element's optional width, set with the resize handles. Without one the element is **automatic** |
+| **Floor** | The width an element's math lines and title need. Comments don't count toward it |
+| **Laid-out width** | The larger of the chosen width and the floor |
 | **Placing** | The UI mode between Add math and the click that creates the anchor |
 | **Print pages** | The sheet laid out for its Page setting. Computed at print time, never stored |
 | **Unbreakable box** | A math line, table row, plot, or drawing that fits a page. A break doesn't pass through one |
@@ -115,8 +127,10 @@ acceptance sheet* (pump sheet).
 
 - At most one line across the sheet is in source form. Every other line is typeset.
 - A result cell is always on its line's row.
-- After every evaluation and every pointer release, an anchor's size equals its
-  content size. A size write never adds an undo step and never changes a value.
+- After every evaluation and every pointer release, an anchor's width equals its
+  laid-out width and its height equals its content's. A size write never adds an undo
+  step and never changes a value. Only a handle sets a chosen width, and that is a step.
+- A laid-out width is never below the floor, so math never wraps and is never cut.
 - Everything visible in an upright element is inside its anchor, so it can be
   clicked and dragged.
 - After every scene change, an anchor has the fixed style. Only `opacity` varies. A
@@ -125,13 +139,16 @@ acceptance sheet* (pump sheet).
 - Hover content is never printed or saved.
 - Comments and notes never change a result. They live only in the line's source,
   and a note is always the last part of a line.
+- A format never changes a result. A rule's condition reads the scope and never
+  changes it, and a rule that can't be decided is skipped with a warning.
+- A title's text is exactly what was typed. Its format is never read from it.
 
 **Units and numbers**
 
 - A display unit, Digits and the unit system never change a value, only how it
   shows. Lines below use the full value.
-- A result with no display unit always follows the unit system. A chosen unit is
-  always marked (tint).
+- A result with no display unit always follows the unit system. A chosen unit has
+  no mark: it is read from the line's source (`in <unit>`) and from its open slot.
 - Every plain number has no more significant digits than Digits, and no digit that
   rounding invented.
 - The source a user typed is never rewritten, except for what a slot or popover
@@ -139,21 +156,26 @@ acceptance sheet* (pump sheet).
 
 **Solve**
 
-- The residual's dimension is checked at the guess. A mismatch is an error at any
-  trial point.
-- A converged result lies inside a bracket of width no more than the fixed
-  tolerance. Anything else is an error, never a value.
-- The same sheet gives the same solve.
+- The residual's dimension is checked at the guess, or at the low end of the search
+  range. A mismatch is an error at any trial point.
+- A root lies inside a bracket of width no more than the fixed tolerance, or is a
+  touching point the search found. Anything else is an error, never a value.
+- A solved value holds the roots found in its range. Nothing shown calls them all
+  the roots.
+- The same sheet gives the same solve, with the same roots in the same order.
 - A solved value runs once per run, at its line. A solve function runs at every
   call, and its definition can fail only for syntax.
+- A range search never runs inside another, and never once per point: a solve
+  function takes a guess, and a range solve can't use a list.
 
 **Functions and lists**
 
 - A definition never has a value or a display unit. Whether a function's result can
   be computed is decided at each call, and any error lands on the calling line.
 - A warning never changes a result.
-- A list's length is fixed by its range. A failed point never removes or shifts
-  other points: index *i* is always the *i*-th value of the range.
+- A range's list has the length its range gives. A failed point never removes or
+  shifts other points: index *i* is always the *i*-th value of the range. A solved
+  value's list has one point per root found, so its length can change with the inputs.
 - Iteration happens at the line, never inside a function body.
 - A plot shows one kind on y and one on x. Clauses never change a value.
 
@@ -161,6 +183,7 @@ acceptance sheet* (pump sheet).
 
 - A line commit's source change is exactly one undo step, and keystrokes are none. A commit
   can also record a nudge or Link edit before it as a step of its own ([section 6](#6-undo)).
+- A press on the title's bar and a change of chosen width are each exactly one undo step.
 - Sheet undo never runs while a line is being edited.
 - A source write is never `EVENTUALLY` or the default capture.
 - Settings changes never enter Excalidraw's undo history.
@@ -176,7 +199,7 @@ Decided in: the Model part of each ticket in [section 18](#18-decision-index).
 
 ## 3. Sheet lines: every form
 
-Built in M1 to M4, as tagged below. Assignment is plain `=`; `:=` isn't accepted.
+Built in M1 to M4c, as tagged below. Assignment is plain `=`; `:=` isn't accepted.
 Typeset, an assignment shows `≔`. One line is one statement.
 
 | Form | Example | Built in | Result cell |
@@ -187,7 +210,7 @@ Typeset, an assignment shows `≔`. One line is one statement.
 | Plain input | `D = 102.3 mm` | M0, M1 | Empty, unless it has a display unit |
 | Bare expression | `2 * pi` | M0, M1 | Value; name and `≔` cells empty |
 | Function definition | `Hp(Q) = H_0 - (H_0 - H_r) (Q/Q_r)^2` | M0, M1 | Empty; problems only |
-| Solve line, value | `Q_op = solve Hp(Q) = Hs(Q), guess Q = 15 L/s` | M3 | Value |
+| Solve line, value | `Q_op = solve Hp(Q) = Hs(Q), for Q = 1 L/s .. 30 L/s` | M3; the range in M4c | The roots found: a value, or several |
 | Solve line, function | `f(Re, r) = solve …, guess f = 0.02` | M3 | Empty; problems only |
 | Range | `Q_s = 1 L/s .. 30 L/s step 1 L/s` | M4 | List summary |
 | Table line | `table(Q_s, Hs(Q_s), Hp(Q_s))` | M4 | Empty; rows draw under the line |
@@ -201,42 +224,107 @@ dP_pipe = f_d * (L_p/D) rho v_d^2 / 2 in kPa # friction only
 ```
 
 Any line with code can also carry a **format**: a clause of `@` words after everything
-else and before the note. The words are `@bold`, `@underline` and one highlight colour,
-`@yellow`, `@green`, `@blue`, `@red` or `@gray`, in any order.
+else and before the note, in any order.
+
+| Word | Sets |
+|---|---|
+| `@bold`, `@underline` | The whole row |
+| `@yellow`, `@green`, `@blue`, `@red`, `@gray` | A highlight: a band behind the whole row |
+| `@text-black`, `@text-blue`, `@text-red`, `@text-green`, `@text-orange`, `@text-gray` | A text colour, from M4c: the equation and the result, not the note |
 
 ```
-U = I_load * R in V @bold @yellow # check
+U = I_load * R in V @bold @text-red @yellow # check
 ```
 
-- A colour named twice keeps the last. A word that isn't a format is an error on the
-  line, and the line's value still reaches the lines below.
-- Only `@` words at the end of the code are a clause. An `@` in a string, in a note or in
-  the middle of the code is left alone (in the code, math.js reports it).
+- **A bare colour is always a highlight** (`@red`), and a text colour always starts with
+  `text-`. A line can carry one of each.
+- A highlight named twice keeps the last, and so does a text colour. A word that isn't a
+  format (`@blod`, `@text-purple`) is an error on the line, and the line's value still
+  reaches the lines below.
+- The clause starts at the first `@` outside a string and runs to the note. An `@` in a
+  string or in a note is left alone.
 - Comment lines and blank lines take no format.
 
-A solve line follows the same rule: `in <unit>` comes last, after the guess. It sets the
-result's display unit and doesn't convert the guess. A clause added later goes before it.
+**A rule** (M4c) is a format word followed by `if` and a condition. The word applies while
+the condition is true. A word with no `if` is a **plain format** and always applies.
 
 ```
-Q_op = solve Hp(Q) = Hs(Q), guess Q = 15 L/s in L/s
+v = Q / A @bold @text-red if v > 3 m/s @text-orange if v > 2 m/s # check
 ```
+
+- **Each word takes its own `if`.** A condition runs from `if` to the next `@`, or to the
+  end of the code. Two formats under one condition are written twice:
+  `@text-red if v > 3 m/s @red if v > 3 m/s`.
+- A line can hold any number of rules, in any order with its plain formats.
+- **The first true rule wins, left to right,** like `if / else if`, so the strictest limit
+  is written first. Text colour, highlight, bold and underline are each decided on their
+  own. When no rule for one of them is true, the line's plain format applies, wherever it
+  is written; with none, the defaults.
+
+  ```
+  @text-blue @text-red if v > 3 m/s @text-orange if v > 2 m/s
+  v = 3.4 m/s → red      v = 2.5 m/s → orange      v = 1.0 m/s → blue
+  ```
+
+- **A condition** is an ordinary expression with units that gives true or false:
+  comparisons, `and`, `or`, `not`. It reads every name defined above the line and the name
+  the line defines, so a limit can be another variable:
+  `sigma = F / A @text-red if sigma > sigma_adm`.
+- **`result`** stands for the line's own value, so a line with no name can be tested
+  (`Q / A @text-red if result > 3 m/s`) and a rule survives a rename. Inside a condition
+  `result` is always the line's value, even on a sheet that defines a variable `result`.
+- **A condition that can't be decided is a warning,** and the rule is skipped: an
+  undefined name, units of different kinds (`v > 3 kg`), something that isn't true or
+  false (`@text-red if v`), or an assignment. The line keeps its value and its other
+  formats. This differs on purpose from a misspelt word, which is the line's error.
+- A line whose own result is an error runs no rules and adds no warning. A plain input
+  has a value, so its rules run. A line with no single value (a function definition, a
+  plot) can't use `result`: that is a warning.
+- On a list or a table a rule is tested per point ([section 10](#ranges-and-lists)).
+- Rules are typed. The format bar never writes or changes one.
+
+A solve line follows the same order: `in <unit>` comes after the range or the guess, and the
+format after that. `in <unit>` sets the result's display unit and doesn't convert the range
+or the guess. A clause added later goes before it.
+
+```
+Q_op = solve Hp(Q) = Hs(Q), for Q = 1 L/s .. 30 L/s in L/s
+```
+
+**An index** (M4c) takes one value out of a list, counting from 1: `x_2 = x_r[2]`,
+`Q_s[5]`.
+
+- It goes on a name. The index is any expression giving a whole number with no unit, 1 or
+  more: `x_r[count(x_r)]` is the last. Anything else, or an index past the end, is an error
+  on that line.
+- A name inside an index doesn't make the line an iterating line: `x_r[2] + 1` is one
+  value.
+- On a single value, `x[1]` is the value itself, so a line written with `[1]` works
+  whether a solve found one root or several.
+- An index on a failed point is that point's error.
 
 **How a line is read, in this order:**
 
 1. **Comment:** split at the first `#` outside a string. Nothing after it is read.
-2. **Format:** take off the trailing `@` words. math.js rejects `@`, so a clause can
-   never be read as code.
+2. **Format:** take off everything from the first `@` outside a string: the format
+   words and, from M4c, each word's `if <condition>`. math.js rejects `@`, so a clause
+   can never be read as code. A condition goes to math.js on its own, after the line
+   has run.
 3. **Display unit:** take off a trailing top-level `in` or `to` whose target is a
    pure unit. The target is read outside the sheet's scope, so a variable named `K`
    doesn't change what `in K` means. A conversion inside the expression
    (`(a in bar) + …`) stays math.js's own.
 4. **Form:** recognise solve (`= solve`), range (`..`), `table(` and `plot(`, and
-   take off their clauses.
-5. **The rest goes to math.js.**
+   take off their clauses. A solve line's `for … = a .. b` is its clause, not a range line.
+5. **Index:** from M4c, read each `name[…]` as the app's own index. math.js never sees
+   it, because lists are the app's and not math.js matrices.
+6. **The rest goes to math.js.**
 
 **Rules for what the app writes:** the unit slot, the plot popover and the format bar
 write before the `#`, so a line reads `D = 102.3 mm in cm @bold # 4" Sch 40`. The slot
-and the popover don't put the line in source. Each write is one line commit.
+and the popover don't put the line in source. Each write is one line commit. The bar
+writes the plain words in a fixed order, `@bold @underline @text-<name> @<highlight>`,
+and then every rule exactly as it was typed.
 
 **Parsing notes that catch people:**
 
@@ -245,6 +333,7 @@ and the popover don't put the line in source. Each write is one line commit.
   `(…)(…)` and `2 (…)` multiply as usual.
 - `min` is a math.js function, so litres per minute is `L/minute`.
 - `table`, `plot` and `solve` are reserved. Assigning to one is an error on the line.
+  `result` isn't reserved: it has its special meaning only inside a rule's condition.
 
 **Function definitions:**
 
@@ -268,11 +357,15 @@ Decided in: [solve](https://github.com/matheus-sancha/excalimathpad/issues/19),
 [comments](https://github.com/matheus-sancha/excalimathpad/issues/36),
 [unit slot](https://github.com/matheus-sancha/excalimathpad/issues/16),
 [Mathcad research](https://github.com/matheus-sancha/excalimathpad/issues/15),
-[spec contents](https://github.com/matheus-sancha/excalimathpad/issues/38).
+[spec contents](https://github.com/matheus-sancha/excalimathpad/issues/38),
+[all-roots solve](https://github.com/matheus-sancha/excalimathpad/issues/92),
+[text colours](https://github.com/matheus-sancha/excalimathpad/issues/93),
+[conditional formats](https://github.com/matheus-sancha/excalimathpad/issues/94).
 
 ## 4. Math element: look and editing
 
-Built in M1. Hover details arrive with M3; the unit slot with M2.
+Built in M1. Hover details arrive with M3; the unit slot with M2. Text colours, rules, the
+title's format and the chosen width arrive with M4c.
 
 ### Typeset grid
 
@@ -291,13 +384,15 @@ Built in M1. Hover details arrive with M3; the unit slot with M2.
   columns. A comment longer than the element is wide wraps onto more rows, so it never
   sticks out past the results and notes. No formatting, typeset math or `##` headings.
 - **Title:** optional. An element with a title shows it in a **header** at the top of its
-  box, above the lines: bold plain text on one line, with a thin rule under it. It is
-  never evaluated and takes no format or typeset math. An element with no title has no
-  header and looks as it always did. The header follows the element's opacity.
+  box, above the lines: plain text on one line, with a thin rule under it. It is
+  never evaluated and takes no typeset math. With no format of its own it is bold, black,
+  16 px and at the left; its [format](#title-format) changes that. An element with no title
+  has no header and looks as it always did. The header follows the element's opacity.
 - **Empty cells:** a plain input and a function definition leave the result cell
   empty. A bare expression has no name or `≔`.
-- **Solve line:** `Q_op ≔ solve H_p(Q) = H_s(Q)`, with the guess small and grey after
-  the equation, inside the expression cell.
+- **Solve line:** `Q_op ≔ solve H_p(Q) = H_s(Q)`, with the search range
+  (`Q = 1 L/s … 30 L/s`) or the guess (`f = 0.02`) small and grey after the equation,
+  inside the expression cell.
 - **Range line:** `Q_s ≔ 1 L/s … 30 L/s`, with the step small and grey after it.
 - `in <unit>`, plot clauses and the format clause don't show when typeset. They show
   in source.
@@ -305,8 +400,47 @@ Built in M1. Hover details arrive with M3; the unit slot with M2.
   result and note. The highlight is a soft band behind the row, in one of five colours
   that keep the text readable, in the dark theme too. On a table or plot line it covers
   the line's own row, not what draws under it. A line that doesn't parse shows no format.
+  Text colours and rules are under [Colours and rules](#colours-and-rules).
 - **Dark theme:** in Excalidraw's dark theme the math takes the canvas's own filter, so it
   darkens exactly as drawings do. Print stays light.
+
+### Colours and rules
+
+Built in M4c. There are six **text colours**, one list for a line, a title and the sheet's
+results. There is no picker and no hex value. The five highlights are a separate list and
+don't change.
+
+| Name | Value | |
+|---|---|---|
+| `black` | `#1e1e1e` | An equation's colour by default |
+| `blue` | `#1971c2` | A result's colour by default |
+| `red` | `#e03131` | |
+| `green` | `#2f9e44` | |
+| `orange` | `#e8590c` | Stands in for yellow, which doesn't read as text |
+| `gray` | `#868e96` | |
+
+- **The sheet's result colour** colours every result's number and unit: one row in the
+  Settings tab, **Result colour**, from the six, blue by default. Equations stay black; there
+  is no sheet-wide equation colour. It is a setting: a change marks the sheet dirty and isn't
+  in undo.
+- **A line's text colour** (`@text-red`) colours its equation and its result: the name, `≔`,
+  the expression, the result's number and unit. On its line it wins over the result colour.
+  **The note stays grey.**
+- **It also colours** a list's summary, written-out roots and a table's cells on that line.
+- **Never recoloured:** an error's message (red), the gutter's marks, a note, a comment
+  line, a solve's range or guess and a range's step (grey), and plot series.
+- A line being edited shows its source uncoloured. Its live result takes its colour.
+- The Variables, Problems and Constants tabs keep their own colours.
+- In the dark theme the six darken with everything else, under the canvas's filter. In print
+  they show as on a light screen.
+
+**A rule on the sheet** (its grammar is in [section 3](#3-sheet-lines-every-form)):
+
+- A rule's format shows exactly as the same plain format would: a text colour on the equation
+  and the result, a highlight behind the row, bold and underline on the whole row.
+- **A rule that can't be decided** puts an amber `⚠` in the gutter, with the reason on hover
+  and in the Problems tab. The result still shows, with the line's other formats.
+- A warning from a condition is reported once per rule, not once per point of a list.
 
 ### Typesetting names
 
@@ -338,10 +472,16 @@ The full text is on hover and in the Problems tab.
 ### Solve details
 
 Hovering the result of a solve line (`Q_op`), or of a line that is just one call to a
-solve function (`f_d = f(Re_d, eps/D)`), shows the method, iterations, residual with
-its unit, and the bracket. A dotted underline marks a result that has details. A line
-where the solve runs deeper (`H_d = Hs(Q_d)`) and a solve function's definition show
-none. Hover is screen-only.
+solve function (`f_d = f(Re_d, eps/D)`), shows its details. A dotted underline marks a
+result that has details. A line where the solve runs deeper (`H_d = Hs(Q_d)`) and a solve
+function's definition show none. Hover is screen-only.
+
+- **A call to a solve function** (a guess): the method, iterations, residual with its unit,
+  and the bracket.
+- **A solved value** (a range, from M4c): the method (scan + Brent), the range searched, the
+  200 points, each root with its residual, a root that only touches zero marked "touching",
+  and how many crossings were rejected as poles or jumps. It never says the roots are all of
+  them: it says "roots found in 1 .. 30 L/s".
 
 ### Gestures
 
@@ -359,9 +499,11 @@ none. Hover is screen-only.
   bound to the right or bottom edge stays where it was until the element next moves.
 - **Enter** on one selected math element edits its **last line**, with the caret at
   the end.
-- The rotate handle works. **Resize handles snap back** to the fit, in place. **Known
-  limit:** the resize still marks the sheet dirty, though nothing changes: Excalidraw
+- The rotate handle works. Until M4c, **resize handles snap back** to the fit, in place.
+  **Known limit:** the resize still marks the sheet dirty, though nothing changes: Excalidraw
   changes the scene while the handle moves.
+- **From M4c the resize handles set the element's width** ([Size](#size)). A change of
+  height by a handle is still discarded.
 
 ### While editing a line
 
@@ -376,7 +518,8 @@ none. Hover is screen-only.
 - **↑ on the first line** goes to the title, and so does the bar's **Title** button, from
   any line. If the element has no title, this opens an empty one. In the title, **↓** or
   **Enter** go to the first line, and Esc or a click outside leave. The title keeps what
-  was typed, trimmed; an empty one removes the header. The title has no bar.
+  was typed, trimmed; an empty one removes the header. Until M4c the title has no bar;
+  from M4c it has [its own](#title-format).
 - **Backspace** at the start joins the line to the one above.
 - A **single click on another line** of the element moves the edit there.
 - **The format bar** sits beside the open line, outside the element's box: Title, then Bold,
@@ -385,6 +528,19 @@ none. Hover is screen-only.
   the line and keeps the line open, with the caret where it was in the code. Pressing a
   pressed button takes that format off. On a comment line or an empty line the bar has Title alone. A
   clause typed by hand shows live, like any other typing.
+- **From M4c the bar has two rows of dots,** and gets no wider: the six text colours on one
+  row, the five highlights on the other, each with its "none".
+
+  ```
+  [T] | [B] [U] | A: ● ● ● ● ● ●  ⊘
+                | ■: ● ● ● ● ●    ⊘
+  ```
+
+  One click each. Pressing the pressed text colour takes it off, which returns the line to the
+  defaults: a black equation and the sheet's result colour.
+- **The bar shows and changes the line's plain formats only.** It leaves every rule exactly as
+  typed. A press while a rule is overriding sets the plain format under it, and the rule still
+  wins while it is true.
 
 **Suggestions:** while a name is typed, a list under the field offers the names that start
 with it, from the first letter, at most eight.
@@ -401,7 +557,8 @@ with it, from the first letter, at most eight.
   without a list. **Esc** closes the list and keeps the line open; a second Esc leaves. A
   click on a name takes it. **↑** with nothing highlighted moves to the line above.
 - **Taking a name** replaces the typed word. A function adds its bracket (`sqrt(`), and
-  `solve`, `guess` and `step` a space. It is typing: the field's own Ctrl+Z takes it back.
+  `solve`, `guess`, `for` and `step` a space. It is typing: the field's own Ctrl+Z takes it back.
+- **After `@`** (M4c) the list holds the format words, and `if` after a word.
 - **No list** where there is nothing to complete: inside a word, after a number (`10k`),
   in a comment, in a quoted plot title, on the element's title, after a name typed in full,
   or after a unit typed in full (`3 m/s`), where one more letter brings it back.
@@ -427,11 +584,12 @@ with it, from the first letter, at most eight.
 ### Size
 
 A math element's box always fits its content. The app measures the content and writes
-the size to the anchor, live, while typing too.
+the size to the anchor, live, while typing too. Until M4c the width is always automatic;
+from M4c it can be the user's ([Chosen width](#chosen-width)).
 
-- **Counts toward width:** the equation (name, `≔` and expression), a solve's guess, a range's
-  step, result values, list summaries, tables, charts, notes, comments, the gutter and
-  the title. The header adds to the height.
+- **Counts toward width:** the equation (name, `≔` and expression), a solve's range or guess,
+  a range's step, result values, list summaries, tables, charts, notes, comments, the gutter
+  and the title, at its size. The header adds to the height, and a larger title makes it taller.
 - **Doesn't:** error text past its cap, and a comment past 320 px: the math lines and their
   notes set the width a comment wraps at, and a comment asks for at most 320 px itself, so
   prose alone or beside short math isn't broken into a thin column.
@@ -445,6 +603,88 @@ the size to the anchor, live, while typing too.
 - **Empty content:** the field of an element with no source, new or emptied, has a
   minimum width of about 240 px. An empty line elsewhere keeps its one-row height.
 - A size write doesn't mark the sheet dirty. Opening a sheet measures again.
+
+### Chosen width
+
+Built in M4c. A math element has an optional **chosen width**. Without one it is
+**automatic**, exactly as under [Size](#size).
+
+- **Laid-out width** is the larger of the chosen width and the **floor**.
+- **The floor is what the math lines need:** the widest math line with its result and note,
+  tables and charts, the gutter, the padding, and the title at its size. Comments don't count
+  toward it. Math never wraps; comment lines always do. An element holding only comments has a
+  floor of about 120 px.
+- **A comment's own request of up to 320 px applies to automatic elements only.** A chosen
+  width replaces it, so a chosen width between the floor and 320 px is kept, and comments wrap
+  to it.
+- **Content that grows past the chosen width widens the element,** as today. The chosen width
+  stays stored and applies again once the content is narrower.
+- **Height is always automatic.** It follows the wrapped content.
+
+**Setting it:**
+
+- **Excalidraw's own resize handles** set it. On release, the dragged width becomes the chosen
+  width, as one undo step, and the sheet is dirty.
+- **Dragged narrower than the floor, the element goes back to automatic** and the chosen
+  width is forgotten. This is the only way back: there is no button or menu item.
+- **While dragging, the text re-wraps live,** and the frame doesn't follow below the floor.
+  If Excalidraw's frame and the overlay can't be kept in step mid-drag
+  ([section 17](#17-verify-first)), the text re-wraps on release instead.
+- **A handle changes the width only.** Any change of height is discarded. A handle on the left
+  moves the left edge, as Excalidraw does for any shape, and the top stays put. A left handle
+  can therefore change reading order, as a move can; a right handle can't.
+- A rotated element resizes like an upright one, along its own axis.
+
+**What uses the extra width:**
+
+- Comment lines re-wrap to the full width, and the header's rule and highlight run the full
+  width. A title aligns within it.
+- Equations, results and notes stay at the left, as in an automatic element. The space to
+  their right is empty. No column stretches, and notes don't wrap.
+
+It is saved with the element and copied with it. Print uses the laid-out width.
+
+### Title format
+
+Built in M4c. The title's text stays exactly what was typed, so `@` and `#` in a title are
+ordinary characters ("Pump @ 50 Hz", "Case #2"). Its format is kept beside it and is set only
+from the title's bar. Nothing is typed to format a title, and a title takes no rules.
+
+| Option | Choices | Without a format |
+|---|---|---|
+| Bold | on, off | on |
+| Italic | on, off | off |
+| Underline | on, off | off |
+| Alignment | left, centre, right | left |
+| Text size | S 13 px, M 16 px, L 20 px, XL 26 px | M |
+| Text colour | The six [text colours](#colours-and-rules) | black |
+| Highlight | The five highlights, or none | none |
+
+- **The highlight fills the whole header band,** from the element's left edge to its right,
+  above the rule, as a line's highlight fills its row. It doesn't reach into the box's padding.
+- **Alignment is within the element's laid-out width,** which is the chosen width when the
+  user set one.
+- **The title stays one line and never wraps.** Its width at its size counts toward the floor,
+  so an XL title can widen the element. The header's height follows the size.
+- The rule under the header stays. Underline is drawn on the text, not on the band.
+- Wherever the title names the element (the Variables and Problems tabs), it is the plain text.
+- Emptying the title removes the header and its format with it. The format is copied with the
+  element, prints as shown, and takes the dark theme's filter like the rest.
+
+**The title's bar** shows beside the title, outside the element's box, only while the title is
+open. It replaces the line's bar there.
+
+```
+[B] [I] [U] | [←] [↔] [→] | [S] [M] [L] [XL]
+A: ● ● ● ● ● ●  ⊘
+■: ● ● ● ● ●    ⊘
+```
+
+- The current format shows pressed. Bold is on without a format, so B shows pressed on a new
+  title, and pressing it stores "not bold".
+- **Each press is one undo step** and keeps the title open. **Ctrl+B**, **Ctrl+I** and
+  **Ctrl+U** do the same from the field.
+- Like the line's bar, it never takes the keyboard from the field.
 
 ### Selected math element
 
@@ -481,11 +721,16 @@ Decided in: [look](https://github.com/matheus-sancha/excalimathpad/issues/14),
 [panel](https://github.com/matheus-sancha/excalimathpad/issues/32),
 [comments](https://github.com/matheus-sancha/excalimathpad/issues/36),
 [functions](https://github.com/matheus-sancha/excalimathpad/issues/27),
-[chrome](https://github.com/matheus-sancha/excalimathpad/issues/17).
+[chrome](https://github.com/matheus-sancha/excalimathpad/issues/17),
+[chosen width](https://github.com/matheus-sancha/excalimathpad/issues/100),
+[text colours](https://github.com/matheus-sancha/excalimathpad/issues/93),
+[conditional formats](https://github.com/matheus-sancha/excalimathpad/issues/94),
+[title format](https://github.com/matheus-sancha/excalimathpad/issues/95),
+[all-roots solve](https://github.com/matheus-sancha/excalimathpad/issues/92).
 
 ## 5. Results: units and numbers
 
-Built in M2.
+Built in M2. A result's colour is the sheet's [result colour](#colours-and-rules), from M4c.
 
 ### Shown result
 
@@ -505,8 +750,9 @@ else in the unit system for its kind; else in composed base units of the system.
 - **Typing filters.** ↑ / ↓ move the highlight. **Enter** applies the highlighted unit,
   or what was typed if nothing matches. **Esc** cancels. An empty field + Enter goes
   back to sheet units.
-- **A chosen unit is tinted**, so it stands out after the system changes. The tint
-  doesn't print.
+- **A chosen unit has no mark,** from M4c: it looks like any other result. Whether a result
+  has one is read from its line (`in m/min`) and from the open slot, whose list has Sheet
+  units on top. Until M4c a chosen unit is tinted, and the tint doesn't print.
 - **Stored** at the end of the line's source as `in <unit>`. Choosing from the slot is
   one line commit and doesn't put the line in source.
 - **Accepts** a unit expression with no number: `bar`, `kN/m^2`, `L/minute`. An unknown
@@ -682,6 +928,9 @@ Excalidraw's own selection steps, and a nudge or Link edit that a line commit fo
 - **A unit slot or plot popover change** is one line commit.
 - **A title change** is one step, written when the edit leaves the title: adding one,
   changing it, or removing it. A title left unchanged writes nothing.
+- **A press on the title's bar or its keys** (M4c) is one step, written at once.
+- **A change of chosen width** (M4c) is one step: Ctrl+Z restores the previous width, or
+  automatic. Excalidraw's resize and the stored width land in the same step.
 - **A format from the bar or its keys** is one line commit too, written at once with the
   line's typed text, so each press is one step. The field's text undo starts fresh after
   it, because the app rewrote the field.
@@ -703,17 +952,19 @@ Excalidraw's own selection steps, and a nudge or Link edit that a line commit fo
     stays moved and no undo reaches it, so the two end up out of line.
   - After a click that deselects, the first Ctrl+Z moves the other anchor back and re-selects, the
     second takes back the line, and the third moves the written anchor back.
-- **Not undo steps:** keystrokes, size writes, style restores, settings changes and
-  results.
+- **Not undo steps:** keystrokes, size writes, style restores, settings changes (the result
+  colour among them) and results.
 
 Decided in: [undo steps](https://github.com/matheus-sancha/excalimathpad/issues/11),
 [undo research](https://github.com/matheus-sancha/excalimathpad/issues/10),
 [auto-size](https://github.com/matheus-sancha/excalimathpad/issues/29),
-[chrome](https://github.com/matheus-sancha/excalimathpad/issues/17).
+[chrome](https://github.com/matheus-sancha/excalimathpad/issues/17),
+[chosen width](https://github.com/matheus-sancha/excalimathpad/issues/100),
+[title format](https://github.com/matheus-sancha/excalimathpad/issues/95).
 
 ## 7. File and save
 
-Built in M1. Settings fill in as M2 and M5 add them.
+Built in M1. Settings fill in as M2, M4c and M5 add them.
 
 ### The file
 
@@ -721,6 +972,15 @@ A sheet is Excalidraw's own JSON with one extra top-level block, saved as
 `.excalimathpad`. Each anchor's source is in its `customData`, with its title when it has
 one (`"title": "Pipe flow"`). An element without a title stores no `title` key, so the
 format version doesn't change.
+
+From M4c an anchor's `customData` can also hold:
+
+- `titleFormat`: only what differs from a title with no format, such as
+  `{ "size": "L", "align": "centre", "color": "red" }`. A title with no `titleFormat` looks as
+  it did before M4c.
+- `width`: the chosen width, in scene units. An element without one is automatic.
+
+Files saved before M4c have neither key and open as they looked, so the format number stays 1.
 
 ```json
 {
@@ -734,6 +994,7 @@ format version doesn't change.
     "settings": {
       "units": { "system": "si-prefixed", "custom": { "pressure": "bar" } },
       "digits": 4,
+      "resultColor": "blue",
       "page": { "size": "A4", "orientation": "portrait" }
     }
   }
@@ -742,6 +1003,7 @@ format version doesn't change.
 
 - `system` is `si-prefixed`, `si-base` or `uscs`. A non-empty `custom` makes it Custom.
   `size` is `A4` or `Letter`, and `orientation` is `portrait` or `landscape`.
+  `resultColor` (M4c) is one of the six text colour names.
 - A setting missing from a file takes its default.
 - `appState` keeps what Excalidraw's own save keeps (background, grid and the like).
 - Embedded images are saved in `files`, as Excalidraw does.
@@ -798,7 +1060,10 @@ Decided in: [file](https://github.com/matheus-sancha/excalimathpad/issues/12),
 [undo research](https://github.com/matheus-sancha/excalimathpad/issues/10),
 [unit slot](https://github.com/matheus-sancha/excalimathpad/issues/16),
 [numbers](https://github.com/matheus-sancha/excalimathpad/issues/30),
-[print](https://github.com/matheus-sancha/excalimathpad/issues/21).
+[print](https://github.com/matheus-sancha/excalimathpad/issues/21),
+[chosen width](https://github.com/matheus-sancha/excalimathpad/issues/100),
+[text colours](https://github.com/matheus-sancha/excalimathpad/issues/93),
+[title format](https://github.com/matheus-sancha/excalimathpad/issues/95).
 
 ## 8. App chrome
 
@@ -860,7 +1125,7 @@ a small window it floats over the canvas, and closes after a jump or a click on 
 |---|---|
 | **Variables** | A filter box, then every name in reading order, grouped by element, labelled by the element's position. Row: typeset name, value, unit, in the unit system and Digits. A name defined twice appears twice. A line with an error shows "error". A list shows its summary (`30 values, 1 … 30 L/s`). A function shows its signature, `H_s(Q)`, with `function` or `solve function` as the value and a blank unit. Comments and notes don't appear |
 | **Problems** | Errors `●` and warnings `⚠` in one list in reading order, each with its message and "element, line n · name". Comments and notes don't appear |
-| **Settings** | Unit system, and for Custom its kind → unit table. Digits, 2 to 15. Page: A4 or Letter, portrait or landscape |
+| **Settings** | Unit system, and for Custom its kind → unit table. Digits, 2 to 15. Result colour, one of six (M4c). Page: A4 or Letter, portrait or landscape |
 | **Constants** | A filter box, then every [built-in constant](#constants) in its group. Row: its symbol typeset and its value in the unit system and Digits, then what it is and the names a line reads it by (`c or speedOfLight`). The filter matches names and descriptions. Nothing here is the sheet's, so a row doesn't jump |
 
 - **An element with a title is named by it** in Variables and Problems ("Pipe flow, line 3"),
@@ -880,52 +1145,118 @@ Decided in: [chrome](https://github.com/matheus-sancha/excalimathpad/issues/17),
 
 ## 9. Solve
 
-Built in M3. A solve is one line. v1 solves one equation in one unknown, with our own Brent
-solver in `src/math/`.
+Built in M3, with a guess on every solve. From M4c a solved value searches a range and can
+hold several roots; a solve function keeps its guess. A solve is one line. v1 solves one
+equation in one unknown, with our own solver in `src/math/`.
 
 ```
-Q_op = solve Hp(Q) = Hs(Q), guess Q = 15 L/s
+x_r  = solve x^3 - 6x^2 + 11x = 6, for x = 0 .. 10                      1, 2, 3
+x_2  = x_r[2]                                                            2
+Q_op = solve Hp(Q) = Hs(Q), for Q = 1 L/s .. 30 L/s in L/s               18.81 L/s
 f(Re, r) = solve 1/sqrt(f) = -2 log10(r/3.7 + 2.51/(Re sqrt(f))), guess f = 0.02
 f_d = f(Re_d, eps/D)
 ```
 
-- **Form:** `<name>[(<params>)] = solve <lhs> = <rhs>, guess <unknown> = <guess expr>`. It
-  defines exactly one name. A solve can't appear mid-expression (`2 * solve …`): solve into
-  a name, then use the name.
-- **Guess: required.** It can be any expression, evaluated each time the solve runs, in the
-  scope at that point: names above, plus the parameters in the function form. It can't use
-  the unknown. The unknown takes its **dimension** from the guess's unit.
+**The two forms:**
+
+| | Solved value | Solve function |
+|---|---|---|
+| Written | `<name> = solve <lhs> = <rhs>, for <unknown> = <from> .. <to>` | `<name>(<params>) = solve <lhs> = <rhs>, guess <unknown> = <expr>` |
+| Gives | Every root found in the range | One root, near the guess |
+| Runs | Once per run, at its line | At every call |
+
+- A solve line defines exactly one name. A solve can't appear mid-expression
+  (`2 * solve …`): solve into a name, then use the name.
+- **A solved value with `guess` is an error** that says what to write, and so is one with
+  neither clause. Sheets saved before M4c show it on each such line: nothing is converted for
+  them. **A solve function with `for` is an error** that asks for `guess`.
+- **Why a function keeps the guess:** it is called many times, and a range search costs 25 to
+  40 times a guess solve. A search inside a search would take about 0.3 s.
 - **Unknown: local to the line.** Inside the equation it wins over every other meaning: a
   variable above, a unit, or the function being defined (in Colebrook, `f` inside is the
   unknown, not a recursive call). It isn't defined below the line. If it's a unit name, the
   shadow warning still shows.
-- **Result:** the value only, in its display unit or the unit system. Details are on hover.
-  Nothing extra prints.
 - **Tolerance:** fixed. Brent stops when the bracket is within about 1e-12 relative of the
   root, with a cap of 100 iterations, which is an error. There is no setting, so nothing is
   saved.
 
-**Failure:** an error on the line that ran it, with the cause named. A failed solve never
-shows a best-effort value.
+### Search range
 
-- **Value form:** the error is the solve line's result. A failed line removes its name, so
-  lines below say `has an error above`.
-- **Function form:** the solve runs only when called, so the error lands on the **calling**
+- **The word is `for`.** Both ends are required, of the same kind, with `from` below `to`.
+  There is no step.
+- The ends are expressions evaluated each time the solve runs, in the scope at that point.
+  They can't use the unknown. **The unknown takes its dimension from them,** as it takes it
+  from a guess.
+- **The search:** the residual is sampled at 200 evenly spaced points of the range, and Brent
+  runs on every sign change between two neighbouring points that have a value. A point where
+  the equation has no value is skipped.
+- **A pole or a jump isn't a root.** A crossing is kept only if the residual at the converged
+  point is at most 1e-6 of the larger residual at its two sample points.
+- **A double root is found** by a second pass over places where the residual dips toward zero
+  without changing sign. If it crosses there, the two roots are found; if it only touches
+  zero (within 1e-9 of the neighbouring samples' size), it counts as one root, marked
+  "touching" in the details.
+- **These numbers are fixed:** 200 points, the tolerance, the 1e-6 check and the 1e-9
+  threshold. No settings.
+- **What it doesn't promise:** it finds the roots it can see at that spacing. It can miss two
+  roots closer than the spacing, the roots of a fast-oscillating equation, and every root
+  outside the range. So the app says "roots found in a .. b" and never "all roots". Complex
+  roots aren't found.
+
+### Roots
+
+- Roots come out in **ascending order**.
+- **Exactly one root is a single value,** as a guess solve's result was. Lines below show
+  plain values.
+- **Several roots are a list,** like any other ([section 10](#ranges-and-lists)): a line that
+  uses the name without an index runs once per root, and aggregates, tables, plots and the
+  Variables tab treat it as a list.
+- **`x_r[2]` takes one root** ([section 3](#3-sheet-lines-every-form)). `x_r[1]` works for one
+  root or several.
+- **Accepted cost:** if inputs change and a second root appears, the lines below become lists.
+- **Shown:** up to five roots are written out in one row, ascending, with the unit once:
+  `0.07996, 0.1491, 0.2369 L/mol`. Six or more show a summary with the count:
+  `13 roots, 0.5236 … 38.22`. Details are on hover. Nothing extra prints.
+- **More than 100 roots is an error** that asks for a narrower range.
+- **A range solve can't use a list:** if its equation or its range mentions one, that is an
+  error which points to a solve function with a guess. There are no lists of lists.
+
+### Guess
+
+- **Required on a solve function.** It can be any expression, evaluated each time the solve
+  runs, in the scope at that point: names above, plus the parameters. It can't use the
+  unknown. The unknown takes its **dimension** from the guess's unit.
+- The search steps out from the guess to a sign change, then Brent. It returns one root.
+- **Result:** the value only, on the calling line, in its display unit or the unit system.
+
+### Failure
+
+An error on the line that ran it, with the cause named. A failed solve never shows a
+best-effort value.
+
+- **Solved value:** the error is the solve line's result. **No root in the range is an
+  error.** A failed line removes its name, so lines below say `has an error above`. There is
+  no warning for a root near the edge of the range.
+- **Solve function:** the solve runs only when called, so the error lands on the **calling**
   line and names the function and its arguments.
-- **A guess that fails to evaluate** is the line's error.
+- **A range end or a guess that fails to evaluate** is the line's error.
 
 **Nested solves:** an inner failure counts as "outside the domain". When the outer search
-tries a point where an inner solve fails (Colebrook at Q ≤ 0), it treats that like a NaN and
-searches the other side. Only if the outer solve ends without a root does its line error,
-and the message carries the last inner cause. **Units errors are never swallowed:** they fail
-the line at once, because no trial point can fix them.
+tries a point where an inner solve fails (Colebrook at Q ≤ 0), it treats that like a point
+with no value: a range search skips it, and a guess search looks on the other side. Only if
+the outer solve ends without a root does its line error, and the message carries the last
+inner cause. **Units errors are never swallowed:** they fail the line at once, because no
+trial point can fix them.
 
 Decided in: [solve](https://github.com/matheus-sancha/excalimathpad/issues/19),
-[libraries](https://github.com/matheus-sancha/excalimathpad/issues/18).
+[libraries](https://github.com/matheus-sancha/excalimathpad/issues/18),
+[all-roots research](https://github.com/matheus-sancha/excalimathpad/issues/91)
+([`all-roots-solve.md`](research/all-roots-solve.md)),
+[all-roots solve](https://github.com/matheus-sancha/excalimathpad/issues/92).
 
 ## 10. Ranges, tables, plots
 
-Built in M4.
+Built in M4. The index and per-point rules arrive with M4c.
 
 ### Ranges and lists
 
@@ -951,6 +1282,12 @@ length: `H_s = Hs(Q_s)` is 30 values, from 30 Colebrook solves.
   included. `Q_s^2` means each point squared.
 - **A function body can't reach a list from outside.** `g(x) = x + Q_s` is an error at the
   definition. Only the line that calls with a list iterates.
+- **An index takes one value out,** counting from 1 (M4c): `Q_s[5]`, `H_s[1]`. It works on
+  any list: a range, a per-point result, a solve's roots. Its rules are in
+  [section 3](#3-sheet-lines-every-form).
+- **A solved value with several roots is a list too** ([section 9](#roots)). Its length is
+  the number of roots found, so two such lists on one line pair up only if they are the same
+  length, like any others.
 
 **A list result shows one row high,** as a summary: `30 values, 12.04 … 33.18 m` (count,
 first … last, unit). Hovering it shows the first and last few values with their index.
@@ -961,6 +1298,16 @@ first … last, unit). Hovering it shows the first and last few values with thei
 - The summary reads `29 of 30 values`.
 - A table cell shows a red — with its message on hover.
 - An aggregate over a list with a failed point is an error.
+
+**A rule on a list is tested per point** (M4c), with `result` and the list names at that
+point's value, as the line already runs once per point.
+
+- **A list's one-row summary takes the format only if every point is true.** Its hover says
+  how many are (`12 of 30 points`). Roots written out in one row follow the same rule.
+- **A table row whose point is true takes the format:** `table(Q_s, v) @red if v > 3 m/s`
+  highlights the rows over the limit. On a table line `result` is a warning; its conditions
+  read the list names.
+- A failed point counts as not true.
 
 ### Tables
 
@@ -1022,7 +1369,9 @@ y axis, Size and Title.
 
 Decided in: [ranges](https://github.com/matheus-sancha/excalimathpad/issues/20),
 [plots](https://github.com/matheus-sancha/excalimathpad/issues/31),
-[libraries](https://github.com/matheus-sancha/excalimathpad/issues/18).
+[libraries](https://github.com/matheus-sancha/excalimathpad/issues/18),
+[all-roots solve](https://github.com/matheus-sancha/excalimathpad/issues/92),
+[conditional formats](https://github.com/matheus-sancha/excalimathpad/issues/94).
 
 ## 11. Print
 
@@ -1052,11 +1401,12 @@ Built in M5. Print fits the sheet to the page width and flows down onto as many 
 
 | Prints | Doesn't print |
 |---|---|
-| Drawings, typeset grid, notes, results as they show on screen, column rule, tables, plots with legend, marks, gaps and × | All app and Excalidraw chrome, the panel, selection, the line editor, anchor borders, the ⚙ and popover, hover details, the dotted underline, the chosen-unit tint |
+| Drawings, typeset grid, notes, results as they show on screen, column rule, tables, plots with legend, marks, gaps and × | All app and Excalidraw chrome, the panel, selection, the line editor, anchor borders, the ⚙ and popover, hover details, the dotted underline |
 | Errors: red `●` and message. A plot's gutter `●` | Warnings: the `⚠`, because its message lives on hover |
 
 An element's math prints at its anchor's opacity. Colours are always a white page in light colours,
-whatever the dark mode or canvas background.
+whatever the dark mode or canvas background. Text colours, highlights, formats set by a rule and a
+title's format print as they show on a light screen, and an element prints at its laid-out width.
 
 **Print flow:**
 
@@ -1075,7 +1425,8 @@ Decided in: [print](https://github.com/matheus-sancha/excalimathpad/issues/21),
 [Chromium PDF](https://github.com/matheus-sancha/excalimathpad/issues/34),
 [comments](https://github.com/matheus-sancha/excalimathpad/issues/36),
 [panel](https://github.com/matheus-sancha/excalimathpad/issues/32),
-[spec contents](https://github.com/matheus-sancha/excalimathpad/issues/38).
+[spec contents](https://github.com/matheus-sancha/excalimathpad/issues/38),
+[text colours](https://github.com/matheus-sancha/excalimathpad/issues/93).
 
 ## 12. Offline PWA
 
@@ -1151,13 +1502,35 @@ The wording of every user-facing message. `<…>` is filled in. Numbers follow
 | When | Message | Arrives |
 |---|---|---|
 | Unknown `in xyz` in source | `Unknown unit xyz` | M2 |
-| A clause word that isn't a format | `Unknown format @bolt` | #63 |
+| A clause word that isn't a format | `Unknown format @bolt`, `Unknown format @text-purple` | #63, M4c |
+
+**Rules** (all warnings)
+
+| When | Message | Arrives |
+|---|---|---|
+| A condition that fails to evaluate | `if v > v_max: <message>`, such as `if v > 3 kg: Units do not match` | M4c |
+| A condition that isn't true or false | `if v: not true or false` | M4c |
+| An assignment in a condition | `if v = 3: a rule can't assign; write ==` | M4c |
+| `result` on a line with no single value | `if result > 3: a rule needs a value` | M4c |
+| `result` on a table line | `if result > 3: a table has no result; use its list names` | M4c |
 
 **Solve**
 
 | When | Message | Arrives |
 |---|---|---|
-| No guess | `solve needs a guess: ", guess Q = <value>"` | M3 |
+| A solved value with `guess`, or with no clause | `solve needs a range: ", for Q = <from> .. <to>"` | M4c |
+| A solve function with `for` | `a solve function takes a guess: ", guess f = <value>"` | M4c |
+| No root in the range | `no root found for x in -10 .. 10`, `no root found for Q in 1 .. 30 L/s` | M4c |
+| No root, and no point of the range had a value | `no root found for Q in 1 .. 30 L/s (the equation has no value in the range)` | M4c |
+| No root after inner failures | `no root found for Q in 1 .. 30 L/s; last inner error: <message>` | M4c |
+| More than 100 roots | `more than 100 roots for x in 0 .. 1000: narrow the range` | M4c |
+| A range solve that mentions a list | `a range solve can't use the list a_s; use a solve function with a guess` | M4c |
+| A missing end, or a step | `for Q needs two ends and no step: "for Q = <from> .. <to>"` | M4c |
+| `from` not below `to` | `for Q = 30 L/s .. 1 L/s: from must be below to` | M4c |
+| Ends of different kinds | `for Q = 1 L/s .. 30 m: the ends must be the same kind` | M4c |
+| An end fails | `for Q: <message>` | M4c |
+| Units of the two sides differ, with a range | `for Q = 1 m .. 30 m: Hp(Q) - Hs(Q) units do not match` | M4c |
+| No guess (a solve function, from M4c) | `solve needs a guess: ", guess Q = <value>"` | M3 |
 | No root | `no root near Q = 15 L/s (searched 0.9 .. 240 L/s)` | M3 |
 | No root, on a call | `in f(1.86·10⁵, 4.399·10⁻⁴): no root near f = 0.02 (searched <range>)` | M3 |
 | Outer solve fails after inner failures | `no root near Q = 15 L/s (searched <range>); last inner error: <message>` | M3 |
@@ -1193,6 +1566,9 @@ The wording of every user-facing message. `<…>` is filled in. Numbers follow
 | A table with no list among its arguments | `a table needs a list, such as table(Q_s)` | #76 |
 | `in <unit>` after a whole table line | `a table takes its units on its arguments: table(Q_s in L/s)` | #76 |
 | A range's start, end or step isn't a single number or quantity | `the range's step must be a number or a quantity`, `a range takes single values, not a list` | #74 |
+| An index past the end | `x_r has 2 values` | M4c |
+| An index that isn't a whole number from 1 | `x_r[0]: an index is a whole number from 1` | M4c |
+| An index on something that isn't a name | `an index goes on a name: x_r[2]` | M4c |
 
 **App**
 
@@ -1212,7 +1588,9 @@ Decided in: [solve](https://github.com/matheus-sancha/excalimathpad/issues/19),
 [ranges](https://github.com/matheus-sancha/excalimathpad/issues/20),
 [plots](https://github.com/matheus-sancha/excalimathpad/issues/31),
 [file](https://github.com/matheus-sancha/excalimathpad/issues/12),
-[spec contents](https://github.com/matheus-sancha/excalimathpad/issues/38).
+[spec contents](https://github.com/matheus-sancha/excalimathpad/issues/38),
+[all-roots solve](https://github.com/matheus-sancha/excalimathpad/issues/92),
+[conditional formats](https://github.com/matheus-sancha/excalimathpad/issues/94).
 
 ## 14. Engineering constraints
 
@@ -1250,6 +1628,19 @@ Engineer's design gate. Tested on Excalidraw 0.18.1, math.js 15.2 and Chromium.
   ([ranges](https://github.com/matheus-sancha/excalimathpad/issues/20))
 - **The solver** compiles the residual with the captured `parse`. The unknown takes the guess's unit, and
   the solver sees SI numbers. ([libraries](https://github.com/matheus-sancha/excalimathpad/issues/18))
+- **The range search (M4c)** is our own code on the Brent `src/math/solver.ts` has, with no library:
+  sample, Brent on each sign change, the crossing check, the dip pass. Both additions are needed: without
+  the check `tan x = 1` on 0 .. 10 returns its three poles as roots, and without the dip pass a double root
+  is missed. `math.polynomialRoot`, `math.eigs` and `math.rationalize` were tried and aren't used.
+  ([all-roots research](https://github.com/matheus-sancha/excalimathpad/issues/91),
+  [`all-roots-solve.md`](research/all-roots-solve.md))
+- **A rule's condition (M4c)** is evaluated after its line has run, in a layer over the scope at that
+  point with `result` bound. Nothing it does reaches the scope the next line sees.
+  ([conditional formats](https://github.com/matheus-sancha/excalimathpad/issues/94))
+- **Writing a format (M4c)** must keep every rule as typed: today `writeFormat` drops the words it doesn't
+  know. The clause reader has to accept the hyphen in `@text-red`.
+- **An index (M4c)** is read by the app before math.js, whose own `x[2]` indexes its matrices. Lists never
+  become matrices.
 
 **Scene writes**
 
@@ -1279,6 +1670,10 @@ Engineer's design gate. Tested on Excalidraw 0.18.1, math.js 15.2 and Chromium.
     the anchor, so `writeAnchorSource` finds nothing pending and a line commit after size writes stays one step.
     The overlay measures in `useAnchorSizes` and writes through the session's `keepClean`; a write waits while
     `sizeWritesWait` (in `anchorSize.ts`) reads Excalidraw as mid-gesture or in one of its editors.
+  - From M4c (#100): where the snap-back runs today, a handle's dragged width is kept as `customData.width`
+    and only its height is put back. The stored width and Excalidraw's resize must land in one undo step,
+    and the contract test "Resize handles can be let go of and put back" changes with it.
+  - From M4c (#95): a title's format is `customData.titleFormat`, written under the same rules as a title.
 - **Add math:** select the new element in the same `updateScene`, or undo takes two steps when something
   was selected before. ([gestures](https://github.com/matheus-sancha/excalimathpad/issues/28))
 - **The line field only takes what the user typed.** Setting its value while typing clears its browser
@@ -1415,7 +1810,7 @@ Decided in: [acceptance](https://github.com/matheus-sancha/excalimathpad/issues/
 
 ## 16. Milestones and finish line
 
-v1 is built in seven milestones, each usable on a real sheet, with a saved typeset sheet first. The existing
+v1 is built in eight milestones, each usable on a real sheet, with a saved typeset sheet first. The existing
 spike is M0, done.
 
 | Milestone | What it lets Matheus do | Sections |
@@ -1425,6 +1820,7 @@ spike is M0, done.
 | **M3 Solve** | Solve an equation on a line, including as a function and a solve calling a solve | [9](#9-solve) |
 | **M4 Ranges & plots** | Run lines over a range, draw tables and plots | [10](#10-ranges-tables-plots) |
 | **M4b Hosted build** | Open the app at a public address on a second machine | [12](#hosted-build) |
+| **M4c Improvements** | Find every root in a range, colour text and results, format by rule, set an element's width, format a title | [3](#3-sheet-lines-every-form), [4](#4-math-element-look-and-editing), [9](#9-solve), [10](#10-ranges-tables-plots) |
 | **M5 Print** | Print the sheet to clean PDF pages | [11](#11-print) |
 | **M6 Offline PWA** | Install the app, work offline, open a `.excalimathpad` file from Windows | [12](#12-offline-pwa) |
 
@@ -1482,7 +1878,27 @@ The deploy comes first, since the other two need an address. The check is Matheu
 last so the stamp can tell him which build each machine runs. It is done before M5 so a blocked laptop is
 known before more is built on it.
 
-**M5's issue order** (M4's five are built, #74 to #78):
+**M4c's issue order** (added on 2026-11-13 from Matheus's [improvements batch](https://github.com/matheus-sancha/excalimathpad/issues/88), built before M5):
+
+1. A value out of a list: the index `x_r[1]`
+2. Range solve: the roots found in a range, with the pump sheet's line 26 rewritten in CI
+3. Roots shown, the range typeset, and a range solve's details on hover
+4. Text colours on a line, and the bar's second row
+5. Result colour in Settings; a chosen unit loses its tint
+6. Rules: conditional formats
+7. Chosen width
+8. Title format
+
+The solve comes first: it carries the milestone's one open risk (its cost is projected, not measured),
+and it is the only part that changes what a saved sheet computes. The index comes before it, because a
+solve's roots are read with it. The colours follow, since rules and the title's bar reuse the six names;
+rules come after both colour issues, since they apply the same words. The width comes before the title,
+whose alignment needs a width to align in.
+
+The batch's other items held no decision and went straight to the Engineer, outside this milestone: #98
+and #99, both built, and #102.
+
+**M5's issue order** (M4's five are built, #74 to #78; M5 follows M4c):
 
 1. Page row and page breaks (#80)
 2. Print view and Print… (Ctrl+P) (#81)
@@ -1505,6 +1921,7 @@ lines through `evaluateSheet` and compares with the reference at 4 s.f. It grows
 | M3 | Adds lines 14-28 | none |
 | M4 | Adds lines 29-31, and the 4" and 5" columns | Step 2: edit `D` to 5" on screen |
 | M4b | none | None from the sheet: the work-laptop check (#85) |
+| M4c | Line 26 with its range, in both columns | none |
 | M5 | none new | Steps 3-4: save and reopen, print to PDF |
 | M6 | none | None from the sheet: finish-line condition 2 checks it |
 
@@ -1514,6 +1931,10 @@ lines through `evaluateSheet` and compares with the reference at 4 s.f. It grows
   today's formatting until M2. M1's check doesn't judge values, so neither blocks it.
 - **Line 6's warning** is checked at M2, when the shadow warning lands.
 - **Settings:** the Settings tab arrives in M2, its Page row in M5. The Print… menu item arrives in M5.
+- **Line 26** keeps its guess in the [pump sheet](acceptance/pump-sizing.md) until M4c's second issue,
+  which rewrites it as `Q_op = solve Hp(Q) = Hs(Q), for Q = 1 L/s .. 30 L/s in L/s` in the same PR as
+  the code: CI reads the sheet's lines from that file. Line 14, the Colebrook function, doesn't change,
+  and neither does any expected value.
 - **The seed:** until Add math (the fifth issue), the untitled sheet started with two seeded elements,
   loaded clean, because an empty sheet had no other way to get a math element. Add math removed them (#45):
   the untitled sheet starts empty, on the welcome screen.
@@ -1531,8 +1952,12 @@ lines through `evaluateSheet` and compares with the reference at 4 s.f. It grows
 - M1 is large and has one check at its end, so the Project Manager watches its issues to see slip early.
 - The nested solve surfaces at M3, after two milestones of UI.
 - Condition 3 depends on Matheus having a real calculation to do, so v1 can stay open after the build ends.
+- M4c's range solve: its cost on the pump sheet (about 10 ms for `Q_op`) is projected from measured
+  per-evaluation costs, not measured with a search in the engine. Every solved value saved with a guess
+  becomes an error until its line is rewritten.
 
-Decided in: [milestones](https://github.com/matheus-sancha/excalimathpad/issues/37).
+Decided in: [milestones](https://github.com/matheus-sancha/excalimathpad/issues/37),
+[M4c](https://github.com/matheus-sancha/excalimathpad/issues/97).
 
 ## 17. Verify first
 
@@ -1664,6 +2089,24 @@ Changes line if it changes behaviour.
 - The file pickers under the work laptop's browser policy, and the download and file-input fallback if they
   are turned off.
 
+**M4c**
+
+- The range solve's run time on the pump sheet: `Q_op` over `1 L/s .. 30 L/s`, calling Colebrook with a
+  guess at each of the 200 points. Projected at about 10 ms; the whole run must stay under the CI test's
+  200 ms and feel instant on every keystroke.
+- A range search over a residual with inner failures (the pump sheet's `Hs(Q)` near Q = 0): skipped
+  points, not an error.
+- Re-wrapping live while a resize handle is dragged: Excalidraw's frame and the overlay's layout in step
+  mid-drag, with the frame held at the floor. If they can't be, re-wrap on release, where the snap-back
+  runs today.
+- Excalidraw's resize and the stored `customData.width` landing in one undo step, and Ctrl+Z restoring
+  the width before it, or automatic.
+- A left handle, a rotated element and a group, each setting the width and discarding the height.
+- The six text colours under the dark theme's filter, on the canvas and on each highlight: still readable.
+- A text colour reaching KaTeX's glyphs in the equation and the result, as bold had to (#63).
+- The suggestions list after `@`.
+- A title at XL: the header's height, the floor it sets, and the anchor following both.
+
 **M5**
 
 - Excalidraw text in Nunito on the pump sheet's heading.
@@ -1710,6 +2153,13 @@ Changes line if it changes behaviour.
 | [What does docs/spec-v1.md contain, and how does it relate to CONTEXT.md and the ADRs?](https://github.com/matheus-sancha/excalimathpad/issues/38) | 1, 3, 11, 13, this structure, ADR amendments, acceptance file |
 | [Warn when a variable name shadows a unit](https://github.com/matheus-sancha/excalimathpad/issues/7) (open, joins M2) | 5, 13 |
 | [Spec for Excalimathpad v1](https://github.com/matheus-sancha/excalimathpad/pull/39) (the review, this PR) | 1, 3, 4, 7, 8, 11, 13, acceptance file |
+| [How can every root of one equation in one unknown be found without a guess?](https://github.com/matheus-sancha/excalimathpad/issues/91) | 9, 14 |
+| [How is an all-roots solve written, shown and indexed?](https://github.com/matheus-sancha/excalimathpad/issues/92) | 1, 2, 3, 4, 9, 10, 13, acceptance file |
+| [What are the text colours: the sheet's result colour and a line's own?](https://github.com/matheus-sancha/excalimathpad/issues/93) | 2, 3, 4, 5, 7, 8, 11 |
+| [How is a conditional format written on a line, with several rules?](https://github.com/matheus-sancha/excalimathpad/issues/94) | 2, 3, 4, 10, 13, 14 |
+| [How is a title's format stored and set?](https://github.com/matheus-sancha/excalimathpad/issues/95) | 2, 4, 6, 7 |
+| [Can the user set a math element's width, with comments wrapping to it?](https://github.com/matheus-sancha/excalimathpad/issues/100) | 2, 4, 6, 7, 14, 17 |
+| [What does milestone M4c hold in the spec, and in what issue order?](https://github.com/matheus-sancha/excalimathpad/issues/97) | 16, 17, ADR amendments |
 
 ## Changes since agreed
 
@@ -1944,3 +2394,54 @@ Changes line if it changes behaviour.
 - 2026-11-13, [section 8](#sheet-panel) (#99, defect): the Variables and Constants filters are text fields.
   As search fields, Excalidraw ran its shortcuts on what was typed: `s` opened its stroke colours and took the
   keyboard, and a space wasn't typed.
+- 2026-11-13, [section 16](#16-milestones-and-finish-line) (agreed by Matheus on the map
+  [Spec for the improvements batch before M5](https://github.com/matheus-sancha/excalimathpad/issues/90), from his batch #88): a new milestone, M4c Improvements,
+  built before M5, in eight issues. Each entry below is one of its decisions; the ticket it names holds his
+  chosen options, word for word. Items in an entry's last sentence, after "Not asked:", are choices
+  the tickets made without asking him, for Matheus to confirm on the PR.
+- 2026-11-13, [sections 1](#1-what-v1-is-and-what-it-isnt), [3](#3-sheet-lines-every-form), [9](#9-solve),
+  [10](#ranges-and-lists) and [13](#13-messages) (#92, agreed by Matheus; method from the research in #91): a
+  solved value takes a search range, `for Q = 1 L/s .. 30 L/s`, and holds every root found in it, ascending;
+  `guess` is removed from value lines ("Range only, guess removed") and kept for solve functions, which return
+  one root. This replaces #19's required guess for solved values, and "bounds or intervals on the unknown"
+  leaves "Not in v1". One root is a single value; up to five are written out; `x_r[1]` takes one value out of
+  any list, counting from 1. No root, more than 100 roots and a list in a range solve are errors. A saved value
+  line with a guess becomes an error that says what to write. The search is 200 points with Brent on each sign
+  change, a check that rejects poles and jumps, and a pass that finds double roots; it reports "roots found in
+  a .. b", never "all roots". Not asked: an index goes on a name and takes any whole-number expression; the
+  range shows small and grey after the equation, as the guess does; the message wordings other than the three
+  he was shown (`no root found for x in -10 .. 10`, `solve needs a range: …`, `a range solve can't use the list
+  a_s; …`).
+- 2026-11-13, [sections 3](#3-sheet-lines-every-form), [4](#colours-and-rules), [5](#unit-slot),
+  [7](#the-file), [8](#sheet-panel) and [11](#11-print) (#93, agreed by Matheus): six fixed text colours. A
+  line's is `@text-red`, on its equation and result, and the note stays grey; a bare `@red` stays a highlight,
+  so no saved sheet changes. The sheet has one Result colour in Settings, blue by default. The format bar gains
+  a second row of dots. A chosen unit loses its tint ("No mark at all"), which reverses section 2's "always
+  marked". Not asked: the last of two text colours wins; what is never recoloured; an edited line shows its
+  source uncoloured; the bar's fixed word order; the suggestions list offers the format words after `@`.
+- 2026-11-13, [sections 3](#3-sheet-lines-every-form), [4](#colours-and-rules), [10](#ranges-and-lists) and
+  [13](#13-messages) (#94, agreed by Matheus: "needs to be able to handle multiple conditional formatting"): a
+  rule is `@word if <condition>`, each word with its own `if`, any number per line. The first true rule wins
+  per property and a plain format is the fallback. A condition reads any name so far plus `result`. On lists
+  and tables it is tested per point. A condition that can't be decided is a warning and the result still
+  shows. Rules are typed only: the bar leaves them alone. The format clause now starts at the first `@`
+  outside a string, where it was the trailing `@` words, so an `@` in the middle of the code is the line's
+  format error and no longer math.js's. Not asked: a line in error runs no rules; an assignment in a
+  condition is a warning; `result` always means the line's value there; a failed point counts as not true;
+  one warning per rule; roots written out in one row take a rule's format only if every root is true, as a
+  list's summary does; the five warning wordings.
+- 2026-11-13, [sections 2](#invariants), [4](#chosen-width), [6](#6-undo), [7](#the-file) and
+  [14](#14-engineering-constraints) (#100, agreed by Matheus: "What we can is set the minimum width and the
+  user can reduce more, but the user can increase it"): a math element has an optional chosen width, set by
+  the resize handles and never below what its math lines need. Dragged narrower, it returns to automatic.
+  Comments re-wrap live, math stays at the left, height stays automatic. It is one undo step and is saved with
+  the element. This amends #29's box that always fits its content: resize handles no longer snap the width
+  back. Not asked: stored as `customData.width`; a comments-only floor of about 120 px; a rotated element
+  resizes along its own axis; a left handle can change reading order; print uses the laid-out width.
+- 2026-11-13, [sections 2](#terms), [4](#title-format), [6](#6-undo) and [7](#the-file) (#95, agreed by
+  Matheus): a title has a format, stored beside it and set from its own three-row bar: bold, italic,
+  underline, left, centre or right, four sizes (13, 16, 20 and 26 px), the six text colours, and a highlight
+  over the whole header band. The text stays as typed. This reverses #64's "takes no format" and "the title
+  has no bar". With no format a title looks as it did. Not asked: stored as `customData.titleFormat`, holding
+  only what differs; each press is one undo step; Ctrl+B, Ctrl+I and Ctrl+U; the title's width at its size
+  counts toward the floor; emptying the title removes its format.

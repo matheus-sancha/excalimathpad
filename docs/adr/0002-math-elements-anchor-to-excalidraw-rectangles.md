@@ -4,6 +4,7 @@
 - **Date**: 2026-10-25
 - **Amended**: 2026-11-03 (spec v1, [`docs/spec-v1.md`](../spec-v1.md): source in the
   anchor, the app writes source, size and style, a solid `#ffffff01` background).
+  2026-11-13 (M4c, not built yet; #95, #100): a chosen width and a title's format.
   Amended items name the milestone that builds them; until then
   [`CONTEXT.md`](../../CONTEXT.md) says what the code does.
 - **Built**: source in the anchor (#41, 2026-11-04); the `#ffffff01` fill, the
@@ -49,6 +50,11 @@ Who owns what on the anchor (#10, #11, #29, #32; M1):
   - Style, fixed except `opacity`, restored with no undo step if anything changes it.
   - `customData.title`, the element's optional title, one undo step per change, by the same
     write path as the source (#64, 2026-11-11).
+  - M4c: `customData.titleFormat`, the title's format, one undo step per press (#95).
+  - M4c: `customData.width`, the element's optional chosen width, set by Excalidraw's resize
+    handles as one undo step (#100). The size write then keeps the width at the larger of it and
+    what the math lines need, and still owns the height. Resize handles no longer snap the width
+    back; they snap the height back.
 
 Engineering rules that make it work (Engineer's, found in the #2 spike and #28):
 
