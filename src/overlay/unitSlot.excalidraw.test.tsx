@@ -136,9 +136,9 @@ describe('the unit slot (docs/spec-v1.md section 5)', () => {
 
     expect(sourceOf()).toBe('p = 45430 Pa * 1 in bar # gauge\nD = 102.3 mm')
     expect(unitField()).toBeNull()
-    await waitFor(() =>
-      expect(document.querySelector('[data-anchor-id="m1"] .math-element__unit.is-chosen')).not.toBeNull(),
-    )
+    // A chosen unit has no mark (M4c): it reads like any other result.
+    await waitFor(() => expect(document.querySelector('[data-anchor-id="m1"] .math-element__unit')).toHaveTextContent(/bar/))
+    expect(document.querySelector('[data-anchor-id="m1"] .math-element__unit.is-chosen')).toBeNull()
     undo()
     expect(sourceOf()).toBe('p = 45430 Pa * 1 # gauge\nD = 102.3 mm')
   })

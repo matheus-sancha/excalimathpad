@@ -7,6 +7,16 @@
   font-weight: 600;
 }
 
+/* One icon width for both items, so "Add math" (a ∑) and "Math Settings" (an
+   SVG) start their labels at the same place (#102). */
+.excalidraw .math-tools__heading ~ * .dropdown-menu-item__icon,
+.excalidraw .math-tools__heading ~ .dropdown-menu-item .dropdown-menu-item__icon {
+  display: flex;
+  justify-content: center;
+  width: 1rem;
+  flex: none;
+}
+
 /* Section 8: a red badge counting errors and warnings, on Math Settings. */
 .excalidraw .math-tools__badge,
 [data-math-problems] .App-toolbar__extra-tools-trigger::after {
@@ -130,4 +140,19 @@
   font-size: 0.6875rem;
   font-variant-numeric: tabular-nums;
   user-select: text;
+}
+
+/* Math Settings' wrapper (#102): it carries Excalidraw's `sidebar-trigger`
+   class only so a floating panel's outside click ignores the item. It has no
+   box, and it hands down the dropdown's text styles, not the square button's:
+   that class sets `line-height: 0`, which hid the item's label. */
+.excalidraw .math-tools__trigger.sidebar-trigger,
+.excalidraw .math-tools__trigger.sidebar-trigger:hover,
+.excalidraw .math-tools__trigger.sidebar-trigger:active {
+  display: contents;
+  color: inherit;
+  font-family: inherit;
+  font-size: inherit;
+  line-height: inherit;
+  letter-spacing: inherit;
 }

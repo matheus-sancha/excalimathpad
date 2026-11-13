@@ -4,7 +4,8 @@
 - **Date**: 2026-10-25
 - **Amended**: 2026-11-03 (spec v1, [`docs/spec-v1.md`](../spec-v1.md): source in the
   anchor, the app writes source, size and style, a solid `#ffffff01` background).
-  2026-11-13 (M4c, not built yet; #95, #100): a chosen width and a title's format.
+  2026-11-13 (M4c; #95, #100): a chosen width and a title's format, both built
+  (#110, #111).
   Amended items name the milestone that builds them; until then
   [`CONTEXT.md`](../../CONTEXT.md) says what the code does.
 - **Built**: source in the anchor (#41, 2026-11-04); the `#ffffff01` fill, the
@@ -14,7 +15,11 @@
   element left empty, and the untitled sheet without its seed (#45, 2026-11-10);
   the fixed style, restored with `NEVER` through `src/canvas/anchorStyle.ts`, and
   opacity followed by the overlay (#46, 2026-11-10); the optional title in
-  `customData.title` (#64, 2026-11-11).
+  `customData.title` (#64, 2026-11-11); the chosen width in `customData.width`, set
+  by the resize handles on release in the resize's own undo step, with the snap-back
+  kept for a height-only drag (`settleResizes`, #110, 2026-11-13); the title's format
+  in `customData.titleFormat`, a string of the words that differ from no format,
+  written one undo step per press (`writeAnchorTitleFormat`, #111, 2026-11-13).
 
 ## Context
 

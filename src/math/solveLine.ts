@@ -3,8 +3,12 @@
  * after the comment, the format clause and the display unit are off:
  *
  * ```
- * <name>[(<params>)] = solve <lhs> = <rhs>, guess <unknown> = <guess expr>
+ * <name> = solve <lhs> = <rhs>, for <unknown> = <from> .. <to>
+ * <name>(<params>) = solve <lhs> = <rhs>, guess <unknown> = <guess expr>
  * ```
+ *
+ * From M4c a solved value takes a search range and a solve function a guess;
+ * either one with the other's clause, or with none, can't be read.
  *
  * Pure text, with no math.js: the engine parses the parts it returns. A line
  * is a solve line when its first `=` is followed by the word `solve` and a
@@ -19,7 +23,10 @@ export type SolveForm =
       lhs: string
       rhs: string
       unknown: string
-      guess: string
+      /** A solve function's guess; null for a solved value. */
+      guess: string | null
+      /** A solved value's search range, as typed; null for a solve function. */
+      range: { from: string; to: string } | null
     }
   /** A solve line that can't be read: its message, and the name it would define. */
   | { kind: 'malformed'; name: string; message: string }
@@ -27,6 +34,7 @@ export type SolveForm =
 const HEAD = /^\s*([A-Za-z_]\w*)\s*(?:\(([^()]*)\))?\s*=(?!=)\s*solve\s+(.*)$/s
 const NAME = /^[A-Za-z_]\w*$/
 const GUESS = /^guess\s+([A-Za-z_]\w*)\s*=(?!=)(.*)$/s
+const FOR = /^for\s+([A-Za-z_]\w*)\s*=(?!=)(.*)$/s
 
 /** The line's solve form, or null when it isn't a solve line. */
 export function readSolve(code: string): SolveForm | null {
@@ -37,16 +45,31 @@ export function readSolve(code: string): SolveForm | null {
   if (params?.some((p) => !NAME.test(p))) {
     return { kind: 'malformed', name, message: `${name}: a parameter isn't a name` }
   }
-  const cut = guessComma(rest)
+  const cut = clauseComma(rest)
   const equation = cut === -1 ? rest : rest.slice(0, cut)
   const sides = splitEquation(equation)
-  const guess = cut === -1 ? null : GUESS.exec(rest.slice(cut + 1).trim())
-  if (!guess || guess[2].trim() === '') {
-    const unknown = sides ? firstFreeName(`${sides[0]} ${sides[1]}`, [name, ...(params ?? [])]) : null
-    return { kind: 'malformed', name, message: `solve needs a guess: ", guess ${unknown ?? 'x'} = <value>"` }
+  const clause = cut === -1 ? '' : rest.slice(cut + 1).trim()
+  const guess = GUESS.exec(clause)
+  const range = FOR.exec(clause)
+  const unknown = (guess ?? range)?.[1] ?? (sides ? firstFreeName(`${sides[0]} ${sides[1]}`, [name, ...(params ?? [])]) : null) ?? 'x'
+  if (params === null && !range) {
+    return { kind: 'malformed', name, message: `solve needs a range: ", for ${unknown} = <from> .. <to>"` }
+  }
+  if (params !== null && range) {
+    return { kind: 'malformed', name, message: `a solve function takes a guess: ", guess ${unknown} = <value>"` }
+  }
+  if (params !== null && (!guess || guess[2].trim() === '')) {
+    return { kind: 'malformed', name, message: `solve needs a guess: ", guess ${unknown} = <value>"` }
   }
   if (!sides) {
     return { kind: 'malformed', name, message: 'solve needs one equation: "<left side> = <right side>"' }
+  }
+  if (range) {
+    const ends = splitRange(range[2])
+    if (ends === null) {
+      return { kind: 'malformed', name, message: `for ${unknown} needs two ends and no step: "for ${unknown} = <from> .. <to>"` }
+    }
+    return { kind: 'solve', name, params, lhs: sides[0], rhs: sides[1], unknown, guess: null, range: ends }
   }
   return {
     kind: 'solve',
@@ -54,16 +77,30 @@ export function readSolve(code: string): SolveForm | null {
     params,
     lhs: sides[0],
     rhs: sides[1],
-    unknown: guess[1],
-    guess: guess[2].trim(),
+    unknown,
+    guess: (guess as RegExpExecArray)[2].trim(),
+    range: null,
   }
 }
 
-/** Where the `, guess` clause starts: the last top-level comma followed by `guess`, or -1. */
-function guessComma(text: string): number {
+/** A search range's two ends: one top-level `..`, both ends there, and no `step`. */
+function splitRange(text: string): { from: string; to: string } | null {
+  const at: number[] = []
+  scan(text, (char, i, depth) => {
+    if (depth === 0 && char === '.' && text[i + 1] === '.' && text[i - 1] !== '.') at.push(i)
+  })
+  if (at.length !== 1) return null
+  const from = text.slice(0, at[0]).trim()
+  const to = text.slice(at[0] + 2).trim()
+  if (from === '' || to === '' || /\bstep\b/.test(to)) return null
+  return { from, to }
+}
+
+/** Where the clause starts: the last top-level comma followed by `guess` or `for`, or -1. */
+function clauseComma(text: string): number {
   let found = -1
   scan(text, (char, i, depth) => {
-    if (depth === 0 && char === ',' && /^\s*guess\b/.test(text.slice(i + 1))) found = i
+    if (depth === 0 && char === ',' && /^\s*(?:guess|for)\b/.test(text.slice(i + 1))) found = i
   })
   return found
 }

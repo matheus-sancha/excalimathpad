@@ -21,6 +21,7 @@ const scene = {
 const custom: SheetSettings = {
   units: { system: 'uscs', custom: { pressure: 'bar' } },
   digits: 6,
+  resultColor: 'red',
   page: { size: 'Letter', orientation: 'landscape' },
 }
 
@@ -101,6 +102,13 @@ describe('readSettings', () => {
   it('fills every missing setting with its default', () => {
     expect(readSettings(undefined)).toEqual(DEFAULT_SETTINGS)
     expect(readSettings({ digits: 7 })).toEqual({ ...DEFAULT_SETTINGS, digits: 7 })
+    // A file saved before M4c has no result colour: blue.
+    expect(readSettings({ digits: 4 }).resultColor).toBe('blue')
+  })
+
+  it('reads a result colour, one of the six text colours', () => {
+    expect(readSettings({ resultColor: 'green' }).resultColor).toBe('green')
+    expect(readSettings({ resultColor: 'purple' }).resultColor).toBe('blue')
   })
 
   it('replaces values it cannot read with the default', () => {

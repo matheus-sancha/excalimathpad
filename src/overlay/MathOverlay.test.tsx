@@ -336,19 +336,54 @@ describe('MathOverlay', () => {
       )
     })
 
-    it('typesets a solve line with its guess small after the equation, and the details on hover', () => {
-      renderOverlay([anchorWith('x = solve x^2 = 2, guess x = 1\ny = x\nf(a) = solve u^2 = a, guess u = 1\nf_d = f(4)')])
+    it('typesets a solve line with its range or guess small after the equation, and the details on hover', () => {
+      renderOverlay([anchorWith('x = solve x^2 = 2, for x = 0 .. 10\ny = x\nf(a) = solve u^2 = a, guess u = 1\nf_d = f(4)')])
 
       expect(cellOf(1, 'expression')).toHaveTextContent(/solve/)
-      expect(rowOf('m1', 1).querySelector('.math-element__aside')).toHaveTextContent(/guess/)
+      expect(rowOf('m1', 1).querySelector('.math-element__aside')).toHaveTextContent(/x=0…10/)
+      expect(rowOf('m1', 3).querySelector('.math-element__aside')).toHaveTextContent(/guess/)
       const detailed = cellOf(1, 'result')!.querySelector<HTMLElement>('.math-element__detailed')!
-      expect(detailed.dataset.tip).toMatch(/^Brent, \d+ iterations\nResidual: .+\nBracket: 1\.41421356237\d* \.\. 1\.41421356237/)
+      expect(detailed.dataset.tip).toMatch(/^Scan \+ Brent, roots found in 0 \.\. 10\n200 points\nRoot 1: 1\.41421356237\d*, residual .+/)
+      expect(cellOf(4, 'result')!.querySelector<HTMLElement>('.math-element__detailed')!.dataset.tip).toMatch(
+        /^Brent, \d+ iterations\nResidual: .+\nBracket: 1\.99999999\d* \.\. 2|^Brent, \d+ iterations\nResidual: .+\nBracket: 2/,
+      )
       expect(detailed).toHaveAttribute('data-tip-when', 'details')
       // Not on a line that only uses the value, nor on a solve function's definition.
       expect(cellOf(2, 'result')!.querySelector('.math-element__detailed')).toBeNull()
       expect(rowOf('m1', 3).querySelector('[data-tip-when="details"]')).toBeNull()
       // A line that is just one call to a solve function has them.
       expect(cellOf(4, 'result')!.querySelector('.math-element__detailed')).not.toBeNull()
+    })
+
+    it('writes up to five roots out in one row, the unit in its slot, else the count; details on hover (#106)', () => {
+      renderOverlay([
+        anchorWith('x_r = solve x^3 - 6 m x^2 + 11 m^2 x = 6 m^3, for x = 0 m .. 10 m\ny = solve sin(y) = 0.5, for y = 0 .. 40'),
+      ])
+
+      const written = cellOf(1, 'result')!
+      expect(written).toHaveAttribute('data-text', '1, 2, 3 m')
+      expect(written.querySelectorAll('[data-unit-slot]')).toHaveLength(1)
+      expect(written.querySelector<HTMLElement>('.math-element__detailed')!.dataset.tip).toMatch(
+        /^Scan \+ Brent, roots found in 0 \.\. 10 m\n200 points\nRoot 1: 1 m, residual .+\nRoot 2: 2/,
+      )
+      const summary = cellOf(2, 'result')!
+      expect(summary).toHaveTextContent(/^13 roots,/)
+      expect(summary.querySelector('.math-element__detailed')).not.toBeNull()
+    })
+
+    it('lays a chosen width out as the body’s width, never below its content (M4c, #110)', () => {
+      renderOverlay([
+        createMathAnchorElements([{ id: 'm1', ...box, source: 'x = 2\n# a long comment', chosenWidth: 480 }])[0],
+        createMathAnchorElements([{ id: 'm2', ...box, y: 400, source: 'y = 3' }])[0],
+      ])
+
+      const body = elementOf('m1')!.querySelector<HTMLElement>('.math-element__body')!
+      expect(body).toHaveClass('has-chosen-width')
+      expect(body.style.width).toBe('480px')
+      expect(body.style.minWidth).toBe('max-content')
+      const automatic = elementOf('m2')!.querySelector<HTMLElement>('.math-element__body')!
+      expect(automatic).not.toHaveClass('has-chosen-width')
+      expect(automatic.style.width).toBe('')
     })
 
     it('typesets a range with its step aside, and a list’s summary with its points on hover', () => {
@@ -1394,6 +1429,54 @@ describe('line format (docs/spec-v1.md section 4: bold, underline, highlight)', 
     expect(rowOf('m1', 1)).not.toHaveClass('is-red')
   })
 
+  it('draws a line’s text colour on its row, beside a highlight (M4c, #107)', () => {
+    renderOverlay([anchorWith('x = 2 m * 3 @text-red @yellow # tripled\ny = 1\nz = q @text-red')])
+
+    expect(rowOf('m1', 1)).toHaveClass('is-text-color', 'is-text-red', 'is-yellow')
+    expect(rowOf('m1', 2)).not.toHaveClass('is-text-color')
+    // An error keeps its own colour: the stylesheet leaves `.is-error` alone.
+    expect(rowOf('m1', 3).querySelector('.math-element__result')).toHaveClass('is-error')
+  })
+
+  it('a text-colour dot writes @text-<name> before the note, the highlight after it; the pressed dot takes it off', () => {
+    const { scene } = renderOverlay([anchorWith('x = 2 @yellow # two')])
+    openLine(1)
+
+    expect(barButton(/No text colour/)).toHaveAttribute('aria-pressed', 'true')
+    press(barButton(/Text red/))
+    expect(scene.sourceOf('m1')).toBe('x = 2 @text-red @yellow # two')
+    expect(scene.sourceWrites()).toBe(1)
+    expect(barButton(/Text red/)).toHaveAttribute('aria-pressed', 'true')
+    expect(openField()).toHaveFocus()
+
+    press(barButton(/Text red/))
+    expect(scene.sourceOf('m1')).toBe('x = 2 @yellow # two')
+    press(barButton(/Text blue/))
+    press(barButton(/No text colour/))
+    expect(scene.sourceOf('m1')).toBe('x = 2 @yellow # two')
+  })
+
+  it('leaves every rule as typed when the bar writes', () => {
+    const { scene } = renderOverlay([anchorWith('v = 4 @text-red if v > 3')])
+    openLine(1)
+
+    press(barButton(/^Bold/))
+    expect(scene.sourceOf('m1')).toBe('v = 4 @bold @text-red if v > 3')
+  })
+
+  it('draws a rule’s format as a plain one would, its warning in the gutter, and a table row it made true (#109)', () => {
+    renderOverlay([
+      anchorWith('v = 4 m/s @text-red if v > 3 m/s\nw = 1 m/s @bold @text-red if w > 3 kg\nx = 1 .. 3\ntable(x) @yellow if x > 2'),
+    ])
+
+    expect(rowOf('m1', 1)).toHaveClass('is-text-red')
+    expect(rowOf('m1', 2)).toHaveClass('is-bold')
+    expect(rowOf('m1', 2)).not.toHaveClass('is-text-red')
+    expect(rowOf('m1', 2).querySelector('[data-tip]')?.getAttribute('data-tip')).toContain('if w > 3 kg: Units do not match')
+    const rows = rowOf('m1', 4).querySelectorAll('tbody tr')
+    expect([...rows].map((row) => row.classList.contains('is-yellow'))).toEqual([false, false, true])
+  })
+
   it('Ctrl+B and Ctrl+U toggle bold and underline from the field', () => {
     const { scene } = renderOverlay([anchorWith('x = 2')])
     openLine(1)
@@ -1475,6 +1558,52 @@ describe('title (docs/spec-v1.md section 4: an optional header on the element)',
     fireEvent.click(screen.getByRole('button', { name: /^Title/ }))
 
     expect(screen.queryByRole('toolbar', { name: 'Line format' })).toBeNull()
+  })
+
+  it('opens the title’s own bar, whose presses write its format beside it and keep it open (M4c, #111)', () => {
+    const { scene } = renderOverlay([titled('Pump @ 50 Hz #2')])
+    openLine(1)
+    fireEvent.click(screen.getByRole('button', { name: /^Title/ }))
+    const formatOf = () => scene.elementOf('m1').customData?.titleFormat
+    const bar = () => screen.getByRole('toolbar', { name: 'Title format' })
+
+    // Bold is on without a format.
+    expect(within(bar()).getByRole('button', { name: /^Bold/ })).toHaveAttribute('aria-pressed', 'true')
+    fireEvent.click(within(bar()).getByRole('button', { name: /^Bold/ }))
+    expect(formatOf()).toBe('regular')
+    fireEvent.click(within(bar()).getByRole('button', { name: 'Size XL' }))
+    fireEvent.click(within(bar()).getByRole('button', { name: 'Centre' }))
+    fireEvent.click(within(bar()).getByRole('button', { name: 'Text red' }))
+    fireEvent.click(within(bar()).getByRole('button', { name: 'Highlight yellow' }))
+    expect(formatOf()).toBe('regular centre XL text-red yellow')
+    expect(titleField()).toHaveFocus()
+    expect(header()).toHaveClass('is-regular', 'is-size-XL', 'is-align-centre', 'is-text-red', 'is-yellow')
+
+    // Ctrl+I from the field; the text stays exactly as typed.
+    fireEvent.keyDown(titleField()!, { key: 'i', ctrlKey: true })
+    expect(formatOf()).toBe('regular italic centre XL text-red yellow')
+    fireEvent.keyDown(titleField()!, { key: 'Escape' })
+    expect(titleOf(scene)).toBe('Pump @ 50 Hz #2')
+    expect(header()).toHaveTextContent('Pump @ 50 Hz #2')
+    expect(screen.queryByRole('toolbar', { name: 'Title format' })).toBeNull()
+  })
+
+  it('looks as before with no format, and emptying the title removes its format', () => {
+    const { scene } = renderOverlay([
+      createMathAnchorElements([{ id: 'm1', ...box, source: 'x = 2', title: 'Inputs' }]).map((element) => ({
+        ...element,
+        customData: { ...element.customData, titleFormat: 'L' },
+      }))[0],
+    ])
+    expect(header()).toHaveClass('is-bold', 'is-size-L', 'is-align-left', 'is-text-black')
+
+    openLine(1)
+    fireEvent.click(screen.getByRole('button', { name: /^Title/ }))
+    type(titleField()!, '')
+    fireEvent.keyDown(titleField()!, { key: 'Escape' })
+
+    expect(scene.elementOf('m1').customData).not.toHaveProperty('titleFormat')
+    expect(scene.elementOf('m1').customData).not.toHaveProperty('title')
   })
 
   it('Esc keeps what was typed, as one write, trimmed', () => {

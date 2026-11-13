@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { MathAnchor } from '../canvas/mathAnchor.ts'
+import { NO_TITLE_FORMAT, type MathAnchor } from '../canvas/mathAnchor.ts'
 import { readingOrder } from './readingOrder.ts'
 
 const at = (id: string, x: number, y: number, more: Partial<MathAnchor> = {}): MathAnchor => ({
@@ -10,6 +10,8 @@ const at = (id: string, x: number, y: number, more: Partial<MathAnchor> = {}): M
   height: 40,
   source: '',
   angle: 0,
+  chosenWidth: null,
+  titleFormat: NO_TITLE_FORMAT,
   locked: false,
   title: '',
   opacity: 100,

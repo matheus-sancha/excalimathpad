@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { MathAnchor } from '../canvas/mathAnchor.ts'
+import { NO_TITLE_FORMAT, type MathAnchor } from '../canvas/mathAnchor.ts'
 import {
   clickTarget,
   keyAction,
@@ -20,6 +20,8 @@ const anchor = (props: Partial<MathAnchor> = {}): MathAnchor => ({
   locked: false,
   title: '',
   opacity: 100,
+  chosenWidth: null,
+  titleFormat: NO_TITLE_FORMAT,
   ...props,
 })
 

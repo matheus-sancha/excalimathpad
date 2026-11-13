@@ -10,7 +10,7 @@ import {
   type ReactNode,
   type RefObject,
 } from 'react'
-import type { MathAnchor } from '../canvas/mathAnchor.ts'
+import type { MathAnchor, TitleFormat } from '../canvas/mathAnchor.ts'
 import type { ForwardWheel } from '../canvas/SheetCanvas.tsx'
 import {
   splitLines,
@@ -26,6 +26,9 @@ import {
 import {
   codeLength,
   FORMAT_COLORS,
+  TEXT_COLORS,
+  type FormatColor,
+  type TextColor,
   NO_FORMAT,
   readLine,
   writeFormat,
@@ -64,6 +67,8 @@ export interface MathElementViewProps {
   unitSlots?: UnitSlots
   /** The suggestions for the open line's text and caret (section 4); none on the title. */
   suggest?: Suggest | null
+  /** A press on the title's bar or its keys: the title's new format, one undo step (section 4, M4c). */
+  onTitleFormat?: (format: TitleFormat) => void
 }
 
 /** What the open line offers for a text and caret: the names that start with the word there. */
@@ -129,6 +134,7 @@ export function MathElementView({
   flash = null,
   unitSlots = NO_SLOTS,
   suggest = null,
+  onTitleFormat = () => {},
 }: MathElementViewProps) {
   const rootRef = useRef<HTMLDivElement>(null)
   const katexReady = useKatexReady()
@@ -158,19 +164,23 @@ export function MathElementView({
       }}
     >
       <div
-        className="math-element__body"
-        style={
-          anchor.angle
+        className={`math-element__body${anchor.chosenWidth !== null ? ' has-chosen-width' : ''}`}
+        style={{
+          // Section 4, Chosen width: never below the content, so the laid-out width is the larger.
+          ...(anchor.chosenWidth !== null ? { width: anchor.chosenWidth, minWidth: 'max-content' } : {}),
+          ...(anchor.angle
             ? {
                 transform: `rotate(${anchor.angle}rad)`,
                 transformOrigin: `${anchor.width / 2}px ${anchor.height / 2}px`,
               }
-            : undefined
-        }
+            : {}),
+        }}
       >
         {(anchor.title !== '' || edit?.lineIndex === TITLE_LINE) && (
           <Header
             title={anchor.title}
+            format={anchor.titleFormat}
+            onFormat={onTitleFormat}
             edit={edit?.lineIndex === TITLE_LINE ? edit : null}
             onType={onType}
             onMove={onMove}
@@ -229,10 +239,14 @@ export function MathElementView({
  */
 function Header({
   title,
+  format,
+  onFormat,
   edit,
   ...field
 }: {
   title: string
+  format: TitleFormat
+  onFormat: (format: TitleFormat) => void
   edit: LineEdit | null
   onType: (text: string) => void
   onMove: (move: LineMove) => void
@@ -240,19 +254,107 @@ function Header({
   onBlur: () => void
 }) {
   const fieldRef = useRef<HTMLInputElement>(null)
+  const toggle = (key: 'b' | 'i' | 'u') =>
+    onFormat(
+      key === 'b'
+        ? { ...format, bold: !format.bold }
+        : key === 'i'
+          ? { ...format, italic: !format.italic }
+          : { ...format, underline: !format.underline },
+    )
   return (
-    <div className={`math-element__title${edit ? ' is-editing' : ''}`} data-title aria-label="Title">
+    <div
+      className={`math-element__title${edit ? ' is-editing' : ''}${titleClasses(format)}`}
+      data-title
+      aria-label="Title"
+    >
       {edit ? (
         <span className="math-element__field-cell is-title">
           <span className="math-element__field-text" aria-hidden="true">
             {edit.text}
           </span>
-          <LineField fieldRef={fieldRef} label="Title" edit={edit} onFormat={null} {...field} />
+          <LineField fieldRef={fieldRef} label="Title" edit={edit} onFormat={null} onTitleKey={toggle} {...field} />
         </span>
       ) : (
-        title
+        <span className="math-element__title-text">{title}</span>
       )}
+      {edit && <TitleBar format={format} onChange={onFormat} />}
     </div>
+  )
+}
+
+/** A title's format as classes: the stylesheet draws each option (section 4, Title format). */
+function titleClasses(format: TitleFormat): string {
+  return [
+    format.bold ? 'is-bold' : 'is-regular',
+    format.italic ? 'is-italic' : '',
+    format.underline ? 'is-underline' : '',
+    `is-align-${format.align}`,
+    `is-size-${format.size}`,
+    `is-text-${format.color}`,
+    format.highlight ? `is-${format.highlight}` : '',
+  ]
+    .filter(Boolean)
+    .map((name) => ` ${name}`)
+    .join('')
+}
+
+/**
+ * The title's bar (section 4, Title format, M4c): beside the open title,
+ * outside the element's box, in place of the line's bar. Bold, italic and
+ * underline; left, centre and right; the four sizes; then the two rows of
+ * colour dots. Each press is one undo step and keeps the title open; its
+ * buttons never take focus.
+ */
+function TitleBar({ format, onChange }: { format: TitleFormat; onChange: (format: TitleFormat) => void }) {
+  const button = (label: string, pressed: boolean, next: TitleFormat, className: string, text: string) => (
+    <button
+      key={label}
+      type="button"
+      className={`math-format-bar__button ${className}`}
+      aria-label={label}
+      aria-pressed={pressed}
+      title={label}
+      tabIndex={-1}
+      onMouseDown={(event) => event.preventDefault()}
+      onClick={() => onChange(next)}
+    >
+      {text}
+    </button>
+  )
+  const ALIGNS = [
+    ['left', 'Align left', '⇤'],
+    ['centre', 'Centre', '↔'],
+    ['right', 'Align right', '⇥'],
+  ] as const
+  return (
+    <span className="math-format-bar is-title-bar" role="toolbar" aria-label="Title format">
+      <span className="math-format-bar__column">
+        <span className="math-format-bar__dot-row">
+          {button('Bold (Ctrl+B)', format.bold, { ...format, bold: !format.bold }, 'is-bold', 'B')}
+          {button('Italic (Ctrl+I)', format.italic, { ...format, italic: !format.italic }, 'is-italic', 'I')}
+          {button(
+            'Underline (Ctrl+U)',
+            format.underline,
+            { ...format, underline: !format.underline },
+            'is-underline',
+            'U',
+          )}
+          <span className="math-format-bar__rule" aria-hidden="true" />
+          {ALIGNS.map(([align, label, text]) => button(label, format.align === align, { ...format, align }, 'is-align', text))}
+          <span className="math-format-bar__rule" aria-hidden="true" />
+          {(['S', 'M', 'L', 'XL'] as const).map((size) =>
+            button(`Size ${size}`, format.size === size, { ...format, size }, 'is-size', size),
+          )}
+        </span>
+        <ColourDots
+          text={format.color}
+          highlight={format.highlight}
+          onText={(color) => onChange({ ...format, color: color ?? 'black' })}
+          onHighlight={(highlight) => onChange({ ...format, highlight })}
+        />
+      </span>
+    </span>
   )
 }
 
@@ -262,9 +364,11 @@ function formatOf(text: string): LineFormat {
   return form.kind === 'code' ? form.format : NO_FORMAT
 }
 
-/** A row's format as classes: the stylesheet draws bold, underline and the band. */
-function formatClasses({ bold, underline, color }: LineFormat): string {
-  return `${bold ? ' is-bold' : ''}${underline ? ' is-underline' : ''}${color ? ` is-${color}` : ''}`
+/** A row's format as classes: the stylesheet draws bold, underline, the band and the text colour. */
+function formatClasses({ bold, underline, color, textColor }: LineFormat): string {
+  return `${bold ? ' is-bold' : ''}${underline ? ' is-underline' : ''}${color ? ` is-${color}` : ''}${
+    textColor ? ` is-text-color is-text-${textColor}` : ''
+  }`
 }
 
 const EMPTY_LINE: SheetLine = {
@@ -414,7 +518,6 @@ function TableBlock({ table, index }: { table: TableView; index: number }) {
                       <SlotBox
                         index={index}
                         column={c}
-                        chosen={column.slot.chosen !== null}
                         hovered={slots.hovered === index}
                         unitHtml={unit}
                         unitText={column.unit}
@@ -436,7 +539,7 @@ function TableBlock({ table, index }: { table: TableView; index: number }) {
         </thead>
         <tbody>
           {table.rows.map((row, r) => (
-            <tr key={r}>
+            <tr key={r} className={formatClasses(table.rowFormats[r] ?? NO_FORMAT).trim() || undefined}>
               {row.map((cell, c) => {
                 if (!cell.ok) {
                   return (
@@ -568,6 +671,25 @@ function ResultCell({
   } else if (result.kind === 'error') {
     text = result.message
     content = result.message
+  } else if (result.kind === 'roots') {
+    // Section 9, Roots: written out in one row, the unit once in its slot, or a summary; details on hover.
+    text = result.text
+    if (plain) content = result.text
+    else {
+      const inner = result.written ? (
+        <RootsContent text={result.text} slot={slot} index={index} />
+      ) : (
+        <SummaryContent text={result.text} />
+      )
+      content =
+        details === null ? (
+          inner
+        ) : (
+          <span className="math-element__detailed" data-tip={detailsText(details)} data-tip-when="details">
+            {inner}
+          </span>
+        )
+    }
   } else if (result.kind === 'list') {
     // Section 10: one row high, as a summary, its points on hover; no unit slot.
     text = result.text
@@ -580,7 +702,7 @@ function ResultCell({
     )
   } else if (slot && slots.hovered === index && !plain) {
     // A plain input: an empty slot on hover (section 5, Unit slot).
-    content = <SlotBox index={index} chosen={false} hovered unitHtml={null} />
+    content = <SlotBox index={index} hovered unitHtml={null} />
   }
   const open = slot !== null && slots.open === index && (slots.openColumn ?? null) === null && !plain
   return (
@@ -604,7 +726,19 @@ function ResultCell({
 }
 
 /** How a solve went, for the hover (section 4, Solve details). */
-function detailsText({ method, iterations, residual, bracket }: SolveDetails): string {
+function detailsText(details: SolveDetails): string {
+  if (details.method === 'scan') {
+    const { range, points, roots, rejected } = details
+    return [
+      `Scan + Brent, roots found in ${range}`,
+      `${points} points`,
+      ...roots.map(
+        (root, i) => `Root ${i + 1}: ${root.value}${root.touching ? ' (touching)' : ''}, residual ${root.residual}`,
+      ),
+      ...(rejected === 0 ? [] : [`${rejected} ${rejected === 1 ? 'crossing' : 'crossings'} rejected as poles or jumps`]),
+    ].join('\n')
+  }
+  const { method, iterations, residual, bracket } = details
   return [
     `${method}, ${iterations} ${iterations === 1 ? 'iteration' : 'iterations'}`,
     `Residual: ${residual}`,
@@ -636,6 +770,28 @@ function SummaryContent({ text }: { text: string }) {
 }
 
 /**
+ * A solved value's roots written out (section 9, Roots): `1, 2, 3 m`, each
+ * number typeset, the unit once, after the last, in the line's slot.
+ */
+function RootsContent({ text, slot, index }: { text: string; slot: SheetLine['unitSlot']; index: number }) {
+  const parts = text.split(', ')
+  const last = parts[parts.length - 1]
+  const earlier = parts.slice(0, -1).map((part) => texToHtml(typesetResult(part)))
+  if (earlier.some((html) => html === null)) return <>{text}</>
+  return (
+    <>
+      {earlier.map((html, i) => (
+        <span key={i}>
+          <Html html={html!} />
+          {', '}
+        </span>
+      ))}
+      <ValueContent text={last} slot={slot} index={index} />
+    </>
+  )
+}
+
+/**
  * A value: its number, then its unit in the slot. A value that isn't a number
  * with a unit (a complex number, a matrix) shows whole, with no slot.
  */
@@ -655,7 +811,6 @@ function ValueContent({ text, slot, index }: { text: string; slot: SheetLine['un
       {(unit !== '' || slots.hovered === index) && (
         <SlotBox
           index={index}
-          chosen={slot.chosen !== null}
           hovered={slots.hovered === index}
           unitHtml={unitHtml}
           unitText={unit}
@@ -667,27 +822,25 @@ function ValueContent({ text, slot, index }: { text: string; slot: SheetLine['un
 
 /**
  * The unit slot (section 5): the result's unit, outlined while its row is
- * hovered, tinted when chosen. It takes no pointer events: the canvas's own
+ * hovered. A chosen unit has no mark (M4c). It takes no pointer events: the canvas's own
  * click opens it (section 14), found by `data-unit-slot`.
  */
 function SlotBox({
   index,
   column,
-  chosen,
   hovered,
   unitHtml,
   unitText = '',
 }: {
   index: number
   column?: number
-  chosen: boolean
   hovered: boolean
   unitHtml: string | null
   unitText?: string
 }) {
   return (
     <span
-      className={`math-element__unit${chosen ? ' is-chosen' : ''}${hovered ? ' is-hovered' : ''}${
+      className={`math-element__unit${hovered ? ' is-hovered' : ''}${
         unitText === '' ? ' is-empty' : ''
       }`}
       data-unit-slot={column === undefined ? index : `${index}:${column}`}
@@ -814,17 +967,66 @@ function FormatBar({
         'U',
       )}
       <span className="math-format-bar__rule" aria-hidden="true" />
-      {FORMAT_COLORS.map((color) => (
-        <span key={color}>
-          {button(
-            `Highlight ${color}`,
-            format.color === color,
-            { ...format, color: format.color === color ? null : color },
-            `is-color is-${color}`,
-          )}
+      <ColourDots
+        text={format.textColor}
+        highlight={format.color}
+        onText={(textColor) => onChange({ ...format, textColor })}
+        onHighlight={(color) => onChange({ ...format, color })}
+      />
+    </span>
+  )
+}
+
+/**
+ * The bar's two rows of dots (section 4, While editing a line, M4c): the six
+ * text colours on one, the five highlights on the other, each with its "none".
+ * One click each; pressing the pressed dot takes it off. Each button never takes
+ * focus, as the rest of the bar.
+ */
+export function ColourDots({
+  text,
+  highlight,
+  onText,
+  onHighlight,
+}: {
+  text: TextColor | null
+  highlight: FormatColor | null
+  onText: (color: TextColor | null) => void
+  onHighlight: (color: FormatColor | null) => void
+}) {
+  const dot = (label: string, pressed: boolean, className: string, onClick: () => void) => (
+    <button
+      key={label}
+      type="button"
+      className={`math-format-bar__button is-color ${className}`}
+      aria-label={label}
+      aria-pressed={pressed}
+      title={label}
+      tabIndex={-1}
+      onMouseDown={(event) => event.preventDefault()}
+      onClick={onClick}
+    />
+  )
+  return (
+    <span className="math-format-bar__dots">
+      <span className="math-format-bar__dot-row" role="group" aria-label="Text colour">
+        <span className="math-format-bar__dot-label" aria-hidden="true">
+          A
         </span>
-      ))}
-      {button('No highlight', format.color === null, { ...format, color: null }, 'is-color is-none')}
+        {TEXT_COLORS.map((color) =>
+          dot(`Text ${color}`, text === color, `is-text-${color}`, () => onText(text === color ? null : color)),
+        )}
+        {dot('No text colour', text === null, 'is-none', () => onText(null))}
+      </span>
+      <span className="math-format-bar__dot-row" role="group" aria-label="Highlight">
+        <span className="math-format-bar__dot-label is-highlight" aria-hidden="true" />
+        {FORMAT_COLORS.map((color) =>
+          dot(`Highlight ${color}`, highlight === color, `is-${color}`, () =>
+            onHighlight(highlight === color ? null : color),
+          ),
+        )}
+        {dot('No highlight', highlight === null, 'is-none', () => onHighlight(null))}
+      </span>
     </span>
   )
 }
@@ -836,6 +1038,8 @@ interface LineFieldProps {
   edit: LineEdit
   /** Ctrl+B and Ctrl+U: null on a line with no code, which takes no format. */
   onFormat: ((change: (format: LineFormat) => Partial<LineFormat>) => void) | null
+  /** On the title: Ctrl+B, Ctrl+I and Ctrl+U (section 4, Title format). */
+  onTitleKey?: (key: 'b' | 'i' | 'u') => void
   onType: (text: string) => void
   onMove: (move: LineMove) => void
   onEscape: () => void
@@ -855,6 +1059,7 @@ function LineField({
   label = 'Line source',
   edit,
   onFormat,
+  onTitleKey,
   onType,
   onMove,
   onEscape,
@@ -944,6 +1149,10 @@ function LineField({
         case 'End':
           setList(null)
       }
+    }
+    if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && onTitleKey) {
+      const key = event.key.toLowerCase()
+      if (key === 'b' || key === 'i' || key === 'u') return take(() => onTitleKey(key))
     }
     if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && onFormat) {
       const key = event.key.toLowerCase()

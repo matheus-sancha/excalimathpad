@@ -1,7 +1,7 @@
 import { act, fireEvent, render, waitFor } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import { SheetCanvas, type SheetCanvasHandle } from './SheetCanvas.tsx'
-import { sizeWritesWait, snapBackResizes, writeAnchorSizes } from './anchorSize.ts'
+import { settleResizes, sizeWritesWait, writeAnchorSizes } from './anchorSize.ts'
 import { createMathAnchorElements, writeAnchorSource } from './mathAnchor.ts'
 import { sceneLoaded, undoControls } from '../test/excalidraw.ts'
 import { clickOnCanvas, dragOnCanvas, interactiveCanvas, type ClientPoint } from '../test/gestures.ts'
@@ -9,14 +9,14 @@ import { clickOnCanvas, dragOnCanvas, interactiveCanvas, type ClientPoint } from
 /**
  * Contracts against the real, installed Excalidraw (docs/spec-v1.md section 4,
  * Size, and section 14): size writes add no undo step and leave a line commit
- * one step, and resize handles snap back.
+ * one step, and resize handles set the chosen width or snap back (M4c).
  */
 const SOURCE = 'R = 10 kohm'
 const BOX = { x: 100, y: 100, width: 300, height: 80 }
 
-async function mount({ snapBack = false, drawing = false } = {}) {
+async function mount({ snapBack = false, drawing = false, floor = 0, chosenWidth = undefined as number | undefined } = {}) {
   let handle: SheetCanvasHandle | undefined
-  const anchors = createMathAnchorElements([{ id: 'm1', ...BOX, source: SOURCE }])
+  const anchors = createMathAnchorElements([{ id: 'm1', ...BOX, source: SOURCE, chosenWidth }])
   // A plain rectangle below the anchor, for a resize of both.
   const drawings = drawing
     ? createMathAnchorElements([{ id: 'r1', ...BOX, y: 250 }]).map((element) => ({
@@ -34,7 +34,7 @@ async function mount({ snapBack = false, drawing = false } = {}) {
   const { api } = handle!
   await sceneLoaded(api)
   if (snapBack) {
-    const off = snapBackResizes(api, (write) => write())
+    const off = settleResizes(api, (write) => write(), () => floor)
     view.unmount = ((unmount) => () => {
       off()
       unmount()
@@ -112,26 +112,72 @@ describe('resize handles on real Excalidraw', () => {
     expect(anchor().width).toBeGreaterThan(BOX.width)
   })
 
-  it('snap back to where the anchor was when the handle is let go', async () => {
+  const chosen = () => (anchorOf().customData as { width?: number } | undefined)?.width
+  let anchorOf: () => { customData?: unknown }
+
+  it('set the chosen width on release, keeping the top and the height (M4c)', async () => {
     const { anchor } = await mount({ snapBack: true })
+    anchorOf = anchor
     clickOnCanvas({ clientX: 150, clientY: 140 })
 
     await dragOnCanvas(corner, { clientX: corner.clientX + 90, clientY: corner.clientY + 60 })
 
-    expect(anchor()).toMatchObject(BOX)
+    expect(anchor()).toMatchObject({ x: BOX.x, y: BOX.y, height: BOX.height })
+    expect(anchor().width).toBeGreaterThan(BOX.width)
+    expect(chosen()).toBe(anchor().width)
   })
 
-  it('restore y too after the top-right handle, which moves it', async () => {
+  it('restore y after the top-right handle, which moves it, and still take the width', async () => {
     const { anchor } = await mount({ snapBack: true })
+    anchorOf = anchor
     clickOnCanvas({ clientX: 150, clientY: 140 })
 
     await dragOnCanvas(topRight, { clientX: topRight.clientX + 60, clientY: topRight.clientY - 45 })
 
-    expect(anchor()).toMatchObject(BOX)
+    expect(anchor()).toMatchObject({ x: BOX.x, y: BOX.y, height: BOX.height })
+    expect(chosen()).toBe(anchor().width)
   })
 
-  it('snap the anchor back and leave the drawing resized when both are selected', async () => {
+  it('move the left edge with a left handle', async () => {
+    const { anchor } = await mount({ snapBack: true })
+    anchorOf = anchor
+    clickOnCanvas({ clientX: 150, clientY: 140 })
+    const left = { clientX: BOX.x - 8, clientY: BOX.y + BOX.height + 8 }
+
+    await dragOnCanvas(left, { clientX: left.clientX - 50, clientY: left.clientY + 30 })
+
+    expect(anchor().x).toBeLessThan(BOX.x)
+    expect(anchor().x + anchor().width).toBeCloseTo(BOX.x + BOX.width, 0)
+    expect(anchor()).toMatchObject({ y: BOX.y, height: BOX.height })
+    expect(chosen()).toBe(anchor().width)
+  })
+
+  it('go back to automatic below the floor, the box where it was', async () => {
+    const { anchor } = await mount({ snapBack: true, floor: 280, chosenWidth: 300 })
+    anchorOf = anchor
+    clickOnCanvas({ clientX: 150, clientY: 140 })
+
+    await dragOnCanvas(corner, { clientX: corner.clientX - 120, clientY: corner.clientY })
+
+    expect(anchor()).toMatchObject(BOX)
+    expect(chosen()).toBeUndefined()
+  })
+
+  it('snap back when only the height changed', async () => {
+    const { anchor } = await mount({ snapBack: true })
+    anchorOf = anchor
+    clickOnCanvas({ clientX: 150, clientY: 140 })
+    const bottom = { clientX: BOX.x + BOX.width / 2, clientY: BOX.y + BOX.height + 8 }
+
+    await dragOnCanvas(bottom, { clientX: bottom.clientX, clientY: bottom.clientY + 60 })
+
+    expect(anchor()).toMatchObject(BOX)
+    expect(chosen()).toBeUndefined()
+  })
+
+  it('set the width on the anchor and leave the drawing resized when both are selected', async () => {
     const { anchor, api } = await mount({ snapBack: true, drawing: true })
+    anchorOf = anchor
     act(() => {
       api.updateScene({ appState: { selectedElementIds: { m1: true, r1: true } } })
     })
@@ -140,12 +186,14 @@ describe('resize handles on real Excalidraw', () => {
 
     await dragOnCanvas(both, { clientX: both.clientX + 90, clientY: both.clientY + 60 })
 
-    expect(anchor()).toMatchObject(BOX)
+    expect(anchor()).toMatchObject({ y: BOX.y, height: BOX.height })
+    expect(chosen()).toBe(anchor().width)
     expect(anchor('r1').width).toBeGreaterThan(BOX.width)
   })
 
-  it('leave nothing for undo to take back', async () => {
+  it('make the width one undo step, which takes it back to automatic', async () => {
     const { anchor, undo } = await mount({ snapBack: true })
+    anchorOf = anchor
     clickOnCanvas({ clientX: 150, clientY: 140 })
     await dragOnCanvas(corner, { clientX: corner.clientX + 90, clientY: corner.clientY + 60 })
 
@@ -153,6 +201,20 @@ describe('resize handles on real Excalidraw', () => {
 
     await new Promise((resolve) => setTimeout(resolve, 20))
     expect(anchor()).toMatchObject(BOX)
+    expect(chosen()).toBeUndefined()
+  })
+
+  it('take a second width back to the first with one undo', async () => {
+    const { anchor, undo } = await mount({ snapBack: true, chosenWidth: 300 })
+    anchorOf = anchor
+    clickOnCanvas({ clientX: 150, clientY: 140 })
+    await dragOnCanvas(corner, { clientX: corner.clientX + 90, clientY: corner.clientY })
+    expect(chosen()).toBeGreaterThan(300)
+
+    undo()
+
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    expect(chosen()).toBe(300)
   })
 })
 

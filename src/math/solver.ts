@@ -95,6 +95,7 @@ function brent(
   fa0: number,
   b0: number,
   fb0: number,
+  absolute = 0,
 ): SolveOutcome {
   let a = a0
   let b = b0
@@ -119,7 +120,7 @@ function brent(
       fb = fc
       fc = fa
     }
-    const tol = 2 * Number.EPSILON * Math.abs(b) + 0.5 * RELATIVE_TOLERANCE * Math.abs(b)
+    const tol = 2 * Number.EPSILON * Math.abs(b) + 0.5 * RELATIVE_TOLERANCE * Math.abs(b) + absolute
     const middle = 0.5 * (c - b)
     if (Math.abs(middle) <= tol || fb === 0) {
       const bracket: [number, number] = fb === 0 ? [b, b] : b < c ? [b, c] : [c, b]
@@ -160,4 +161,168 @@ function brent(
     if (Number.isNaN(fb)) return { kind: 'no-root', searched: a0 < b0 ? [a0, b0] : [b0, a0] }
   }
   return { kind: 'no-convergence', iterations: MAX_ITERATIONS }
+}
+
+/** Points sampled over a search range (section 9, Search range). */
+export const RANGE_POINTS = 200
+/** A crossing is a root only if its residual is at most this times its samples' larger one. */
+export const CROSSING_CHECK = 1e-6
+/** A dip touches zero when its minimum is within this of its neighbouring samples' size. */
+export const TOUCH_THRESHOLD = 1e-9
+/** More roots than this is an error (section 9, Roots). */
+export const MAX_ROOTS = 100
+
+export interface RangeRoot {
+  x: number
+  /** The residual at `x`. */
+  residual: number
+  /** Found by the dip pass: the residual only touches zero here. */
+  touching: boolean
+}
+
+export type RangeOutcome =
+  | {
+      kind: 'roots'
+      /** Ascending, at least one. */
+      roots: readonly RangeRoot[]
+      /** Sign changes rejected by the crossing check: poles and jumps. */
+      rejected: number
+      evaluations: number
+    }
+  /** No root. `hadValue` is false when no sample had a value. */
+  | { kind: 'no-root'; hadValue: boolean; rejected: number }
+  | { kind: 'too-many'; count: number }
+  | { kind: 'no-convergence'; iterations: number }
+
+/**
+ * The roots of `f` found in `low .. high` (section 9, Search range): the
+ * residual at 200 evenly spaced points, Brent on every sign change between two
+ * neighbours that have a value, a crossing kept only if its residual is small
+ * against its samples' (a pole or a jump isn't a root), and a dip pass where
+ * three neighbours share a sign and the middle is closest to zero (golden
+ * section): a minimum across zero is two roots, one within the threshold is a
+ * touching root. Deterministic; anything `f` throws passes through.
+ */
+export function solveRange(f: (x: number) => number, low: number, high: number): RangeOutcome {
+  let evaluations = 0
+  const value = (x: number) => {
+    evaluations++
+    const y = f(x)
+    return Number.isFinite(y) ? y : Number.NaN
+  }
+  const n = RANGE_POINTS
+  const xs: number[] = []
+  const ys: number[] = []
+  for (let i = 0; i < n; i++) {
+    const x = i === n - 1 ? high : low + ((high - low) * i) / (n - 1)
+    xs.push(x)
+    ys.push(value(x))
+  }
+  const roots: RangeRoot[] = []
+  let rejected = 0
+  // A root at 0 has no size to be relative to: the range's width gives a floor.
+  const floor = (high - low) * 1e-15
+
+  // Brent on [a, b], kept if it passes the crossing check. Null when rejected or lost in a hole.
+  const cross = (a: number, fa: number, b: number, fb: number): RangeRoot | 'no-convergence' | null => {
+    const outcome = brent(value, a, fa, b, fb, floor)
+    if (outcome.kind === 'no-convergence') return 'no-convergence'
+    if (outcome.kind !== 'root') return null
+    if (Math.abs(outcome.residual) > CROSSING_CHECK * Math.max(Math.abs(fa), Math.abs(fb))) {
+      rejected++
+      return null
+    }
+    return { x: outcome.x, residual: outcome.residual, touching: false }
+  }
+
+  for (let i = 0; i < n; i++) {
+    const y = ys[i]
+    if (Number.isNaN(y)) continue
+    if (y === 0) {
+      roots.push({ x: xs[i], residual: 0, touching: false })
+      continue
+    }
+    if (i === n - 1) continue
+    const next = ys[i + 1]
+    if (Number.isNaN(next) || next === 0 || Math.sign(next) === Math.sign(y)) continue
+    const root = cross(xs[i], y, xs[i + 1], next)
+    if (root === 'no-convergence') return { kind: 'no-convergence', iterations: MAX_ITERATIONS }
+    if (root !== null) roots.push(root)
+  }
+
+  // The dip pass: a residual that turns back toward zero without changing sign.
+  for (let i = 1; i < n - 1; i++) {
+    const [a, y, b] = [ys[i - 1], ys[i], ys[i + 1]]
+    if ([a, y, b].some((v) => Number.isNaN(v) || v === 0)) continue
+    if (Math.sign(a) !== Math.sign(y) || Math.sign(b) !== Math.sign(y)) continue
+    if (!(Math.abs(y) < Math.abs(a) && Math.abs(y) <= Math.abs(b))) continue
+    const s = Math.sign(y)
+    const bottom = goldenMinimum((x) => s * value(x), xs[i - 1], xs[i + 1])
+    const fm = s * bottom.y
+    if (Number.isNaN(fm)) continue
+    if (fm === 0) {
+      roots.push({ x: bottom.x, residual: 0, touching: true })
+    } else if (Math.sign(fm) !== s) {
+      for (const [p, fp, q, fq] of [
+        [xs[i - 1], a, bottom.x, fm],
+        [bottom.x, fm, xs[i + 1], b],
+      ]) {
+        const root = cross(p, fp, q, fq)
+        if (root === 'no-convergence') return { kind: 'no-convergence', iterations: MAX_ITERATIONS }
+        if (root !== null) roots.push(root)
+      }
+    } else if (Math.abs(fm) <= TOUCH_THRESHOLD * Math.max(Math.abs(a), Math.abs(b))) {
+      roots.push({ x: bottom.x, residual: fm, touching: true })
+    }
+  }
+
+  const sorted = distinct(roots.sort((p, q) => p.x - q.x), (high - low) * 1e-12)
+  if (sorted.length > MAX_ROOTS) return { kind: 'too-many', count: sorted.length }
+  if (sorted.length === 0) return { kind: 'no-root', hadValue: ys.some((y) => !Number.isNaN(y)), rejected }
+  return { kind: 'roots', roots: sorted, rejected, evaluations }
+}
+
+/** Roots closer than `gap`, or within the solve's tolerance, are one root. */
+function distinct(roots: RangeRoot[], gap: number): RangeRoot[] {
+  const kept: RangeRoot[] = []
+  for (const root of roots) {
+    const last = kept[kept.length - 1]
+    const near = last !== undefined && Math.abs(root.x - last.x) <= Math.max(gap, 4 * RELATIVE_TOLERANCE * Math.abs(root.x))
+    if (!near) kept.push(root)
+    else if (Math.abs(root.residual) < Math.abs(last.residual)) kept[kept.length - 1] = root
+  }
+  return kept
+}
+
+/** Golden-section search for the minimum of `g` on `[a, b]`; NaN counts as no minimum. */
+function goldenMinimum(g: (x: number) => number, a0: number, b0: number): { x: number; y: number } {
+  const ratio = (Math.sqrt(5) - 1) / 2
+  const at = (x: number) => {
+    const y = g(x)
+    return Number.isNaN(y) ? Number.POSITIVE_INFINITY : y
+  }
+  let a = a0
+  let b = b0
+  let c = b - ratio * (b - a)
+  let d = a + ratio * (b - a)
+  let fc = at(c)
+  let fd = at(d)
+  for (let k = 0; k < 200 && Math.abs(b - a) > RELATIVE_TOLERANCE * (Math.abs(c) + Math.abs(d)) + 1e-300; k++) {
+    if (fc < fd) {
+      b = d
+      d = c
+      fd = fc
+      c = b - ratio * (b - a)
+      fc = at(c)
+    } else {
+      a = c
+      c = d
+      fc = fd
+      d = a + ratio * (b - a)
+      fd = at(d)
+    }
+    if (fc <= 0 || fd <= 0) break
+  }
+  const best = fc < fd ? { x: c, y: fc } : { x: d, y: fd }
+  return { x: best.x, y: Number.isFinite(best.y) ? best.y : Number.NaN }
 }

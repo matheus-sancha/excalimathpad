@@ -64,14 +64,21 @@ server. v1 target: one sheet, for Matheus's own use.
   left empty. `SheetCanvas` draws the welcome screen, and the app's two
   items in Excalidraw's More tools dropdown: Add math and Math Settings, which
   opens the Sheet panel. `moreTools.ts` finds the open dropdown
-  (`useMoreToolsSlot`, a box of the app's own appended to it), closes it
+  (`useMoreToolsSlot`, a box of the app's own appended to it; Math Settings
+  sits in a `display: contents` wrapper carrying `sidebar-trigger`, so a
+  floating panel's outside click ignores it without Excalidraw's square-button
+  style, whose `line-height: 0` hid its label, #102), closes it
   (`closeMoreTools`) and marks its button while it is closed (`markMoreTools`:
   `data-math-placing`, `data-math-problems` and `--math-problems`). Excalidraw
   has no slot for it, so `moreTools.excalidraw.test.tsx` pins the class names.
   `anchorSize.ts` writes an anchor's size (`writeAnchorSizes`: `NEVER`, top-left
-  kept, the rotated top-left for a rotated anchor) and snaps resize handles back
-  (`snapBackResizes`, from `onPointerUp`'s `originalElements`), and says when
-  a size write waits (`sizeWritesWait`). The only module that imports
+  kept, the rotated top-left for a rotated anchor) and settles a resize on
+  release (`settleResizes`, from `onPointerUp`'s `originalElements`): a width
+  at or above the element's floor becomes its **chosen width**
+  (`customData.width`, `MathAnchor.chosenWidth`), with Excalidraw's `x` kept
+  and the top and height put back, written `NEVER` so it lands in the resize's
+  own undo step; below the floor it goes back to automatic; a height-only drag
+  snaps back. It also says when a size write waits (`sizeWritesWait`). The only module that imports
   Excalidraw at runtime; tests may too, and other modules may import its
   types. This is ADR 0001's engineering rule as amended in ADR 0002. Depends
   on: `@excalidraw/excalidraw`.
@@ -81,10 +88,19 @@ server. v1 target: one sheet, for Matheus's own use.
   `LineResult` (value | error | empty) and its `TypesetLine`, from the same
   parse: blank, comment, math (name, expression and note, as TeX) or unparsed
   (raw source). `lineForm.ts` (pure) reads a line's comment and its format clause
-  (`@bold @yellow`) before math.js sees it (ADR 0005), so a note or a format
-  never reaches math.js; `writeFormat` composes the clause back for the bar. A
-  math line carries its `LineFormat`; an unknown clause word is the line's
-  error, reported after the line ran. `typeset.ts` is the
+  (`@bold @text-red @yellow`, from the first `@` outside a string) before math.js
+  sees it (ADR 0005), so a note or a format never reaches math.js. A word with
+  `if <condition>` is a rule (`FormatRule`, kept as typed); `writeFormat`
+  composes the plain words back for the bar in a fixed order and keeps every
+  rule. A math line carries its `LineFormat` (bold, underline, highlight, text
+  colour); an unknown clause word is the line's error, reported after the line
+  ran. After a line runs, `runRules` (in `evaluate.ts`) tests its rules in a
+  `LayeredScope` over the scope with `result` bound, so a condition never
+  reaches the next line; the first true rule wins per property over the plain
+  format (`resolveRules`), and the typeset format is the result. A condition
+  that can't be decided is one warning per rule. On a list it runs per point
+  (the summary takes the format only if all are true; the hover counts them);
+  on a table, per row (`TableView.rowFormats`). `typeset.ts` is the
   `toTex` handler of spec section 4, Typesetting names; a name counts as the
   sheet's from the line that assigns it down. `typesetResult` sets a result's
   `math.format` text as number and unit. A plain
@@ -136,23 +152,33 @@ server. v1 target: one sheet, for Matheus's own use.
   the engine's own reads use `holds` and `peek`. `listConstants` gives the
   Constants tab its rows.
   A **solve line** (spec section 9) is read as text before math.js sees it
-  (`solveLine.ts`, pure: `<name>[(<params>)] = solve <lhs> = <rhs>, guess
-  <unknown> = <expr>`); its sides and guess are parsed with the captured
-  `parse` and compiled once (`solve.ts`, `createSolver`). Each run evaluates
-  the guess in the scope at that point with the unknown hidden, then the
-  residual `lhs - rhs` in a `LayeredScope` where the unknown wins, reduced to
-  SI numbers, so a dimension mismatch is the app's message; `solver.ts`
-  (pure numbers) steps out from the guess for a sign change, skipping points
-  with no value (NaN), then runs Brent to 1e-12 relative, 100 iterations at
-  most. The value form solves once at its line; the function form defines a
-  wrapped function (`sheetFunction.solve`) that solves at each call over the
-  scope as it is then. A failure throws a `SheetError`; no root and no
+  (`solveLine.ts`, pure): a **solved value** is `<name> = solve <lhs> = <rhs>,
+  for <unknown> = <from> .. <to>` and a **solve function** is
+  `<name>(<params>) = solve …, guess <unknown> = <expr>`; either one with the
+  other's clause, or none, is the line's error. Its sides and clause are
+  parsed with the captured `parse` and compiled once (`solve.ts`,
+  `createSolver`). Each run evaluates the guess or the range's ends in the
+  scope at that point with the unknown hidden, then the residual `lhs - rhs`
+  in a `LayeredScope` where the unknown wins, reduced to SI numbers, so a
+  dimension mismatch is the app's message. `solver.ts` (pure numbers) has two
+  searches. `solveNear` steps out from a guess for a sign change, skipping
+  points with no value (NaN), then runs Brent to 1e-12 relative, 100
+  iterations at most. `solveRange` samples 200 points of the range, runs Brent
+  on each sign change, keeps a crossing only if its residual is at most 1e-6
+  of its samples' (a pole or a jump isn't a root), and runs a dip pass (golden
+  section) for double roots; more than 100 roots is an error. The solved value
+  runs once at its line and holds its roots, ascending: one root is a single
+  value, several a `SheetList`. It refuses a list in its equation or range
+  (an index on one is fine). The solve function defines a wrapped function
+  (`sheetFunction.solve`) that solves at each call over the scope as it is
+  then. A failure throws a `SheetError`; a guess solve's no root and no
   convergence are marked `outsideDomain`, which the `in f(…):` wrapper keeps,
   so an outer solve counts a trial point where an inner one failed as having
-  no value there; every other error fails the outer line at once. A converged
-  solve's details (method, iterations, residual in SI, bracket) ride on its
-  line's `solveDetails`, and on a line that is just one call to a solve
-  function.
+  no value there; every other error fails the outer line at once. A solve's
+  details ride on its line's `solveDetails` (and on a line that is just one
+  call to a solve function): a guess solve's method, iterations, residual in
+  SI and bracket; a range solve's range, points, each root with its residual
+  and touching mark, and the crossings rejected.
   **Lists** (spec section 10, `lists.ts`): a `SheetList` holds point results
   (a value or an error) and the first list its line ran over, to name a failed
   point. A range line is read as text (`rangeLine.ts`, `[name =] a .. b [step
@@ -162,7 +188,14 @@ server. v1 target: one sheet, for Matheus's own use.
   one compiled expression, no math.js matrices; a point that throws fails
   alone. An aggregate (`min`, `max`, `sum`, `mean`, `count`) over a list is
   worked out first and stands in the node as a bound name (`foldAggregates`).
-  A function body that names an outside list fails at its definition. A list
+  A function body that names an outside list fails at its definition. An
+  **index** (`indexes.ts`, spec section 3) is the app's: after the parse
+  (`parseSheet`), each `name[i]` becomes a call to `__index`, a raw-args
+  function in the namespace that reads the name whole and takes its `i`-th
+  point, counting from 1 (a single value is a list of one). A name inside an
+  index never makes a line iterate (`withoutIndexes`), and `iterate` works out
+  an index on a whole list first (`foldIndexes`), so `Q_s[2] + Q_s` reads the
+  list. The typesetter shows it as `x_r[2]`, brackets at the baseline. A list
   result is `{ kind: 'list', text, failed }`: its summary, and the line's
   error when points failed. A **table line** (`tableLine.ts`, `table(arg, …)`,
   each argument with its own `in <unit>`) gives `SheetLine.table`: columns
@@ -200,8 +233,8 @@ server. v1 target: one sheet, for Matheus's own use.
   at full. In Excalidraw's dark theme the
   overlay takes its canvas filter.
   The **unit slot** (spec section 5): a result's unit is drawn in its own
-  `[data-unit-slot]` span, tinted when the line has `in <unit>`, outlined on
-  its hovered row (an empty one for a plain input or a dimensionless value).
+  `[data-unit-slot]` span, outlined on its hovered row (a chosen unit has no
+  mark, from M4c) (an empty one for a plain input or a dimensionless value).
   The gestures find a slot from the slots' screen boxes (`slotAt`), open its
   field on the canvas's click when the element hasn't moved, and follow hover
   from `pointerMove`; `suggest.ts` (pure) is the suggestions while a line is
@@ -223,9 +256,13 @@ server. v1 target: one sheet, for Matheus's own use.
   canvas or a scene or viewport change hides it. Screen only. A **solve's
   details** (spec section 4) use the same tip: a value with `solveDetails`
   sits in a `math-element__detailed` span, dotted underline, whose `data-tip`
-  reads `Brent, 5 iterations`, the residual and the bracket. A solve line's
-  guess and a range's step are their own TeX (`TypesetLine.aside`), set small
-  and grey after the expression. A list's summary (`math-element__summary`)
+  reads `Brent, 5 iterations`, the residual and the bracket; a range solve's
+  reads `Scan + Brent, roots found in 1 .. 30 L / s`, the 200 points and each
+  root with its residual. A solved value with several roots is a `roots`
+  result: up to five written out (`RootsContent`, the unit once in the last
+  root's slot), else a count summary (`13 roots, …`), with the details on
+  hover. A solve line's range or guess and a range's step are their own TeX
+  (`TypesetLine.aside`), set small and grey after the expression. A list's summary (`math-element__summary`)
   typesets its first and last values after the count, and its `data-tip` is
   the line's `listPreview`: three points from each end with their index.
   `MathOverlay` subscribes to the scene (`onChange`, `onScrollChange`) and
@@ -237,7 +274,8 @@ server. v1 target: one sheet, for Matheus's own use.
   every source change and every change of order, then hands each
   `MathElementView` its lines. The overlay takes no pointer events except the open field
   and its format bar: Excalidraw gets every click and drag. The bar
-  (`FormatBar`, in `MathElementView`) writes the clause into the open line's
+  (`FormatBar`, in `MathElementView`; its two rows of dots, text colours over
+  highlights, are `ColourDots`) writes the clause into the open line's
   text; `MathOverlay` commits it at once and mounts a new field on the
   rewritten text (`LineEdit.revision`). `useSheetGestures` opens, moves and
   leaves the line edit from the events `listenToCanvas` hands it, starts and
@@ -280,7 +318,9 @@ server. v1 target: one sheet, for Matheus's own use.
   out through `onEvaluated`) into Variables groups and Problems rows;
   `SheetPanel.tsx` renders them, and a click asks App to jump.
   `panelMemory.ts` keeps open/closed in `localStorage`. `SettingsTab.tsx`
-  edits the unit system, Custom's kind → unit table and Digits through the
+  edits the unit system, Custom's kind → unit table, Digits and the Result
+  colour (`settings.resultColor`, one of the six text colours; App hands it to
+  `MathOverlay`, which sets `--math-result` on the overlay) through the
   session's `setSettings` (saved with the sheet, dirty, not in undo); App
   hands the session's settings to `MathOverlay`, which evaluates with them. App does the jump
   (`jumpToAnchor` in `canvas/selection.ts`: scroll, select with `NEVER`) and
@@ -309,7 +349,13 @@ and everything downstream recalculates. Engine: math.js, client-side.
   that creates the anchor. It is Excalidraw's active tool, never in the scene,
   and no undo step. Esc cancels it.
 - **Title** — a math element's optional name: plain text on one line, in
-  `customData.title`, shown in a header above the lines. Never evaluated. An
+  `customData.title`, shown in a header above the lines. Never evaluated. Its
+  **title format** (bold, italic, underline, alignment, size, text colour,
+  highlight; `MathAnchor.titleFormat`) is kept beside it in
+  `customData.titleFormat` as a string of the words that differ from no format
+  (`"centre L text-red"`), never read from the text, and set only from the
+  title's bar (`TitleBar` in `MathElementView`, Ctrl+B, Ctrl+I, Ctrl+U), one
+  undo step per press (`writeAnchorTitleFormat`). Emptying the title removes it. An
   edit on it is the line edit at `TITLE_LINE` (-1): ↑ on the first line, the
   bar's Title button, or a double-click on the header (`onHeader`).
 - **Empty element** — one whose source has no text and that has no title:
@@ -432,7 +478,10 @@ and everything downstream recalculates. Engine: math.js, client-side.
   (drag, resize, rotation, new shape, text or line editor); its flags are
   contract-tested.
 - **The body is measured, not the anchor.** `.math-element__body` is
-  `max-content` and rotates about the anchor's centre; `offsetWidth` and
+  `max-content` (with a chosen width, that width and `min-width: max-content`,
+  its comments asking for nothing, so the laid-out width is never below the
+  floor; `floorOf` in `useAnchorSizes.ts` measures the floor by laying the body
+  out at no width for a moment) and rotates about the anchor's centre; `offsetWidth` and
   `offsetHeight` ignore transforms, so they are scene units. A body measuring
   0 × 0 isn't laid out (jsdom) and is never written.
 - **The Add math item hands the keyboard to `.excalidraw`.** A clicked button
@@ -466,6 +515,11 @@ and everything downstream recalculates. Engine: math.js, client-side.
   nothing when the grid sizes its columns, so a comment wraps at the width the
   math sets and asks for at most 320 px itself (#98). jsdom lays nothing out:
   check a change here in Chromium.
+- **`customData` holds no nested objects.** Excalidraw compares it one level
+  deep when it records a step, so an object inside it differs from the
+  snapshot's clone and every later write of the anchor gains an empty undo
+  step. The title's format is a string for that reason
+  (`mathAnchor.excalidraw.test.tsx`).
 - **Underline is drawn, not `text-decoration`.** KaTeX's boxes are
   inline-blocks, which a decoration doesn't reach; bold is set on `.katex`
   itself, because KaTeX sets its own font there.
@@ -517,8 +571,11 @@ and everything downstream recalculates. Engine: math.js, client-side.
   it. Reading order is by top, so it doesn't change.
 - Opacity set on a math element becomes Excalidraw's default for the next
   shape drawn, as for any element. A new math element starts at 100.
-- Resizing an anchor by a handle snaps back but still marks the sheet dirty:
-  Excalidraw changes the scene while the handle moves (spec section 4).
+- A height-only drag of a handle snaps back but still marks the sheet dirty:
+  Excalidraw changes the scene while the handle moves (spec section 4). A
+  width change marks it dirty because it changes the sheet.
+- A chosen width re-wraps comments on release, not while the handle moves:
+  the overlay lays the body out from the stored width (spec section 17).
 
 ## Decisions
 
@@ -539,4 +596,4 @@ marked with a milestone aren't built yet.
   the sheet file is Excalidraw JSON plus one block, saved as `.excalimathpad`.
 - [ADR 0005](docs/adr/0005-app-reads-line-forms-before-mathjs.md) — the app
   reads its line forms (comment, display unit, solve, range, table, plot)
-  before math.js sees a line.
+  before math.js sees a line, and the index right after the parse.

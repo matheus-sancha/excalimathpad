@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { TEXT_COLORS, type TextColor } from '../math/lineForm.ts'
 import {
   isCustom,
   KIND_LABELS,
@@ -12,7 +13,7 @@ import {
 
 /**
  * The Settings tab (docs/spec-v1.md section 8): the unit system, Custom's
- * kind → unit table, and Digits. A change goes straight to the sheet: it
+ * kind → unit table, Digits and the Result colour. A change goes straight to the sheet: it
  * re-shows every result, is saved with the sheet and isn't part of undo. The
  * Page row arrives in M5.
  */
@@ -21,6 +22,7 @@ import {
 export interface SettingsValue {
   units: UnitSettings
   digits: number
+  resultColor: TextColor
 }
 
 const SYSTEMS: { value: UnitSystemName; label: string }[] = [
@@ -114,6 +116,20 @@ export function SettingsTab<T extends SettingsValue>({
       )}
 
       <DigitsField digits={settings.digits} onChange={(digits) => onChange({ ...settings, digits })} />
+
+      <label className="sheet-settings__field">
+        <span>Result colour</span>
+        <select
+          value={settings.resultColor}
+          onChange={(event) => onChange({ ...settings, resultColor: event.target.value as TextColor })}
+        >
+          {TEXT_COLORS.map((color) => (
+            <option key={color} value={color}>
+              {color[0].toUpperCase() + color.slice(1)}
+            </option>
+          ))}
+        </select>
+      </label>
     </div>
   )
 }

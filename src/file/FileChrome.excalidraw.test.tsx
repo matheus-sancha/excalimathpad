@@ -57,7 +57,7 @@ const sheetText = (sources: string[]) =>
       appState: {},
       files: {},
     }),
-    { units: { system: 'si-prefixed', custom: {} }, digits: 4, page: { size: 'A4', orientation: 'portrait' } },
+    { units: { system: 'si-prefixed', custom: {} }, digits: 4, resultColor: 'blue', page: { size: 'A4', orientation: 'portrait' } },
   )
 
 const linesOnScreen = () =>

@@ -152,6 +152,7 @@ export default function App({ files, recovery, initialElements }: AppProps = {})
               keepClean={file.session.keepClean}
               onEvaluated={setSheet}
               settings={settings}
+              resultColor={settings.resultColor}
               flash={flash}
             />
             <FileChrome session={file.session} dialogs={file.dialogs} canvasRoot={canvas.root} />

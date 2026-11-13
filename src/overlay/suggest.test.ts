@@ -135,3 +135,26 @@ describe('the fixed lists', () => {
     }
   })
 })
+
+describe('suggestions in a format clause (docs/spec-v1.md section 4, Suggestions, M4c)', () => {
+  const none = { sheet: [], constants: [], functions: [], units: [] }
+  const names = (text: string) => suggest(text, text.length, none)?.items.map((item) => item.name) ?? null
+
+  it('offers the format words after @, filtered by what is typed', () => {
+    expect(names('v = 1 @')).toEqual(['bold', 'underline', 'text-black', 'text-blue', 'text-red', 'text-green', 'text-orange', 'text-gray'])
+    expect(names('v = 1 @text-r')).toEqual(['text-red'])
+    expect(names('v = 1 @y')).toEqual(['yellow'])
+    expect(suggest('v = 1 @text-r', 13, none)).toMatchObject({ from: 7, to: 13 })
+  })
+
+  it('offers if after a whole format word', () => {
+    expect(names('v = 1 @text-red ')).toEqual(['if'])
+    expect(names('v = 1 @text-red i')).toEqual(['if'])
+    expect(names('v = 1 @blod ')).toBeNull()
+  })
+
+  it('offers nothing in a note or a string', () => {
+    expect(names('v = 1 # @')).toBeNull()
+    expect(names('s = "@')).toBeNull()
+  })
+})

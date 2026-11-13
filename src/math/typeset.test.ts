@@ -141,11 +141,12 @@ describe('typeset lines', () => {
 })
 
 describe('solve lines (section 4: keyword form, guess small after it)', () => {
-  it('typesets the value form: the name, solve and the equation, the guess apart', () => {
-    const line = math(typeset('Hp(Q) = 2 Q\nHs(Q) = Q + 1\nQ_op = solve Hp(Q) = Hs(Q), guess Q = 15 L/s in L/s')[2])
+  it('typesets the value form: the name, solve and the equation, the range apart', () => {
+    const line = math(typeset('Hp(Q) = 2 Q\nHs(Q) = Q + 1\nQ_op = solve Hp(Q) = Hs(Q), for Q = 1 L/s .. 30 L/s in L/s')[2])
     expect(line.name).toBe('{Q}_{\\mathrm{op}}')
     expect(line.expression).toBe('\\mathrm{solve}\\;\\mathit{Hp}\\left( Q\\right)=\\mathit{Hs}\\left( Q\\right)')
-    expect(line.aside).toBe('\\text{guess }Q=15\\,\\mathrm{L}/\\mathrm{s}')
+    expect(line.aside).toBe('Q=1\\,\\mathrm{L}/\\mathrm{s}\\ldots 30\\,\\mathrm{L}/\\mathrm{s}')
+    expect(() => render(line.aside!)).not.toThrow()
   })
 
   it('typesets the function form, its unknown and parameters as names, and renders in KaTeX', () => {
@@ -201,3 +202,12 @@ describe('typesetResult (section 4: from the result’s plain text)', () => {
     expect(() => render(textTex('\\ { } $ & # ^ _ % ~'))).not.toThrow()
   })
 })
+
+describe('an index (docs/spec-v1.md section 4, Typesetting names; #104)', () => {
+  it('shows in square brackets after the whole name, at the baseline, not as a subscript', () => {
+    const [, line] = typeset('Q_s = 1 .. 3\nQ_5 = Q_s[2] + 1')
+    expect(math(line).expression).toBe('{Q}_{s}\\lbrack 2\\rbrack +1')
+    expect(() => render(math(line).expression)).not.toThrow()
+  })
+})
+

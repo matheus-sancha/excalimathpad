@@ -976,9 +976,12 @@ format version doesn't change.
 
 From M4c an anchor's `customData` can also hold:
 
-- `titleFormat`: only what differs from a title with no format, such as
-  `{ "size": "L", "align": "centre", "color": "red" }`. A title with no `titleFormat` looks as
-  it did before M4c.
+- `titleFormat`: only what differs from a title with no format, as a string of words, such as
+  `"centre L text-red"` (`regular`, `italic`, `underline`; `centre`, `right`; `S`, `L`, `XL`;
+  `text-<colour>`; a highlight's name). A title with no `titleFormat` looks as it did before M4c.
+  It is a string and not an object because Excalidraw compares `customData` one level deep when it
+  records a step: a nested object adds an empty undo step to every later write of the anchor
+  (#111, `mathAnchor.excalidraw.test.tsx`).
 - `width`: the chosen width, in scene units. An element without one is automatic.
 
 Files saved before M4c have neither key and open as they looked, so the format number stays 1.
@@ -1739,7 +1742,7 @@ Evidence: [`excalidraw-gestures.md`](research/excalidraw-gestures.md).
 | No built-in shortcut for M | M leaves the tool unchanged when not intercepted | #45, `addMath.excalidraw.test.tsx` |
 | `.excalidraw` takes focus | Enter works after leaving an edit | #43, `gestures.excalidraw.test.tsx` |
 | A `NEVER` write updates the captured copy | A line commit after size writes is one step (control: an uncaptured size change is a second step) | #44, `anchorSize.excalidraw.test.tsx` |
-| Resize handles can be let go of and put back | A handle drag snaps back, `x` and `y` too, and leaves undo nothing (control: without it, the anchor resizes) | #44, `anchorSize.excalidraw.test.tsx` |
+| Resize handles set the chosen width | From M4c (#110): a width drag stores `customData.width`, keeps the top and height, and is one undo step with Excalidraw's resize; below the floor it goes back to automatic; a height-only drag snaps back (control: without it, the anchor resizes) | #44, #110, `anchorSize.excalidraw.test.tsx` |
 | `sizeWritesWait`'s app-state flags | Set while a shape is drawn, an element dragged, a handle held or the text editor open; clear afterwards | #44, `anchorSize.excalidraw.test.tsx` |
 | The dark theme is `--theme-filter` | The overlay's filter is one of the package's `--theme-filter` values | #44, `layers.test.ts` |
 | Order of the panel's children in `.panelColumn` | The reduced panel hides what comes before Opacity | #46, `mathSelection.excalidraw.test.tsx` |
@@ -2094,19 +2097,43 @@ Changes line if it changes behaviour.
 
 - The range solve's run time on the pump sheet: `Q_op` over `1 L/s .. 30 L/s`, calling Colebrook with a
   guess at each of the 200 points. Projected at about 10 ms; the whole run must stay under the CI test's
-  200 ms and feel instant on every keystroke.
+  200 ms and feel instant on every keystroke. **Measured (#105), in Node under Vitest:** the whole pump sheet,
+  lines 1 to 31 with its table and plot, averaged 33 ms a run over 10 runs, with line 26 rewritten as a range
+  solve. `Q_op` is 18.81 L/s, one root, and the CI test's lines 1 to 28 stay under its 200 ms.
 - A range search over a residual with inner failures (the pump sheet's `Hs(Q)` near Q = 0): skipped
-  points, not an error.
+  points, not an error. **Passed (#105):** a range from -5 L/s, where the inner Colebrook solve fails below
+  zero, finds the root; with no root, the message carries the last inner error
+  (`evaluate.test.ts`, nested solves).
 - Re-wrapping live while a resize handle is dragged: Excalidraw's frame and the overlay's layout in step
   mid-drag, with the frame held at the floor. If they can't be, re-wrap on release, where the snap-back
-  runs today.
+  runs today. **Re-wraps on release (#110):** size writes wait while Excalidraw resizes
+  (`sizeWritesWait`), so the overlay keeps the stored width until the handle is let go, then lays out at
+  the new one. Checked in Chromium with real mouse input: an element with `x = 2` and a long comment,
+  dragged to 762 px, ran the comment on two rows with the math at the left; dragged to 256 px, between
+  the floor and 320 px, the comment wrapped to it; dragged below the floor, it went back to automatic.
 - Excalidraw's resize and the stored `customData.width` landing in one undo step, and Ctrl+Z restoring
-  the width before it, or automatic.
+  the width before it, or automatic. **Passed (#110):** a `NEVER` write in `onPointerUp` lands in the
+  resize's own step; one Ctrl+Z restored the width before it, and automatic for a first width
+  (`anchorSize.excalidraw.test.tsx`, and in Chromium).
 - A left handle, a rotated element and a group, each setting the width and discarding the height.
+  **Passed for a left handle and a group (#110),** in `anchorSize.excalidraw.test.tsx` against the
+  installed package: a left handle moves the left edge with the right edge in place, and a group resize
+  sets the anchor's width and keeps the drawing's resize. A rotated element keeps Excalidraw's own
+  geometry along its axis, and the height is then refit to the content; not checked by hand.
 - The six text colours under the dark theme's filter, on the canvas and on each highlight: still readable.
 - A text colour reaching KaTeX's glyphs in the equation and the result, as bold had to (#63).
 - The suggestions list after `@`.
-- A title at XL: the header's height, the floor it sets, and the anchor following both.
+- A title at XL: the header's height, the floor it sets, and the anchor following both. **Passed (#111),**
+  in Chromium with real keys and mouse: "Pump @ 50 Hz #2" at XL, centred, red on yellow, gave a 42 px
+  header; the anchor grew to fit, and the title kept its characters. Every press on the title's bar
+  left the title field focused.
+
+**M4c, also checked in Chromium (#107, #109, #111)**
+
+- A text colour reaches KaTeX's glyphs: a line with `@text-red` computed `rgb(224, 49, 49)` on the
+  equation's glyphs and on its result; its note stayed grey. A rule's colour (`@text-red if v > 3 m/s`)
+  showed the same, and a table's rows over a rule's limit took its band. Not checked: the six colours
+  under the dark theme's filter.
 
 **M5**
 
@@ -2163,6 +2190,13 @@ Changes line if it changes behaviour.
 | [What does milestone M4c hold in the spec, and in what issue order?](https://github.com/matheus-sancha/excalimathpad/issues/97) | 16, 17, ADR amendments |
 
 ## Changes since agreed
+
+- 2026-11-13, [section 7](#the-file) (#111, found while building, not asked): a title's format is stored
+  as a string of words (`"centre L text-red"`), not an object. Excalidraw compares `customData` one
+  level deep when it records a step, so an object there added an empty undo step to every later write
+  of the anchor, line commits included. It still holds only what differs.
+- 2026-11-13, [section 4](#chosen-width) (#110, the fallback the spec allows): a chosen width re-wraps
+  comments on release, not while the handle moves.
 
 - 2026-11-04, [section 6](#6-undo) (#41, agreed by Matheus): selecting and deselecting are
   Excalidraw's own undo steps, found while probing and accepted. So with the element selected, a
