@@ -64,7 +64,7 @@ const linesOnScreen = () =>
   screen.getAllByRole('list', { name: 'Lines' }).map((list) => linesOf(list).join(''))
 
 describe('the ☰ menu', () => {
-  it("has Open…, Save and Save as… first, and none of Excalidraw's own file items", async () => {
+  it("has Open…, Save, Save as… and Print… first, and none of Excalidraw's own file items", async () => {
     await mount()
 
     fireEvent.click(screen.getByTestId('main-menu-trigger'))
@@ -73,7 +73,7 @@ describe('the ☰ menu', () => {
       document.querySelectorAll('.dropdown-menu .dropdown-menu-item__text'),
       (item) => item.textContent?.trim(),
     )
-    expect(items.slice(0, 3)).toEqual(['Open…', 'Save', 'Save as…'])
+    expect(items.slice(0, 4)).toEqual(['Open…', 'Save', 'Save as…', 'Print…'])
     expect(items).toEqual(expect.arrayContaining(['Find on canvas', 'Help', 'Reset the canvas']))
     expect(items).not.toContain('Open')
     expect(items.some((item) => /Save to|Export image/.test(item ?? ''))).toBe(false)

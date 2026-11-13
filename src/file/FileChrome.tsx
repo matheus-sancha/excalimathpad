@@ -12,6 +12,8 @@ export interface FileChromeProps {
   dialogs: DialogHost
   /** The element the canvas fills, to place the name beside Excalidraw's ☰ button. */
   canvasRoot: HTMLElement | null
+  /** Print… for Ctrl+P (section 11); without it the key stays the browser's. */
+  print?: () => void
 }
 
 /**
@@ -20,7 +22,7 @@ export interface FileChromeProps {
  * leave prompt. The keys and drops it answers are taken from Excalidraw by
  * `src/canvas/fileRoutes.ts`.
  */
-export function FileChrome({ session, dialogs, canvasRoot }: FileChromeProps) {
+export function FileChrome({ session, dialogs, canvasRoot, print }: FileChromeProps) {
   const { name, dirty } = useSyncExternalStore(session.subscribe, session.getState)
   const pending = useSyncExternalStore(dialogs.subscribe, dialogs.getPending)
   const besideMenu = useBesideMenu(canvasRoot)
@@ -58,6 +60,7 @@ export function FileChrome({ session, dialogs, canvasRoot }: FileChromeProps) {
       save: () => void session.save(),
       saveAs: () => void session.saveAs(),
       open: () => void session.open(),
+      print,
       openDropped: (file, handle) =>
         void session.open(async () => ({
           name: file.name,
@@ -65,7 +68,7 @@ export function FileChrome({ session, dialogs, canvasRoot }: FileChromeProps) {
           handle: asFileHandle(await handle),
         })),
     }),
-    [session],
+    [session, print],
   )
   useFileRoutes(routes)
 

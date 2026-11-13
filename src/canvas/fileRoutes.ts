@@ -18,6 +18,11 @@ export interface FileRouteHandlers {
   save: () => void
   saveAs: () => void
   open: () => void
+  /**
+   * Print… (Ctrl+P, M5). Optional: without it Ctrl+P is left to the browser.
+   * Taken here so the browser's own print of the screen never runs from the key.
+   */
+  print?: () => void
   /** A dropped file Excalidraw would load as its scene. `handle` may be null. */
   openDropped: (file: File, handle: Promise<unknown>) => void
 }
@@ -37,6 +42,8 @@ export function fileKeyRoute(event: KeyboardEvent): KeyRoute | null {
       return event.shiftKey ? 'saveAs' : 'save'
     case 'o':
       return event.shiftKey ? null : 'open'
+    case 'p':
+      return event.shiftKey ? null : 'print'
     case 'e':
       // Excalidraw's image export: nothing in the app answers it in M1.
       return event.shiftKey ? 'swallow' : null
@@ -49,10 +56,10 @@ export function useFileRoutes(handlers: FileRouteHandlers) {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       const route = fileKeyRoute(event)
-      if (!route) return
+      if (!route || (route === 'print' && !handlers.print)) return
       event.preventDefault()
       event.stopPropagation()
-      if (route !== 'swallow' && !event.repeat) handlers[route]()
+      if (route !== 'swallow' && !event.repeat) handlers[route]?.()
     }
     const onDrop = (event: DragEvent) => {
       const transfer = event.dataTransfer

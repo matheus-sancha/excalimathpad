@@ -157,6 +157,7 @@ describe('fileKeyRoute', () => {
     ['s', {}, 'save'],
     ['S', { shiftKey: true }, 'saveAs'],
     ['o', {}, 'open'],
+    ['p', {}, 'print'],
     ['E', { shiftKey: true }, 'swallow'],
     ['s', { metaKey: true, ctrlKey: false }, 'save'],
   ] as const)('%s %o is %s', (k, mods, route) => {
@@ -167,6 +168,7 @@ describe('fileKeyRoute', () => {
     ['s', { ctrlKey: false }],
     ['s', { altKey: true }],
     ['O', { shiftKey: true }],
+    ['P', { shiftKey: true }],
     ['e', {}],
     ['z', {}],
   ] as const)('%s %o is none of them', (k, mods) => {

@@ -78,7 +78,9 @@ server. v1 target: one sheet, for Matheus's own use.
   (`customData.width`, `MathAnchor.chosenWidth`), with Excalidraw's `x` kept
   and the top and height put back, written `NEVER` so it lands in the resize's
   own undo step; below the floor it goes back to automatic; a height-only drag
-  snaps back. It also says when a size write waits (`sizeWritesWait`). `drawingBoxes.ts` gives the
+  snaps back. It also says when a size write waits (`sizeWritesWait`). `drawingExport.ts`
+  (`exportDrawings`) is the drawings for print: public `exportToSvg` without the
+  anchors, light, no background, no padding. `drawingBoxes.ts` gives the
   drawings' print boxes (Excalidraw's `getCommonBounds`, anchors left out, a group or a labelled shape as
   one drawing). The only module that imports
   Excalidraw at runtime; tests may too, and other modules may import its
@@ -292,7 +294,7 @@ server. v1 target: one sheet, for Matheus's own use.
   element and line under a point from geometry and the rows' `offsetTop` and
   `offsetHeight` (spec section 4, Gestures, section 14). Its `control` lets the
   sheet file commit the line (Ctrl+S keeps it open) or leave it (Open).
-  `printBoxes.ts` (`mathBoxes`) measures the math elements' print boxes from
+  `printBoxes.ts` (`boxNodes`, a body's parts in a fixed order; `mathBoxes`) measures the math elements' print boxes from
   the drawn overlay, in scene units: the header, each row, and a table line as
   its equation, header row (marked) and rows; a rotated or unmeasured element
   is its anchor's rotated bounds.
@@ -317,7 +319,7 @@ server. v1 target: one sheet, for Matheus's own use.
   size tests (`layout.ts`) and readers for the grid (`sheetView.ts`). KaTeX is
   loaded before the tests run. Not app code.
 
-- **print** (`src/print/`) — print pages (spec section 11), pure.
+- **print** (`src/print/`) — Print… (spec section 11). `printPages.ts` is pure:
   `printPages(boxes, page)` takes the sheet's boxes in scene units (drawings
   from canvas, rows from overlay) and the Page setting, and gives the paper,
   margins and footer band in CSS pixels, the scale (shrink only, at most 1),
@@ -325,7 +327,20 @@ server. v1 target: one sheet, for Matheus's own use.
   tables whose header row repeats at its top. A box no taller than a page is
   unbreakable; a break moves up from the page's bottom to the lowest line
   through no unbreakable box, else cuts at the bottom; a page starts at its
-  first content. Depends on: nothing.
+  first content. `printView.ts` builds the print view from it
+  (`buildPrintView`): `.print-root` on `document.body`, which only print shows
+  (`print.css`, off-screen but laid out on screen so its fonts load). The math
+  is the overlay's `.math-element`s cloned at their scene position and zoom 1,
+  hover and the field's controls taken out, measured with `mathBoxes`; each page
+  is a frame inside the margins with the drawings' SVG and a sheet copy, scaled
+  with `transform`, every box outside its slice `visibility: hidden` (paired
+  with its node by `boxNodes`), a band at the top for a split table's header
+  row, and the footer; `@page` is written from the Page setting. `printSheet.ts`
+  is the flow (`printSheet`, over ports): leave the line, await the parts
+  (`sheetPrintParts`: `exportDrawings`, KaTeX, Plot, frames for the overlay to
+  draw), build, await `document.fonts.ready`, title without `●`,
+  `window.print()`, then remove the view and restore the title. Depends on:
+  canvas (drawings), overlay (boxes, KaTeX, Plot).
 
 - **panel** (`src/panel/`) — the Sheet panel's tabs (spec section 8), drawn
   inside Excalidraw's sidebar, which `SheetCanvas` frames (`SheetPanelSlot`:
@@ -544,7 +559,8 @@ and everything downstream recalculates. Engine: math.js, client-side.
   from code clears the browser's text undo, which is what Ctrl+Z means while
   editing (spec section 6).
 - **The app takes the file keys and drops before Excalidraw**
-  (`src/canvas/fileRoutes.ts`): Ctrl+S, Ctrl+Shift+S, Ctrl+O, Ctrl+Shift+E and
+  (`src/canvas/fileRoutes.ts`): Ctrl+S, Ctrl+Shift+S, Ctrl+O, Ctrl+P (Print…,
+  when the app answers it), Ctrl+Shift+E and
   dropped scene files, on the window in the capture phase. In Excalidraw 0.18,
   Ctrl+Shift+S and Ctrl+Shift+E ignore `canvasActions`, and a dropped scene
   replaces the sheet; each would drop the block (ADR 0004).

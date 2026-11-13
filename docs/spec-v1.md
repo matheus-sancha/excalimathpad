@@ -2138,7 +2138,19 @@ Changes line if it changes behaviour.
 
 **M5**
 
-- Excalidraw text in Nunito on the pump sheet's heading.
+How #81 was checked: headless Chromium (Playwright) opened the pump sheet through the app and pressed the real
+Ctrl+P on the canvas. The app built its pages, awaited the fonts and called `window.print()`; a stub there kept
+the print view and its `@page` rule, which were put back into the same page and saved with `page.pdf` at the
+CSS page size. That is Chromium's print layout of the app's own view, not the dialog's pipeline, which needs a
+headed browser. The PDFs were read back with Poppler (`pdftotext`, `pdffonts`, `pdftoppm`).
+
+- **The pump sheet as a PDF. Passed (#81):** A4 portrait gave 2 A4 pages, every line, result, all 30 table rows
+  and the plot with its legend and mark on them, the table's header row repeated on page 2, and a grey footer
+  `pump.excalimathpad · 2026-11-13 · 1 of 2` on each. Each table value is in the text once; no image is
+  rasterized. Letter landscape gave 3 Letter pages, the break inside the table after row 19.
+- Excalidraw text in Nunito on the pump sheet's heading. **Not checked:** this sandbox's network blocks the CDN
+  Excalidraw loads its fonts from until M6, so the heading printed, whole and as vector text, in a fallback
+  serif, as it shows on screen there. To check on a machine that reaches the CDN, or after M6.
 - Staggered side-by-side elements and the no-clean-gap fallback. **Passed (#80),** on boxes measured from the
   overlay in Chromium (sheets opened through the app, boxes from `mathBoxes` and `drawingBoxes`, laid out by
   `printPages`). Nine 5-line elements on the left and seven 7-line elements on the right, tops staggered: on
@@ -2148,9 +2160,16 @@ Changes line if it changes behaviour.
   gave 65 math boxes (the table line as its equation, header row and 30 rows) and 1 drawing: on A4 portrait 2
   pages at scale 0.682, on A4 landscape 4 at 100%, on Letter portrait 2 at 0.705, each break through no
   unbreakable box, and the page after a break inside the table repeating its header row.
-- A drawing taller than a page, dark mode, and images in drawings.
-- Taking over Ctrl+P with real keys, and a person at an open dialog.
-- KaTeX 0.16.47, which the repo resolves, against the 0.19.1 the PDF probe used.
+- A drawing taller than a page, dark mode, and images in drawings. **Dark mode passed (#81):** the pump sheet
+  printed with Excalidraw's dark theme on rendered page 1 pixel for pixel the same as in the light theme. A
+  drawing taller than a page and images in drawings: **not checked.** A drawing wholly outside a page's slice
+  put no text on that page; one that a break crosses may show its text on both pages: not checked.
+- Taking over Ctrl+P with real keys, and a person at an open dialog. **Real keys passed (#81):** a real Ctrl+P
+  on the canvas started Print…, and the key is prevented, so the browser's own print of the screen doesn't run
+  (`App.test.tsx`). The title read `● pump` before, `pump` while printing, and `● pump` after, on a sheet made
+  dirty by a Page change. A person at an open dialog: **not checked** (headless).
+- KaTeX 0.16.47, which the repo resolves, against the 0.19.1 the PDF probe used. **Passed (#81):** the math is
+  in the PDF, typeset, with KaTeX_Main, Math, Size1, Size2 and Size3 embedded.
 - A hand-set Scale in the dialog, other systems and real printers.
 - The browser's own Print right after a drawing edit, which could show a slightly old drawing.
 
@@ -2494,3 +2513,8 @@ Changes line if it changes behaviour.
   content, so empty space between parts of the sheet never prints a blank page. Not asked: the footer's band is
   7 mm above the bottom margin; a group of drawings is one drawing, and a shape's label is part of it; a table
   line's equation is a box of its own above its table; a rotated math element is one box, its anchor as rotated.
+- 2026-11-13, [sections 8](#8-app-chrome) and [11](#11-print) (#81, Engineer's, for Matheus to confirm on the PR):
+  Print… is the ☰ menu's fourth item, after Save as…. Not asked: the footer reads the file name with its
+  extension, then the date, then `1 of 2`, spread across the page in 9 px grey; the print view is the overlay's
+  elements cloned, so it prints what the overlay shows, minus hover and the open field's controls; a second
+  Print… while one is being prepared is ignored.

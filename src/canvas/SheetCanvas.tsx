@@ -33,6 +33,7 @@ export interface FileMenu {
   open: () => void
   save: () => void
   saveAs: () => void
+  print: () => void
 }
 
 /**
@@ -315,8 +316,8 @@ export const WELCOME_HINT = 'Press M, or choose Add math under More tools, then 
 
 /**
  * The ☰ menu: the app's file items first, then the Excalidraw items v1 keeps.
- * Excalidraw's Open, Save to… and Export image… are left out. Print… arrives
- * in M5.
+ * Excalidraw's Open, Save to… and Export image… are left out. Print… prints
+ * the sheet on its print pages (section 11, M5).
  */
 function SheetMenu({ fileMenu }: { fileMenu?: FileMenu }) {
   return (
@@ -331,6 +332,9 @@ function SheetMenu({ fileMenu }: { fileMenu?: FileMenu }) {
           </MainMenu.Item>
           <MainMenu.Item onSelect={fileMenu.saveAs} shortcut="Ctrl+Shift+S">
             Save as…
+          </MainMenu.Item>
+          <MainMenu.Item onSelect={fileMenu.print} shortcut="Ctrl+P">
+            Print…
           </MainMenu.Item>
           <MainMenu.Separator />
         </>

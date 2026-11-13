@@ -1,0 +1,84 @@
+/* The print view (docs/spec-v1.md sections 11 and 14; docs/research/print-pdf.md).
+   Each rule is there because a PDF without it loses rows or math with no error. */
+
+/* On screen it is laid out far off to the left, so its fonts load before printing. */
+.print-root {
+  position: fixed;
+  top: 0;
+  left: -100000px;
+  pointer-events: none;
+}
+
+@media print {
+  body > :not(.print-root) {
+    display: none !important;
+  }
+
+  .print-root {
+    position: static;
+  }
+}
+
+.print-page {
+  position: relative;
+  /* Not the paper's height: 100vh survives a remembered "Margins: Minimum". */
+  height: 100vh;
+  /* Without it, a scaled sheet prints 3 of 30 rows: a contained page is never fragmented. */
+  contain: strict;
+  overflow: hidden;
+  break-after: page;
+  background: #ffffff;
+}
+
+.print-page:last-of-type {
+  break-after: auto;
+}
+
+/* The 15 mm margins and the footer's band are drawn by the app; @page has none. */
+.print-frame {
+  position: absolute;
+  overflow: hidden;
+}
+
+.print-band,
+.print-slice {
+  position: absolute;
+  left: 0;
+  right: 0;
+  overflow: hidden;
+}
+
+.print-band {
+  top: 0;
+}
+
+/* transform, not zoom: zoom's measured heights drift, so a break can land on a row. */
+.print-content {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: 0 0;
+}
+
+.print-sheet {
+  position: absolute;
+  inset: auto;
+  top: 0;
+  left: 0;
+}
+
+.print-drawings {
+  position: absolute;
+}
+
+.print-footer {
+  position: absolute;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  color: #888888;
+  font: 9px/1.2 system-ui, sans-serif;
+  /* Otherwise Chromium darkens light text with Background graphics off. */
+  print-color-adjust: exact;
+  -webkit-print-color-adjust: exact;
+}

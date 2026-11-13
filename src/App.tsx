@@ -19,7 +19,8 @@ import { createDialogHost } from './file/dialogs.ts'
 import { browserFileAccess, type FileAccess } from './file/fileAccess.ts'
 import { FileChrome } from './file/FileChrome.tsx'
 import { indexedDbRecovery, type RecoveryStore } from './file/recovery.ts'
-import { createLineRelay, createSheetSession } from './file/sheetSession.ts'
+import { createLineRelay, createSheetSession, displayName } from './file/sheetSession.ts'
+import { printSheet, sheetPrintParts } from './print/printSheet.ts'
 
 export interface AppProps {
   /** The disk and the browser store; tests pass fakes. */
@@ -108,14 +109,36 @@ export default function App({ files, recovery, initialElements }: AppProps = {})
     }
   }, [flash])
 
+  // Print… (section 11): the overlay is read where it is drawn, in the canvas's stage.
+  const print = useMemo(
+    () =>
+      canvas && file
+        ? () =>
+            void printSheet({
+              leaveLine: () => line.leaveLine(),
+              plainTitle: () => displayName(file.session.getState().name),
+              parts: () => {
+                const overlay = canvas.root.ownerDocument.querySelector<HTMLElement>('.math-overlay')!
+                const { name, settings } = file.session.getState()
+                return sheetPrintParts(canvas.api, overlay, settings.page, name)
+              },
+              document,
+              print: () => window.print(),
+            })
+        : undefined,
+    [canvas, file, line],
+  )
+
   const fileMenu = useMemo(
     () =>
-      file && {
+      file &&
+      print && {
         open: () => void file.session.open(),
         save: () => void file.session.save(),
         saveAs: () => void file.session.saveAs(),
+        print,
       },
-    [file],
+    [file, print],
   )
 
   return (
@@ -155,7 +178,7 @@ export default function App({ files, recovery, initialElements }: AppProps = {})
               resultColor={settings.resultColor}
               flash={flash}
             />
-            <FileChrome session={file.session} dialogs={file.dialogs} canvasRoot={canvas.root} />
+            <FileChrome session={file.session} dialogs={file.dialogs} canvasRoot={canvas.root} print={print} />
           </>
         )
       }

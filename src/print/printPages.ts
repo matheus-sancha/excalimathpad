@@ -67,10 +67,15 @@ const PAPER_MM: Record<PaperSize, [number, number]> = {
  */
 const EDGE = 0.5
 
+/** The paper in millimetres, for the Page setting: what `@page` is given. */
+export function paperMillimetres(page: PageSetting): { width: number; height: number } {
+  const [short, long] = PAPER_MM[page.size]
+  return page.orientation === 'portrait' ? { width: short, height: long } : { width: long, height: short }
+}
+
 /** The paper in CSS pixels, for the Page setting. */
 export function paperSize(page: PageSetting): { width: number; height: number } {
-  const [short, long] = PAPER_MM[page.size]
-  const [width, height] = page.orientation === 'portrait' ? [short, long] : [long, short]
+  const { width, height } = paperMillimetres(page)
   return { width: width * PX_PER_MM, height: height * PX_PER_MM }
 }
 

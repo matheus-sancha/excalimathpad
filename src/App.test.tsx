@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import App from './App.tsx'
 import { WELCOME_HINT } from './canvas/SheetCanvas.tsx'
 import { fakeFileAccess, fakeRecovery } from './test/files.ts'
@@ -231,6 +231,77 @@ describe('App', () => {
       type('v = 2 m/s in k')
 
       expect(options().map(([name]) => name)).toEqual(['kg', 'kJ', 'km', 'kN', 'kV', 'kW', 'kgf', 'kHz'])
+    })
+  })
+
+  describe('Print… (docs/spec-v1.md section 11, M5)', () => {
+    const ctrl = (key: string) =>
+      act(() => {
+        document
+          .querySelector('.excalidraw')!
+          .dispatchEvent(new KeyboardEvent('keydown', { key, ctrlKey: true, bubbles: true, cancelable: true }))
+      })
+
+    it('Ctrl+P prints the print pages, titled without the mark, and leaves the sheet as it was', async () => {
+      const seen: { title: string; pages: number; footer: string | null }[] = []
+      const print = vi.spyOn(window, 'print').mockImplementation(() => {
+        seen.push({
+          title: document.title,
+          pages: document.querySelectorAll('.print-root .print-page').length,
+          footer: document.querySelector('.print-footer')?.textContent ?? null,
+        })
+      })
+      renderApp({
+        initialElements: createMathAnchorElements([{ id: 'm1', x: 100, y: 100, width: 300, height: 48, source: 'p = 2 Pa' }]),
+      })
+      await ready()
+      await screen.findAllByRole('list', { name: 'Lines' })
+
+      const event = new KeyboardEvent('keydown', { key: 'p', ctrlKey: true, bubbles: true, cancelable: true })
+      act(() => {
+        document.querySelector('.excalidraw')!.dispatchEvent(event)
+      })
+      // Taken from the browser, whose own Ctrl+P prints the screen.
+      expect(event.defaultPrevented).toBe(true)
+      await waitFor(() => expect(print).toHaveBeenCalledOnce())
+
+      expect(seen[0].title).toBe('Untitled')
+      expect(seen[0].pages).toBe(1)
+      expect(seen[0].footer).toContain('Untitled')
+      expect(seen[0].footer).toContain('1 of 1')
+      // Afterwards: the view is gone and the sheet is still clean.
+      expect(document.querySelector('.print-root')).toBeNull()
+      expect(document.title).toBe('Untitled')
+      print.mockRestore()
+    })
+
+    it('ends an open line edit first; the title drops the mark while printing and gets it back', async () => {
+      const titles: string[] = []
+      const print = vi.spyOn(window, 'print').mockImplementation(() => void titles.push(document.title))
+      renderApp()
+      await ready()
+      fireEvent.click(await addMath())
+      clickOnCanvas({ clientX: 300, clientY: 400 })
+      fireEvent.input(lineField()!, { target: { value: 'x = 3 m' } })
+
+      ctrl('p')
+      await waitFor(() => expect(print).toHaveBeenCalledOnce())
+      expect(lineField()).toBeNull()
+      expect(mathElements()[0].textContent).toContain('x')
+      expect(titles).toEqual(['Untitled'])
+      await waitFor(() => expect(document.title).toBe('● Untitled'))
+      print.mockRestore()
+    })
+
+    it('is in the ☰ menu as Print…', async () => {
+      const print = vi.spyOn(window, 'print').mockImplementation(() => {})
+      renderApp()
+      await ready()
+      fireEvent.click(screen.getByTestId('main-menu-trigger'))
+      // Its Ctrl+P hint shows only in Excalidraw's desktop layout, which jsdom's 0-wide box isn't.
+      fireEvent.click(await screen.findByText('Print…'))
+      await waitFor(() => expect(print).toHaveBeenCalledOnce())
+      print.mockRestore()
     })
   })
 
