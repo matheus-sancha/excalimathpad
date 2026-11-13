@@ -71,8 +71,9 @@ describe('the format clause (docs/spec-v1.md section 3: after everything, before
       kind: 'code',
       code: 'U = I * R',
       note: null,
-      format: { bold: true, underline: false, color: 'yellow' },
+      format: { bold: true, underline: false, color: 'yellow', textColor: null },
       unknownFormat: null,
+      rules: [],
       displayUnit: null,
       expression: 'U = I * R',
     })
@@ -106,8 +107,8 @@ describe('the format clause (docs/spec-v1.md section 3: after everything, before
   it('leaves an @ alone inside a string, inside a note, and in the middle of the code', () => {
     expect(formatOf('s = "a @bold"')).toMatchObject({ code: 's = "a @bold"', format: NO_FORMAT })
     expect(formatOf('x = 1 # see @bold')).toMatchObject({ code: 'x = 1', note: 'see @bold', format: NO_FORMAT })
-    // Not at the end: it stays in the code, where math.js reports it.
-    expect(formatOf('x = 1 @bold + 2')).toMatchObject({ code: 'x = 1 @bold + 2', format: NO_FORMAT })
+    // In the middle of the code, the clause starts there: it is the line's format error (M4c).
+    expect(formatOf('x = 1 @bold + 2')).toMatchObject({ code: 'x = 1', format: NO_FORMAT, unknownFormat: '@bold' })
   })
 
   it('gives a comment line and a blank line no format', () => {
@@ -116,12 +117,45 @@ describe('the format clause (docs/spec-v1.md section 3: after everything, before
   })
 })
 
+describe('text colours and rules (docs/spec-v1.md section 3, M4c)', () => {
+  const formatOf = (line: string) => {
+    const form = readLine(line)
+    if (form.kind !== 'code') throw new Error('not code')
+    return form
+  }
+  it('reads a text colour, apart from a highlight; the last of two wins', () => {
+    expect(formatOf('U = I * R in V @bold @text-red @yellow # check')).toMatchObject({
+      code: 'U = I * R in V',
+      format: { bold: true, underline: false, color: 'yellow', textColor: 'red' },
+      unknownFormat: null,
+    })
+    expect(formatOf('x = 1 @red')).toMatchObject({ format: { color: 'red', textColor: null } })
+    expect(formatOf('x = 1 @text-red @text-blue')).toMatchObject({ format: { textColor: 'blue' } })
+  })
+
+  it('makes a word that isn’t a format the line’s error', () => {
+    expect(formatOf('x = 1 @text-purple')).toMatchObject({ unknownFormat: '@text-purple' })
+    expect(formatOf('x = 1 @purple')).toMatchObject({ unknownFormat: '@purple' })
+  })
+
+  it('reads each word’s own rule, to the next @, beside the plain formats', () => {
+    const form = formatOf('v = Q / A @bold @text-red if v > 3 m/s @text-orange if v > 2 m/s # check')
+    expect(form).toMatchObject({ code: 'v = Q / A', note: 'check', format: { bold: true, textColor: null } })
+    expect(form.kind === 'code' && form.rules).toEqual([
+      { word: { kind: 'text', color: 'red' }, condition: 'v > 3 m/s', text: '@text-red if v > 3 m/s' },
+      { word: { kind: 'text', color: 'orange' }, condition: 'v > 2 m/s', text: '@text-orange if v > 2 m/s' },
+    ])
+    expect(formatOf('x = 1 @blod if x > 0')).toMatchObject({ unknownFormat: '@blod' })
+    expect(formatOf('s = "a@b" @red if s == "a@b"')).toMatchObject({ code: 's = "a@b"' })
+  })
+})
+
 describe('writeFormat (what the format bar writes)', () => {
   const bold: LineFormat = { ...NO_FORMAT, bold: true }
 
   it('adds the clause after the code', () => {
     expect(writeFormat('U = I * R', bold)).toBe('U = I * R @bold')
-    expect(writeFormat('U = I * R in V', { bold: true, underline: true, color: 'yellow' })).toBe(
+    expect(writeFormat('U = I * R in V', { bold: true, underline: true, color: 'yellow', textColor: null })).toBe(
       'U = I * R in V @bold @underline @yellow',
     )
   })
@@ -132,6 +166,18 @@ describe('writeFormat (what the format bar writes)', () => {
 
   it('replaces the clause that is there, unknown words too', () => {
     expect(writeFormat('x = 1 @bolt @red # n', { ...NO_FORMAT, color: 'blue' })).toBe('x = 1 @blue # n')
+  })
+
+  it('writes the plain words in a fixed order, then every rule exactly as typed', () => {
+    expect(
+      writeFormat('v = Q / A @text-red if v > 3 m/s @yellow @red if  v>4 m/s # n', {
+        bold: true,
+        underline: true,
+        color: 'green',
+        textColor: 'blue',
+      }),
+    ).toBe('v = Q / A @bold @underline @text-blue @green @text-red if v > 3 m/s @red if  v>4 m/s # n')
+    expect(writeFormat('v = 1 @text-red if v > 0', NO_FORMAT)).toBe('v = 1 @text-red if v > 0')
   })
 
   it('removes the clause for no format', () => {
@@ -145,7 +191,7 @@ describe('writeFormat (what the format bar writes)', () => {
   })
 
   it('reads back what it wrote', () => {
-    const format: LineFormat = { bold: true, underline: true, color: 'gray' }
+    const format: LineFormat = { bold: true, underline: true, color: 'gray', textColor: 'red' }
     const form = readLine(writeFormat('  Q = 2 L/s # flow', format))
     expect(form).toMatchObject({ code: '  Q = 2 L/s', note: 'flow', format, unknownFormat: null })
   })

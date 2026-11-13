@@ -229,6 +229,24 @@
 .math-element__row.is-red { background: #ffe3e3; }
 .math-element__row.is-gray { background: #e9ecef; }
 
+/* A line's text colour (section 4, Colours and rules, M4c): its equation and
+   its result, a list's summary, written-out roots and a table's cells. The
+   note, an error, the gutter, a solve's range or guess and a range's step keep
+   their own colours. A line being edited shows its source uncoloured: the
+   field isn't the equation cell. */
+.math-element__row.is-text-black { --math-line: #1e1e1e; }
+.math-element__row.is-text-blue { --math-line: #1971c2; }
+.math-element__row.is-text-red { --math-line: #e03131; }
+.math-element__row.is-text-green { --math-line: #2f9e44; }
+.math-element__row.is-text-orange { --math-line: #e8590c; }
+.math-element__row.is-text-gray { --math-line: #868e96; }
+
+.math-element__row.is-text-color .math-element__equation,
+.math-element__row.is-text-color .math-element__result:not(.is-error),
+.math-element__row.is-text-color .math-element__table td:not(.is-failed) {
+  color: var(--math-line);
+}
+
 .math-element__row[class*='is-'] {
   print-color-adjust: exact;
 }
@@ -312,6 +330,48 @@
 .math-format-bar__button.is-none {
   background: linear-gradient(to top right, transparent 46%, #e03131 46% 54%, transparent 54%);
 }
+
+/* The two rows of dots (M4c): text colours over highlights, no wider than the one row was. */
+.math-format-bar__dots {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.math-format-bar__dot-row {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.math-format-bar__dot-label {
+  width: 12px;
+  color: var(--math-quiet);
+  font: 600 11px/14px system-ui, 'Segoe UI', sans-serif;
+  text-align: center;
+}
+
+.math-format-bar__dot-label.is-highlight::before {
+  content: '';
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+  background: #ffe066;
+  vertical-align: middle;
+}
+
+.math-format-bar__dots .math-format-bar__button.is-color {
+  width: 14px;
+  height: 14px;
+}
+
+.math-format-bar__button.is-text-black { background: #1e1e1e; }
+.math-format-bar__button.is-text-blue { background: #1971c2; }
+.math-format-bar__button.is-text-red { background: #e03131; }
+.math-format-bar__button.is-text-green { background: #2f9e44; }
+.math-format-bar__button.is-text-orange { background: #e8590c; }
+.math-format-bar__button.is-text-gray { background: #868e96; }
 
 .math-format-bar__rule {
   width: 1px;

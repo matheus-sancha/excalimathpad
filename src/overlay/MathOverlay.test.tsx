@@ -1414,6 +1414,41 @@ describe('line format (docs/spec-v1.md section 4: bold, underline, highlight)', 
     expect(rowOf('m1', 1)).not.toHaveClass('is-red')
   })
 
+  it('draws a line’s text colour on its row, beside a highlight (M4c, #107)', () => {
+    renderOverlay([anchorWith('x = 2 m * 3 @text-red @yellow # tripled\ny = 1\nz = q @text-red')])
+
+    expect(rowOf('m1', 1)).toHaveClass('is-text-color', 'is-text-red', 'is-yellow')
+    expect(rowOf('m1', 2)).not.toHaveClass('is-text-color')
+    // An error keeps its own colour: the stylesheet leaves `.is-error` alone.
+    expect(rowOf('m1', 3).querySelector('.math-element__result')).toHaveClass('is-error')
+  })
+
+  it('a text-colour dot writes @text-<name> before the note, the highlight after it; the pressed dot takes it off', () => {
+    const { scene } = renderOverlay([anchorWith('x = 2 @yellow # two')])
+    openLine(1)
+
+    expect(barButton(/No text colour/)).toHaveAttribute('aria-pressed', 'true')
+    press(barButton(/Text red/))
+    expect(scene.sourceOf('m1')).toBe('x = 2 @text-red @yellow # two')
+    expect(scene.sourceWrites()).toBe(1)
+    expect(barButton(/Text red/)).toHaveAttribute('aria-pressed', 'true')
+    expect(openField()).toHaveFocus()
+
+    press(barButton(/Text red/))
+    expect(scene.sourceOf('m1')).toBe('x = 2 @yellow # two')
+    press(barButton(/Text blue/))
+    press(barButton(/No text colour/))
+    expect(scene.sourceOf('m1')).toBe('x = 2 @yellow # two')
+  })
+
+  it('leaves every rule as typed when the bar writes', () => {
+    const { scene } = renderOverlay([anchorWith('v = 4 @text-red if v > 3')])
+    openLine(1)
+
+    press(barButton(/^Bold/))
+    expect(scene.sourceOf('m1')).toBe('v = 4 @bold @text-red if v > 3')
+  })
+
   it('Ctrl+B and Ctrl+U toggle bold and underline from the field', () => {
     const { scene } = renderOverlay([anchorWith('x = 2')])
     openLine(1)

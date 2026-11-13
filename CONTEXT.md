@@ -81,10 +81,13 @@ server. v1 target: one sheet, for Matheus's own use.
   `LineResult` (value | error | empty) and its `TypesetLine`, from the same
   parse: blank, comment, math (name, expression and note, as TeX) or unparsed
   (raw source). `lineForm.ts` (pure) reads a line's comment and its format clause
-  (`@bold @yellow`) before math.js sees it (ADR 0005), so a note or a format
-  never reaches math.js; `writeFormat` composes the clause back for the bar. A
-  math line carries its `LineFormat`; an unknown clause word is the line's
-  error, reported after the line ran. `typeset.ts` is the
+  (`@bold @text-red @yellow`, from the first `@` outside a string) before math.js
+  sees it (ADR 0005), so a note or a format never reaches math.js. A word with
+  `if <condition>` is a rule (`FormatRule`, kept as typed); `writeFormat`
+  composes the plain words back for the bar in a fixed order and keeps every
+  rule. A math line carries its `LineFormat` (bold, underline, highlight, text
+  colour); an unknown clause word is the line's error, reported after the line
+  ran. `typeset.ts` is the
   `toTex` handler of spec section 4, Typesetting names; a name counts as the
   sheet's from the line that assigns it down. `typesetResult` sets a result's
   `math.format` text as number and unit. A plain
@@ -258,7 +261,8 @@ server. v1 target: one sheet, for Matheus's own use.
   every source change and every change of order, then hands each
   `MathElementView` its lines. The overlay takes no pointer events except the open field
   and its format bar: Excalidraw gets every click and drag. The bar
-  (`FormatBar`, in `MathElementView`) writes the clause into the open line's
+  (`FormatBar`, in `MathElementView`; its two rows of dots, text colours over
+  highlights, are `ColourDots`) writes the clause into the open line's
   text; `MathOverlay` commits it at once and mounts a new field on the
   rewritten text (`LineEdit.revision`). `useSheetGestures` opens, moves and
   leaves the line edit from the events `listenToCanvas` hands it, starts and

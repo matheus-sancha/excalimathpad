@@ -26,6 +26,9 @@ import {
 import {
   codeLength,
   FORMAT_COLORS,
+  TEXT_COLORS,
+  type FormatColor,
+  type TextColor,
   NO_FORMAT,
   readLine,
   writeFormat,
@@ -262,9 +265,11 @@ function formatOf(text: string): LineFormat {
   return form.kind === 'code' ? form.format : NO_FORMAT
 }
 
-/** A row's format as classes: the stylesheet draws bold, underline and the band. */
-function formatClasses({ bold, underline, color }: LineFormat): string {
-  return `${bold ? ' is-bold' : ''}${underline ? ' is-underline' : ''}${color ? ` is-${color}` : ''}`
+/** A row's format as classes: the stylesheet draws bold, underline, the band and the text colour. */
+function formatClasses({ bold, underline, color, textColor }: LineFormat): string {
+  return `${bold ? ' is-bold' : ''}${underline ? ' is-underline' : ''}${color ? ` is-${color}` : ''}${
+    textColor ? ` is-text-color is-text-${textColor}` : ''
+  }`
 }
 
 const EMPTY_LINE: SheetLine = {
@@ -867,17 +872,66 @@ function FormatBar({
         'U',
       )}
       <span className="math-format-bar__rule" aria-hidden="true" />
-      {FORMAT_COLORS.map((color) => (
-        <span key={color}>
-          {button(
-            `Highlight ${color}`,
-            format.color === color,
-            { ...format, color: format.color === color ? null : color },
-            `is-color is-${color}`,
-          )}
+      <ColourDots
+        text={format.textColor}
+        highlight={format.color}
+        onText={(textColor) => onChange({ ...format, textColor })}
+        onHighlight={(color) => onChange({ ...format, color })}
+      />
+    </span>
+  )
+}
+
+/**
+ * The bar's two rows of dots (section 4, While editing a line, M4c): the six
+ * text colours on one, the five highlights on the other, each with its "none".
+ * One click each; pressing the pressed dot takes it off. Each button never takes
+ * focus, as the rest of the bar.
+ */
+export function ColourDots({
+  text,
+  highlight,
+  onText,
+  onHighlight,
+}: {
+  text: TextColor | null
+  highlight: FormatColor | null
+  onText: (color: TextColor | null) => void
+  onHighlight: (color: FormatColor | null) => void
+}) {
+  const dot = (label: string, pressed: boolean, className: string, onClick: () => void) => (
+    <button
+      key={label}
+      type="button"
+      className={`math-format-bar__button is-color ${className}`}
+      aria-label={label}
+      aria-pressed={pressed}
+      title={label}
+      tabIndex={-1}
+      onMouseDown={(event) => event.preventDefault()}
+      onClick={onClick}
+    />
+  )
+  return (
+    <span className="math-format-bar__dots">
+      <span className="math-format-bar__dot-row" role="group" aria-label="Text colour">
+        <span className="math-format-bar__dot-label" aria-hidden="true">
+          A
         </span>
-      ))}
-      {button('No highlight', format.color === null, { ...format, color: null }, 'is-color is-none')}
+        {TEXT_COLORS.map((color) =>
+          dot(`Text ${color}`, text === color, `is-text-${color}`, () => onText(text === color ? null : color)),
+        )}
+        {dot('No text colour', text === null, 'is-none', () => onText(null))}
+      </span>
+      <span className="math-format-bar__dot-row" role="group" aria-label="Highlight">
+        <span className="math-format-bar__dot-label is-highlight" aria-hidden="true" />
+        {FORMAT_COLORS.map((color) =>
+          dot(`Highlight ${color}`, highlight === color, `is-${color}`, () =>
+            onHighlight(highlight === color ? null : color),
+          ),
+        )}
+        {dot('No highlight', highlight === null, 'is-none', () => onHighlight(null))}
+      </span>
     </span>
   )
 }

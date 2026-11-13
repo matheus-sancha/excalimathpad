@@ -9,9 +9,11 @@
  *   first `#` outside a string. Only the code goes to math.js, so a note never
  *   changes a result.
  * - Code can end with a **format clause**: `@` words after everything else and
- *   before the note, `U = I * R in V @bold @yellow # check`. math.js rejects
- *   `@`, so a clause can never be read as code, and it is taken off before
- *   math.js sees the line.
+ *   before the note, `U = I * R in V @bold @text-red @yellow # check`. It
+ *   starts at the first `@` outside a string. math.js rejects `@`, so a clause
+ *   can never be read as code, and it is taken off before math.js sees the
+ *   line. From M4c a word can carry a **rule**, `@text-red if v > 3 m/s`: its
+ *   condition runs from `if` to the next `@` or the end of the code.
  * - Code can then end with a **display unit**: a trailing top-level `in` or
  *   `to` and its target, `dP = ... in kPa`. It is taken off the code here as
  *   text, because math.js would read `3 in L/minute` as `(3 in L) / minute`.
@@ -28,6 +30,8 @@ export type LineForm =
       format: LineFormat
       /** A clause word that isn't a format, with its `@`: an error on the line. */
       unknownFormat: string | null
+      /** The clause's rules, in the order typed (section 3, A rule). */
+      rules: readonly FormatRule[]
       /** The target of a trailing top-level `in` or `to`, as typed, or null. */
       displayUnit: string | null
       /** The code before that `in` or `to`; the whole code when there is none. */
@@ -38,14 +42,61 @@ export type LineForm =
 export const FORMAT_COLORS = ['yellow', 'green', 'blue', 'red', 'gray'] as const
 export type FormatColor = (typeof FORMAT_COLORS)[number]
 
-/** A line's format: it applies to the whole row, equation, result and note. */
+/** The text colours (section 4, Colours and rules), written `@text-<name>`. */
+export const TEXT_COLORS = ['black', 'blue', 'red', 'green', 'orange', 'gray'] as const
+export type TextColor = (typeof TEXT_COLORS)[number]
+
+/** A line's format: bold and underline on the whole row, a highlight band, a text colour. */
 export interface LineFormat {
   bold: boolean
   underline: boolean
+  /** The highlight. */
   color: FormatColor | null
+  /** The equation's and the result's text colour. */
+  textColor: TextColor | null
 }
 
-export const NO_FORMAT: LineFormat = { bold: false, underline: false, color: null }
+export const NO_FORMAT: LineFormat = { bold: false, underline: false, color: null, textColor: null }
+
+/** One format word, as it sets a format: null for a word that isn't one. */
+export type FormatWord =
+  | { kind: 'bold' }
+  | { kind: 'underline' }
+  | { kind: 'highlight'; color: FormatColor }
+  | { kind: 'text'; color: TextColor }
+
+/** A rule (section 3): a format word that applies while its condition is true. */
+export interface FormatRule {
+  word: FormatWord
+  /** The condition as typed, trimmed; empty if nothing follows `if`. */
+  condition: string
+  /** The rule exactly as typed, `@text-red if v > 3 m/s`, for the bar to keep. */
+  text: string
+}
+
+/** What a format word sets, or null when it isn't a format word. */
+export function readFormatWord(word: string): FormatWord | null {
+  if (word === 'bold') return { kind: 'bold' }
+  if (word === 'underline') return { kind: 'underline' }
+  if (isFormatColor(word)) return { kind: 'highlight', color: word }
+  const text = /^text-(.+)$/.exec(word)
+  if (text && (TEXT_COLORS as readonly string[]).includes(text[1])) return { kind: 'text', color: text[1] as TextColor }
+  return null
+}
+
+/** A format with `word` applied: a colour named twice keeps the last. */
+export function applyFormatWord(format: LineFormat, word: FormatWord): LineFormat {
+  switch (word.kind) {
+    case 'bold':
+      return { ...format, bold: true }
+    case 'underline':
+      return { ...format, underline: true }
+    case 'highlight':
+      return { ...format, color: word.color }
+    case 'text':
+      return { ...format, textColor: word.color }
+  }
+}
 
 export function readLine(line: string): LineForm {
   const at = commentStart(line)
@@ -54,15 +105,15 @@ export function readLine(line: string): LineForm {
   if (code.trim() === '') {
     return after ? { kind: 'comment', text: after } : { kind: 'blank' }
   }
-  const { rest, words } = splitClause(code)
+  const { rest, segments } = splitClause(code)
   let format = NO_FORMAT
   let unknownFormat: string | null = null
-  for (const word of words) {
-    if (word === 'bold') format = { ...format, bold: true }
-    else if (word === 'underline') format = { ...format, underline: true }
-    // A colour named twice keeps the last.
-    else if (isFormatColor(word)) format = { ...format, color: word }
-    else unknownFormat ??= `@${word}`
+  const rules: FormatRule[] = []
+  for (const segment of segments) {
+    const read = readSegment(segment)
+    if (read === null) unknownFormat ??= segment.split(/\s+/)[0]
+    else if (read.condition === null) format = applyFormatWord(format, read.word)
+    else rules.push({ word: read.word, condition: read.condition, text: segment })
   }
   return {
     kind: 'code',
@@ -70,8 +121,21 @@ export function readLine(line: string): LineForm {
     note: after || null,
     format,
     unknownFormat,
+    rules,
     ...splitDisplayUnit(rest),
   }
+}
+
+/** One clause segment, `@word` or `@word if <condition>`; null when the word isn't a format. */
+function readSegment(segment: string): { word: FormatWord; condition: string | null } | null {
+  const match = /^@([A-Za-z][\w-]*)(.*)$/s.exec(segment)
+  if (!match) return null
+  const word = readFormatWord(match[1])
+  if (word === null) return null
+  const rest = match[2].trim()
+  if (rest === '') return { word, condition: null }
+  const rule = /^if(?![\w.])(.*)$/s.exec(rest)
+  return rule ? { word, condition: rule[1].trim() } : null
 }
 
 /**
@@ -110,21 +174,27 @@ export function splitDisplayUnit(code: string): { expression: string; displayUni
 }
 
 /**
- * The line with its format clause replaced by `format`'s, for the format bar.
+ * The line with its plain format replaced by `format`'s, for the format bar.
  * The code and the note stay exactly as typed; the clause goes after the code
- * and before the `#`. A line with no code takes no format and comes back
- * unchanged. Unknown clause words are dropped: the bar writes a clean clause.
+ * and before the `#`: the plain words in a fixed order, `@bold @underline
+ * @text-<name> @<highlight>`, then every rule exactly as it was typed (section
+ * 3, Rules for what the app writes). Unknown words are dropped. A line with no
+ * code takes no format and comes back unchanged.
  */
 export function writeFormat(line: string, format: LineFormat): string {
   const at = commentStart(line)
   const code = at === -1 ? line : line.slice(0, at)
   if (code.trim() === '') return line
+  const { rest, segments } = splitClause(code)
+  const rules = segments.filter((segment) => readSegment(segment)?.condition != null)
   const words = [
     format.bold ? '@bold' : null,
     format.underline ? '@underline' : null,
+    format.textColor ? `@text-${format.textColor}` : null,
     format.color ? `@${format.color}` : null,
+    ...rules,
   ].filter((word) => word !== null)
-  const head = [splitClause(code).rest, ...words].join(' ')
+  const head = [rest, ...words].join(' ')
   return at === -1 ? head : `${head} ${line.slice(at)}`
 }
 
@@ -139,11 +209,12 @@ export function writeDisplayUnit(line: string, unit: string | null): string {
   const head = at === -1 ? line : line.slice(0, at)
   if (head.trim() === '') return line
   const tail = at === -1 ? '' : line.slice(at)
-  const clause = CLAUSE.exec(head)
-  const code = (clause ? head.slice(0, clause.index) : head).trimEnd()
+  const start = clauseStart(head)
+  const code = (start === -1 ? head : head.slice(0, start)).trimEnd()
+  const clause = start === -1 ? '' : ` ${head.slice(start).trim()}`
   const { expression } = splitDisplayUnit(code)
   const written = unit ? `${expression} in ${unit.trim()}` : expression
-  return `${written}${clause ? clause[0].trimEnd() : ''}${tail ? ` ${tail}` : ''}`
+  return `${written}${clause}${tail ? ` ${tail}` : ''}`
 }
 
 /** Where the code part of a line ends: before its clause and its note. */
@@ -156,16 +227,41 @@ function isFormatColor(word: string): word is FormatColor {
   return (FORMAT_COLORS as readonly string[]).includes(word)
 }
 
-/** The trailing `@word`s of a line's code, and the code before them. */
-const CLAUSE = /(?:\s+@\w*)+\s*$/
+/**
+ * The clause's segments, each `@word` or `@word if <condition>`, and the code
+ * before the clause. The clause starts at the first `@` outside a string, and
+ * a segment runs to the next `@` outside a string.
+ */
+function splitClause(code: string): { rest: string; segments: string[] } {
+  const start = clauseStart(code)
+  if (start === -1) return { rest: code.trimEnd(), segments: [] }
+  const clause = code.slice(start)
+  const cuts = outsideStrings(clause, '@')
+  const segments = cuts.map((cut, i) => clause.slice(cut, cuts[i + 1] ?? clause.length).trim())
+  return { rest: code.slice(0, start).trimEnd(), segments }
+}
 
-function splitClause(code: string): { rest: string; words: string[] } {
-  const match = CLAUSE.exec(code)
-  if (!match) return { rest: code.trimEnd(), words: [] }
-  return {
-    rest: code.slice(0, match.index),
-    words: match[0].trim().split(/\s+/).map((word) => word.slice(1)),
+/** Where the format clause starts: the first `@` outside a string, or -1. */
+function clauseStart(code: string): number {
+  return outsideStrings(code, '@')[0] ?? -1
+}
+
+/** Every index of `target` outside a string, by the same quote rule as the comment. */
+function outsideStrings(text: string, target: string): number[] {
+  const found: number[] = []
+  let quote: string | null = null
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i]
+    if (quote) {
+      if (char === '\\') i++
+      else if (char === quote) quote = null
+    } else if (char === target) {
+      found.push(i)
+    } else if (char === '"' || (char === "'" && !endsValue(text, i))) {
+      quote = char
+    }
   }
+  return found
 }
 
 /**
