@@ -11,6 +11,7 @@ export const FORMAT = 1
 export const SHEET_EXTENSION = '.excalimathpad'
 
 import { TEXT_COLORS, type TextColor } from '../math/lineForm.ts'
+import type { PageSetting } from '../print/printPages.ts'
 
 export type UnitSystemName = 'si-prefixed' | 'si-base' | 'uscs'
 
@@ -24,7 +25,8 @@ export interface SheetSettings {
   digits: number
   /** The colour of every result's number and unit (section 4, Colours and rules, M4c). */
   resultColor: TextColor
-  page: { size: 'A4' | 'Letter'; orientation: 'portrait' | 'landscape' }
+  /** What print lays the sheet out for (section 11, M5). */
+  page: PageSetting
 }
 
 export const DEFAULT_SETTINGS: SheetSettings = {

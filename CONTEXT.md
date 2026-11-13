@@ -78,7 +78,9 @@ server. v1 target: one sheet, for Matheus's own use.
   (`customData.width`, `MathAnchor.chosenWidth`), with Excalidraw's `x` kept
   and the top and height put back, written `NEVER` so it lands in the resize's
   own undo step; below the floor it goes back to automatic; a height-only drag
-  snaps back. It also says when a size write waits (`sizeWritesWait`). The only module that imports
+  snaps back. It also says when a size write waits (`sizeWritesWait`). `drawingBoxes.ts` gives the
+  drawings' print boxes (Excalidraw's `getCommonBounds`, anchors left out, a group or a labelled shape as
+  one drawing). The only module that imports
   Excalidraw at runtime; tests may too, and other modules may import its
   types. This is ADR 0001's engineering rule as amended in ADR 0002. Depends
   on: `@excalidraw/excalidraw`.
@@ -290,8 +292,12 @@ server. v1 target: one sheet, for Matheus's own use.
   element and line under a point from geometry and the rows' `offsetTop` and
   `offsetHeight` (spec section 4, Gestures, section 14). Its `control` lets the
   sheet file commit the line (Ctrl+S keeps it open) or leave it (Open).
+  `printBoxes.ts` (`mathBoxes`) measures the math elements' print boxes from
+  the drawn overlay, in scene units: the header, each row, and a table line as
+  its equation, header row (marked) and rows; a rotated or unmeasured element
+  is its anchor's rotated bounds.
   Depends on: canvas (anchor, size, selection and layer contracts, API types),
-  math, `katex` (lazily).
+  math, print (types), `katex` (lazily).
 - **file** (`src/file/`) — the sheet file (ADR 0004, spec section 7).
   `sheetFormat.ts` (pure) reads and writes the `excalimathpad` block, settings
   and migrations. The session's state carries the settings, and
@@ -311,6 +317,16 @@ server. v1 target: one sheet, for Matheus's own use.
   size tests (`layout.ts`) and readers for the grid (`sheetView.ts`). KaTeX is
   loaded before the tests run. Not app code.
 
+- **print** (`src/print/`) — print pages (spec section 11), pure.
+  `printPages(boxes, page)` takes the sheet's boxes in scene units (drawings
+  from canvas, rows from overlay) and the Page setting, and gives the paper,
+  margins and footer band in CSS pixels, the scale (shrink only, at most 1),
+  the content's left edge and each page's slice `top` to `bottom`, with the
+  tables whose header row repeats at its top. A box no taller than a page is
+  unbreakable; a break moves up from the page's bottom to the lowest line
+  through no unbreakable box, else cuts at the bottom; a page starts at its
+  first content. Depends on: nothing.
+
 - **panel** (`src/panel/`) — the Sheet panel's tabs (spec section 8), drawn
   inside Excalidraw's sidebar, which `SheetCanvas` frames (`SheetPanelSlot`:
   the badge count, the tabs' content, `onChange`). `sheetPanel.ts` (pure)
@@ -320,7 +336,8 @@ server. v1 target: one sheet, for Matheus's own use.
   `panelMemory.ts` keeps open/closed in `localStorage`. `SettingsTab.tsx`
   edits the unit system, Custom's kind → unit table, Digits and the Result
   colour (`settings.resultColor`, one of the six text colours; App hands it to
-  `MathOverlay`, which sets `--math-result` on the overlay) through the
+  `MathOverlay`, which sets `--math-result` on the overlay) and the Page
+  (`settings.page`: paper size and orientation, for print) through the
   session's `setSettings` (saved with the sheet, dirty, not in undo); App
   hands the session's settings to `MathOverlay`, which evaluates with them. App does the jump
   (`jumpToAnchor` in `canvas/selection.ts`: scroll, select with `NEVER`) and

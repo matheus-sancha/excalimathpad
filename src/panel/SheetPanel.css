@@ -126,6 +126,12 @@
   padding: 2px 4px;
 }
 
+.sheet-settings__pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
 .sheet-settings select,
 .sheet-settings input {
   box-sizing: border-box;

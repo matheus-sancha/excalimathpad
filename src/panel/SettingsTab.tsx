@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { TEXT_COLORS, type TextColor } from '../math/lineForm.ts'
+import type { Orientation, PageSetting, PaperSize } from '../print/printPages.ts'
 import {
   isCustom,
   KIND_LABELS,
@@ -13,16 +14,17 @@ import {
 
 /**
  * The Settings tab (docs/spec-v1.md section 8): the unit system, Custom's
- * kind → unit table, Digits and the Result colour. A change goes straight to the sheet: it
- * re-shows every result, is saved with the sheet and isn't part of undo. The
- * Page row arrives in M5.
+ * kind → unit table, Digits, the Result colour and the Page (M5), which print
+ * lays the sheet out for. A change goes straight to the sheet: it re-shows
+ * every result, is saved with the sheet and isn't part of undo.
  */
 
-/** What the tab edits; the sheet's settings carry more (the page). */
+/** What the tab edits. */
 export interface SettingsValue {
   units: UnitSettings
   digits: number
   resultColor: TextColor
+  page: PageSetting
 }
 
 const SYSTEMS: { value: UnitSystemName; label: string }[] = [
@@ -130,6 +132,32 @@ export function SettingsTab<T extends SettingsValue>({
           ))}
         </select>
       </label>
+
+      <div className="sheet-settings__field" role="group" aria-labelledby="sheet-settings-page">
+        <span id="sheet-settings-page">Page</span>
+        <span className="sheet-settings__pair">
+          <select
+            aria-label="Paper size"
+            value={settings.page.size}
+            onChange={(event) =>
+              onChange({ ...settings, page: { ...settings.page, size: event.target.value as PaperSize } })
+            }
+          >
+            <option value="A4">A4</option>
+            <option value="Letter">Letter</option>
+          </select>
+          <select
+            aria-label="Orientation"
+            value={settings.page.orientation}
+            onChange={(event) =>
+              onChange({ ...settings, page: { ...settings.page, orientation: event.target.value as Orientation } })
+            }
+          >
+            <option value="portrait">Portrait</option>
+            <option value="landscape">Landscape</option>
+          </select>
+        </span>
+      </div>
     </div>
   )
 }

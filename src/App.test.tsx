@@ -463,6 +463,36 @@ describe('App', () => {
       expect(overlay().style.getPropertyValue('--math-result')).toBe('#e03131')
     })
 
+    it('Settings: the Page is saved with the sheet, dirty and outside undo (M5, #80)', async () => {
+      const { files } = renderApp({
+        initialElements: createMathAnchorElements([{ id: 'm1', x: 100, y: 100, width: 300, height: 48, source: 'p = 2 Pa' }]),
+      })
+      await ready()
+      await screen.findAllByRole('list', { name: 'Lines' })
+
+      fireEvent.click(await sheetButton())
+      fireEvent.mouseDown(await screen.findByRole('tab', { name: 'Settings' }))
+      expect(await screen.findByRole('group', { name: 'Page' })).toBeInTheDocument()
+      expect(screen.getByLabelText('Paper size')).toHaveValue('A4')
+      expect(screen.getByLabelText('Orientation')).toHaveValue('portrait')
+      fireEvent.change(screen.getByLabelText('Paper size'), { target: { value: 'Letter' } })
+      fireEvent.change(screen.getByLabelText('Orientation'), { target: { value: 'landscape' } })
+      await waitFor(() => expect(document.title).toBe('● Untitled'))
+
+      const excalidraw = document.querySelector('.excalidraw')!
+      act(() => {
+        excalidraw.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', ctrlKey: true, bubbles: true, cancelable: true }))
+      })
+      expect(screen.getByLabelText('Paper size')).toHaveValue('Letter')
+
+      act(() => {
+        excalidraw.dispatchEvent(new KeyboardEvent('keydown', { key: 's', ctrlKey: true, bubbles: true, cancelable: true }))
+      })
+      await waitFor(() => expect(files.saveAs).toHaveBeenCalledOnce())
+      const saved = JSON.parse(files.disk.get('Untitled.excalimathpad')!)
+      expect(saved.excalimathpad.settings.page).toEqual({ size: 'Letter', orientation: 'landscape' })
+    })
+
     it('Settings: Custom changes the unit for a chosen kind', async () => {
       renderApp({
         initialElements: createMathAnchorElements([

@@ -1400,6 +1400,7 @@ Built in M5. Print fits the sheet to the page width and flows down onto as many 
 - **Fallback:** with no clean gap (staggered side-by-side elements taller than a page), cut at the
   page bottom.
 - A table split across pages repeats its header row.
+- A page starts at its first content, so empty space on the sheet never makes a blank page.
 
 **What's on paper:**
 
@@ -2138,7 +2139,15 @@ Changes line if it changes behaviour.
 **M5**
 
 - Excalidraw text in Nunito on the pump sheet's heading.
-- Staggered side-by-side elements and the no-clean-gap fallback.
+- Staggered side-by-side elements and the no-clean-gap fallback. **Passed (#80),** on boxes measured from the
+  overlay in Chromium (sheets opened through the app, boxes from `mathBoxes` and `drawingBoxes`, laid out by
+  `printPages`). Nine 5-line elements on the left and seven 7-line elements on the right, tops staggered: on
+  A4 portrait the break moved 17.4 units up from the page's bottom to the lowest line clear in both columns,
+  through no box. Two 80-line elements side by side with the right one 12 units (half a row) lower: no line is
+  clear, and the break fell at the page's bottom, through one row of each. The pump sheet with its heading
+  gave 65 math boxes (the table line as its equation, header row and 30 rows) and 1 drawing: on A4 portrait 2
+  pages at scale 0.682, on A4 landscape 4 at 100%, on Letter portrait 2 at 0.705, each break through no
+  unbreakable box, and the page after a break inside the table repeating its header row.
 - A drawing taller than a page, dark mode, and images in drawings.
 - Taking over Ctrl+P with real keys, and a person at an open dialog.
 - KaTeX 0.16.47, which the repo resolves, against the 0.19.1 the PDF probe used.
@@ -2481,3 +2490,7 @@ Changes line if it changes behaviour.
   has no bar". With no format a title looks as it did. Not asked: stored as `customData.titleFormat`, holding
   only what differs; each press is one undo step; Ctrl+B, Ctrl+I and Ctrl+U; the title's width at its size
   counts toward the floor; emptying the title removes its format.
+- 2026-11-13, [section 11](#11-print) (#80, Engineer's, for Matheus to confirm on the PR): a page starts at its first
+  content, so empty space between parts of the sheet never prints a blank page. Not asked: the footer's band is
+  7 mm above the bottom margin; a group of drawings is one drawing, and a shape's label is part of it; a table
+  line's equation is a box of its own above its table; a rotated math element is one box, its anchor as rotated.
