@@ -66,7 +66,7 @@ print.
 | 24b | `H_r = 20 m` | pump datasheet: rated head |
 | 24c | `Q_r = 20 L/s` | pump datasheet: rated flow |
 | 25 | `Hp(Q) = H_0 - (H_0 - H_r) (Q/Q_r)^2` | function |
-| 26 | `Q_op = solve Hp(Q) = Hs(Q), guess Q = 15 L/s in L/s` | solve calling a solve, with units |
+| 26 | `Q_op = solve Hp(Q) = Hs(Q), for Q = 1 L/s .. 30 L/s in L/s` | range solve calling a solve, with units |
 | 27 | `H_op = Hp(Q_op)` | |
 | 28 | `P_op = rho g_n Q_op H_op / eta in kW` | display unit |
 | 29 | `Q_s = 1 L/s .. 30 L/s step 1 L/s` | range with units |

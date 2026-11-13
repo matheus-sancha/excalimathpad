@@ -134,7 +134,8 @@ describe('the pump sheet (acceptance, M3: lines 1-28)', () => {
   // Section 4, Solve details: a solve line and a direct call to a solve function, nothing deeper.
   it('gives solve details to lines 18 and 26 only', () => {
     for (const [id, line] of lines) {
-      if (id === '18' || id === '26') expect(line.solveDetails?.method, `line ${id}`).toBe('Brent')
+      if (id === '18') expect(line.solveDetails?.method, `line ${id}`).toBe('Brent')
+      else if (id === '26') expect(line.solveDetails?.method, `line ${id}`).toBe('scan')
       else expect(line.solveDetails, `line ${id}`).toBeNull()
     }
   })

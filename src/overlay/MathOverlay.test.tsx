@@ -336,13 +336,17 @@ describe('MathOverlay', () => {
       )
     })
 
-    it('typesets a solve line with its guess small after the equation, and the details on hover', () => {
-      renderOverlay([anchorWith('x = solve x^2 = 2, guess x = 1\ny = x\nf(a) = solve u^2 = a, guess u = 1\nf_d = f(4)')])
+    it('typesets a solve line with its range or guess small after the equation, and the details on hover', () => {
+      renderOverlay([anchorWith('x = solve x^2 = 2, for x = 0 .. 10\ny = x\nf(a) = solve u^2 = a, guess u = 1\nf_d = f(4)')])
 
       expect(cellOf(1, 'expression')).toHaveTextContent(/solve/)
-      expect(rowOf('m1', 1).querySelector('.math-element__aside')).toHaveTextContent(/guess/)
+      expect(rowOf('m1', 1).querySelector('.math-element__aside')).toHaveTextContent(/for/)
+      expect(rowOf('m1', 3).querySelector('.math-element__aside')).toHaveTextContent(/guess/)
       const detailed = cellOf(1, 'result')!.querySelector<HTMLElement>('.math-element__detailed')!
-      expect(detailed.dataset.tip).toMatch(/^Brent, \d+ iterations\nResidual: .+\nBracket: 1\.41421356237\d* \.\. 1\.41421356237/)
+      expect(detailed.dataset.tip).toMatch(/^Scan \+ Brent, roots found in 0 \.\. 10\n200 points\nRoot 1: 1\.41421356237\d*, residual .+/)
+      expect(cellOf(4, 'result')!.querySelector<HTMLElement>('.math-element__detailed')!.dataset.tip).toMatch(
+        /^Brent, \d+ iterations\nResidual: .+\nBracket: 1\.99999999\d* \.\. 2|^Brent, \d+ iterations\nResidual: .+\nBracket: 2/,
+      )
       expect(detailed).toHaveAttribute('data-tip-when', 'details')
       // Not on a line that only uses the value, nor on a solve function's definition.
       expect(cellOf(2, 'result')!.querySelector('.math-element__detailed')).toBeNull()

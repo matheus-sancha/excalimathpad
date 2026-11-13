@@ -604,7 +604,19 @@ function ResultCell({
 }
 
 /** How a solve went, for the hover (section 4, Solve details). */
-function detailsText({ method, iterations, residual, bracket }: SolveDetails): string {
+function detailsText(details: SolveDetails): string {
+  if (details.method === 'scan') {
+    const { range, points, roots, rejected } = details
+    return [
+      `Scan + Brent, roots found in ${range}`,
+      `${points} points`,
+      ...roots.map(
+        (root, i) => `Root ${i + 1}: ${root.value}${root.touching ? ' (touching)' : ''}, residual ${root.residual}`,
+      ),
+      ...(rejected === 0 ? [] : [`${rejected} ${rejected === 1 ? 'crossing' : 'crossings'} rejected as poles or jumps`]),
+    ].join('\n')
+  }
+  const { method, iterations, residual, bracket } = details
   return [
     `${method}, ${iterations} ${iterations === 1 ? 'iteration' : 'iterations'}`,
     `Residual: ${residual}`,

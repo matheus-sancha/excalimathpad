@@ -90,7 +90,8 @@ export interface SolveWarningParts {
   unknown: string
   lhs: MathNode
   rhs: MathNode
-  guess: MathNode
+  guess: MathNode | null
+  range: { from: MathNode; to: MathNode } | null
 }
 
 /**
@@ -120,7 +121,7 @@ export function solveWarnings(parts: SolveWarningParts, facts: WarningFacts): st
     if (facts.isShortConstant(entry.name) && !facts.isUnit(entry.name)) continue
     add(`${entry.name} shadows ${what(entry.name)} ${entry.name}`)
   }
-  const sides = [parts.lhs, parts.rhs, parts.guess]
+  const sides = [parts.lhs, parts.rhs, ...(parts.guess ? [parts.guess] : []), ...(parts.range ? [parts.range.from, parts.range.to] : [])]
   if (params === null) {
     for (const used of sides.flatMap(usedNames)) {
       if (used === unknown || !clashes(used) || facts.inScope(used) || taken(used)) continue

@@ -110,21 +110,30 @@ export function lineTex(node: MathNode, names: Names): LineTex {
 }
 
 /**
- * A solve line (section 4): `Q_op ≔ solve H_p(Q) = H_s(Q)`, and its guess,
+ * A solve line (section 4): `Q_op ≔ solve H_p(Q) = H_s(Q)`, and its range or guess,
  * which the grid sets small and grey after the equation.
  * `names` already counts the unknown and the parameters as sheet names.
  */
 export function solveTex(
   name: string,
   params: readonly string[] | null,
-  parts: { unknown: string; lhs: MathNode; rhs: MathNode; guess: MathNode },
+  parts: {
+    unknown: string
+    lhs: MathNode
+    rhs: MathNode
+    guess: MathNode | null
+    range: { from: MathNode; to: MathNode } | null
+  },
   names: Names,
 ): LineTex & { aside: string } {
   const head = params === null ? nameTex(name) : `${nameTex(name)}\\left(${params.map(nameTex).join(',')}\\right)`
   return {
     name: head,
     expression: `\\mathrm{solve}\\;${toTex(parts.lhs, names)}=${toTex(parts.rhs, names)}`,
-    aside: `\\text{guess }${nameTex(parts.unknown)}=${toTex(parts.guess, names)}`,
+    aside:
+      parts.range !== null
+        ? `\\text{for }${nameTex(parts.unknown)}=${toTex(parts.range.from, names)}\\ldots ${toTex(parts.range.to, names)}`
+        : `\\text{guess }${nameTex(parts.unknown)}=${parts.guess === null ? '' : toTex(parts.guess, names)}`,
   }
 }
 

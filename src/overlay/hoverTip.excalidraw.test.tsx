@@ -38,7 +38,7 @@ const anchors = createMathAnchorElements([
     source: 'K = 2 * 2.7\nx = 1 m + 2 s\nD = 102.3 mm',
   },
   { id: 'm2', x: 100, y: 250, width: 560, height: 48, source: 'y = 3 kg + 1 s' },
-  { id: 'm3', x: 100, y: 400, width: 560, height: 48, source: 'x = solve x^2 = 2, guess x = 1' },
+  { id: 'm3', x: 100, y: 400, width: 560, height: 48, source: 'x = solve x^2 = 2, for x = 0 .. 10' },
   { id: 'm4', x: 100, y: 550, width: 560, height: 48, source: 'n = 1 .. 3' },
 ])
 
@@ -255,12 +255,12 @@ describe('a problem’s message on hover (docs/spec-v1.md section 4, Problems)',
 })
 
 describe('a solve’s details on hover (docs/spec-v1.md section 4, Solve details)', () => {
-  it('shows the method, iterations, residual and bracket over a solved value', async () => {
+  it('shows the method, the range searched and the root over a solved value', async () => {
     await mount()
 
     hover(onResult('m3', 1))
-    await waitFor(() => expect(tip()).toHaveTextContent(/^Brent, \d+ iterations/))
-    expect(tip()).toHaveTextContent('Bracket: 1.41421356237')
+    await waitFor(() => expect(tip()).toHaveTextContent(/^Scan \+ Brent, roots found in 0 \.\. 10/))
+    expect(tip()).toHaveTextContent('Root 1: 1.41421356237')
 
     hover(offMarks('m3', 1))
     expect(tip()).toBeNull()

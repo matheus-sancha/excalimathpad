@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { MAX_ITERATIONS, RELATIVE_TOLERANCE, solveNear } from './solver.ts'
+import { MAX_ITERATIONS, RELATIVE_TOLERANCE, solveNear , solveRange, type RangeOutcome } from './solver.ts'
 
 /** Colebrook's residual in f, NaN where sqrt(f) has no real value. */
 const colebrook = (re: number, r: number) => (f: number) =>
@@ -64,5 +64,59 @@ describe('solveNear (docs/spec-v1.md section 9)', () => {
 
   it('is deterministic', () => {
     expect(solveNear((x) => Math.cos(x) - x, 1)).toEqual(solveNear((x) => Math.cos(x) - x, 1))
+  })
+})
+
+describe('solveRange (docs/spec-v1.md section 9, Search range; #105)', () => {
+  const xs = (outcome: RangeOutcome) => (outcome.kind === 'roots' ? outcome.roots.map((root) => root.x) : outcome.kind)
+  const close = (actual: number[] | string, expected: number[]) => {
+    expect(Array.isArray(actual) ? actual.length : actual).toBe(expected.length)
+    ;(actual as number[]).forEach((x, i) => expect(x).toBeCloseTo(expected[i], 6))
+  }
+
+  it('finds every root it can see, ascending', () => {
+    close(xs(solveRange((x) => x * x - 4, -10.07, 10.3)), [-2, 2])
+    close(xs(solveRange((x) => (x - 1) * (x - 2) * (x - 3), -10.07, 10.3)), [1, 2, 3])
+    close(xs(solveRange((x) => Math.sin(x) - 0.5, 0, 10)), [Math.PI / 6, (5 * Math.PI) / 6, Math.PI / 6 + 2 * Math.PI, (5 * Math.PI) / 6 + 2 * Math.PI])
+  })
+
+  it('rejects poles and jumps: tan x = 1 has 3 roots on 0 .. 10, 1/x = 0 and a step have none', () => {
+    const tan = solveRange((x) => Math.tan(x) - 1, 0, 10)
+    close(xs(tan), [Math.PI / 4, Math.PI / 4 + Math.PI, Math.PI / 4 + 2 * Math.PI])
+    expect(tan.kind === 'roots' && tan.rejected).toBe(3)
+    expect(solveRange((x) => 1 / x, -10.07, 10.3)).toMatchObject({ kind: 'no-root', hadValue: true })
+    expect(solveRange((x) => (x < 0.3 ? -1 : 1), -10.07, 10.3)).toMatchObject({ kind: 'no-root' })
+  })
+
+  it('finds a double root as one touching root, and two roots closer than the spacing', () => {
+    const double = solveRange((x) => (x - 1) ** 2, -10.07, 10.3)
+    expect(double.kind === 'roots' && double.roots.length).toBe(1)
+    expect(double.kind === 'roots' && double.roots[0].touching).toBe(true)
+    expect(double.kind === 'roots' && double.roots[0].x).toBeCloseTo(1, 4)
+    const quadruple = solveRange((x) => (x - 1) ** 4, -10.07, 10.3)
+    expect(quadruple.kind === 'roots' && quadruple.roots.length).toBe(1)
+    close(xs(solveRange((x) => (x - 1) * (x - 1.001), -10.07, 10.3)), [1, 1.001])
+    expect(solveRange((x) => x * x + 1e-6, -10.07, 10.3).kind).toBe('no-root')
+  })
+
+  it('skips points with no value, and says when none had one', () => {
+    close(xs(solveRange((x) => Math.sqrt(x) - (x - 2), -10.07, 10.3)), [4])
+    expect(solveRange(() => Number.NaN, 0, 1)).toEqual({ kind: 'no-root', hadValue: false, rejected: 0 })
+  })
+
+  it('finds the three van der Waals roots for CO2 at 280 K and 5.5 MPa', () => {
+    const [R, T, P, a, b] = [0.08314, 280, 55, 3.64, 0.04267]
+    const roots = xs(solveRange((V) => (R * T) / (V - b) - a / V ** 2 - P, 0.05, 5))
+    expect(Array.isArray(roots) && roots.length).toBe(3)
+  })
+
+  it('finds roots far apart in size, and refuses more than 100', () => {
+    close(xs(solveRange((x) => (x - 1e-3) * (x - 1) * (x - 1e3), -2000, 2000)), [1e-3, 1, 1e3])
+    expect(solveRange((x) => Math.sin(x), 0.5, 340).kind).toBe('too-many')
+  })
+
+  it('gives the same roots in the same order every time', () => {
+    const f = (x: number) => Math.tan(x) - 1
+    expect(solveRange(f, 0, 10)).toEqual(solveRange(f, 0, 10))
   })
 })

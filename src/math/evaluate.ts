@@ -746,8 +746,16 @@ export function evaluateSheet(
    * land on the calling line, through the wrapper.
    */
   function runSolve(line: Extract<ParsedLine, { kind: 'solve' }>): unknown {
-    const { name, params, solve } = line
+    const { name, params, solve, parts } = line
     if (params === null) {
+      // Section 9, Roots: a range search never runs once per point.
+      const clause = parts.range === null ? [] : [parts.range.from, parts.range.to]
+      for (const node of [parts.lhs, parts.rhs, ...clause]) {
+        const list = listsIn(node).find((name) => name !== parts.unknown)
+        if (list !== undefined) {
+          throw new SheetError(`a range solve can't use the list ${list}; use a solve function with a guess`)
+        }
+      }
       const { value, details } = solve.run(scope, solveText)
       lastSolve = details
       scope.set(name, value)
@@ -1421,10 +1429,12 @@ function parseLine(text: string): ParsedLine {
         unknown: solve.unknown,
         lhs: parseSheet(solve.lhs),
         rhs: parseSheet(solve.rhs),
-        guess: parseSheet(solve.guess),
+        guess: solve.guess === null ? null : parseSheet(solve.guess),
+        range: solve.range === null ? null : { from: parseSheet(solve.range.from), to: parseSheet(solve.range.to) },
         lhsText: solve.lhs,
         rhsText: solve.rhs,
         guessText: solve.guess,
+        rangeText: solve.range,
       }
       return {
         kind: 'solve',

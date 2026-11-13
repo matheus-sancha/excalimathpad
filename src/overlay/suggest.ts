@@ -176,8 +176,9 @@ const keyword = (name: string, detail: string): Suggestion => ({ name, kind: 'ke
 
 /** The functions and line forms a line can use: math.js's everyday ones and the app's own. */
 export const FUNCTION_SUGGESTIONS: readonly Suggestion[] = [
-  keyword('solve', 'x = solve lhs = rhs, guess x = 1'),
-  keyword('guess', 'a solve’s starting value'),
+  keyword('solve', 'x = solve lhs = rhs, for x = 0 .. 10'),
+  keyword('for', 'a solve’s search range: for x = 0 .. 10'),
+  keyword('guess', 'a solve function’s starting value'),
   keyword('step', 'a range’s step: 1 .. 10 step 0.5'),
   call('plot', 'plot(x, y1, …)'),
   call('table', 'table(a, b, …)'),

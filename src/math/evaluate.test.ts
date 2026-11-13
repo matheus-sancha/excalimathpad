@@ -830,7 +830,7 @@ describe('variables (docs/spec-v1.md section 8, Variables tab)', () => {
   })
 
   it('marks a solve function, and gives a solved value its value', () => {
-    expect(variables('f(a) = solve x^2 = a, guess x = 1\nr = solve r^2 = 2, guess r = 1')).toEqual([
+    expect(variables('f(a) = solve x^2 = a, guess x = 1\nr = solve r^2 = 2, for r = 0 .. 10')).toEqual([
       [{ name: 'f', kind: 'function', params: ['a'], solve: true }],
       [{ name: 'r', kind: 'value', text: '1.414' }],
     ])
@@ -913,93 +913,139 @@ describe('unit slot (docs/spec-v1.md section 5)', () => {
   })
 })
 
-describe('solve, the value form (docs/spec-v1.md section 9, #70)', () => {
+describe('solve, the value form: a search range (docs/spec-v1.md section 9, #70, #105)', () => {
   const lines = (source: string) => evaluateSheet([{ id: 'b', source }]).get('b')!
+  const list = (text: string): LineResult => ({ kind: 'list', text, failed: null })
 
   it('solves into a name, which the lines below use', () => {
-    expect(block('x = solve x^2 = 2, guess x = 1\nx * 10')).toEqual([value('1.414'), value('14.14')])
+    expect(block('x = solve x^2 = 2, for x = 0 .. 10\nx * 10')).toEqual([value('1.414'), value('14.14')])
   })
 
-  it('gives the unknown the guess’s dimension, and shows in the unit system or `in <unit>`', () => {
-    expect(block('A = 2 m^2\nw = solve w^2 = A, guess w = 1 m\nv = solve v^2 = A, guess v = 1 m in cm')).toEqual([
+  it('gives every root found in the range, ascending: several are a list', () => {
+    expect(block('x_r = solve x^3 - 6x^2 + 11x = 6, for x = 0 .. 10\nx_r[2]\nx_r * 2')).toEqual([
+      list('3 values, 1 … 3'),
+      value('2'),
+      list('3 values, 2 … 6'),
+    ])
+    expect(block('x = solve x^2 = 4, for x = -10 .. 10')).toEqual([list('2 values, -2 … 2')])
+  })
+
+  it('gives the unknown the low end’s dimension, and shows in the unit system or `in <unit>`', () => {
+    expect(block('A = 2 m^2\nw = solve w^2 = A, for w = 0 m .. 10 m\nv = solve v^2 = A, for v = 0 m .. 10 m in cm')).toEqual([
       empty,
       value('1.414 m'),
       value('141.4 cm'),
     ])
   })
 
-  it('evaluates the guess as any expression, in the scope at the line', () => {
-    expect(block('g = 3\nx = solve x^3 = 27, guess x = g + 1')).toEqual([empty, value('3')])
+  it('evaluates the ends as any expression, in the scope at the line', () => {
+    expect(block('g = 3\nx = solve x^3 = 27, for x = g - 1 .. g * 2')).toEqual([empty, value('3')])
   })
 
   it('keeps the unknown local to the line: it wins inside and is not defined below', () => {
-    expect(block('Q = 100\nq = solve Q + 1 = 3, guess Q = 1\nQ')).toEqual([empty, value('2'), value('100')])
+    expect(block('Q = 100\nq = solve Q + 1 = 3, for Q = 0 .. 10\nQ')).toEqual([empty, value('2'), value('100')])
     // A unit name: the unknown wins over the unit, with the shadow warning.
-    expect(block('k_t = solve s * 2 = 6, guess s = 1\ns')).toEqual([value('3'), value('s')])
-    expect(warnings('k_t = solve s * 2 = 6, guess s = 1')[0]).toEqual(['s shadows the unit s'])
+    expect(block('k_t = solve s * 2 = 6, for s = 0 .. 10\ns')).toEqual([value('3'), value('s')])
+    expect(warnings('k_t = solve s * 2 = 6, for s = 0 .. 10')[0]).toEqual(['s shadows the unit s'])
   })
 
-  it('does not let the guess use the unknown', () => {
-    expect(block('x = 5\ny = solve x = 2, guess x = x')).toEqual([empty, error('guess x: Undefined symbol x')])
+  it('does not let the ends use the unknown', () => {
+    expect(block('x = 5\ny = solve x = 2, for x = 0 .. x')).toEqual([empty, error('for x: Undefined symbol x')])
   })
 
-  it('needs a guess, and one equation', () => {
-    expect(block('Q_op = solve Hp(Q) = Hs(Q)')).toEqual([error('solve needs a guess: ", guess Q = <value>"')])
-    expect(block('x = solve x^2, guess x = 1')).toEqual([
+  it('needs a range, not a guess, and one equation', () => {
+    expect(block('Q_op = solve Hp(Q) = Hs(Q)\nQ_op + 1')).toEqual([
+      error('solve needs a range: ", for Q = <from> .. <to>"'),
+      error('Q_op has an error above'),
+    ])
+    expect(block('Q_op = solve Hp(Q) = Hs(Q), guess Q = 15 L/s\nQ_op + 1')).toEqual([
+      error('solve needs a range: ", for Q = <from> .. <to>"'),
+      error('Q_op has an error above'),
+    ])
+    expect(block('x = solve x^2, for x = 0 .. 1')).toEqual([
       error('solve needs one equation: "<left side> = <right side>"'),
     ])
   })
 
-  it('reports no root with the guess and the span searched, in the guess’s unit', () => {
-    const [result] = block('x = solve x^2 = -1 m^2, guess x = 2 m')
-    expect(result).toEqual(error('no root near x = 2 m (searched -2.209·10¹¹ .. 2.209·10¹¹ m)'))
+  it('needs two ends and no step, from below to, of one kind', () => {
+    expect(block('x = solve x = 1, for x = 0\nx = solve x = 1, for x = 0 .. 2 step 1')).toEqual([
+      error('for x needs two ends and no step: "for x = <from> .. <to>"'),
+      error('for x needs two ends and no step: "for x = <from> .. <to>"'),
+    ])
+    expect(block('Q = solve Q = 3 L/s, for Q = 30 L/s .. 1 L/s')).toEqual([
+      error('for Q = 30 L/s .. 1 L/s: from must be below to'),
+    ])
+    expect(block('Q = solve Q = 3 L/s, for Q = 1 L/s .. 30 m')).toEqual([
+      error('for Q = 1 L/s .. 30 m: the ends must be the same kind'),
+    ])
+    expect(block('x = solve x = 1, for x = 1 m + 1 s .. 2')).toEqual([error('for x: Units do not match')])
   })
 
-  it('reports the sides’ units not matching, at the guess', () => {
-    expect(block('Q = solve Q = 3 m, guess Q = 15 m^3/s')).toEqual([
-      error('guess Q = 15 m^3/s: Q - 3 m units do not match'),
+  it('reports no root in the range, and a range where the equation has no value', () => {
+    expect(block('x = solve x^2 = -1, for x = -10 .. 10')).toEqual([error('no root found for x in -10 .. 10')])
+    expect(block('Q = solve Q = -1 L/s, for Q = 1 L/s .. 30 L/s')).toEqual([
+      error('no root found for Q in 1 .. 30 L / s'),
+    ])
+    expect(block('x = solve sqrt(x) = 1, for x = -10 .. -1')).toEqual([
+      error('no root found for x in -10 .. -1 (the equation has no value in the range)'),
     ])
   })
 
-  it('reports a guess that fails', () => {
-    expect(block('x = solve x = 1, guess x = 1 m + 1 s')).toEqual([error('guess x: Units do not match')])
+  it('reports more than 100 roots', () => {
+    expect(block('x = solve sin(x) = 0, for x = 0.5 .. 340')).toEqual([
+      error('more than 100 roots for x in 0.5 .. 340: narrow the range'),
+    ])
+  })
+
+  it('refuses a list in its equation or its range, but takes one value out of a list', () => {
+    expect(block('a_s = 1 .. 3\nx = solve x = a_s, for x = 0 .. 10\ny = solve x = 2, for x = 0 .. max(a_s)\nz = solve x = a_s[2], for x = 0 .. 10')).toEqual([
+      list('3 values, 1 … 3'),
+      error("a range solve can't use the list a_s; use a solve function with a guess"),
+      error("a range solve can't use the list a_s; use a solve function with a guess"),
+      value('2'),
+    ])
+    expect(block('a_s = 1 .. 3\ny = solve x = 2, for x = 0 .. a_s')[1]).toEqual(
+      error("a range solve can't use the list a_s; use a solve function with a guess"),
+    )
+  })
+
+  it('reports the sides’ units not matching', () => {
+    expect(block('Q = solve Q = 3 m, for Q = 1 m^3/s .. 30 m^3/s')).toEqual([
+      error('for Q = 1 m^3/s .. 30 m^3/s: Q - 3 m units do not match'),
+    ])
   })
 
   it('never shows a value when it fails: the name is removed, and the lines below say so', () => {
-    expect(block('x = 4\nx = solve x^2 = -1, guess x = 1\nx + 1')).toEqual([
+    expect(block('x = 4\nx = solve x^2 = -1, for x = 0 .. 1\nx + 1')).toEqual([
       empty,
-      error('no root near x = 1 (searched -1.104·10¹¹ .. 1.104·10¹¹)'),
+      error('no root found for x in 0 .. 1'),
       error('x has an error above'),
     ])
   })
 
-  it('fails after 100 iterations rather than showing a value', () => {
-    expect(block('x = solve x^3 = 0, guess x = 0.5')).toEqual([error('no convergence for x after 100 iterations')])
-  })
-
   it('cannot appear mid-expression', () => {
-    expect(block('y = 2 * solve x = 1, guess x = 1')[0].kind).toBe('error')
+    expect(block('y = 2 * solve x = 1, for x = 0 .. 2')[0].kind).toBe('error')
   })
 
   it('is an error, not a solve, when it assigns to solve', () => {
-    expect(block('solve = solve x = 1, guess x = 1')).toEqual([error('solve is a line form: choose another name')])
+    expect(block('solve = solve x = 1, for x = 0 .. 2')).toEqual([error('solve is a line form: choose another name')])
   })
 
   it('reads its note and format clause as any line does', () => {
-    const [line] = lines('x = solve x^2 = 4 m^2, guess x = 1 m in cm @bold # positive root')
+    const [line] = lines('x = solve x^2 = 4 m^2, for x = 0 m .. 10 m in cm @bold # positive root')
     expect(line.result).toEqual(value('200 cm'))
     expect(line.typeset).toMatchObject({ kind: 'math', note: 'positive root', format: { bold: true } })
   })
 
-  it('is the same solve on every run', () => {
-    const source = 'x = solve cos(x) = x, guess x = 1'
+  it('is the same solve on every run, with the same roots in the same order', () => {
+    const source = 'x = solve cos(x) = x, for x = -5 .. 5\ny = solve tan(y) = 1, for y = 0 .. 10'
     expect(lines(source)).toEqual(lines(source))
   })
 
-  it('gives the solve details to the hover, and none to other lines', () => {
-    const [solved, plain] = lines('x = solve x^2 = 2, guess x = 1\ny = x')
-    expect(solved.solveDetails).toMatchObject({ method: 'Brent', bracket: expect.stringContaining('1.41421356237') })
-    expect(solved.solveDetails?.iterations).toBeGreaterThan(0)
+  it('gives the range solve’s details to the hover, and none to other lines', () => {
+    const [solved, plain] = lines('x = solve x^2 = 2, for x = 0 .. 10\ny = x')
+    expect(solved.solveDetails).toMatchObject({ method: 'scan', range: '0 .. 10', points: 200, rejected: 0 })
+    expect(solved.solveDetails?.method === 'scan' && solved.solveDetails.roots[0].value).toContain('1.41421356237')
     expect(plain.solveDetails).toBeNull()
   })
 })
@@ -1062,23 +1108,23 @@ describe('solve functions and nested solves (docs/spec-v1.md section 9, #71)', (
     const sheet = [
       colebrook,
       'Hs(Q) = 12 m + f(Q / (1 L/s) * 1e4, 4e-4) * 1e3 m * (Q / (1 L/s))^2 / 100',
-      'Q_op = solve Hs(Q) = 25 m, guess Q = 1 L/s',
+      'Q_op = solve Hs(Q) = 25 m, for Q = -5 L/s .. 30 L/s',
     ].join('\n')
     const [, , solved] = lines(sheet)
     expect(solved.result.kind).toBe('value')
-    expect(solved.solveDetails?.method).toBe('Brent')
+    expect(solved.solveDetails?.method).toBe('scan')
   })
 
   it('carries the last inner error when the outer solve finds no root', () => {
-    const [, result] = block('g(a) = solve x^2 = a, guess x = 1\ny = solve g(y) = -5, guess y = 4')
+    const [, result] = block('g(a) = solve x^2 = a, guess x = 1\ny = solve g(y) = -5, for y = -4 .. 4')
     expect(result.kind).toBe('error')
     if (result.kind === 'error') {
-      expect(result.message).toMatch(/^no root near y = 4 \(searched .*\); last inner error: in g\(-?[\d.·⁰¹²³⁴⁵⁶⁷⁸⁹⁻]+\): no root near x = 1/)
+      expect(result.message).toMatch(/^no root found for y in -4 \.\. 4; last inner error: in g\(-?[\d.·⁰¹²³⁴⁵⁶⁷⁸⁹⁻]+\): no root near x = 1/)
     }
   })
 
   it('never swallows a units error in an inner solve', () => {
-    expect(block('g(a) = solve x = a, guess x = 1 m\ny = solve g(y) = 5, guess y = 1')).toEqual([
+    expect(block('g(a) = solve x = a, guess x = 1 m\ny = solve g(y) = 5, for y = 1 .. 2')).toEqual([
       empty,
       error('in g(1): guess x = 1 m: x - a units do not match'),
     ])
@@ -1090,6 +1136,13 @@ describe('solve functions and nested solves (docs/spec-v1.md section 9, #71)', (
     expect(direct.solveDetails?.method).toBe('Brent')
     expect(bare.solveDetails?.method).toBe('Brent')
     expect(deeper.solveDetails).toBeNull()
+  })
+
+  it('asks a solve function for a guess, not a range', () => {
+    expect(block('h(a) = solve x = a, for x = 0 .. 1')).toEqual([
+      error('a solve function takes a guess: ", guess x = <value>"'),
+    ])
+    expect(block('h(a) = solve x = a')).toEqual([error('solve needs a guess: ", guess x = <value>"')])
   })
 
   it('warns on a guess name not defined above, but not on the unknown or the parameters', () => {

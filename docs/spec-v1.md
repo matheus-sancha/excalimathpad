@@ -2094,9 +2094,13 @@ Changes line if it changes behaviour.
 
 - The range solve's run time on the pump sheet: `Q_op` over `1 L/s .. 30 L/s`, calling Colebrook with a
   guess at each of the 200 points. Projected at about 10 ms; the whole run must stay under the CI test's
-  200 ms and feel instant on every keystroke.
+  200 ms and feel instant on every keystroke. **Measured (#105), in Node under Vitest:** the whole pump sheet,
+  lines 1 to 31 with its table and plot, averaged 33 ms a run over 10 runs, with line 26 rewritten as a range
+  solve. `Q_op` is 18.81 L/s, one root, and the CI test's lines 1 to 28 stay under its 200 ms.
 - A range search over a residual with inner failures (the pump sheet's `Hs(Q)` near Q = 0): skipped
-  points, not an error.
+  points, not an error. **Passed (#105):** a range from -5 L/s, where the inner Colebrook solve fails below
+  zero, finds the root; with no root, the message carries the last inner error
+  (`evaluate.test.ts`, nested solves).
 - Re-wrapping live while a resize handle is dragged: Excalidraw's frame and the overlay's layout in step
   mid-drag, with the frame held at the floor. If they can't be, re-wrap on release, where the snap-back
   runs today.

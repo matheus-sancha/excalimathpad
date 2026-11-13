@@ -136,23 +136,33 @@ server. v1 target: one sheet, for Matheus's own use.
   the engine's own reads use `holds` and `peek`. `listConstants` gives the
   Constants tab its rows.
   A **solve line** (spec section 9) is read as text before math.js sees it
-  (`solveLine.ts`, pure: `<name>[(<params>)] = solve <lhs> = <rhs>, guess
-  <unknown> = <expr>`); its sides and guess are parsed with the captured
-  `parse` and compiled once (`solve.ts`, `createSolver`). Each run evaluates
-  the guess in the scope at that point with the unknown hidden, then the
-  residual `lhs - rhs` in a `LayeredScope` where the unknown wins, reduced to
-  SI numbers, so a dimension mismatch is the app's message; `solver.ts`
-  (pure numbers) steps out from the guess for a sign change, skipping points
-  with no value (NaN), then runs Brent to 1e-12 relative, 100 iterations at
-  most. The value form solves once at its line; the function form defines a
-  wrapped function (`sheetFunction.solve`) that solves at each call over the
-  scope as it is then. A failure throws a `SheetError`; no root and no
+  (`solveLine.ts`, pure): a **solved value** is `<name> = solve <lhs> = <rhs>,
+  for <unknown> = <from> .. <to>` and a **solve function** is
+  `<name>(<params>) = solve …, guess <unknown> = <expr>`; either one with the
+  other's clause, or none, is the line's error. Its sides and clause are
+  parsed with the captured `parse` and compiled once (`solve.ts`,
+  `createSolver`). Each run evaluates the guess or the range's ends in the
+  scope at that point with the unknown hidden, then the residual `lhs - rhs`
+  in a `LayeredScope` where the unknown wins, reduced to SI numbers, so a
+  dimension mismatch is the app's message. `solver.ts` (pure numbers) has two
+  searches. `solveNear` steps out from a guess for a sign change, skipping
+  points with no value (NaN), then runs Brent to 1e-12 relative, 100
+  iterations at most. `solveRange` samples 200 points of the range, runs Brent
+  on each sign change, keeps a crossing only if its residual is at most 1e-6
+  of its samples' (a pole or a jump isn't a root), and runs a dip pass (golden
+  section) for double roots; more than 100 roots is an error. The solved value
+  runs once at its line and holds its roots, ascending: one root is a single
+  value, several a `SheetList`. It refuses a list in its equation or range
+  (an index on one is fine). The solve function defines a wrapped function
+  (`sheetFunction.solve`) that solves at each call over the scope as it is
+  then. A failure throws a `SheetError`; a guess solve's no root and no
   convergence are marked `outsideDomain`, which the `in f(…):` wrapper keeps,
   so an outer solve counts a trial point where an inner one failed as having
-  no value there; every other error fails the outer line at once. A converged
-  solve's details (method, iterations, residual in SI, bracket) ride on its
-  line's `solveDetails`, and on a line that is just one call to a solve
-  function.
+  no value there; every other error fails the outer line at once. A solve's
+  details ride on its line's `solveDetails` (and on a line that is just one
+  call to a solve function): a guess solve's method, iterations, residual in
+  SI and bracket; a range solve's range, points, each root with its residual
+  and touching mark, and the crossings rejected.
   **Lists** (spec section 10, `lists.ts`): a `SheetList` holds point results
   (a value or an error) and the first list its line ran over, to name a failed
   point. A range line is read as text (`rangeLine.ts`, `[name =] a .. b [step
