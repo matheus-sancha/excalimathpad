@@ -162,7 +162,14 @@ server. v1 target: one sheet, for Matheus's own use.
   one compiled expression, no math.js matrices; a point that throws fails
   alone. An aggregate (`min`, `max`, `sum`, `mean`, `count`) over a list is
   worked out first and stands in the node as a bound name (`foldAggregates`).
-  A function body that names an outside list fails at its definition. A list
+  A function body that names an outside list fails at its definition. An
+  **index** (`indexes.ts`, spec section 3) is the app's: after the parse
+  (`parseSheet`), each `name[i]` becomes a call to `__index`, a raw-args
+  function in the namespace that reads the name whole and takes its `i`-th
+  point, counting from 1 (a single value is a list of one). A name inside an
+  index never makes a line iterate (`withoutIndexes`), and `iterate` works out
+  an index on a whole list first (`foldIndexes`), so `Q_s[2] + Q_s` reads the
+  list. The typesetter shows it as `x_r[2]`, brackets at the baseline. A list
   result is `{ kind: 'list', text, failed }`: its summary, and the line's
   error when points failed. A **table line** (`tableLine.ts`, `table(arg, …)`,
   each argument with its own `in <unit>`) gives `SheetLine.table`: columns
@@ -539,4 +546,4 @@ marked with a milestone aren't built yet.
   the sheet file is Excalidraw JSON plus one block, saved as `.excalimathpad`.
 - [ADR 0005](docs/adr/0005-app-reads-line-forms-before-mathjs.md) — the app
   reads its line forms (comment, display unit, solve, range, table, plot)
-  before math.js sees a line.
+  before math.js sees a line, and the index right after the parse.

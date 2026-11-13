@@ -28,6 +28,7 @@ import { readSolve } from './solveLine.ts'
 import { readRange } from './rangeLine.ts'
 import { readTable } from './tableLine.ts'
 import { PLOT_SIZES, readPlot, type PlotClause } from './plotLine.ts'
+import { createIndex, INDEX_FN, indexParts, readIndexes, withoutIndexes } from './indexes.ts'
 import { AGGREGATES, createRanges, isSheetList, listSummary, SheetList, type Point } from './lists.ts'
 import { lineTex, rangeTex, resultTex, solveTex, textTex, unitTex, type Names } from './typeset.ts'
 import { bodyNames, lineWarnings, solveWarnings, usedNames } from './warnings.ts'
@@ -96,6 +97,11 @@ function registerShortConstants() {
 }
 registerShortConstants()
 
+// The app's index (section 3, An index): `x_r[2]` is read as this call after
+// the parse, so math.js never indexes a list. Joins the namespace before
+// `import` is disabled; it takes its arguments raw.
+math.import({ [INDEX_FN]: createIndex(math) })
+
 // Keep our own reference before hardening: the `parse` that expressions can
 // see is disabled below; this one stays usable. The sheet parses each line
 // once with it (to learn which names the line defines) and evaluates the
@@ -105,6 +111,9 @@ registerShortConstants()
 // names (`help`, `rationalize`, `symbolicEqual`, a `parser()`'s methods)
 // fail with "... is not supported" messages.
 const parse = math.parse
+
+/** A sheet line's code, parsed, with each `name[…]` read as the app's index (ADR 0005, step 5). */
+const parseSheet = (text: string): MathNode => readIndexes(parse(text), math)
 
 /** The shown result's formatter (docs/spec-v1.md section 5), on the captured parser. */
 const display = createDisplay(math, parse)
@@ -1014,7 +1023,7 @@ export function evaluateSheet(
 
   /** The names in a node that hold a list here, in order, each once. */
   function listsIn(node: MathNode, bound?: ReadonlyMap<string, unknown>): string[] {
-    return [...new Set(usedNames(node))].filter((name) => !bound?.has(name) && isSheetList(scope.peek(name)))
+    return [...new Set(usedNames(withoutIndexes(node, math)))].filter((name) => !bound?.has(name) && isSheetList(scope.peek(name)))
   }
 
   /**
@@ -1022,7 +1031,9 @@ export function evaluateSheet(
    * name bound to its i-th value, lists paired point by point. A point whose
    * input failed, or whose run throws, fails alone.
    */
-  function iterate(expression: MathNode, bound: ReadonlyMap<string, unknown>): SheetList {
+  function iterate(line: MathNode, outer: ReadonlyMap<string, unknown>): SheetList {
+    const bound = new Map(outer)
+    const expression = foldIndexes(line, bound)
     const names = listsIn(expression, bound)
     const lists = names.map((name) => scope.peek(name) as SheetList)
     const length = lists[0].length
@@ -1052,6 +1063,23 @@ export function evaluateSheet(
       }
     }
     return new SheetList(points, { name: names[0], list: lists[0] })
+  }
+
+  /**
+   * An index on a whole list (section 3, An index), worked out before a line
+   * runs once per point: the list's name is bound to each point inside the
+   * run, and `Q_s[2] + Q_s` still means the second value of the whole list.
+   */
+  function foldIndexes(node: MathNode, bound: Map<string, unknown>): MathNode {
+    return node.transform((child) => {
+      const parts = indexParts(child)
+      if (parts === null || !isSymbolNode(parts.object)) return child
+      const name = parts.object.name
+      if (bound.has(name) || !isSheetList(scope.peek(name))) return child
+      const key = `__indexed${bound.size}`
+      bound.set(key, child.compile().evaluate(new LayeredScope(scope, new Map(bound))))
+      return new math.SymbolNode(key)
+    })
   }
 
   /**
@@ -1307,7 +1335,7 @@ function parseLine(text: string): ParsedLine {
         args: plotForm.args.map(({ expression, displayUnit }) => {
           const target = displayUnit === null ? null : display.readTarget(displayUnit)
           return {
-            node: parse(target === null && displayUnit !== null ? `${expression} in ${displayUnit}` : expression),
+            node: parseSheet(target === null && displayUnit !== null ? `${expression} in ${displayUnit}` : expression),
             display: target,
             displayText: target === null ? null : displayUnit,
             text: expression,
@@ -1315,11 +1343,11 @@ function parseLine(text: string): ParsedLine {
         }),
         clauses: plotForm.clauses,
         marks: plotForm.clauses.flatMap((clause) =>
-          clause.kind === 'mark' ? [{ node: parse(clause.expression), text: clause.expression }] : [],
+          clause.kind === 'mark' ? [{ node: parseSheet(clause.expression), text: clause.expression }] : [],
         ),
         ranges: plotForm.clauses.flatMap((clause) =>
           clause.kind === 'range'
-            ? [{ axis: clause.axis, start: parse(clause.start), end: parse(clause.end), text: `${clause.start} .. ${clause.end}` }]
+            ? [{ axis: clause.axis, start: parseSheet(clause.start), end: parseSheet(clause.end), text: `${clause.start} .. ${clause.end}` }]
             : [],
         ),
         defines: [],
@@ -1341,7 +1369,7 @@ function parseLine(text: string): ParsedLine {
         args: tableForm.args.map(({ expression, displayUnit }) => {
           const target = displayUnit === null ? null : display.readTarget(displayUnit)
           return {
-            node: parse(target === null && displayUnit !== null ? `${expression} in ${displayUnit}` : expression),
+            node: parseSheet(target === null && displayUnit !== null ? `${expression} in ${displayUnit}` : expression),
             display: target,
             displayText: target === null ? null : displayUnit,
           }
@@ -1363,9 +1391,9 @@ function parseLine(text: string): ParsedLine {
       return {
         kind: 'range',
         name: range.name,
-        start: parse(range.start),
-        end: parse(range.end),
-        step: range.step === null ? null : parse(range.step),
+        start: parseSheet(range.start),
+        end: parseSheet(range.end),
+        step: range.step === null ? null : parseSheet(range.step),
         defines: range.name === null ? [] : [range.name],
         note: form.note,
         format: form.format,
@@ -1391,9 +1419,9 @@ function parseLine(text: string): ParsedLine {
     try {
       const parts: SolveParts = {
         unknown: solve.unknown,
-        lhs: parse(solve.lhs),
-        rhs: parse(solve.rhs),
-        guess: parse(solve.guess),
+        lhs: parseSheet(solve.lhs),
+        rhs: parseSheet(solve.rhs),
+        guess: parseSheet(solve.guess),
         lhsText: solve.lhs,
         rhsText: solve.rhs,
         guessText: solve.guess,
@@ -1421,7 +1449,7 @@ function parseLine(text: string): ParsedLine {
     }
   }
   try {
-    const node = parse(line)
+    const node = parseSheet(line)
     return {
       kind: 'parsed',
       node,

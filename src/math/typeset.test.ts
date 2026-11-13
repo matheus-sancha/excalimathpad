@@ -201,3 +201,12 @@ describe('typesetResult (section 4: from the result’s plain text)', () => {
     expect(() => render(textTex('\\ { } $ & # ^ _ % ~'))).not.toThrow()
   })
 })
+
+describe('an index (docs/spec-v1.md section 4, Typesetting names; #104)', () => {
+  it('shows in square brackets after the whole name, at the baseline, not as a subscript', () => {
+    const [, line] = typeset('Q_s = 1 .. 3\nQ_5 = Q_s[2] + 1')
+    expect(math(line).expression).toBe('{Q}_{s}\\lbrack 2\\rbrack +1')
+    expect(() => render(math(line).expression)).not.toThrow()
+  })
+})
+

@@ -1199,6 +1199,73 @@ describe('ranges and lists (docs/spec-v1.md section 10, #74)', () => {
   })
 })
 
+describe('an index (docs/spec-v1.md section 3, An index; #104)', () => {
+  const list = (text: string, failed: string | null = null): LineResult => ({ kind: 'list', text, failed })
+  const RANGE = 'Q_s = 1 L/s .. 30 L/s step 1 L/s'
+
+  it('takes one value out of a list, counting from 1, as one value', () => {
+    expect(block(`${RANGE}\nQ_5 = Q_s[5]\nQ_s[5] + 1 L/s\nQ_s[1]\nQ_s[count(Q_s)]`)).toEqual([
+      list('30 values, 1 … 30 L / s'),
+      value('5 L / s'),
+      value('6 L / s'),
+      value('1 L / s'),
+      value('30 L / s'),
+    ])
+  })
+
+  it('works on a per-point result, and an index on a whole list beside the list itself', () => {
+    expect(block('x = 1 .. 3\ny = x * 10\ny[2]\nx[3] + x')).toEqual([
+      list('3 values, 1 … 3'),
+      list('3 values, 10 … 30'),
+      value('20'),
+      list('3 values, 4 … 6'),
+    ])
+  })
+
+  it('takes any whole-number expression, and an index inside an aggregate', () => {
+    expect(block('x = 1 .. 5\nn = 2\nx[n + 1]\nmax(x[1], x[4])')).toEqual([
+      list('5 values, 1 … 5'),
+      empty,
+      value('3'),
+      value('4'),
+    ])
+  })
+
+  it('reads a single value as a list of one', () => {
+    expect(block('x = 3 m\nx[1] * 2\nx[2]')).toEqual([empty, value('6 m'), error('x has 1 value')])
+  })
+
+  it('refuses an index that isn’t a whole number from 1, one past the end, and one not on a name', () => {
+    const [, zero, half, past, paren, below] = block(
+      `${RANGE}\na = Q_s[0]\nQ_s[1.5]\nQ_s[31]\n(Q_s)[2]\na + 1 L/s`,
+    )
+    expect(zero).toEqual(error('Q_s[0]: an index is a whole number from 1'))
+    expect(half).toEqual(error('Q_s[1.5]: an index is a whole number from 1'))
+    expect(past).toEqual(error('Q_s has 30 values'))
+    expect(paren).toEqual(error('an index goes on a name: x_r[2]'))
+    expect(below).toEqual(error('a has an error above'))
+  })
+
+  it('refuses a list or a unit as the index: a name inside an index never iterates', () => {
+    expect(block('x = 1 .. 3\nx[x]\nx[2 m]')).toEqual([
+      list('3 values, 1 … 3'),
+      error('x[x]: an index is a whole number from 1'),
+      error('x[2 m]: an index is a whole number from 1'),
+    ])
+  })
+
+  it('gives a failed point’s own error', () => {
+    const [, , y, second, third] = block('x = -1 .. 1\nr(t) = t < 0 ? missing : t\ny = r(x)\ny[2]\ny[1]')
+    expect(y.kind).toBe('list')
+    expect(second).toEqual(value('0'))
+    expect(third).toEqual(error('in r(-1): Undefined symbol missing'))
+  })
+
+  it('says when the indexed name is defined below', () => {
+    expect(block('x[1]\nx = 1 .. 2')[0]).toEqual(error('x is defined below'))
+  })
+})
+
 describe('a list’s hover (docs/spec-v1.md section 10, #75)', () => {
   const preview = (source: string) => evaluateSheet([{ id: 'b', source }]).get('b')!.map((line) => line.listPreview)
 

@@ -8,6 +8,7 @@ import {
   isSymbolNode,
   type MathNode,
 } from 'mathjs'
+import { indexParts } from './indexes.ts'
 import { leadingNumber, numberTex } from './numbers.ts'
 
 /**
@@ -152,6 +153,11 @@ function toTex(node: MathNode, names: Names): string {
       const tex = symbolTex(child.name, names)
       // math.js glues operands onto operators: `\cdot` then `v` is `\cdotv`.
       return tex === undefined ? undefined : ` ${tex}`
+    }
+    // An index (M4c) in square brackets after the whole name, at the baseline.
+    const index = indexParts(child)
+    if (index !== null) {
+      return ` ${index.object.toTex(options)}\\lbrack ${index.index.toTex(options)}\\rbrack `
     }
     if (isFunctionNode(child) && isSymbolNode(child.fn) && isSheetFunction(child.fn.name, names)) {
       const args = child.args.map((arg) => arg.toTex(options)).join(',')
