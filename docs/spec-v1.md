@@ -457,6 +457,7 @@ Lines typeset through math.js `toTex` with one custom handler, then KaTeX.
 - Results typeset from the text `math.format` shows: number and unit split, unit
   typeset.
 - Micro shows as `µm`, not math.js's `um`. `ohm` shows as Ω (`kohm` as kΩ), `deg` as °.
+- An index (M4c) shows in square brackets after the whole name, at the baseline: `x_r[2]`.
 
 ### Problems
 
@@ -1880,14 +1881,14 @@ known before more is built on it.
 
 **M4c's issue order** (added on 2026-11-13 from Matheus's [improvements batch](https://github.com/matheus-sancha/excalimathpad/issues/88), built before M5):
 
-1. A value out of a list: the index `x_r[1]`
-2. Range solve: the roots found in a range, with the pump sheet's line 26 rewritten in CI
-3. Roots shown, the range typeset, and a range solve's details on hover
-4. Text colours on a line, and the bar's second row
-5. Result colour in Settings; a chosen unit loses its tint
-6. Rules: conditional formats
-7. Chosen width
-8. Title format
+1. A value out of a list: the index `x_r[1]` (#104)
+2. Range solve: the roots found in a range, with the pump sheet's line 26 rewritten in CI (#105)
+3. Roots shown, the range typeset, and a range solve's details on hover (#106)
+4. Text colours on a line, and the bar's second row (#107)
+5. Result colour in Settings; a chosen unit loses its tint (#108)
+6. Rules: conditional formats (#109)
+7. Chosen width (#110)
+8. Title format (#111)
 
 The solve comes first: it carries the milestone's one open risk (its cost is projected, not measured),
 and it is the only part that changes what a saved sheet computes. The index comes before it, because a
@@ -2396,7 +2397,7 @@ Changes line if it changes behaviour.
   keyboard, and a space wasn't typed.
 - 2026-11-13, [section 16](#16-milestones-and-finish-line) (agreed by Matheus on the map
   [Spec for the improvements batch before M5](https://github.com/matheus-sancha/excalimathpad/issues/90), from his batch #88): a new milestone, M4c Improvements,
-  built before M5, in eight issues. Each entry below is one of its decisions; the ticket it names holds his
+  built before M5, in eight issues (#104 to #111), the solve first ("Solve first"). Each entry below is one of its decisions; the ticket it names holds his
   chosen options, word for word. Items in an entry's last sentence, after "Not asked:", are choices
   the tickets made without asking him, for Matheus to confirm on the PR.
 - 2026-11-13, [sections 1](#1-what-v1-is-and-what-it-isnt), [3](#3-sheet-lines-every-form), [9](#9-solve),
@@ -2428,8 +2429,9 @@ Changes line if it changes behaviour.
   outside a string, where it was the trailing `@` words, so an `@` in the middle of the code is the line's
   format error and no longer math.js's. Not asked: a line in error runs no rules; an assignment in a
   condition is a warning; `result` always means the line's value there; a failed point counts as not true;
-  one warning per rule; roots written out in one row take a rule's format only if every root is true, as a
-  list's summary does; the five warning wordings.
+  one warning per rule; the five warning wordings. Asked on 2026-11-13 while writing M4c: roots written out
+  in one row take a rule's format only if every root is true, as a list's summary does ("Row only if all
+  true").
 - 2026-11-13, [sections 2](#invariants), [4](#chosen-width), [6](#6-undo), [7](#the-file) and
   [14](#14-engineering-constraints) (#100, agreed by Matheus: "What we can is set the minimum width and the
   user can reduce more, but the user can increase it"): a math element has an optional chosen width, set by
