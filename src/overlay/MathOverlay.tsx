@@ -18,6 +18,7 @@ import {
   toMathAnchor,
   writeAnchorSource,
   writeAnchorTitle,
+  writeAnchorTitleFormat,
   type MathAnchor,
 } from '../canvas/mathAnchor.ts'
 import { SHEET_SIDEBAR_CLASS, type ForwardWheel } from '../canvas/SheetCanvas.tsx'
@@ -385,6 +386,10 @@ export function MathOverlay({
             const next = { ...current, text, caret, revision: (current.revision ?? 0) + 1 }
             writeAnchorSource(api, current.anchorId, withTypedLine(live.source, next))
             changeEdit(next)
+          }}
+          onTitleFormat={(format) => {
+            // A press on the title's bar or its keys: one undo step; the title stays open.
+            writeAnchorTitleFormat(api, anchor.id, format)
           }}
           onMove={moveEdit}
           onEscape={() => {

@@ -5,6 +5,7 @@ import {
 } from '@excalidraw/excalidraw'
 import type { ExcalidrawElement } from '@excalidraw/excalidraw/element/types'
 import type { ExcalidrawImperativeAPI } from '@excalidraw/excalidraw/types'
+import { FORMAT_COLORS, TEXT_COLORS, type FormatColor, type TextColor } from '../math/lineForm.ts'
 
 /**
  * A math element's anchor: a plain Excalidraw rectangle marked with
@@ -61,6 +62,76 @@ export interface MathAnchor {
    * scene units; null for an automatic element. Stored in `customData.width`.
    */
   chosenWidth: number | null
+  /** How the title looks (section 4, Title format, M4c). Stored in `customData.titleFormat`. */
+  titleFormat: TitleFormat
+}
+
+/** A title's format (section 4, Title format): set only from the title's bar. */
+export interface TitleFormat {
+  bold: boolean
+  italic: boolean
+  underline: boolean
+  align: 'left' | 'centre' | 'right'
+  size: 'S' | 'M' | 'L' | 'XL'
+  color: TextColor
+  highlight: FormatColor | null
+}
+
+/** A title with no format: bold, black, M and at the left, as before M4c. */
+export const NO_TITLE_FORMAT: TitleFormat = {
+  bold: true,
+  italic: false,
+  underline: false,
+  align: 'left',
+  size: 'M',
+  color: 'black',
+  highlight: null,
+}
+
+const TITLE_ALIGNS = ['left', 'centre', 'right'] as const
+const TITLE_SIZES = ['S', 'M', 'L', 'XL'] as const
+
+/**
+ * A title's format as a file holds it: a string of words, only those that
+ * differ from no format, such as `"L centre text-red"` (`regular`, `italic`,
+ * `underline`; `centre`, `right`; `S`, `L`, `XL`; `text-<colour>`; a highlight).
+ * A string and not an object: Excalidraw compares `customData` one level deep
+ * when it records a step, so a nested object would add an empty undo step to
+ * every later write of the anchor (`mathAnchor.excalidraw.test.tsx`). Anything
+ * unreadable is the default.
+ */
+function readTitleFormat(element: ExcalidrawElement): TitleFormat {
+  const stored: unknown = element.customData?.titleFormat
+  if (typeof stored !== 'string') return NO_TITLE_FORMAT
+  let format = NO_TITLE_FORMAT
+  for (const word of stored.split(/\s+/)) {
+    if (word === 'regular') format = { ...format, bold: false }
+    else if (word === 'italic' || word === 'underline') format = { ...format, [word]: true }
+    else if ((TITLE_ALIGNS as readonly string[]).includes(word)) format = { ...format, align: word as TitleFormat['align'] }
+    else if ((TITLE_SIZES as readonly string[]).includes(word)) format = { ...format, size: word as TitleFormat['size'] }
+    else if (word.startsWith('text-') && (TEXT_COLORS as readonly string[]).includes(word.slice(5))) {
+      format = { ...format, color: word.slice(5) as TextColor }
+    } else if ((FORMAT_COLORS as readonly string[]).includes(word)) format = { ...format, highlight: word as FormatColor }
+  }
+  return format
+}
+
+/** The words of `format` that differ from no format, as a file stores them; null when none does. */
+function storedTitleFormat(format: TitleFormat): string | null {
+  const words = [
+    format.bold ? null : 'regular',
+    format.italic ? 'italic' : null,
+    format.underline ? 'underline' : null,
+    format.align === 'left' ? null : format.align,
+    format.size === 'M' ? null : format.size,
+    format.color === 'black' ? null : `text-${format.color}`,
+    format.highlight,
+  ].filter((word) => word !== null)
+  return words.length === 0 ? null : words.join(' ')
+}
+
+function sameTitleFormat(a: TitleFormat, b: TitleFormat): boolean {
+  return (Object.keys(a) as (keyof TitleFormat)[]).every((key) => a[key] === b[key])
 }
 
 export function isMathAnchor(element: ExcalidrawElement): boolean {
@@ -103,6 +174,7 @@ export function toMathAnchor(element: ExcalidrawElement): MathAnchor {
     source: readSource(element),
     title: readTitle(element),
     chosenWidth: readChosenWidth(element),
+    titleFormat: readTitleFormat(element),
   }
 }
 
@@ -119,14 +191,15 @@ export function sameAnchor(a: MathAnchor, b: MathAnchor): boolean {
     a.opacity === b.opacity &&
     a.source === b.source &&
     a.title === b.title &&
-    a.chosenWidth === b.chosenWidth
+    a.chosenWidth === b.chosenWidth &&
+    sameTitleFormat(a.titleFormat, b.titleFormat)
   )
 }
 
 /** Builds the scene elements for new anchors (e.g. for `initialData`). */
 export function createMathAnchorElements(
   anchors: ReadonlyArray<
-    Omit<MathAnchor, 'angle' | 'source' | 'locked' | 'opacity' | 'title' | 'chosenWidth'> & {
+    Omit<MathAnchor, 'angle' | 'source' | 'locked' | 'opacity' | 'title' | 'chosenWidth' | 'titleFormat'> & {
       source?: string
       title?: string
       locked?: boolean
@@ -197,8 +270,24 @@ export function writeAnchorTitle(api: SourceWriteApi, anchorId: string, title: s
   const next = title.replace(/\s*[\r\n]+\s*/g, ' ').trim()
   return writeAnchorData(api, anchorId, (anchor) => {
     if (readTitle(anchor) === next) return null
-    const { title: _old, ...rest } = anchor.customData ?? {}
-    return next ? { ...rest, title: next } : rest
+    const { title: _old, titleFormat: _format, ...rest } = anchor.customData ?? {}
+    // Emptying the title removes its format with it (section 4, Title format).
+    return next ? { ...rest, title: next, ...(_format === undefined ? {} : { titleFormat: _format }) } : rest
+  })
+}
+
+/**
+ * Sets a title's format (section 4, Title format, M4c), from the title's bar:
+ * one undo step when it changes, under the same rules as a source write.
+ * `customData.titleFormat` holds only what differs from no format, and no key
+ * at all for none, so a title without a format is stored as it always was.
+ */
+export function writeAnchorTitleFormat(api: SourceWriteApi, anchorId: string, format: TitleFormat): boolean {
+  return writeAnchorData(api, anchorId, (anchor) => {
+    if (sameTitleFormat(readTitleFormat(anchor), format)) return null
+    const { titleFormat: _old, ...rest } = anchor.customData ?? {}
+    const stored = storedTitleFormat(format)
+    return stored === null ? rest : { ...rest, titleFormat: stored }
   })
 }
 

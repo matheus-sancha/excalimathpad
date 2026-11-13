@@ -64,8 +64,55 @@
 }
 
 .math-element__title.is-editing {
+  position: relative;
   opacity: 1;
 }
+
+/* A title's format (section 4, Title format, M4c). Without one it is bold,
+   black, 16 px and at the left, as before. The highlight fills the header
+   band above the rule; underline is on the text, not the band. One line,
+   never wrapped: its width at its size counts toward the floor. */
+.math-element__title.is-regular { font-weight: normal; }
+.math-element__title.is-italic { font-style: italic; }
+.math-element__title.is-underline .math-element__title-text { text-decoration: underline; }
+.math-element__title.is-align-centre { text-align: center; }
+.math-element__title.is-align-right { text-align: right; }
+.math-element__title.is-align-centre,
+.math-element__title.is-align-right { padding-right: 14px; }
+.math-element__title.is-size-S { font-size: 13px; line-height: 20px; }
+.math-element__title.is-size-L { font-size: 20px; line-height: 30px; }
+.math-element__title.is-size-XL { font-size: 26px; line-height: 38px; }
+.math-element__title.is-text-black { color: #1e1e1e; }
+.math-element__title.is-text-blue { color: #1971c2; }
+.math-element__title.is-text-red { color: #e03131; }
+.math-element__title.is-text-green { color: #2f9e44; }
+.math-element__title.is-text-orange { color: #e8590c; }
+.math-element__title.is-text-gray { color: #868e96; }
+.math-element__title.is-yellow { background: #fff3bf; }
+.math-element__title.is-green { background: #d3f9d8; }
+.math-element__title.is-blue { background: #d0ebff; }
+.math-element__title.is-red { background: #ffe3e3; }
+.math-element__title.is-gray { background: #e9ecef; }
+.math-element__title[class*='is-'] { print-color-adjust: exact; }
+
+/* The title's bar: the line's bar's look, beside the header, its rows stacked. */
+.math-format-bar.is-title-bar {
+  top: 0;
+  transform: none;
+  font: 13px/20px system-ui, 'Segoe UI', sans-serif;
+  font-style: normal;
+  font-weight: normal;
+  color: var(--math-text);
+}
+
+.math-format-bar__column {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.math-format-bar__button.is-italic { font-style: italic; }
+.math-format-bar__button.is-size { width: auto; min-width: 22px; padding: 0 3px; font-size: 11px; }
 
 /* The title's field starts with room to type, as a new element's line does. */
 .math-element__field-cell.is-title {

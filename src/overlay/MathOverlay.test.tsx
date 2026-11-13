@@ -1560,6 +1560,52 @@ describe('title (docs/spec-v1.md section 4: an optional header on the element)',
     expect(screen.queryByRole('toolbar', { name: 'Line format' })).toBeNull()
   })
 
+  it('opens the title’s own bar, whose presses write its format beside it and keep it open (M4c, #111)', () => {
+    const { scene } = renderOverlay([titled('Pump @ 50 Hz #2')])
+    openLine(1)
+    fireEvent.click(screen.getByRole('button', { name: /^Title/ }))
+    const formatOf = () => scene.elementOf('m1').customData?.titleFormat
+    const bar = () => screen.getByRole('toolbar', { name: 'Title format' })
+
+    // Bold is on without a format.
+    expect(within(bar()).getByRole('button', { name: /^Bold/ })).toHaveAttribute('aria-pressed', 'true')
+    fireEvent.click(within(bar()).getByRole('button', { name: /^Bold/ }))
+    expect(formatOf()).toBe('regular')
+    fireEvent.click(within(bar()).getByRole('button', { name: 'Size XL' }))
+    fireEvent.click(within(bar()).getByRole('button', { name: 'Centre' }))
+    fireEvent.click(within(bar()).getByRole('button', { name: 'Text red' }))
+    fireEvent.click(within(bar()).getByRole('button', { name: 'Highlight yellow' }))
+    expect(formatOf()).toBe('regular centre XL text-red yellow')
+    expect(titleField()).toHaveFocus()
+    expect(header()).toHaveClass('is-regular', 'is-size-XL', 'is-align-centre', 'is-text-red', 'is-yellow')
+
+    // Ctrl+I from the field; the text stays exactly as typed.
+    fireEvent.keyDown(titleField()!, { key: 'i', ctrlKey: true })
+    expect(formatOf()).toBe('regular italic centre XL text-red yellow')
+    fireEvent.keyDown(titleField()!, { key: 'Escape' })
+    expect(titleOf(scene)).toBe('Pump @ 50 Hz #2')
+    expect(header()).toHaveTextContent('Pump @ 50 Hz #2')
+    expect(screen.queryByRole('toolbar', { name: 'Title format' })).toBeNull()
+  })
+
+  it('looks as before with no format, and emptying the title removes its format', () => {
+    const { scene } = renderOverlay([
+      createMathAnchorElements([{ id: 'm1', ...box, source: 'x = 2', title: 'Inputs' }]).map((element) => ({
+        ...element,
+        customData: { ...element.customData, titleFormat: 'L' },
+      }))[0],
+    ])
+    expect(header()).toHaveClass('is-bold', 'is-size-L', 'is-align-left', 'is-text-black')
+
+    openLine(1)
+    fireEvent.click(screen.getByRole('button', { name: /^Title/ }))
+    type(titleField()!, '')
+    fireEvent.keyDown(titleField()!, { key: 'Escape' })
+
+    expect(scene.elementOf('m1').customData).not.toHaveProperty('titleFormat')
+    expect(scene.elementOf('m1').customData).not.toHaveProperty('title')
+  })
+
   it('Esc keeps what was typed, as one write, trimmed', () => {
     const { scene } = renderOverlay([anchorWith('x = 2')])
     fireEvent.keyDown(openLine(1), { key: 'ArrowUp' })

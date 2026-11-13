@@ -10,7 +10,7 @@ import {
   type ReactNode,
   type RefObject,
 } from 'react'
-import type { MathAnchor } from '../canvas/mathAnchor.ts'
+import type { MathAnchor, TitleFormat } from '../canvas/mathAnchor.ts'
 import type { ForwardWheel } from '../canvas/SheetCanvas.tsx'
 import {
   splitLines,
@@ -67,6 +67,8 @@ export interface MathElementViewProps {
   unitSlots?: UnitSlots
   /** The suggestions for the open line's text and caret (section 4); none on the title. */
   suggest?: Suggest | null
+  /** A press on the title's bar or its keys: the title's new format, one undo step (section 4, M4c). */
+  onTitleFormat?: (format: TitleFormat) => void
 }
 
 /** What the open line offers for a text and caret: the names that start with the word there. */
@@ -132,6 +134,7 @@ export function MathElementView({
   flash = null,
   unitSlots = NO_SLOTS,
   suggest = null,
+  onTitleFormat = () => {},
 }: MathElementViewProps) {
   const rootRef = useRef<HTMLDivElement>(null)
   const katexReady = useKatexReady()
@@ -176,6 +179,8 @@ export function MathElementView({
         {(anchor.title !== '' || edit?.lineIndex === TITLE_LINE) && (
           <Header
             title={anchor.title}
+            format={anchor.titleFormat}
+            onFormat={onTitleFormat}
             edit={edit?.lineIndex === TITLE_LINE ? edit : null}
             onType={onType}
             onMove={onMove}
@@ -234,10 +239,14 @@ export function MathElementView({
  */
 function Header({
   title,
+  format,
+  onFormat,
   edit,
   ...field
 }: {
   title: string
+  format: TitleFormat
+  onFormat: (format: TitleFormat) => void
   edit: LineEdit | null
   onType: (text: string) => void
   onMove: (move: LineMove) => void
@@ -245,19 +254,107 @@ function Header({
   onBlur: () => void
 }) {
   const fieldRef = useRef<HTMLInputElement>(null)
+  const toggle = (key: 'b' | 'i' | 'u') =>
+    onFormat(
+      key === 'b'
+        ? { ...format, bold: !format.bold }
+        : key === 'i'
+          ? { ...format, italic: !format.italic }
+          : { ...format, underline: !format.underline },
+    )
   return (
-    <div className={`math-element__title${edit ? ' is-editing' : ''}`} data-title aria-label="Title">
+    <div
+      className={`math-element__title${edit ? ' is-editing' : ''}${titleClasses(format)}`}
+      data-title
+      aria-label="Title"
+    >
       {edit ? (
         <span className="math-element__field-cell is-title">
           <span className="math-element__field-text" aria-hidden="true">
             {edit.text}
           </span>
-          <LineField fieldRef={fieldRef} label="Title" edit={edit} onFormat={null} {...field} />
+          <LineField fieldRef={fieldRef} label="Title" edit={edit} onFormat={null} onTitleKey={toggle} {...field} />
         </span>
       ) : (
-        title
+        <span className="math-element__title-text">{title}</span>
       )}
+      {edit && <TitleBar format={format} onChange={onFormat} />}
     </div>
+  )
+}
+
+/** A title's format as classes: the stylesheet draws each option (section 4, Title format). */
+function titleClasses(format: TitleFormat): string {
+  return [
+    format.bold ? 'is-bold' : 'is-regular',
+    format.italic ? 'is-italic' : '',
+    format.underline ? 'is-underline' : '',
+    `is-align-${format.align}`,
+    `is-size-${format.size}`,
+    `is-text-${format.color}`,
+    format.highlight ? `is-${format.highlight}` : '',
+  ]
+    .filter(Boolean)
+    .map((name) => ` ${name}`)
+    .join('')
+}
+
+/**
+ * The title's bar (section 4, Title format, M4c): beside the open title,
+ * outside the element's box, in place of the line's bar. Bold, italic and
+ * underline; left, centre and right; the four sizes; then the two rows of
+ * colour dots. Each press is one undo step and keeps the title open; its
+ * buttons never take focus.
+ */
+function TitleBar({ format, onChange }: { format: TitleFormat; onChange: (format: TitleFormat) => void }) {
+  const button = (label: string, pressed: boolean, next: TitleFormat, className: string, text: string) => (
+    <button
+      key={label}
+      type="button"
+      className={`math-format-bar__button ${className}`}
+      aria-label={label}
+      aria-pressed={pressed}
+      title={label}
+      tabIndex={-1}
+      onMouseDown={(event) => event.preventDefault()}
+      onClick={() => onChange(next)}
+    >
+      {text}
+    </button>
+  )
+  const ALIGNS = [
+    ['left', 'Align left', '⇤'],
+    ['centre', 'Centre', '↔'],
+    ['right', 'Align right', '⇥'],
+  ] as const
+  return (
+    <span className="math-format-bar is-title-bar" role="toolbar" aria-label="Title format">
+      <span className="math-format-bar__column">
+        <span className="math-format-bar__dot-row">
+          {button('Bold (Ctrl+B)', format.bold, { ...format, bold: !format.bold }, 'is-bold', 'B')}
+          {button('Italic (Ctrl+I)', format.italic, { ...format, italic: !format.italic }, 'is-italic', 'I')}
+          {button(
+            'Underline (Ctrl+U)',
+            format.underline,
+            { ...format, underline: !format.underline },
+            'is-underline',
+            'U',
+          )}
+          <span className="math-format-bar__rule" aria-hidden="true" />
+          {ALIGNS.map(([align, label, text]) => button(label, format.align === align, { ...format, align }, 'is-align', text))}
+          <span className="math-format-bar__rule" aria-hidden="true" />
+          {(['S', 'M', 'L', 'XL'] as const).map((size) =>
+            button(`Size ${size}`, format.size === size, { ...format, size }, 'is-size', size),
+          )}
+        </span>
+        <ColourDots
+          text={format.color}
+          highlight={format.highlight}
+          onText={(color) => onChange({ ...format, color: color ?? 'black' })}
+          onHighlight={(highlight) => onChange({ ...format, highlight })}
+        />
+      </span>
+    </span>
   )
 }
 
@@ -941,6 +1038,8 @@ interface LineFieldProps {
   edit: LineEdit
   /** Ctrl+B and Ctrl+U: null on a line with no code, which takes no format. */
   onFormat: ((change: (format: LineFormat) => Partial<LineFormat>) => void) | null
+  /** On the title: Ctrl+B, Ctrl+I and Ctrl+U (section 4, Title format). */
+  onTitleKey?: (key: 'b' | 'i' | 'u') => void
   onType: (text: string) => void
   onMove: (move: LineMove) => void
   onEscape: () => void
@@ -960,6 +1059,7 @@ function LineField({
   label = 'Line source',
   edit,
   onFormat,
+  onTitleKey,
   onType,
   onMove,
   onEscape,
@@ -1049,6 +1149,10 @@ function LineField({
         case 'End':
           setList(null)
       }
+    }
+    if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && onTitleKey) {
+      const key = event.key.toLowerCase()
+      if (key === 'b' || key === 'i' || key === 'u') return take(() => onTitleKey(key))
     }
     if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && onFormat) {
       const key = event.key.toLowerCase()

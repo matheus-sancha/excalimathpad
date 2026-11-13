@@ -346,7 +346,13 @@ and everything downstream recalculates. Engine: math.js, client-side.
   that creates the anchor. It is Excalidraw's active tool, never in the scene,
   and no undo step. Esc cancels it.
 - **Title** — a math element's optional name: plain text on one line, in
-  `customData.title`, shown in a header above the lines. Never evaluated. An
+  `customData.title`, shown in a header above the lines. Never evaluated. Its
+  **title format** (bold, italic, underline, alignment, size, text colour,
+  highlight; `MathAnchor.titleFormat`) is kept beside it in
+  `customData.titleFormat` as a string of the words that differ from no format
+  (`"centre L text-red"`), never read from the text, and set only from the
+  title's bar (`TitleBar` in `MathElementView`, Ctrl+B, Ctrl+I, Ctrl+U), one
+  undo step per press (`writeAnchorTitleFormat`). Emptying the title removes it. An
   edit on it is the line edit at `TITLE_LINE` (-1): ↑ on the first line, the
   bar's Title button, or a double-click on the header (`onHeader`).
 - **Empty element** — one whose source has no text and that has no title:
@@ -506,6 +512,11 @@ and everything downstream recalculates. Engine: math.js, client-side.
   nothing when the grid sizes its columns, so a comment wraps at the width the
   math sets and asks for at most 320 px itself (#98). jsdom lays nothing out:
   check a change here in Chromium.
+- **`customData` holds no nested objects.** Excalidraw compares it one level
+  deep when it records a step, so an object inside it differs from the
+  snapshot's clone and every later write of the anchor gains an empty undo
+  step. The title's format is a string for that reason
+  (`mathAnchor.excalidraw.test.tsx`).
 - **Underline is drawn, not `text-decoration`.** KaTeX's boxes are
   inline-blocks, which a decoration doesn't reach; bold is set on `.katex`
   itself, because KaTeX sets its own font there.

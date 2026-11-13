@@ -2,7 +2,14 @@ import { act, fireEvent, render, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 import { CaptureUpdateAction, newElementWith } from '@excalidraw/excalidraw'
 import { SheetCanvas, type SheetCanvasHandle } from './SheetCanvas.tsx'
-import { createMathAnchorElements, writeAnchorSource } from './mathAnchor.ts'
+import {
+  createMathAnchorElements,
+  NO_TITLE_FORMAT,
+  toMathAnchor,
+  writeAnchorSource,
+  writeAnchorTitle,
+  writeAnchorTitleFormat,
+} from './mathAnchor.ts'
 import { sceneLoaded, undoControls } from '../test/excalidraw.ts'
 import { clickOnCanvas } from '../test/gestures.ts'
 import { deselectAll } from './selection.ts'
@@ -134,6 +141,53 @@ describe('writeAnchorSource on real Excalidraw', () => {
 // Excalidraw changes an element without capturing it in its arrow-key nudge and
 // its Link editor. Until the app records that change, a write lands in the scene
 // but adds no step, or its undo takes earlier lines with it.
+describe('a title’s format on real Excalidraw (M4c, #111)', () => {
+  it('makes each press one undo step, storing only what differs, and adds no step to later writes', async () => {
+    const { api, canUndo, undo, sourceOf } = await mount()
+    const anchor = () => api.getSceneElements().find((element) => element.id === 'm1')!
+    act(() => {
+      writeAnchorTitle(api, 'm1', 'Pump @ 50 Hz')
+    })
+    act(() => {
+      writeAnchorTitleFormat(api, 'm1', { ...NO_TITLE_FORMAT, size: 'L' })
+    })
+    act(() => {
+      writeAnchorTitleFormat(api, 'm1', { ...NO_TITLE_FORMAT, size: 'L', align: 'centre' })
+    })
+    expect(anchor().customData?.titleFormat).toBe('centre L')
+    expect(toMathAnchor(anchor()).titleFormat).toMatchObject({ bold: true, size: 'L', align: 'centre' })
+    act(() => {
+      writeAnchorSource(api, 'm1', 'a = 1')
+    })
+
+    undo()
+    await waitFor(() => expect(sourceOf()).toBe(SOURCE))
+    undo()
+    await waitFor(() => expect(anchor().customData?.titleFormat).toBe('L'))
+    undo()
+    await waitFor(() => expect(anchor().customData).not.toHaveProperty('titleFormat'))
+    expect(anchor().customData?.title).toBe('Pump @ 50 Hz')
+    undo()
+    await waitFor(() => expect(anchor().customData).not.toHaveProperty('title'))
+    expect(canUndo()).toBe(false)
+  })
+
+  it('writes nothing for no change, and back to no format removes the key', async () => {
+    const { api } = await mount()
+    const anchor = () => api.getSceneElements().find((element) => element.id === 'm1')!
+    let wrote = true
+    act(() => {
+      wrote = writeAnchorTitleFormat(api, 'm1', NO_TITLE_FORMAT)
+    })
+    expect(wrote).toBe(false)
+    act(() => {
+      writeAnchorTitleFormat(api, 'm1', { ...NO_TITLE_FORMAT, italic: true })
+      writeAnchorTitleFormat(api, 'm1', NO_TITLE_FORMAT)
+    })
+    expect(anchor().customData).not.toHaveProperty('titleFormat')
+  })
+})
+
 describe('writeAnchorSource after a change Excalidraw did not capture', () => {
   async function mountSelected() {
     const mounted = await mount()

@@ -976,9 +976,12 @@ format version doesn't change.
 
 From M4c an anchor's `customData` can also hold:
 
-- `titleFormat`: only what differs from a title with no format, such as
-  `{ "size": "L", "align": "centre", "color": "red" }`. A title with no `titleFormat` looks as
-  it did before M4c.
+- `titleFormat`: only what differs from a title with no format, as a string of words, such as
+  `"centre L text-red"` (`regular`, `italic`, `underline`; `centre`, `right`; `S`, `L`, `XL`;
+  `text-<colour>`; a highlight's name). A title with no `titleFormat` looks as it did before M4c.
+  It is a string and not an object because Excalidraw compares `customData` one level deep when it
+  records a step: a nested object adds an empty undo step to every later write of the anchor
+  (#111, `mathAnchor.excalidraw.test.tsx`).
 - `width`: the chosen width, in scene units. An element without one is automatic.
 
 Files saved before M4c have neither key and open as they looked, so the format number stays 1.
@@ -2120,7 +2123,17 @@ Changes line if it changes behaviour.
 - The six text colours under the dark theme's filter, on the canvas and on each highlight: still readable.
 - A text colour reaching KaTeX's glyphs in the equation and the result, as bold had to (#63).
 - The suggestions list after `@`.
-- A title at XL: the header's height, the floor it sets, and the anchor following both.
+- A title at XL: the header's height, the floor it sets, and the anchor following both. **Passed (#111),**
+  in Chromium with real keys and mouse: "Pump @ 50 Hz #2" at XL, centred, red on yellow, gave a 42 px
+  header; the anchor grew to fit, and the title kept its characters. Every press on the title's bar
+  left the title field focused.
+
+**M4c, also checked in Chromium (#107, #109, #111)**
+
+- A text colour reaches KaTeX's glyphs: a line with `@text-red` computed `rgb(224, 49, 49)` on the
+  equation's glyphs and on its result; its note stayed grey. A rule's colour (`@text-red if v > 3 m/s`)
+  showed the same, and a table's rows over a rule's limit took its band. Not checked: the six colours
+  under the dark theme's filter.
 
 **M5**
 
@@ -2177,6 +2190,13 @@ Changes line if it changes behaviour.
 | [What does milestone M4c hold in the spec, and in what issue order?](https://github.com/matheus-sancha/excalimathpad/issues/97) | 16, 17, ADR amendments |
 
 ## Changes since agreed
+
+- 2026-11-13, [section 7](#the-file) (#111, found while building, not asked): a title's format is stored
+  as a string of words (`"centre L text-red"`), not an object. Excalidraw compares `customData` one
+  level deep when it records a step, so an object there added an empty undo step to every later write
+  of the anchor, line commits included. It still holds only what differs.
+- 2026-11-13, [section 4](#chosen-width) (#110, the fallback the spec allows): a chosen width re-wraps
+  comments on release, not while the handle moves.
 
 - 2026-11-04, [section 6](#6-undo) (#41, agreed by Matheus): selecting and deselecting are
   Excalidraw's own undo steps, found while probing and accepted. So with the element selected, a
