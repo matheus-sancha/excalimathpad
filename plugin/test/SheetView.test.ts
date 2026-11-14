@@ -90,7 +90,10 @@ describe('the lookbehind check (section 12a; iOS below 16.4)', () => {
 
   it('shows the message and neither opens nor writes the sheet', async () => {
     const vault = await vaultWith({ [PUMP]: pumpSheet() })
-    const memory = { rememberedOpen: () => null, rememberOpen: () => {} }
+    const memory = {
+      panel: { rememberedOpen: () => null, rememberOpen: () => {} },
+      theme: { rememberedTheme: () => null, rememberTheme: () => {} },
+    }
     vault.app.views.set(VIEW_TYPE, (leaf) => new SheetView(leaf as never, memory, { lookbehind: () => false }) as never)
     const leaf = await act(() => vault.open(PUMP))
     open.push(leaf)

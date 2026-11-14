@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import type { PlotClause, PlotSize } from '../math/plotLine.ts'
+import { vaultKeyRoute } from '../canvas/vaultKeys.ts'
 
 /**
  * The plot's settings popover (docs/spec-v1.md section 10, Plots): Mark,
@@ -46,8 +47,9 @@ export function PlotSettings({
       event.preventDefault()
       onClose()
     }
-    // The canvas's own keys stay away while the popover has the keyboard.
-    event.stopPropagation()
+    // The canvas's own keys stay away while the popover has the keyboard;
+    // Obsidian's core keys still reach Obsidian (docs/spec-v1.md section 8).
+    if (vaultKeyRoute(event.nativeEvent) !== 'pass') event.stopPropagation()
   }
 
   return (

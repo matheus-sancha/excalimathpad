@@ -19,7 +19,8 @@
     "preview": "vite preview",
     "audit:plugin": "node scripts/audit-plugin.mjs",
     "test:blocked": "node scripts/blocked-run.mjs",
-    "check": "npm run lint && npm run test && npm run build && npm run audit:plugin && npm run test:blocked"
+    "test:popout": "node scripts/popout-run.mjs",
+    "check": "npm run lint && npm run test && npm run build && npm run audit:plugin && npm run test:blocked && npm run test:popout"
   },
   "dependencies": {
     "@excalidraw/excalidraw": "^0.18.1",

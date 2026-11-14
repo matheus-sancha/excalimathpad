@@ -6,9 +6,10 @@ a Vite + React + TypeScript app that builds to static files; there is no
 server. v1 target: for anyone, built around Matheus's own engineering work;
 free and best effort. M4d adds an Obsidian community plugin built from this
 source (`docs/spec-v1.md` section 12a, ADR 0006): **one source, two builds**.
-Built so far (#135): the plugin bundle and a view that opens and shows a sheet;
-saving in a vault, New sheet, the chrome and releases are still to come, and
-their terms move in here as each M4d issue makes them true.
+Built so far (#135–#137): the plugin bundle, a view that opens a sheet and
+saves it in the vault, New sheet, and the tab's chrome (keys, theme, hidden
+items, commands, pop-out windows); releases and the rest of M4d are still to
+come, and their terms move in here as each M4d issue makes them true.
 
 ## Entry points
 
@@ -23,8 +24,10 @@ their terms move in here as each M4d issue makes them true.
   `tsc -b` and both builds; `lint` is oxlint, then Obsidian's ESLint rules
   (`eslint.config.mjs`) at `--max-warnings 0`; `check` is lint, the tests, the
   build, the **bundle audit** (`scripts/audit-plugin.mjs`) and the
-  **network-blocked run** (`scripts/blocked-run.mjs`). CI installs Playwright's
-  Chromium (the version `package.json` pins) for the last.
+  **network-blocked run** (`scripts/blocked-run.mjs`) and the **pop-out run**
+  (`scripts/popout-run.mjs`: the built plugin with sheet tabs in a second,
+  same-origin window, as an Obsidian pop-out). CI installs Playwright's
+  Chromium (the version `package.json` pins) for the last two.
 - `.github/workflows/ci.yml` — runs `npm run check` on pushes to `main`
   and on pull requests. On a push to `main` its `deploy` job then publishes
   that run's `dist/` to Cloudflare Pages (spec section 12, Hosted build); it
@@ -47,7 +50,12 @@ their terms move in here as each M4d issue makes them true.
   (`vault.connect`), which writes it back; it ignores a dropped sheet file
   (`ignoreSceneDrops`), routes Excalidraw's image tool to the vault's picker
   (`vault.pickImage`), binds the gestures' keys and the flash's click to the
-  view's container, and turns Excalidraw's embeds off. `panelMemory` is where the panel's open state lives
+  view's container, and turns Excalidraw's embeds off. It also confines the
+  keys to the view (`confineKeys`), bridges the view when it is in a pop-out
+  window (`bridgeWindow`, again after `vault.onWindowMigrated`), hands the
+  view its `SheetCommands` (Add math, Toggle Math settings) through
+  `vault.commands`, and passes the canvas `vault` and `vault.theme` (where
+  light or dark is remembered). `panelMemory` is where the panel's open state lives
   (a port: `storagePanelMemory` on the web, `data.json` in the plugin, this
   page only if unset). App imports none of the browser ports at run time, so
   the plugin's bundle holds none. `initialElements` gives tests a sheet.
@@ -59,8 +67,20 @@ their terms move in here as each M4d issue makes them true.
   Depends on: nothing.
 - **canvas** (`src/canvas/`) — everything that knows Excalidraw. `SheetCanvas`
   is the official, unforked component; its `onReady` hands out a
-  `SheetCanvasHandle`: Excalidraw's imperative API plus `forwardWheel` and
-  `focusCanvas`. `mathAnchor.ts` defines a math element's anchor (a rectangle
+  `SheetCanvasHandle`: Excalidraw's imperative API plus `forwardWheel`,
+  `focusCanvas`, and `addMath` and `toggleSheetPanel`, what the two More tools
+  items do. With `vault` it marks its box `sheet-canvas--vault` (`VAULT_CLASS`
+  in `vaultItems.ts`), under which `SheetCanvas.css` hides the items
+  `VAULT_HIDDEN` names (Web Embed and Mermaid, one test id; the Generate
+  heading; Browse libraries; Copy to clipboard as SVG), and turns off
+  Excalidraw's AI items. With `theme` (a `ThemeMemory`, `theme.ts`) it opens
+  in the mode last chosen, light until one is, and tells the memory each
+  change of `appState.theme`. `vaultKeys.ts` is the keys of a vault tab:
+  `PASS_THROUGH_KEYS` and `SWALLOWED_KEYS` (tested constants), `vaultKeyRoute`,
+  and `confineKeys`, a capture listener on the view's container that stops a
+  core key Obsidian took (`defaultPrevented`) and every swallowed key.
+  `popoutBridge.ts` is the **pop-out bridge** (`bridgeWindow`, see
+  Load-bearing). `mathAnchor.ts` defines a math element's anchor (a rectangle
   with `customData.kind === "math"` and `customData.source`, ADR 0002; a solid
   `#ffffff01` fill, so clicks inside it select and drag it) and
   `writeAnchorSource`, the only way source enters the scene, and
@@ -352,13 +372,17 @@ their terms move in here as each M4d issue makes them true.
   (file routes, layers).
 - **plugin** (`plugin/`, section 12a, ADR 0006) — the Obsidian plugin, and the
   only code that imports `obsidian`. `main.ts` (the `Plugin`) registers the
-  view for `.excalimathpad` only and keeps the panel's open state in
-  `data.json` (`loadData`/`saveData`). `SheetView.ts` is the `TextFileView`:
+  view for `.excalimathpad` only and keeps the panel's open state and light
+  or dark in `data.json` (`loadData`/`saveData`; `SheetMemory`, anything else
+  read there dropped). It registers New sheet and `SHEET_COMMANDS` (Add math,
+  Toggle Math settings), whose `checkCallback` offers them only while
+  `getActiveViewOfType(SheetView)` has `commands`; none has a hotkey. `SheetView.ts` is the `TextFileView`:
   `setViewData` runs the **lookbehind check** (`hasLookbehind`; without it,
   "Excalimathpad needs iOS 16.4 or later."), then `readSheet`; a newer or
   unreadable file shows section 13's message in the view and nothing mounts;
   otherwise it mounts `<App vault=…>` on `contentEl` with React's `createRoot`
-  and unmounts on close. **Autosave** (section 7, A sheet in a vault): the
+  and unmounts on close. It holds the tab's `commands` while the app is up and
+  passes `contentEl.onWindowMigrated` for the bridge. **Autosave** (section 7, A sheet in a vault): the
   vault sheet calls `onUnwritten` when its `saveKey` (plus the settings)
   leaves the key the file holds, and the view calls `requestSave`; `save` is
   the view's own and writes only `unwritten()` (an open line committed
@@ -384,7 +408,9 @@ their terms move in here as each M4d issue makes them true.
   the web's `html` and `body` rules, never ships. `plugin/test/obsidian.ts` is a
   hand-written **fake `obsidian`** (Plugin, the view classes, WorkspaceLeaf,
   Workspace, Vault, FileManager, TFile, TFolder, Menu, FuzzySuggestModal,
-  Scope, Platform, Notice, Obsidian's DOM helpers) that records
+  Scope, Platform, Notice, Obsidian's DOM helpers with `onWindowMigrated`;
+  `setActiveLeaf`, `runCommand` and `isOffered` as the palette does, and
+  `migrateWindow` as a move to a pop-out does) that records
   registrations, writes, creates, binary reads, notices and modals, and acts
   as the world outside the view (`changeOutside`, `rename`, `failNext`,
   `fileMenu`, `quit`, a pick in a modal); Vitest aliases `obsidian` to it, and the
@@ -649,6 +675,25 @@ and everything downstream recalculates. Engine: math.js, client-side.
   `eslint.config.mjs`: the web-only modules, `execCommand('insertText')` (the
   line field's own undo) and the leave prompt's `returnValue`. Its sentence-case
   rule doesn't read JSX text, so UI labels are kept in sentence case by hand.
+- **Obsidian's keys pass by Obsidian's own mark** (`vaultKeys.ts`). Its keymap
+  hears a key before the view, and a core key it acted on comes marked
+  `defaultPrevented`: only then does the view stop it, so the sheet doesn't
+  act on it too. Stopping it unmarked would break Obsidian's keys if its
+  keymap listened later. The unit field and the plot settings stop every key
+  but those. Whether Obsidian marks them is a hand check (spec section 17).
+- **The pop-out bridge** (`popoutBridge.ts`, spec section 14). In an Obsidian
+  pop-out window the code runs in the main window, so Excalidraw's own
+  `window` and `document` listeners and its dialogs (`document.body`) are the
+  main window's. The bridge copies a sheet's pointer, touch, `keyup` and
+  clipboard events from the pop-out onto the main document (never `keydown`):
+  a move and a release from the main body, since Excalidraw's drag reads on
+  only for an `HTMLElement` of the code's window; a press keeps its target.
+  For a clipboard event it lends the main document the pop-out's
+  `activeElement`, `elementFromPoint` and `navigator.clipboard`. It moves a
+  dialog box from the main body into the pop-out whose sheet had the last
+  press or key (each view notes that on its own container), and gives the main
+  body a `removeChild` that finds a moved box. Every one of these is
+  Excalidraw 0.18.1's text; the pop-out run fails an upgrade that moves it.
 - **Callbacks handed around unbound are function properties**, not methods
   (`SheetSession`, `DialogHost`, the scene store): the type-aware lint's
   `unbound-method` holds them to it.
@@ -670,13 +715,15 @@ and everything downstream recalculates. Engine: math.js, client-side.
 - In Excalidraw's phone layout (a narrow window), ☰ moves to the bottom bar and
   the file name, placed beside it, sits under that bar, so it doesn't show. v1
   targets desktop Chrome and Edge.
-- The plugin's `main.js` is about 3.43 MB and `styles.css` 0.64 MB (#135);
+- The plugin's `main.js` is about 3.45 MB and `styles.css` 0.64 MB (#137);
   the audit fails either above 5,000,000 bytes, Obsidian Sync Standard's cap.
 - Excalidraw 0.18.1 listens on the global `document` (copy, cut, paste, `keyup`,
   pointer moves and ups, scroll and others) and `window` (resize, blur, focus,
   message, unload) by itself. The plugin's own code adds none
-  (`plugin/test/SheetView.test.ts`, against Excalidraw alone); how
-  Excalidraw's behave in a pop-out window is #137's to check.
+  (`plugin/test/SheetView.test.ts`, against Excalidraw alone). In a pop-out
+  window the bridge carries them across (#137).
+- Excalidraw 0.18.1 doesn't render its command palette unless the host does,
+  so Ctrl+/ and Ctrl+Shift+P open nothing even before the view swallows them.
 - After an Open, Excalidraw's Undo button can stay lit: `history.clear()`
   doesn't notify it. Pressing it undoes nothing and puts it right.
 - KaTeX shares the lazy `katex-*.js` chunk with Mermaid (about 77 kB gzip) and
@@ -721,4 +768,4 @@ marked with a milestone aren't built yet.
   Obsidian plugin bundles the whole app from the same source: `plugin/` is the
   only code that imports `obsidian`, built by esbuild into one `main.js`, with
   no network and nothing stored outside the vault (M4d; the bundle and the
-  view are built, #135).
+  view are built, #135, and the tab's chrome, #137).

@@ -8,6 +8,8 @@ import { isPlacing, startPlacing } from './addMath.ts'
 import { insertImage, measureIn, takeOverImageTool, type PickedImage } from './imageTool.ts'
 import { markMathSelection } from './mathSelection.ts'
 import { closeMoreTools, markMoreTools, useMoreToolsSlot } from './moreTools.ts'
+import type { SheetTheme, ThemeMemory } from './theme.ts'
+import { VAULT_CLASS } from './vaultItems.ts'
 import './SheetCanvas.css'
 
 /**
@@ -27,6 +29,10 @@ export interface SheetCanvasHandle {
   focusCanvas: () => void
   /** The element Excalidraw fills, the same box as the overlay's stage. */
   root: HTMLElement
+  /** Add math, as its More tools item does: placing starts and the canvas takes the keyboard. */
+  addMath: () => void
+  /** Math settings, as its More tools item does: the panel opens on its last tab, or closes. */
+  toggleSheetPanel: () => void
 }
 
 /** The ☰ menu's file items (docs/spec-v1.md section 8). */
@@ -80,6 +86,18 @@ export interface SheetCanvasProps {
    * instead of the operating system's (docs/spec-v1.md section 12a, Reach).
    */
   imageTool?: ImageToolSlot
+  /**
+   * Set in an Obsidian tab: the items docs/spec-v1.md section 8 lists as
+   * hidden in the plugin are hidden (`VAULT_CLASS`), and Excalidraw's AI items
+   * are off.
+   */
+  vault?: boolean
+  /**
+   * Where light or dark is remembered: the canvas opens in the mode last
+   * chosen, and tells the memory each change. Unset (the web), it opens light
+   * and remembers nothing.
+   */
+  theme?: ThemeMemory
 }
 
 /** The vault's image picker, and where the tool's key is heard. */
@@ -118,6 +136,8 @@ export function SheetCanvas({
   sheetPanel,
   embeds = true,
   imageTool,
+  vault = false,
+  theme,
 }: SheetCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   // The tab Math settings opens: the one last shown.
@@ -139,6 +159,12 @@ export function SheetCanvas({
     containerRef.current?.querySelector<HTMLElement>('.excalidraw')?.focus()
   }, [])
 
+  // The mode the canvas opens in: the one last chosen, else light. Read once.
+  const [initialData] = useState(() => ({
+    elements: initialElements ?? [],
+    appState: { ...INITIAL_APP_STATE, theme: theme?.rememberedTheme() ?? 'light' },
+  }))
+
   // Excalidraw hands out its API from its own constructor, which can run before
   // this container is attached. So the handle goes out from an effect, once both
   // exist, rather than from that callback.
@@ -149,8 +175,26 @@ export function SheetCanvas({
   })
   useEffect(() => {
     const root = containerRef.current
-    if (api && root) onReadyRef.current?.({ api, forwardWheel, focusCanvas, root })
+    if (!api || !root) return
+    const addMath = () => {
+      startPlacing(api)
+      // The keyboard goes to the canvas, so Esc cancels and M keeps placing.
+      focusCanvas()
+    }
+    const toggleSheetPanel = () => api.toggleSidebar({ name: SHEET_PANEL, tab: lastTab.current })
+    onReadyRef.current?.({ api, forwardWheel, focusCanvas, root, addMath, toggleSheetPanel })
   }, [api, forwardWheel, focusCanvas])
+
+  // A change of light or dark (☰ Dark mode, Alt+Shift+D) is remembered.
+  useEffect(() => {
+    if (!api || !theme) return
+    let last: SheetTheme = api.getAppState().theme
+    return api.onChange((_elements, appState) => {
+      if (appState.theme === last) return
+      last = appState.theme
+      theme.rememberTheme(last)
+    })
+  }, [api, theme])
 
   // More tools' button shows placing and the problem count while it is closed.
   const problems = sheetPanel?.problems ?? 0
@@ -181,12 +225,14 @@ export function SheetCanvas({
         containerRef.current = node
         setRoot(node)
       }}
+      className={vault ? VAULT_CLASS : undefined}
       style={{ width: '100%', height: '100%' }}
     >
       <Excalidraw
         excalidrawAPI={setApi}
-        initialData={{ elements: initialElements ?? [], appState: INITIAL_APP_STATE }}
+        initialData={initialData}
         UIOptions={UI_OPTIONS}
+        aiEnabled={!vault}
         // `false` makes every embed invalid, so none loads its iframe.
         validateEmbeddable={embeds ? undefined : false}
         // Nothing is drawn top right: the app's items go into More tools.

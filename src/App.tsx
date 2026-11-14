@@ -23,6 +23,18 @@ import { createLineRelay, createSheetSession } from './file/sheetSession.ts'
 import { createVaultSheet, type VaultSheet, type VaultSheetData } from './file/vaultSheet.ts'
 import { ignoreSceneDrops } from './canvas/fileRoutes.ts'
 import type { PickedImage } from './canvas/imageTool.ts'
+import type { ThemeMemory } from './canvas/theme.ts'
+import { confineKeys } from './canvas/vaultKeys.ts'
+import { bridgeWindow } from './canvas/popoutBridge.ts'
+
+/**
+ * What Obsidian's commands do in a sheet tab (docs/spec-v1.md section 8,
+ * Inside an Obsidian tab): the same as the app's More tools items.
+ */
+export interface SheetCommands {
+  addMath: () => void
+  toggleMathSettings: () => void
+}
 
 /**
  * A sheet in a vault (M4d, docs/spec-v1.md section 12a): what the plugin's view
@@ -47,6 +59,15 @@ export interface VaultHome {
   onUnwritten: () => void
   /** The vault's image picker, for Excalidraw's image tool (section 12a, Reach). */
   pickImage: () => Promise<PickedImage | null>
+  /** Light or dark, kept in the plugin's `data.json` (section 8, Inside an Obsidian tab). */
+  theme: ThemeMemory
+  /** Hands the view what its commands do, once the canvas is up, and null as the app goes. */
+  commands: (commands: SheetCommands | null) => void
+  /**
+   * Calls `listener` each time Obsidian moves the view to another window (a
+   * pop-out, or back); returns the function that stops.
+   */
+  onWindowMigrated: (listener: () => void) => () => void
 }
 
 export interface AppProps {
@@ -133,10 +154,35 @@ export default function App({ files, recovery, panelMemory, vault, initialElemen
   }, [vault, vaultSheet])
 
   // In a vault the tab's file is the sheet: a dropped sheet file is ignored.
+  // Obsidian's core keys reach Obsidian, and Excalidraw's export and palette
+  // keys stop at the view (section 8, Inside an Obsidian tab).
   const vaultContainer = vault?.container
   useEffect(() => {
-    if (vaultContainer) return ignoreSceneDrops(vaultContainer)
+    if (!vaultContainer) return
+    const stopDrops = ignoreSceneDrops(vaultContainer)
+    const stopKeys = confineKeys(vaultContainer)
+    return () => {
+      stopDrops()
+      stopKeys()
+    }
   }, [vaultContainer])
+
+  // In a pop-out window, Excalidraw's own listeners are the main window's: the
+  // bridge carries the pop-out's events and dialogs across (section 8).
+  const [migrations, setMigrations] = useState(0)
+  const onWindowMigrated = vault?.onWindowMigrated
+  useEffect(() => onWindowMigrated?.(() => setMigrations((n) => n + 1)), [onWindowMigrated])
+  useEffect(() => {
+    if (vaultContainer) return bridgeWindow(vaultContainer)
+  }, [vaultContainer, migrations])
+
+  // Obsidian's Add math and Toggle Math settings commands act on this tab.
+  const handCommands = vault?.commands
+  useEffect(() => {
+    if (!handCommands || !canvas) return
+    handCommands({ addMath: canvas.addMath, toggleMathSettings: canvas.toggleSheetPanel })
+    return () => handCommands(null)
+  }, [handCommands, canvas])
   const imageTool = useMemo(
     () => vault && { keys: vault.container, pick: vault.pickImage },
     [vault],
@@ -215,6 +261,8 @@ export default function App({ files, recovery, panelMemory, vault, initialElemen
           initialElements={initialElements}
           onReady={setCanvas}
           embeds={!vault}
+          vault={!!vault}
+          theme={vault?.theme}
           imageTool={imageTool ?? undefined}
           fileMenu={fileMenu ?? undefined}
           sheetPanel={{
