@@ -94,6 +94,11 @@ export class SheetView extends TextFileView {
   private known: string | null = null
   /** Set while an outside change is being taken in: no save may run meanwhile. */
   private reconciling = false
+  /** The last save, queued after the one before it: one write at a time. */
+  private saving: Promise<void> = Promise.resolve()
+  /** Set while the file is being read for an outside change; `recheck` asks for one more read. */
+  private checking = false
+  private recheck = false
 
   constructor(leaf: WorkspaceLeaf, memory: SheetMemory, options: SheetViewOptions = {}) {
     super(leaf)
@@ -112,7 +117,7 @@ export class SheetView extends TextFileView {
     // on disk, so the view hears it itself; `setViewData` below covers the other way.
     this.registerEvent(
       this.app.vault.on('modify', (file: TAbstractFile) => {
-        if (file instanceof TFile && file.path === this.file?.path) void this.readOutside(file)
+        if (file instanceof TFile && file.path === this.file?.path) void this.checkOutside()
       }),
     )
     this.registerEvent(this.app.workspace.on('quit', (tasks) => tasks.add(() => this.save())))
@@ -124,8 +129,10 @@ export class SheetView extends TextFileView {
   }
 
   setViewData(data: string, clear: boolean): void {
-    // The same file, read again: an outside change, taken as one.
-    if (!clear && this.sheet) return this.takeOutside(data)
+    // The same file, read again: maybe an outside change. Obsidian's text may be
+    // from before this view's last write, or a write caught half-done (0.1.0's
+    // beta), so only the file as it is once this view's writes finish counts.
+    if (!clear && this.sheet) return void this.checkOutside()
     this.known = data
     this.data = data
     this.show(data)
@@ -135,8 +142,18 @@ export class SheetView extends TextFileView {
     this.unmount()
   }
 
-  /** Writes the sheet if, and only if, the file doesn't hold it. */
-  async save(): Promise<void> {
+  /**
+   * Writes the sheet if, and only if, the file doesn't hold it. Saves run one
+   * at a time, so a write never overtakes another and `known` is always the
+   * text of the last write that finished or is running.
+   */
+  save(): Promise<void> {
+    const run = this.saving.then(() => this.write())
+    this.saving = run.catch(() => undefined)
+    return run
+  }
+
+  private async write(): Promise<void> {
     const file = this.file
     const sheet = this.sheet
     if (!file || !sheet || this.reconciling) return
@@ -162,14 +179,35 @@ export class SheetView extends TextFileView {
     await super.onClose()
   }
 
-  private async readOutside(file: TFile) {
-    let text: string
-    try {
-      text = await this.app.vault.read(file)
-    } catch {
+  /**
+   * The file may have changed: reads it once this view's own writes have
+   * finished, and takes it in only if it differs from what this view last
+   * wrote or read. Calls that come during a read ask for one more read after
+   * it, so the text taken is never older than the last call.
+   */
+  private async checkOutside(): Promise<void> {
+    if (this.checking) {
+      this.recheck = true
       return
     }
-    this.takeOutside(text)
+    this.checking = true
+    try {
+      do {
+        this.recheck = false
+        await this.saving
+        const file = this.file
+        if (!file) return
+        let text: string
+        try {
+          text = await this.app.vault.read(file)
+        } catch {
+          return
+        }
+        if (!this.recheck) this.takeOutside(text)
+      } while (this.recheck)
+    } finally {
+      this.checking = false
+    }
   }
 
   /** The file now holds `text`, written by someone other than this view. */

@@ -3002,6 +3002,13 @@ Changes line if it changes behaviour.
 - Two taps becoming a `dblclick` on iOS and Android, Excalidraw's phone toolbar reaching Add math, and the
   bottom sheet staying above the on-screen keyboard (`visualViewport`).
 - Whether Obsidian's review passes without a committed `main.js`, by the preview scan.
+- The `0.1.0` beta through BRAT (#138, replacing M4b's #85). **Failed on 2026-11-14:** in Matheus's vault,
+  every save while a line was open made a conflict copy, and editing the copy made a copy of it. The
+  tab's own write was coming back as an outside change: the view compared the text Obsidian handed it,
+  which can predate the last write or catch it half-done, and two saves could overlap. Fixed for `0.1.1`:
+  saves run one at a time, and any word of a change makes the view read the file afresh once its own
+  write has finished (`plugin/test/vault.test.ts`, "the tab's own writes coming back"). Not reproduced
+  in real Obsidian from the build session; the `0.1.1` beta is the check.
 - The Release workflow's permission to push the version commit and tag to `main` (#138). **Checked from the
   repository's settings as far as the build session could, on 2026-11-14:** `main` has no branch protection
   (GitHub's branch list reports it unprotected), and the workflow asks for `contents: write`, which a

@@ -288,6 +288,8 @@ describe('an outside change (section 7: sync, git, another app, another tab)', (
 
   it("is Obsidian's setViewData too, when it reads the same file again", async () => {
     const { view } = await setUp()
+    // The file changed with no `modify` reaching the view; Obsidian's call is the only word of it.
+    vault.app.vault.files.set(SHEET, OUTSIDE)
     act(() => view.setViewData(OUTSIDE, false))
     await waitFor(() => expect(shownLines()).toHaveLength(3))
     expect(writes()).toEqual([])
@@ -322,6 +324,53 @@ describe('an outside change (section 7: sync, git, another app, another tab)', (
     open.splice(open.indexOf(leaf), 1)
     expect(writes()).toEqual([])
     expect(fileText()).toBe(newer)
+  })
+})
+
+describe("the tab's own writes coming back (section 7: never a conflict, 0.1.0's beta)", () => {
+  // Found in the 0.1.0 beta: typing in a line made a conflict copy on every
+  // save, and the copy's tab made its own. Each case below is the tab's own
+  // write reaching it again, with a line open as it is while typing.
+
+  it('Obsidian reading the file again hands back the version from before the save: no copy', async () => {
+    const { view } = await setUp()
+    typeLine(1, 'a = 11 m')
+    await act(() => view.save())
+    const written = fileText()
+    act(() => view.setViewData(START, false))
+    await act(() => new Promise((resolve) => setTimeout(resolve, 50)))
+    expect(vault.app.vault.creates).toEqual([])
+    expect(notices).toEqual([])
+    expect(fileText()).toBe(written)
+    expect(lineField()).toHaveValue('a = 11 m')
+  })
+
+  it('a write caught half-done (an empty read) is no outside change: no copy, the sheet stays', async () => {
+    const { view } = await setUp()
+    typeLine(1, 'a = 11 m')
+    await act(() => view.save())
+    act(() => view.setViewData('', false))
+    await act(() => new Promise((resolve) => setTimeout(resolve, 50)))
+    expect(vault.app.vault.creates).toEqual([])
+    expect(notices).toEqual([])
+    expect(view.containerEl).not.toHaveTextContent(MESSAGES.notASheet)
+    expect(lineField()).toHaveValue('a = 11 m')
+  })
+
+  it('two saves close together: the first coming back after the second started is no outside change', async () => {
+    const { view } = await setUp()
+    const field = typeLine(1, 'a = 11 m')
+    let first!: Promise<void>
+    act(() => {
+      first = view.save()
+    })
+    fireEvent.input(field, { target: { value: 'a = 12 m' } })
+    await act(() => Promise.all([first, view.save()]))
+    await act(() => new Promise((resolve) => setTimeout(resolve, 50)))
+    expect(vault.app.vault.creates).toEqual([])
+    expect(notices).toEqual([])
+    expect(sourceIn(fileText())).toBe('a = 12 m\nb = a * 3')
+    expect(lineField()).toHaveValue('a = 12 m')
   })
 })
 
