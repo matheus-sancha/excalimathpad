@@ -150,6 +150,8 @@ Spec: milestone M4c Improvements, before M5
 
 ## Pull Requests
 
+A new pull request starts from [the template](.github/pull_request_template.md): fill in its sections and tick its checks.
+
 1. **Keep it focused.** One issue, feature or fix per pull request.
 2. **Describe it.** Say what changed and why, and link the issue.
 3. **Keep the docs in step.** Update the spec, `CONTEXT.md` and the ADRs as described [above](#spec-contextmd-and-adrs).
