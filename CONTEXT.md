@@ -402,9 +402,11 @@ come, and their terms move in here as each M4d issue makes them true.
   the view's own and writes only `unwritten()` (an open line committed
   first), so viewing never writes; close, quit (`workspace.on('quit')`) and
   Obsidian's Save current file write at once; a failed write is a Notice and
-  stays unwritten. **Outside changes:** the view hears `vault.on('modify')`
-  for its file (and `setViewData(data, false)`), ignores its own text
-  (`known`), reloads an idle tab in place (`VaultSheet.reload`: no undo step,
+  stays unwritten; saves run one at a time (`saving`). **Outside changes:**
+  `vault.on('modify')` for its file and `setViewData(data, false)` are only
+  word of a change: `checkOutside` waits for the view's own save, reads the
+  file afresh (Obsidian's text can predate the last write, or catch it
+  half-done: 0.1.0's beta), ignores its own text (`known`), reloads an idle tab in place (`VaultSheet.reload`: no undo step,
   scroll and zoom kept), and for a busy one (`busy()`: unwritten work or a
   line open) writes the tab's version beside the sheet with `vault.create`
   under `names.ts`'s `conflictBase` and `freeSheetPath` (never over a file),
