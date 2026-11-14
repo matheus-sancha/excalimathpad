@@ -168,6 +168,7 @@ The web app and the Obsidian plugin share **one version**, from `package.json` (
 
 - **The Release button.** Actions → **Release** → **Run workflow**, on `main`, with patch, minor or major. The first release is **minor**, from `0.0.0` to `0.1.0`; `1.0.0` waits for v1's finish line. The workflow (`.github/workflows/release.yml`) runs `npm version`, then `npm run check` against the bumped build, then pushes the version commit and tag to `main` together, and drafts a GitHub release with `main.js`, `manifest.json` and `styles.css`, this checklist and generated notes. If the check fails, nothing is pushed.
 - **One commit.** `npm version <bump>` runs `scripts/version.mjs`, which copies the version into `manifest.json` and adds a line to `versions.json` when `minAppVersion` has changed (it is `1.7.2`), so all three move in one commit, "Release x.y.z". Tags are `x.y.z`, with no `v` (`.npmrc`). Don't edit the version by hand.
+- **Publish the workflow's draft.** Open the draft it made on the Releases page, click **Edit**, then **Publish release**. Don't use **Draft a new release**: a release made by hand on the same tag has no files, and BRAT refuses it.
 - **`main.js` is never committed.** It is built in the workflow and attached to the release.
 - **The plugin's stamp** in the ☰ menu is its version (`0.1.0`); the web app's stamp stays the commit and date.
 - **Betas** are installed through [BRAT](https://github.com/TfTHacker/obsidian42-brat) from this repository until the plugin is listed. Fixes ship as `0.1.x`.

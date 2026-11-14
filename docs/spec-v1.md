@@ -3002,19 +3002,27 @@ Changes line if it changes behaviour.
 - Two taps becoming a `dblclick` on iOS and Android, Excalidraw's phone toolbar reaching Add math, and the
   bottom sheet staying above the on-screen keyboard (`visualViewport`).
 - Whether Obsidian's review passes without a committed `main.js`, by the preview scan.
-- The `0.1.0` beta through BRAT (#138, replacing M4b's #85). **Failed on 2026-11-14:** in Matheus's vault,
+- The beta through BRAT (#138, replacing M4b's #85). **`0.1.0` failed on 2026-11-14:** in Matheus's vault,
   every save while a line was open made a conflict copy, and editing the copy made a copy of it. The
   tab's own write was coming back as an outside change: the view compared the text Obsidian handed it,
   which can predate the last write or catch it half-done, and two saves could overlap. Fixed for `0.1.1`:
   saves run one at a time, and any word of a change makes the view read the file afresh once its own
   write has finished (`plugin/test/vault.test.ts`, "the tab's own writes coming back"). Not reproduced
-  in real Obsidian from the build session; the `0.1.1` beta is the check.
+  in real Obsidian from the build session; the `0.1.1` beta is the check. **`0.1.1` passed on 2026-11-14,**
+  installed through BRAT on the work laptop and on Matheus's personal machine, each in his own vault,
+  in Obsidian 1.15.0 (installer 1.12.7): a sheet opened, lines typed with autosave pauses kept their
+  results, and after closing and reopening Obsidian the lines were kept, with no conflict copy. The
+  plugin is the route to the work laptop that the hosted app couldn't be (#115).
 - The Release workflow's permission to push the version commit and tag to `main` (#138). **Checked from the
   repository's settings as far as the build session could, on 2026-11-14:** `main` has no branch protection
   (GitHub's branch list reports it unprotected), and the workflow asks for `contents: write`, which a
   workflow in its own repository may take whatever the default token setting is. Rulesets couldn't be read
   from the build session, so the first press of the button is the full check. It fails safe: the commit and
   tag go up in one atomic push after `npm run check`, and the draft is made only once the push has landed.
+  **Passed (2026-11-14):** the runs for `0.1.0` and `0.1.1` each pushed their "Release x.y.z" commit and
+  tag to `main` and drafted the release with its three files. **Found:** a release made by hand with
+  "Draft a new release" on the same tag carries no files, and BRAT then refuses it ("A manifest.json
+  file does not exist in the latest release"); the workflow's own draft is the one to publish.
   **Found:** a push made with the workflow's own token starts no other workflow, so CI and the hosted
   deploy don't run for the release commit; the next push to `main` deploys as usual. The commit changes
   only version numbers, which the web app doesn't show.
