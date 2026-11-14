@@ -14,6 +14,7 @@ import {
   ROW_HEIGHT,
   ROW_TOP,
   type ClientPoint,
+  doubleClickLine,
 } from '../test/gestures.ts'
 import { TIP_DELAY_MS } from './HoverTip.tsx'
 import { MathOverlay } from './MathOverlay.tsx'
@@ -162,9 +163,16 @@ beforeEach(() => {
 })
 
 describe('a problem’s message on hover (docs/spec-v1.md section 4, Problems)', () => {
-  it('shows a warning ⚠’s message after a short rest, and hides it when the pointer leaves', async () => {
+  it('shows a warning ⚠’s message after a short rest while its element is edited, and hides it when the pointer leaves', async () => {
     await mount()
+    // At rest the ⚠ is hidden, and a hidden mark has no hover (M4d).
+    hover(onGutter('m1', 1))
+    await rest(TIP_DELAY_MS * 2)
+    expect(tip()).toBeNull()
+    hover(offMarks('m1', 1))
 
+    doubleClickLine('m1', 3)
+    await screen.findByRole('textbox', { name: 'Line source' })
     hover(onGutter('m1', 1))
     expect(tip()).toBeNull()
     await rest(TIP_DELAY_MS / 2)
@@ -177,6 +185,8 @@ describe('a problem’s message on hover (docs/spec-v1.md section 4, Problems)',
 
   it('shows an error ●’s message, and moves straight to the next mark while one shows', async () => {
     await mount()
+    doubleClickLine('m1', 3)
+    await screen.findByRole('textbox', { name: 'Line source' })
 
     hover(onGutter('m1', 2))
     await waitFor(() => expect(tip()).toHaveTextContent(ERROR))
@@ -201,7 +211,7 @@ describe('a problem’s message on hover (docs/spec-v1.md section 4, Problems)',
   it('a pointer that leaves before the rest shows nothing', async () => {
     await mount()
 
-    hover(onGutter('m1', 1))
+    hover(onGutter('m1', 2))
     await rest(TIP_DELAY_MS / 2)
     hover(offMarks('m1', 3))
     await rest(TIP_DELAY_MS)
@@ -211,10 +221,10 @@ describe('a problem’s message on hover (docs/spec-v1.md section 4, Problems)',
 
   it('a press on a mark still selects its element, and the message goes', async () => {
     const { selected } = await mount()
-    hover(onGutter('m1', 1))
+    hover(onGutter('m1', 2))
     await waitFor(() => expect(tip()).not.toBeNull())
 
-    clickOnCanvas(onGutter('m1', 1))
+    clickOnCanvas(onGutter('m1', 2))
 
     expect(selected()).toEqual(['m1'])
     expect(tip()).toBeNull()
@@ -233,7 +243,7 @@ describe('a problem’s message on hover (docs/spec-v1.md section 4, Problems)',
 
   it('hides when the pointer leaves the canvas', async () => {
     const { root } = await mount()
-    hover(onGutter('m1', 1))
+    hover(onGutter('m1', 2))
     await waitFor(() => expect(tip()).not.toBeNull())
 
     act(() => {
@@ -246,7 +256,7 @@ describe('a problem’s message on hover (docs/spec-v1.md section 4, Problems)',
   it('is screen only: nothing of it reaches the scene', async () => {
     const { api } = await mount()
     const before = JSON.stringify(api.getSceneElements())
-    hover(onGutter('m1', 1))
+    hover(onGutter('m1', 2))
     await waitFor(() => expect(tip()).not.toBeNull())
 
     expect(JSON.stringify(api.getSceneElements())).toBe(before)

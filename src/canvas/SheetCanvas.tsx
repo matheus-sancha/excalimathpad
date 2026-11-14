@@ -55,8 +55,8 @@ export type SheetPanelTab = 'variables' | 'problems' | 'settings' | 'constants'
 
 /** What fills the Sheet panel (docs/spec-v1.md section 8); the canvas draws its frame. */
 export interface SheetPanelSlot {
-  /** Errors and warnings: the badge on Math settings and on More tools. */
-  problems: number
+  /** Errors (M4d: warnings alone show none): the badge on Math settings and on More tools. */
+  errors: number
   variables: ReactNode
   problemsTab: ReactNode
   settings?: ReactNode
@@ -196,14 +196,14 @@ export function SheetCanvas({
     })
   }, [api, theme])
 
-  // More tools' button shows placing and the problem count while it is closed.
-  const problems = sheetPanel?.problems ?? 0
+  // More tools' button shows placing and the error count while it is closed.
+  const errors = sheetPanel?.errors ?? 0
   useEffect(() => {
     if (!api || !root) return
-    const mark = () => markMoreTools(root, { placing: isPlacing(api.getAppState()), problems })
+    const mark = () => markMoreTools(root, { placing: isPlacing(api.getAppState()), problems: errors })
     mark()
     return api.onChange(mark)
-  }, [api, root, problems])
+  }, [api, root, errors])
 
   // In a vault the image tool picks from the vault, and the picked image is copied in.
   useEffect(() => {
@@ -273,9 +273,12 @@ export function SheetCanvas({
                       api.toggleSidebar({ name: SHEET_PANEL, tab: lastTab.current })
                     }}
                   >
-                    {sheetPanel.problems > 0 && (
-                      <span className="math-tools__badge" aria-label={`${sheetPanel.problems} problems`}>
-                        {sheetPanel.problems}
+                    {sheetPanel.errors > 0 && (
+                      <span
+                        className="math-tools__badge"
+                        aria-label={`${sheetPanel.errors} ${sheetPanel.errors === 1 ? 'error' : 'errors'}`}
+                      >
+                        {sheetPanel.errors}
                       </span>
                     )}
                   </MoreToolsItem>

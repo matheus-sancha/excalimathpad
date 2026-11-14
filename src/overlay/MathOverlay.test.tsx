@@ -7,7 +7,7 @@ import { createMathAnchorElements } from '../canvas/mathAnchor.ts'
 import { linePoint } from '../test/gestures.ts'
 import { fireResizeObservers, layOutBodies } from '../test/layout.ts'
 import { linesOf, resultsOf as sheetResults } from '../test/sheetView.ts'
-import { MathOverlay, type SceneApi } from './MathOverlay.tsx'
+import { MathOverlay, type FlashLine, type SceneApi } from './MathOverlay.tsx'
 
 /**
  * A fake of the slice of Excalidraw's API the overlay uses: a mutable scene,
@@ -133,15 +133,19 @@ function renderOverlay(elements: ExcalidrawElement[]) {
   onTestFinished(() => canvasRoot.remove())
   const forwardWheel = vi.fn()
   const focusCanvas = vi.fn()
-  const view = render(
+  const overlay = (flash: FlashLine | null) => (
     <MathOverlay
       api={scene.api}
       canvasRoot={canvasRoot}
       forwardWheel={forwardWheel}
       focusCanvas={focusCanvas}
-    />,
+      flash={flash}
+    />
   )
-  return { scene, forwardWheel, focusCanvas, unmount: view.unmount }
+  const view = render(overlay(null))
+  /** A jump from the Sheet panel flashes a line, as App passes it; null clears it. */
+  const setFlash = (flash: FlashLine | null) => view.rerender(overlay(flash))
+  return { scene, forwardWheel, focusCanvas, setFlash, unmount: view.unmount }
 }
 
 const resultsOf = (id: string) => sheetResults(elementOf(id))
@@ -322,8 +326,9 @@ describe('MathOverlay', () => {
       expect(cellOf(1, 'gutter')).toHaveAttribute('data-tip', 'Units do not match')
     })
 
-    it('marks a warning with an amber ⚠ and its message on the mark; the value still shows', () => {
+    it('marks a warning with an amber ⚠ and its message on the mark while its element is edited; the value still shows', () => {
       renderOverlay([anchorWith('K = 2 * 2.7\nP = V * 2\nV = 1 A * 2 ohm')])
+      openLine(3)
 
       const gutter = cellOf(1, 'gutter')!
       expect(gutter).toHaveTextContent('⚠')
@@ -1472,9 +1477,12 @@ describe('line format (docs/spec-v1.md section 4: bold, underline, highlight)', 
     expect(rowOf('m1', 1)).toHaveClass('is-text-red')
     expect(rowOf('m1', 2)).toHaveClass('is-bold')
     expect(rowOf('m1', 2)).not.toHaveClass('is-text-red')
-    expect(rowOf('m1', 2).querySelector('[data-tip]')?.getAttribute('data-tip')).toContain('if w > 3 kg: Units do not match')
     const rows = rowOf('m1', 4).querySelectorAll('tbody tr')
     expect([...rows].map((row) => row.classList.contains('is-yellow'))).toEqual([false, false, true])
+    // A rule's ⚠ follows the rule of Problems: only while its element is edited (M4d).
+    expect(rowOf('m1', 2).querySelector('[data-tip]')).toBeNull()
+    openLine(3)
+    expect(rowOf('m1', 2).querySelector('[data-tip]')?.getAttribute('data-tip')).toContain('if w > 3 kg: Units do not match')
   })
 
   it('Ctrl+B and Ctrl+U toggle bold and underline from the field', () => {
@@ -1498,6 +1506,114 @@ describe('line format (docs/spec-v1.md section 4: bold, underline, highlight)', 
 
     expect(rowOf('m1', 1)).toHaveClass('is-gray')
     expect(barButton(/Highlight gray/)).toHaveAttribute('aria-pressed', 'true')
+  })
+})
+
+describe('a warning at rest (docs/spec-v1.md section 4, Problems, M4d)', () => {
+  const gutterOf = (id: string, n: number) => rowOf(id, n).querySelector<HTMLElement>('.math-element__gutter')!
+  /** A mark that is shown: its glyph, amber, with its message on hover. */
+  const shown = (gutter: HTMLElement, message: string) => {
+    expect(gutter).toHaveTextContent('⚠')
+    expect(gutter).toHaveClass('is-warning')
+    expect(gutter).toHaveAttribute('data-tip', message)
+  }
+  /** A hidden mark: the gutter cell stays in its column, empty, with no hover. */
+  const hidden = (gutter: HTMLElement) => {
+    expect(gutter).toHaveTextContent('')
+    expect(gutter).not.toHaveClass('is-warning')
+    expect(gutter).not.toHaveAttribute('data-tip')
+  }
+  const WARNED = 'K = 2 * 2.7\nx = 3'
+  const K = 'K shadows the unit K'
+  const above = (id: string, source: string) =>
+    createMathAnchorElements([{ id, x: 100, y: -300, width: 400, height: 96, source }])[0]
+
+  it('hides a ⚠ at rest, keeping its gutter cell and the value, and shows it once a line of the element opens', () => {
+    renderOverlay([anchorWith(WARNED)])
+
+    hidden(gutterOf('m1', 1))
+    expect(rowOf('m1', 1).querySelector('.math-element__result')).toHaveAttribute('data-text', '5.4')
+
+    openLine(2)
+    shown(gutterOf('m1', 1), K)
+
+    fireEvent.keyDown(openField()!, { key: 'Escape' })
+    expect(openField()).toBeNull()
+    hidden(gutterOf('m1', 1))
+  })
+
+  it('shows the ⚠ on the open line itself, live as it is typed', () => {
+    renderOverlay([anchorWith('x = 3')])
+    const field = openLine(1)
+
+    type(field, 'K = 3')
+
+    shown(gutterOf('m1', 1), K)
+  })
+
+  it('a selected element is not being edited: its ⚠ stays hidden', () => {
+    const { scene } = renderOverlay([anchorWith(WARNED)])
+
+    scene.select('m1')
+    scene.updateElements([scene.elementOf('m1')])
+
+    hidden(gutterOf('m1', 1))
+  })
+
+  it('shows the element’s ⚠ while its title is open', () => {
+    renderOverlay([createMathAnchorElements([{ id: 'm1', ...box, source: WARNED, title: 'Pipe flow' }])[0]])
+    openLine(1)
+
+    fireEvent.click(screen.getByRole('button', { name: /^Title/ }))
+
+    expect(screen.getByRole('textbox', { name: 'Title' })).toHaveFocus()
+    expect(openField()).toBeNull()
+    shown(gutterOf('m1', 1), K)
+  })
+
+  it('keeps other elements’ ⚠ hidden while one is edited, even a warning the edit causes there', () => {
+    // m2 sits above m1, so it reads first: V defined in m1 is "defined below" for it.
+    const { setFlash } = renderOverlay([anchorWith('x = 3'), above('m2', 'K = 1\nP = V * 2')])
+    const field = openLine(1)
+
+    type(field, 'V = 2 A * 1 ohm')
+
+    hidden(gutterOf('m2', 1))
+    hidden(gutterOf('m2', 2))
+    // The warning the edit caused is there: a jump to it shows it.
+    setFlash({ anchorId: 'm2', line: 1, key: 1 })
+    shown(gutterOf('m2', 2), 'V reads as the unit V here: the variable is defined below')
+    hidden(gutterOf('m2', 1))
+  })
+
+  it('a jump’s flash shows that line’s ⚠ while it lasts, and opens nothing', () => {
+    const { setFlash } = renderOverlay([anchorWith('K = 2 * 2.7\nm = 3\nx = 4')])
+
+    setFlash({ anchorId: 'm1', line: 1, key: 1 })
+
+    expect(rowOf('m1', 2)).toHaveClass('is-flash')
+    shown(gutterOf('m1', 2), 'm shadows the unit m')
+    hidden(gutterOf('m1', 1))
+    expect(openField()).toBeNull()
+
+    setFlash(null)
+    hidden(gutterOf('m1', 2))
+  })
+
+  it('an error’s ● always shows, at rest and selected', () => {
+    renderOverlay([anchorWith('K = 1 m + 1 s')])
+
+    expect(gutterOf('m1', 1)).toHaveTextContent('●')
+    expect(gutterOf('m1', 1)).toHaveAttribute('data-tip', 'Units do not match')
+  })
+
+  it('keeps a gutter cell on every math row, at rest and while editing, so rows don’t shift when an edit opens', () => {
+    renderOverlay([anchorWith(WARNED)])
+    const cells = () => [1, 2].map((n) => rowOf('m1', n).firstElementChild)
+
+    expect(cells().map((cell) => cell?.className)).toEqual(['math-element__gutter', 'math-element__gutter'])
+    openLine(2)
+    expect(cells().map((cell) => cell?.classList.contains('math-element__gutter'))).toEqual([true, true])
   })
 })
 

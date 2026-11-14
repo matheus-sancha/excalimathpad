@@ -1,5 +1,5 @@
 import { act, fireEvent, screen, waitFor } from '@testing-library/react'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, onTestFinished } from 'vitest'
 import { isOffered, runCommand, type Command, type WorkspaceLeaf } from './obsidian.ts'
 import { DEFAULT_SETTINGS, writeSheet } from '../../src/file/sheetFormat.ts'
 import { doubleClickLine } from '../../src/test/gestures.ts'
@@ -62,6 +62,37 @@ const darkModeKey = (leaf: WorkspaceLeaf) =>
     fireEvent.keyDown(excalidrawIn(leaf), { key: 'D', code: 'KeyD', altKey: true, shiftKey: true })
   })
 const command = (vault: Vault, id: string) => vault.recorded.commands.find((c) => c.id === id) as Command
+
+describe('the panel at launch (section 8: on Problems only for an error, M4d)', () => {
+  /** The tab is 1440 px wide: the panel docks, so it opens as the sheet opens. */
+  const wideTab = () => {
+    const client = Object.getOwnPropertyDescriptor(Element.prototype, 'clientWidth')!
+    Object.defineProperty(Element.prototype, 'clientWidth', { configurable: true, get: () => 1440 })
+    onTestFinished(() => {
+      Object.defineProperty(Element.prototype, 'clientWidth', client)
+    })
+  }
+  const tabOf = async (leaf: WorkspaceLeaf) => {
+    await waitFor(() => expect(panelIn(leaf)).not.toBeNull())
+    return leaf.containerEl.querySelector('[role="tab"][aria-selected="true"]')
+  }
+
+  it('opens on Problems for a vault sheet with an error, though the file loads after the view mounts', async () => {
+    wideTab()
+    const vault = await vaultWith({ [A]: sheetOf(['K = 5.4', 'x = 1 m + 1 s']) })
+    const leaf = await openTab(vault, A)
+
+    expect(await tabOf(leaf)).toHaveTextContent('Problems')
+  })
+
+  it('opens on Variables for a vault sheet with warnings alone', async () => {
+    wideTab()
+    const vault = await vaultWith({ [A]: sheetOf(['K = 5.4', 'x = 2']) })
+    const leaf = await openTab(vault, A)
+
+    expect(await tabOf(leaf)).toHaveTextContent('Variables')
+  })
+})
 
 describe('the theme (section 8: Excalimathpad’s own light or dark, remembered)', () => {
   it('opens light until a mode is chosen, whatever Obsidian’s', async () => {

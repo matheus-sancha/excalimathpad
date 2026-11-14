@@ -141,6 +141,9 @@ export function MathElementView({
   const { x, y } = sceneToStage(anchor, viewport)
   // A new or emptied element: its field starts with room to type (section 4, Size).
   const isEmpty = !hasText(anchor.source)
+  // A warning at rest (section 4, Problems, M4d): the element's ⚠ marks show
+  // while any of its lines or its title is open; being selected is not editing.
+  const editing = edit !== null
 
   // React's onWheel is passive, so it cannot stop ctrl+wheel zooming the page.
   useEffect(() => {
@@ -193,19 +196,19 @@ export function MathElementView({
           <ol className="math-element__grid" aria-label="Lines">
             {splitLines(source).map((text, i) => {
               const line = lines[i] ?? EMPTY_LINE
-              const editing = edit?.lineIndex === i
+              const open = edit?.lineIndex === i
               const flashing = flash?.line === i
               return (
                 <li
                   // A new key restarts the flash's animation on a second jump.
                   key={flashing ? `${i}:${flash.key}` : i}
-                  className={`math-element__row is-${editing ? 'editing' : line.typeset.kind}${formatClasses(
-                    editing ? formatOf(edit.text) : line.typeset.kind === 'math' ? line.typeset.format : NO_FORMAT,
+                  className={`math-element__row is-${open ? 'editing' : line.typeset.kind}${formatClasses(
+                    open ? formatOf(edit.text) : line.typeset.kind === 'math' ? line.typeset.format : NO_FORMAT,
                   )}${flashing ? ' is-flash' : ''}`}
                   data-line={i}
                   aria-label={text}
                 >
-                  {editing ? (
+                  {open ? (
                     <EditingRow
                       edit={edit}
                       result={line.result}
@@ -218,7 +221,14 @@ export function MathElementView({
                       onBlur={() => onBlurLine(i)}
                     />
                   ) : (
-                    <TypesetRow text={text} line={line} index={i} katexReady={katexReady} />
+                    <TypesetRow
+                      text={text}
+                      line={line}
+                      index={i}
+                      katexReady={katexReady}
+                      // A jump's flash or outline shows its line's ⚠ while it lasts.
+                      showWarnings={editing || flashing}
+                    />
                   )}
                 </li>
               )
@@ -371,6 +381,9 @@ function formatClasses({ bold, underline, color, textColor }: LineFormat): strin
   }`
 }
 
+/** A row whose ⚠ is hidden: its gutter keeps its column, with no mark and no hover. */
+const NO_WARNINGS: readonly string[] = []
+
 const EMPTY_LINE: SheetLine = {
   result: { kind: 'empty' },
   typeset: { kind: 'blank' },
@@ -389,13 +402,17 @@ function TypesetRow({
   line,
   index,
   katexReady,
+  showWarnings,
 }: {
   text: string
   line: SheetLine
   index: number
   katexReady: boolean
+  /** Whether the row's ⚠ shows (section 4, A warning at rest). */
+  showWarnings: boolean
 }) {
-  const { typeset, result, warnings } = line
+  const { typeset, result } = line
+  const warnings = showWarnings ? line.warnings : NO_WARNINGS
   switch (typeset.kind) {
     case 'blank':
       return <ResultCell result={result} />
@@ -612,10 +629,13 @@ function Html({ html }: { html: string }) {
 /**
  * The problem gutter (section 4, Problems): a red `●` for an error, else an
  * amber `⚠` for warnings. Warnings never change the result, so the value still
- * shows beside the mark. The mark's message (`data-tip`) shows on hover, found
- * by the gestures from the mark's box (`tipAt`): the overlay takes no pointer
- * events, so a `title` here would never show. Screen only: print and the file
- * never carry it.
+ * shows beside the mark. A `⚠` shows only while its element is being edited, or
+ * on its line while a jump flashes it (section 4, A warning at rest): otherwise
+ * the row passes no warnings, and the gutter keeps its fixed column, empty and
+ * with no hover, so rows don't shift when an edit opens. A `●` always shows.
+ * The mark's message (`data-tip`) shows on hover, found by the gestures from
+ * the mark's box (`tipAt`): the overlay takes no pointer events, so a `title`
+ * here would never show. Screen only: print and the file never carry it.
  */
 function Gutter({ result, warnings }: { result: LineResult; warnings: readonly string[] }) {
   // A list's failed points are the line's error (section 10).
