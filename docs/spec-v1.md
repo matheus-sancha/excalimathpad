@@ -1967,7 +1967,10 @@ touch in [section 4](#touch). Research: [`docs/research/obsidian-plugin.md`](res
   (the Math guide, plot settings, notices) is bound to the view's own container and window
   (`registerDomEvent`, `activeDocument`, `element.doc`), so pop-out windows work. Nothing listens
   on the global `window` or `document`; Excalidraw keeps `handleKeyboardGlobally: false`.
-  `html` and `body` CSS is scoped to the view.
+  `html` and `body` CSS is scoped to the view. The other way, Obsidian's and a theme's global CSS
+  stay out: the app's and Excalidraw's CSS sit in one cascade layer (`excalimathpad`), and one
+  guard rule sends every property of every element inside the view back to that layer
+  (`all: revert-layer`, weighted as an id), so the sheet and its panel look as on the web.
 - **A device without regex lookbehind** (iOS below 16.4) is detected at view open
   (`new RegExp('(?<=a)b')` in a try): the view shows "Excalimathpad needs iOS 16.4 or later" and
   neither opens nor writes the sheet.
@@ -2008,7 +2011,8 @@ touch in [section 4](#touch). Research: [`docs/research/obsidian-plugin.md`](res
   - **Network-blocked run:** the built bundle loads in headless Chromium against the fake
     `obsidian`, with every non-local request blocked and logged, and opens a sample sheet with
     math, a plot, an image and CJK text. Any attempted request fails, and so does any `<style>` or
-    `<link>` added at run time.
+    `<link>` added at run time. The page also carries a stand-in for Obsidian's global rules for
+    buttons, inputs and selects on a dark theme, and the run fails if a Sheet panel row takes any.
   - **Obsidian's lint:** `eslint-plugin-obsidianmd` over `plugin/` and `src/`, with
     `--max-warnings 0`. UI text is in sentence case in both homes.
 
@@ -2938,7 +2942,13 @@ Changes line if it changes behaviour.
   **Found:** Obsidian documents neither how a `TextFileView` reacts to its file changing on disk nor whether
   its `modify` event can come before `vault.modify` resolves, so the view hears `vault.on('modify')` itself,
   also takes `setViewData(data, false)` as an outside change, and records the text it writes before the write.
-  Both routes, and a real sync, are for the hand check.
+  Both routes, and a real sync, are for the hand check. **Hand check (Matheus, 2026-11-14):** type, close
+  and reopen; the unchanged modified time; the idle reload and the conflict copy across a split pane; and
+  the round trip with the web app all passed. **Found:** in Obsidian's dark theme the Sheet panel's rows
+  took Obsidian's global button style (dark, 30 px, centred), since its `button:not(.clickable-icon)`
+  outweighs the app's one-class rules. Fixed by the view's CSS guard ([12a](#one-source-two-builds)) and
+  held by the network-blocked run. A white box near Obsidian's left sidebar after Split right is not yet
+  reproduced.
 - The `equal` / `unequal` text signatures inside the hardened math.js instance, and `if()` with `rawArgs` under
   the custom `toTex`.
 - With presses from `.sheet-sidebar` skipped in `listenToCanvas` and the panel-wide prevention on `document` in

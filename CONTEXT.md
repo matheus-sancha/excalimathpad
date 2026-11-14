@@ -376,8 +376,12 @@ their terms move in here as each M4d issue makes them true.
   `ImagePicker.ts` is the **vault image picker**, a `FuzzySuggestModal` over
   the vault's image files that reads only the one picked (`readBinary`).
   `styles.css`
-  is the view's own CSS (no padding, a full-height box); `src/index.css`, the
-  web's `html` and `body` rules, never ships. `plugin/test/obsidian.ts` is a
+  is the view's own CSS (no padding, a full-height box) and the **guard**: the
+  build wraps the app's and Excalidraw's CSS in `@layer excalimathpad`
+  (`APP_LAYER` in `esbuild.plugin.mjs`), and one rule gives every element in
+  the view `all: revert-layer` with an id's weight, so Obsidian's and a theme's
+  global rules (buttons, inputs, selects) never reach the app. `src/index.css`,
+  the web's `html` and `body` rules, never ships. `plugin/test/obsidian.ts` is a
   hand-written **fake `obsidian`** (Plugin, the view classes, WorkspaceLeaf,
   Workspace, Vault, FileManager, TFile, TFolder, Menu, FuzzySuggestModal,
   Scope, Platform, Notice, Obsidian's DOM helpers) that records

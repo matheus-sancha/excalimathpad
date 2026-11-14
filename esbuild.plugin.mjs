@@ -78,6 +78,12 @@ const trims = {
 }
 
 /**
+ * The cascade layer the app's and Excalidraw's CSS sit in, in the plugin
+ * (docs/spec-v1.md section 12a, The view is confined to itself).
+ */
+export const APP_LAYER = 'excalimathpad'
+
+/**
  * Rewrites one of Excalidraw's files so it reaches nothing outside the vault.
  * Each replacement is checked: an upgrade that moves the text fails the build
  * here, not silently in the audit.
@@ -146,10 +152,13 @@ export async function buildPlugin({ outDir = out, log = console.log } = {}) {
   const fonts = await inlineFonts(await readFile(mainPath, 'utf8'))
   await writeFile(mainPath, fonts.code)
 
-  // esbuild writes the CSS the JS imports beside it as main.css: that and the
-  // view's own rules are the one styles.css.
+  // esbuild writes the CSS the JS imports beside it as main.css: that, in the
+  // app's cascade layer, and the view's own rules are the one styles.css.
+  // `plugin/styles.css`'s guard sends every property inside the view back to
+  // this layer, past Obsidian's global rules for buttons, inputs and the rest.
   const cssPath = join(outDir, 'main.css')
-  const css = `${await readFile(cssPath, 'utf8')}\n${await readFile(join(root, 'plugin/styles.css'), 'utf8')}`
+  const app = (await readFile(cssPath, 'utf8')).replace(/^@charset "UTF-8";\s*/, '')
+  const css = `@charset "UTF-8";\n@layer ${APP_LAYER} {\n${app}\n}\n${await readFile(join(root, 'plugin/styles.css'), 'utf8')}`
   await writeFile(join(outDir, 'styles.css'), css)
   await rm(cssPath)
   await copyFile(join(root, 'manifest.json'), join(outDir, 'manifest.json'))
