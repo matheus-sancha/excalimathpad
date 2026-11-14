@@ -2,6 +2,8 @@
 
 - **Status**: accepted, built in M1 (#42)
 - **Date**: 2026-11-03
+- **Amended**: 2026-11-14 (M4d, not built; #124): in a vault, the file follows Obsidian's
+  autosave; the web app keeps explicit save.
 
 ## Context
 
@@ -40,6 +42,15 @@ Engineering rules (Engineer's):
   through the session's `keepClean`.
 - A migration is a pure function from format *n* to *n + 1*, one per step.
 - Results are never saved: they are derived on every run (ADR 0003).
+
+Amended on 2026-11-14 for M4d, decided by Matheus (#124). Not built:
+
+- **In a vault, the file follows Obsidian's autosave; the web app keeps explicit save.** The
+  plugin's view writes the same file, in the same format, through `TextFileView.requestSave()`
+  after a line commit or scene change, and at once on close, only when `saveKey` changed. There is
+  no recovery copy, dirty mark or leave question there: the file is its own copy. An outside change
+  reloads an idle tab and writes a conflict copy beside a busy one. Nothing Obsidian-specific is
+  added to the file, so a sheet moves between the two homes unchanged.
 
 ## Alternatives considered
 
