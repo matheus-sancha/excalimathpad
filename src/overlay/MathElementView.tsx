@@ -1088,7 +1088,7 @@ function LineField({
     field.focus()
     field.setSelectionRange(from, to)
     // `insertText` keeps the field's own Ctrl+Z; where it isn't there, write the text and say so.
-    if (!document.execCommand?.('insertText', false, item.insert)) {
+    if (!field.ownerDocument.execCommand?.('insertText', false, item.insert)) {
       field.setRangeText(item.insert, from, to, 'end')
       field.dispatchEvent(new Event('input', { bubbles: true }))
     }
@@ -1201,7 +1201,7 @@ function LineField({
         onBlur={(event) => {
           setList(null)
           // The window lost focus, not the field: the edit hasn't left its line.
-          if (document.activeElement !== event.currentTarget) onBlur()
+          if (event.currentTarget.ownerDocument.activeElement !== event.currentTarget) onBlur()
         }}
       />
       {list && (

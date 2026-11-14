@@ -46,13 +46,17 @@ You need **Node.js** `^22.22.2 || ^24.15.0 || >=26` and **npm 10+**. CI runs on 
 | Command | Description |
 |---|---|
 | `npm run dev` | Start the dev server (hot reload) |
-| `npm run build` | Type-check, then make a production build in `dist/` |
+| `npm run build` | Type-check, then build both homes: `build:web` and `build:plugin` |
+| `npm run build:web` | The web app's production build in `dist/` (Vite) |
+| `npm run build:plugin` | The Obsidian plugin in `dist-plugin/`: `main.js`, `styles.css`, `manifest.json` (`esbuild.plugin.mjs`) |
+| `npm run audit:plugin` | Check `dist-plugin/`: three files, each under 5,000,000 bytes, nothing that reaches the network |
+| `npm run test:blocked` | Open the built plugin in headless Chromium with the network blocked (Playwright's Chromium: `npx playwright install chromium` once) |
 | `npm run preview` | Serve `dist/` locally |
-| `npm run lint` | Lint with oxlint |
+| `npm run lint` | Lint with oxlint, then Obsidian's ESLint rules at zero warnings |
 | `npm test` | Run the tests once with Vitest (jsdom) |
 | `npm run test:watch` | Run the tests in watch mode |
 | `npm run typecheck` | Run the TypeScript project build, with no output files |
-| `npm run check` | Run lint, the tests and the build. **This is what CI runs, so run it before you push** |
+| `npm run check` | Run lint, the tests, both builds, the plugin audit and the blocked run. **This is what CI runs, so run it before you push** |
 
 ### Typical workflow
 
@@ -88,6 +92,9 @@ src/
 ├── panel/        Sheet panel tabs: Variables, Problems, Settings, Constants
 ├── file/         The .excalimathpad file, save, open, recovery copy
 └── test/         jsdom stubs and helpers (not app code)
+plugin/           The Obsidian plugin: the only code that imports `obsidian`
+└── test/         The fake `obsidian`, the plugin's tests and the pump sheet fixture
+scripts/          The plugin's bundle audit and network-blocked run
 docs/
 ├── spec-v1.md    The v1 spec
 ├── adr/          Architecture decision records
@@ -103,6 +110,7 @@ These rules keep the architecture sound, and the tests check several of them. Pl
 
 - **Excalidraw stays unforked.** Only `src/canvas/` imports `@excalidraw/excalidraw` at runtime. Other modules may import its types, and tests may import it. See [ADR 0001](docs/adr/0001-wrap-excalidraw-unforked.md) and [ADR 0002](docs/adr/0002-math-elements-anchor-to-excalidraw-rectangles.md).
 - **Only `src/math/` imports `mathjs`.** App code evaluates only through `evaluateSheet`.
+- **One source, two builds.** `src/` never imports `obsidian` or `plugin/`; oxlint and `plugin/test/boundary.test.ts` both check it. The plugin makes no network request and stores nothing outside the vault: `npm run check` audits the bundle and runs it with the network blocked. See [ADR 0006](docs/adr/0006-plugin-bundles-the-app-from-one-source.md).
 - **No `eval()` or `new Function()`.** Expressions are parsed by math.js. The engine closes every route an expression could use to change the shared math.js instance, and each of those closures has a test. Keep it that way.
 - **The anchor's `customData.source` is the only stored copy of an element's math.** Write it only through `writeAnchorSource`.
 - **Keep undo honest.** A line commit is one undo step, and keystrokes are none. Size and style writes add no undo step and never make a clean sheet dirty.

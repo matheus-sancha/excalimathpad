@@ -34,7 +34,7 @@ export function PlotChart({ plot }: { plot: PlotView }) {
   useEffect(() => {
     if (!module || !host.current) return
     host.current.replaceChildren(drawChart(module, plot))
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- `key` stands for `plot`, so an equal plot draws nothing.
   }, [module, key])
 
   return (

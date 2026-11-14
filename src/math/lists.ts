@@ -70,7 +70,7 @@ export function createRanges(math: MathJsInstance) {
      * The list `start .. end step step`. `name` names the range in messages;
      * `stepText` is how a missing step is suggested.
      */
-    range(start: unknown, end: unknown, step: unknown | null, name: string | null): SheetList {
+    range(start: unknown, end: unknown, step: unknown, name: string | null): SheetList {
       const a = reduce(start, 'start')
       const b = reduce(end, 'end')
       if (step === null && (a.dimensions !== null || b.dimensions !== null || isUnit(start) || isUnit(end))) {
@@ -108,7 +108,8 @@ export function createRanges(math: MathJsInstance) {
 
   function showStep(step: unknown): string {
     if (step === null) return '1'
-    return isUnit(step) ? step.toString() : String(step)
+    // `reduce` has taken it, so it is a unit or a plain number.
+    return isUnit(step) ? step.toString() : `${step as number}`
   }
 }
 

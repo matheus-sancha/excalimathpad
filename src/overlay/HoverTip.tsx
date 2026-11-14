@@ -29,7 +29,7 @@ export const TIP_DELAY_MS = 500
 export function useHoverTip(delay = TIP_DELAY_MS) {
   const [tip, setTip] = useState<TipTarget | null>(null)
   const shown = useRef<TipTarget | null>(null)
-  const waiting = useRef<{ target: TipTarget; timer: ReturnType<typeof setTimeout> } | null>(null)
+  const waiting = useRef<{ target: TipTarget; timer: number } | null>(null)
 
   const show = useCallback((target: TipTarget | null) => {
     shown.current = target
@@ -37,7 +37,7 @@ export function useHoverTip(delay = TIP_DELAY_MS) {
   }, [])
 
   const stopWaiting = () => {
-    if (waiting.current) clearTimeout(waiting.current.timer)
+    if (waiting.current) window.clearTimeout(waiting.current.timer)
     waiting.current = null
   }
 
@@ -58,7 +58,7 @@ export function useHoverTip(delay = TIP_DELAY_MS) {
         show(target)
         return
       }
-      const timer = setTimeout(() => {
+      const timer = window.setTimeout(() => {
         const ready = waiting.current?.target
         waiting.current = null
         if (ready) show(ready)

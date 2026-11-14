@@ -37,7 +37,7 @@ export function indexedDbRecovery(
       const request = factory.open(name, 1)
       request.onupgradeneeded = () => request.result.createObjectStore(STORE)
       request.onsuccess = () => resolve(request.result)
-      request.onerror = () => reject(request.error)
+      request.onerror = () => reject(request.error ?? new Error('IndexedDB would not open'))
     })
     return opening
   }
@@ -48,8 +48,8 @@ export function indexedDbRecovery(
         const transaction = db.transaction(STORE, mode)
         const request = act(transaction.objectStore(STORE))
         transaction.oncomplete = () => resolve(request.result as T)
-        transaction.onerror = () => reject(transaction.error)
-        transaction.onabort = () => reject(transaction.error)
+        transaction.onerror = () => reject(transaction.error ?? new Error('IndexedDB transaction failed'))
+        transaction.onabort = () => reject(transaction.error ?? new Error('IndexedDB transaction aborted'))
       }, reject)
     })
 

@@ -52,9 +52,10 @@ export interface SessionState {
   settings: SheetSettings
 }
 
+// Function properties, not methods: React and App take them unbound.
 export interface SheetSession {
-  getState(): SessionState
-  subscribe(listener: () => void): () => void
+  getState: () => SessionState
+  subscribe: (listener: () => void) => () => void
   /** Offers the recovery copy, then takes the clean mark. Runs once. */
   start(): Promise<void>
   /** Listens to the scene. Returns the way to stop. */
@@ -69,7 +70,7 @@ export interface SheetSession {
   /** Commits the line being typed, so it counts as a change (before the page goes away). */
   commitPending(): void
   /** Runs a scene write that mustn't make a clean sheet dirty (auto-size, style restore). */
-  keepClean(write: () => void): void
+  keepClean: (write: () => void) => void
   /** Writes a pending recovery copy now, as the page goes away. */
   flushRecovery(): void
   readonly settings: SheetSettings
@@ -77,7 +78,7 @@ export interface SheetSession {
    * Changes the sheet's settings (section 8, Settings tab): saved with the
    * sheet, so the sheet turns dirty; not part of undo.
    */
-  setSettings(next: SheetSettings): void
+  setSettings: (next: SheetSettings) => void
 }
 
 export interface SessionPorts {
@@ -117,7 +118,7 @@ export function createSheetSession({
   let started = false
   let starting: Promise<void> | null = null
   let busy = false
-  let pendingCopy: ReturnType<typeof setTimeout> | null = null
+  let pendingCopy: number | null = null
   let recoveryQueue: Promise<unknown> = Promise.resolve()
 
   let state: SessionState = { name, dirty: false, settings }
@@ -142,7 +143,7 @@ export function createSheetSession({
   /** What a save would write: the scene's key and the settings. */
   const currentKey = () => `${scene.saveKey()}|${JSON.stringify(settings)}`
   const cancelPendingCopy = () => {
-    if (pendingCopy !== null) clearTimeout(pendingCopy)
+    if (pendingCopy !== null) window.clearTimeout(pendingCopy)
     pendingCopy = null
   }
   const writeCopyNow = () => {
@@ -153,7 +154,7 @@ export function createSheetSession({
   }
   const scheduleCopy = () => {
     cancelPendingCopy()
-    pendingCopy = setTimeout(writeCopyNow, recoveryDelayMs)
+    pendingCopy = window.setTimeout(writeCopyNow, recoveryDelayMs)
   }
 
   /**

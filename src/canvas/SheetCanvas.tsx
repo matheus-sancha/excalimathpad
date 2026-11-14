@@ -48,7 +48,7 @@ export type SheetPanelTab = 'variables' | 'problems' | 'settings' | 'constants'
 
 /** What fills the Sheet panel (docs/spec-v1.md section 8); the canvas draws its frame. */
 export interface SheetPanelSlot {
-  /** Errors and warnings: the badge on Math Settings and on More tools. */
+  /** Errors and warnings: the badge on Math settings and on More tools. */
   problems: number
   variables: ReactNode
   problemsTab: ReactNode
@@ -66,8 +66,14 @@ export interface SheetCanvasProps {
   initialElements?: readonly ExcalidrawElement[]
   /** The app's file items, at the top of the ☰ menu. */
   fileMenu?: FileMenu
-  /** Math Settings: its More tools item and the panel. */
+  /** Math settings: its More tools item and the panel. */
   sheetPanel?: SheetPanelSlot
+  /**
+   * Whether Excalidraw may load embeds (YouTube, Figma…) in iframes. The web
+   * keeps Excalidraw's default; the plugin turns them off, since it makes no
+   * request (docs/spec-v1.md section 12a, Data protection).
+   */
+  embeds?: boolean
 }
 
 /**
@@ -91,9 +97,9 @@ const INITIAL_APP_STATE = { currentItemFontFamily: FONT_FAMILY.Nunito }
  * The `src/canvas/` modules are the only ones that import
  * `@excalidraw/excalidraw` at runtime (ADR 0001).
  */
-export function SheetCanvas({ onReady, initialElements, fileMenu, sheetPanel }: SheetCanvasProps) {
+export function SheetCanvas({ onReady, initialElements, fileMenu, sheetPanel, embeds = true }: SheetCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null)
-  // The tab Math Settings opens: the one last shown.
+  // The tab Math settings opens: the one last shown.
   const lastTab = useRef<SheetPanelTab>('variables')
   const [docked, setDocked] = useState(true)
   // The same box as `containerRef`, as state, for what waits on it.
@@ -152,6 +158,8 @@ export function SheetCanvas({ onReady, initialElements, fileMenu, sheetPanel }: 
         excalidrawAPI={setApi}
         initialData={{ elements: initialElements ?? [], appState: INITIAL_APP_STATE }}
         UIOptions={UI_OPTIONS}
+        // `false` makes every embed invalid, so none loads its iframe.
+        validateEmbeddable={embeds ? undefined : false}
         // Nothing is drawn top right: the app's items go into More tools.
         // This prop is where Excalidraw hands over its app state on each render.
         renderTopRightUI={(_isMobile, appState) =>
@@ -182,9 +190,9 @@ export function SheetCanvas({ onReady, initialElements, fileMenu, sheetPanel }: 
                 <div className="math-tools__trigger sidebar-trigger">
                   <MoreToolsItem
                     icon={<SettingsIcon />}
-                    label="Math Settings"
+                    label="Math settings"
                     pressed={appState.openSidebar?.name === SHEET_PANEL}
-                    title="Math Settings: variables, problems and settings"
+                    title="Math settings: variables, problems and settings"
                     onSelect={() => {
                       closeMoreTools(root)
                       api.toggleSidebar({ name: SHEET_PANEL, tab: lastTab.current })
@@ -276,7 +284,7 @@ function MoreToolsItem({
   )
 }
 
-/** Math Settings' icon: three sliders, drawn like Excalidraw's own tool icons. */
+/** Math settings' icon: three sliders, drawn like Excalidraw's own tool icons. */
 function SettingsIcon() {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">

@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url'
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vitest/config'
 import { buildStamp } from './buildStamp.ts'
@@ -15,6 +16,9 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],
+    // The plugin's tests run against a hand-written fake of Obsidian's module
+    // (docs/spec-v1.md section 12a, Tests); Obsidian itself isn't on npm.
+    alias: { obsidian: fileURLToPath(new URL('./plugin/test/obsidian.ts', import.meta.url)) },
     css: false,
     // Excalidraw's ESM build imports JSON without import attributes, which
     // Node rejects; let Vite transform it instead of loading it natively.

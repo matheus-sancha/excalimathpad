@@ -13,9 +13,11 @@
  *
  * Pointer events are heard on `root`, the box Excalidraw fills. The overlay is
  * its sibling, so the overlay's own controls (the line field) never reach them.
- * Keys are heard on `document`, but only those aimed at the canvas: their
- * target is inside `root`, or is the page's body. The app's own dialogs and
- * panels keep their keys.
+ * Keys are heard on `keys`, the page's document by default, but only those
+ * aimed at the canvas: their target is inside `root`, or is the page's body.
+ * The app's own dialogs and panels keep their keys. In a vault view (M4d,
+ * section 12a) `keys` is the view's own container, so nothing listens on the
+ * global document and each tab hears only its own keys.
  */
 export interface CanvasEventHandlers {
   /** Returns true when the app took it: it is then stopped before Excalidraw. */
@@ -33,7 +35,11 @@ export interface CanvasEventHandlers {
 }
 
 /** Starts listening; returns the function that stops. */
-export function listenToCanvas(root: HTMLElement, handlers: CanvasEventHandlers): () => void {
+export function listenToCanvas(
+  root: HTMLElement,
+  handlers: CanvasEventHandlers,
+  keys: EventTarget = root.ownerDocument,
+): () => void {
   const take = (event: Event) => {
     event.stopPropagation()
     event.preventDefault()
@@ -49,7 +55,7 @@ export function listenToCanvas(root: HTMLElement, handlers: CanvasEventHandlers)
   const onKeyDown = (event: KeyboardEvent) => {
     const target = event.target
     const onCanvas =
-      target === document.body || (target instanceof Node && root.contains(target))
+      target === root.ownerDocument.body || (isNode(target) && root.contains(target))
     if (onCanvas && handlers.keyDown(event)) take(event)
   }
 
@@ -58,13 +64,27 @@ export function listenToCanvas(root: HTMLElement, handlers: CanvasEventHandlers)
   root.addEventListener('click', onClick, true)
   root.addEventListener('pointermove', onPointerMove, true)
   root.addEventListener('pointerleave', onPointerLeave)
-  document.addEventListener('keydown', onKeyDown, true)
+  keys.addEventListener('keydown', onKeyDown as EventListener, true)
   return () => {
     root.removeEventListener('pointermove', onPointerMove, true)
     root.removeEventListener('pointerleave', onPointerLeave)
     root.removeEventListener('dblclick', onDoubleClick, true)
     root.removeEventListener('pointerdown', onPointerDown, true)
     root.removeEventListener('click', onClick, true)
-    document.removeEventListener('keydown', onKeyDown, true)
+    keys.removeEventListener('keydown', onKeyDown as EventListener, true)
   }
+}
+
+/**
+ * Whether an event's target is Excalidraw's canvas, in any window: a pop-out
+ * window has its own `HTMLCanvasElement`, so `instanceof` would miss it there
+ * (section 12a).
+ */
+export function isCanvasElement(target: EventTarget | null): target is HTMLCanvasElement {
+  return isNode(target) && target.nodeName === 'CANVAS'
+}
+
+/** A DOM node from any window: a pop-out window has its own `Node` (section 12a). */
+function isNode(target: EventTarget | null): target is Node {
+  return typeof (target as Node | null)?.nodeType === 'number'
 }

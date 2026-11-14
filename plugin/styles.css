@@ -1,0 +1,17 @@
+/* The plugin's view (docs/spec-v1.md section 12a): the app fills its tab.
+   Every ancestor of the canvas needs a definite height (CONTEXT.md,
+   Load-bearing); the web's html and body rules (src/index.css) never ship. */
+.workspace-leaf-content[data-type='excalimathpad-sheet'] > .view-content.excalimathpad-view {
+  padding: 0;
+  overflow: hidden;
+}
+
+.excalimathpad-view__app {
+  position: relative;
+  height: 100%;
+}
+
+.excalimathpad-view__message {
+  padding: var(--size-4-4, 16px);
+  color: var(--text-normal);
+}

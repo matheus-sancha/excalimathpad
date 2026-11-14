@@ -4,14 +4,27 @@ Excalimathpad is a single-user, browser-only "calc sheet": the Excalidraw
 whiteboard with a layer of live, unit-aware math on top (Mathcad-style). It is
 a Vite + React + TypeScript app that builds to static files; there is no
 server. v1 target: for anyone, built around Matheus's own engineering work;
-free and best effort. M4d (specified, not built) adds an Obsidian community
-plugin built from this source (`docs/spec-v1.md` section 12a, ADR 0006); its
-terms move in here as each M4d issue makes them true.
+free and best effort. M4d adds an Obsidian community plugin built from this
+source (`docs/spec-v1.md` section 12a, ADR 0006): **one source, two builds**.
+Built so far (#135): the plugin bundle and a view that opens and shows a sheet;
+saving in a vault, New sheet, the chrome and releases are still to come, and
+their terms move in here as each M4d issue makes them true.
 
 ## Entry points
 
-- `index.html` → `src/main.tsx` — the only runtime entry; mounts `App`.
-- `npm run dev | build | preview | test | lint | check` — see `package.json`.
+- `index.html` → `src/main.tsx` — the web app's entry; mounts `App` with the
+  browser's ports: the file pickers, the IndexedDB recovery copy and the
+  per-browser panel memory (`localStorage`).
+- `plugin/main.ts` — the plugin's entry (section 12a), built by
+  `esbuild.plugin.mjs` into `dist-plugin/` (`main.js`, `styles.css`, a copy of
+  the root `manifest.json`). `tsconfig.plugin.json` type-checks `plugin/`.
+- `npm run dev | build | build:web | build:plugin | preview | test | lint |
+  audit:plugin | test:blocked | check` — see `package.json`. `build` runs
+  `tsc -b` and both builds; `lint` is oxlint, then Obsidian's ESLint rules
+  (`eslint.config.mjs`) at `--max-warnings 0`; `check` is lint, the tests, the
+  build, the **bundle audit** (`scripts/audit-plugin.mjs`) and the
+  **network-blocked run** (`scripts/blocked-run.mjs`). CI installs Playwright's
+  Chromium (the version `package.json` pins) for the last.
 - `.github/workflows/ci.yml` — runs `npm run check` on pushes to `main`
   and on pull requests. On a push to `main` its `deploy` job then publishes
   that run's `dist/` to Cloudflare Pages (spec section 12, Hosted build); it
@@ -25,9 +38,18 @@ terms move in here as each M4d issue makes them true.
 - **App** (`src/App.tsx`) — composition root. Decides what fills each shell
   slot and wires the sheet file to the canvas and the line edit, and the
   sheet's evaluation to the Sheet panel (opened at launch on a wide window). The untitled
-  sheet starts empty, on the welcome screen. Takes `files`, `recovery` and
-  `initialElements` so tests pass fakes and a sheet to work on. Depends on:
-  shell, canvas, overlay, file.
+  sheet starts empty, on the welcome screen. It runs in one of two **homes**.
+  On the web it takes `files` and `recovery` (required; tests pass fakes) and
+  mounts the session with `FileChrome`. With `vault` (a `VaultHome`: the
+  view's container and the sheet as the view read it) it mounts no file
+  chrome, no file keys or drops and no ☰ file items, loads the sheet through
+  `createVaultSheet` (`src/file/vaultSheet.ts`, no writes until #136), binds
+  the gestures' keys and the flash's click to the view's container, and turns
+  Excalidraw's embeds off. `panelMemory` is where the panel's open state lives
+  (a port: `storagePanelMemory` on the web, `data.json` in the plugin, this
+  page only if unset). App imports none of the browser ports at run time, so
+  the plugin's bundle holds none. `initialElements` gives tests a sheet.
+  Depends on: shell, canvas, overlay, file.
 - **shell** (`src/shell/`) — full-viewport layout with three slots: `canvas`,
   `overlay` (stacked exactly over the canvas, pointer-transparent by default)
   and `sidePanel` (docked right). Empty (falsy) slots render nothing. Neither
@@ -50,9 +72,14 @@ terms move in here as each M4d issue makes them true.
   `SheetCanvas` starts new text in the Normal font (Nunito).
   `canvasEvents.ts` (`listenToCanvas`) hands the canvas's double-clicks, presses,
   clicks, pointer moves and keys to the gestures before Excalidraw hears them,
-  and stops the ones they take. `sceneFile.ts` is
+  and stops the ones they take. Keys are heard on a target it is given: the
+  page's document on the web, the view's container in a vault (`keyScope`,
+  through `MathOverlay` and `useSheetGestures`). `isCanvasElement` tells
+  Excalidraw's canvas by node name, so it holds in a pop-out window. `sceneFile.ts` is
   the Excalidraw half of the sheet file: `serializeScene`, `loadScene` (no undo
   step, clears history) and `saveKey`, the key dirty is measured by.
+  `SheetCanvas`'s `embeds={false}` passes Excalidraw `validateEmbeddable={false}`,
+  so no embed loads an iframe (the plugin's no-network rule).
   `SheetCanvas` also turns off Excalidraw's own open, save and export and draws
   the ☰ menu with the app's file items and, as its last line, the build stamp
   (`__BUILD_STAMP__`, plain text); its handle carries `root`, the box it
@@ -65,9 +92,9 @@ terms move in here as each M4d issue makes them true.
   click into a new anchor, selected in the same write, and holds the crosshair.
   `mathAnchor.ts` also has `removeAnchor`, the one-step removal of an element
   left empty. `SheetCanvas` draws the welcome screen, and the app's two
-  items in Excalidraw's More tools dropdown: Add math and Math Settings, which
+  items in Excalidraw's More tools dropdown: Add math and Math settings, which
   opens the Sheet panel. `moreTools.ts` finds the open dropdown
-  (`useMoreToolsSlot`, a box of the app's own appended to it; Math Settings
+  (`useMoreToolsSlot`, a box of the app's own appended to it; Math settings
   sits in a `display: contents` wrapper carrying `sidebar-trigger`, so a
   floating panel's outside click ignores it without Excalidraw's square-button
   style, whose `line-height: 0` hid its label, #102), closes it
@@ -308,6 +335,24 @@ terms move in here as each M4d issue makes them true.
   `canvas/fileRoutes.ts` takes. Opening picks the file before it asks about
   unsaved changes: Chromium allows one picker per gesture. Depends on: canvas
   (file routes, layers).
+- **plugin** (`plugin/`, section 12a, ADR 0006) — the Obsidian plugin, and the
+  only code that imports `obsidian`. `main.ts` (the `Plugin`) registers the
+  view for `.excalimathpad` only and keeps the panel's open state in
+  `data.json` (`loadData`/`saveData`). `SheetView.ts` is the `TextFileView`:
+  `setViewData` runs the **lookbehind check** (`hasLookbehind`; without it,
+  "Excalimathpad needs iOS 16.4 or later."), then `readSheet`; a newer or
+  unreadable file shows section 13's message in the view and nothing mounts;
+  otherwise it mounts `<App vault=…>` on `contentEl` with React's `createRoot`
+  and unmounts on close. Until autosave (#136) `save` does nothing and
+  `getViewData` returns the text as read, so viewing never writes. `styles.css`
+  is the view's own CSS (no padding, a full-height box); `src/index.css`, the
+  web's `html` and `body` rules, never ships. `plugin/test/obsidian.ts` is a
+  hand-written **fake `obsidian`** (Plugin, the view classes, WorkspaceLeaf,
+  Vault, Scope, Platform, Notice, Obsidian's DOM helpers) that records
+  registrations, writes and notices; Vitest aliases `obsidian` to it, and the
+  blocked run bundles the same file for the browser.
+  `plugin/test/pump-sizing.excalimathpad` is the pump sheet with an image and
+  CJK text. Depends on: App, file (`readSheet`, the messages), panel memory.
 - **test setup** (`src/test/`) — jsdom stubs for browser APIs Excalidraw
   touches on mount (canvas, fonts, matchMedia, ResizeObserver, which tests can
   fire), helpers for tests against the real Excalidraw, body sizes for the
@@ -320,7 +365,8 @@ terms move in here as each M4d issue makes them true.
   turns the evaluated sheet (`EvaluatedElement`s, which `MathOverlay` hands
   out through `onEvaluated`) into Variables groups and Problems rows;
   `SheetPanel.tsx` renders them, and a click asks App to jump.
-  `panelMemory.ts` keeps open/closed in `localStorage`. `SettingsTab.tsx`
+  `panelMemory.ts` is the `PanelMemory` port for the open/closed state
+  (`localStorage` on the web, given by `src/main.tsx`). `SettingsTab.tsx`
   edits the unit system, Custom's kind → unit table, Digits and the Result
   colour (`settings.resultColor`, one of the six text colours; App hands it to
   `MathOverlay`, which sets `--math-result` on the overlay) through the
@@ -542,6 +588,32 @@ and everything downstream recalculates. Engine: math.js, client-side.
   itself; trusting the last `onChange` misses that line.
 - **Static-only build** with relative `base` (`vite.config.ts`). Adding a
   server dependency breaks the deploy model.
+- **`src/` never imports `obsidian` or `plugin/`** (section 12a): oxlint's
+  `no-restricted-imports` under `src/**` and `plugin/test/boundary.test.ts`,
+  which reads every file in `src/`. `plugin/` imports `src/`, never the reverse.
+- **The plugin's bundle names no browser storage and reaches no host.** App
+  takes the web's ports as props, so `recovery.ts`, `fileAccess.ts` and
+  `localStorage` stay out of `main.js`; importing one into App at run time
+  fails the audit. `esbuild.plugin.mjs` stubs Mermaid to Excalidraw, the
+  non-English locales and font subsetting; rewrites Excalidraw's `./fonts/…`
+  strings to `data:` URLs (Xiaolai to `local:`); and in Excalidraw's own files
+  turns `localStorage` into no storage, the `esm.sh` fallback into
+  `about:blank#` and every `VITE_APP_*` value (service URLs, the Firebase key)
+  into `""`. Each depends on Excalidraw 0.18.1's text; the audit fails an
+  upgrade that moves it. The audit's allowlist (`scripts/plugin-allowlist.json`)
+  says why each host and each library `<style>`/`<link>` site is harmless.
+- **Excalidraw's typings give some of its API as `any`** (its `.d.ts` imports
+  types the package doesn't ship; `setCursor` indexes a private member).
+  `setCanvasCursor` (`addMath.ts`), `clearHistory` (`sceneFile.ts`) and
+  `toMathAnchor`'s `angle` state their shapes, so the type-aware lint passes.
+- **Obsidian's lint runs over shipping code only**, as the community scanner
+  does: tests and Node scripts are left out. Its exceptions are named in
+  `eslint.config.mjs`: the web-only modules, `execCommand('insertText')` (the
+  line field's own undo) and the leave prompt's `returnValue`. Its sentence-case
+  rule doesn't read JSX text, so UI labels are kept in sentence case by hand.
+- **Callbacks handed around unbound are function properties**, not methods
+  (`SheetSession`, `DialogHost`, the scene store): the type-aware lint's
+  `unbound-method` holds them to it.
 
 ## Incidental
 
@@ -560,6 +632,13 @@ and everything downstream recalculates. Engine: math.js, client-side.
 - In Excalidraw's phone layout (a narrow window), ☰ moves to the bottom bar and
   the file name, placed beside it, sits under that bar, so it doesn't show. v1
   targets desktop Chrome and Edge.
+- The plugin's `main.js` is about 3.43 MB and `styles.css` 0.64 MB (#135);
+  the audit fails either above 5,000,000 bytes, Obsidian Sync Standard's cap.
+- Excalidraw 0.18.1 listens on the global `document` (copy, cut, paste, `keyup`,
+  pointer moves and ups, scroll and others) and `window` (resize, blur, focus,
+  message, unload) by itself. The plugin's own code adds none
+  (`plugin/test/SheetView.test.ts`, against Excalidraw alone); how
+  Excalidraw's behave in a pop-out window is #137's to check.
 - After an Open, Excalidraw's Undo button can stay lit: `history.clear()`
   doesn't notify it. Pressing it undoes nothing and puts it right.
 - KaTeX shares the lazy `katex-*.js` chunk with Mermaid (about 77 kB gzip) and
@@ -600,3 +679,8 @@ marked with a milestone aren't built yet.
 - [ADR 0005](docs/adr/0005-app-reads-line-forms-before-mathjs.md) — the app
   reads its line forms (comment, display unit, solve, range, table, plot)
   before math.js sees a line, and the index right after the parse.
+- [ADR 0006](docs/adr/0006-plugin-bundles-the-app-from-one-source.md) — the
+  Obsidian plugin bundles the whole app from the same source: `plugin/` is the
+  only code that imports `obsidian`, built by esbuild into one `main.js`, with
+  no network and nothing stored outside the vault (M4d; the bundle and the
+  view are built, #135).
