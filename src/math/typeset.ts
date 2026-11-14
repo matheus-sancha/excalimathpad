@@ -175,7 +175,7 @@ function toTex(node: MathNode, names: Names): string {
     const quantity = quantityTex(child, names)
     return quantity === null ? undefined : ` ${quantity}`
   }
-  return node.toTex({ parenthesis: 'auto', implicit: 'hide', handler } as object).trim()
+  return node.toTex({ parenthesis: 'auto', implicit: 'hide', handler }).trim()
 }
 
 function symbolTex(name: string, names: Names): string | undefined {

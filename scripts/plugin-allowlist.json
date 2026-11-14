@@ -1,0 +1,31 @@
+{
+  "$comment": "What the bundle audit (scripts/audit-plugin.mjs, docs/spec-v1.md section 12a, Data protection) lets through. Every entry says why it can't reach the network. Add one only with its reason; the audit fails on anything else.",
+  "hosts": {
+    "www.w3.org": "XML namespaces (SVG, XHTML, XLink, MathML): names, never fetched",
+    "react.dev": "React's error messages name their help page in the thrown text; never fetched",
+    "github.com": "Licence comments, Excalidraw's Help and dialog links, and jotai's and zustand's warning texts; a link opens the browser only when clicked",
+    "docs.excalidraw.com": "Excalidraw's Help dialog link; opens the browser only when clicked",
+    "plus.excalidraw.com": "Excalidraw's Help dialog link (blog); opens the browser only when clicked",
+    "www.youtube.com": "Excalidraw's Help link, and its embed patterns, which never load: the plugin passes validateEmbeddable false",
+    "youtube.com": "Excalidraw's embed patterns; never loaded (validateEmbeddable false)",
+    "discord.gg": "Excalidraw's Help dialog link; opens the browser only when clicked",
+    "x.com": "Excalidraw's Help link and embed pattern; never loaded (validateEmbeddable false)",
+    "twitter.com": "Excalidraw's embed pattern; never loaded (validateEmbeddable false)",
+    "platform.twitter.com": "Excalidraw's tweet embed script, written only into an embed's iframe; never loaded (validateEmbeddable false)",
+    "player.vimeo.com": "Excalidraw's embed pattern; never loaded (validateEmbeddable false)",
+    "www.figma.com": "Excalidraw's embed pattern; never loaded (validateEmbeddable false)",
+    "reddit.com": "Excalidraw's embed pattern; never loaded (validateEmbeddable false)",
+    "embed.reddit.com": "Excalidraw's embed pattern; never loaded (validateEmbeddable false)",
+    "giphy.com": "Excalidraw's embed pattern; never loaded (validateEmbeddable false)",
+    "gist.github.com": "Excalidraw's embed pattern; never loaded (validateEmbeddable false)",
+    "libraries.excalidraw.com": "A link in Excalidraw's Publish library dialog, which the plugin never opens",
+    "mermaid.js.org": "Links in Excalidraw's Mermaid dialog, which is trimmed from the plugin"
+  },
+  "elementCreation": {
+    "$comment": "Each createElement(\"style\" | \"link\") must sit near one of these words, which mark library code the app never reaches. The network-blocked run also fails on any <style> or <link> added at run time.",
+    "precedence": "React DOM's hoisting of <style> and <link> written in JSX; the app renders none",
+    "preload": "React DOM's preload resources (ReactDOM.preload, <link rel=preload> in JSX); the app uses neither",
+    "dns-prefetch": "React DOM's ReactDOM.prefetchDNS; the app never calls it",
+    "__webpack_nonce__": "react-style-singleton, which Radix's scroll lock uses only in a modal; the blocked run watches for it"
+  }
+}

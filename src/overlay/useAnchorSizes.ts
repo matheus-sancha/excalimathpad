@@ -33,14 +33,12 @@ export function floorOf(root: HTMLElement | null, id: string): number {
     (candidate) => candidate.closest<HTMLElement>('[data-anchor-id]')?.dataset.anchorId === id,
   )
   if (!body) return 0
-  const { width, minWidth } = body.style
   const had = body.classList.contains('has-chosen-width')
-  body.classList.add('has-chosen-width')
-  body.style.width = '0px'
-  body.style.minWidth = 'max-content'
+  // A class, not inline styles: `is-measuring-floor` lays the body out at no
+  // width (MathOverlay.css) and goes again before the next paint.
+  body.classList.add('has-chosen-width', 'is-measuring-floor')
   const floor = body.offsetWidth
-  body.style.width = width
-  body.style.minWidth = minWidth
+  body.classList.remove('is-measuring-floor')
   if (!had) body.classList.remove('has-chosen-width')
   if (floor === 0) return 0
   return body.querySelector('.math-element__row:not(.is-comment):not(.is-blank)') ? floor : Math.max(floor, COMMENTS_ONLY_FLOOR)

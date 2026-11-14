@@ -17,7 +17,7 @@ const renderApp = (props: Parameters<typeof App>[0] = {}) => {
 const mathElements = () => screen.queryAllByRole('list', { name: 'Lines' })
 const lineField = () => screen.queryByRole<HTMLInputElement>('textbox', { name: 'Line source' })
 
-/** Opens Excalidraw's More tools, where Add math and Math Settings are (section 8). */
+/** Opens Excalidraw's More tools, where Add math and Math settings are (section 8). */
 async function openMoreTools() {
   if (!document.querySelector('.math-tools')) fireEvent.click(await screen.findByTitle('More tools'))
   await waitFor(() => expect(document.querySelector('.math-tools button')).not.toBeNull())
@@ -258,10 +258,10 @@ describe('App', () => {
     })
   })
 
-  describe('Math Settings (docs/spec-v1.md section 8)', () => {
+  describe('Math settings (docs/spec-v1.md section 8)', () => {
     const sheetButton = async () => {
       await openMoreTools()
-      return screen.getByRole('button', { name: /^Math Settings/ })
+      return screen.getByRole('button', { name: /^Math settings/ })
     }
     const problemSheet = () =>
       createMathAnchorElements([
@@ -277,7 +277,7 @@ describe('App', () => {
       const root = document.querySelector<HTMLElement>('[data-math-problems]')!
       expect(root.style.getPropertyValue('--math-problems')).toBe('"2"')
 
-      expect(await sheetButton()).toHaveTextContent('Math Settings2')
+      expect(await sheetButton()).toHaveTextContent('Math settings2')
       expect(screen.getByLabelText('2 problems')).toBeInTheDocument()
     })
 
@@ -289,7 +289,7 @@ describe('App', () => {
       // Excalidraw's `.excalidraw .sidebar-trigger` sets `line-height: 0` and a fixed button look;
       // on the item it collapsed the label to no height (seen in Chromium).
       expect(item.matches('.excalidraw .sidebar-trigger')).toBe(false)
-      expect(item.querySelector('.dropdown-menu-item__text')).toHaveTextContent('Math Settings2')
+      expect(item.querySelector('.dropdown-menu-item__text')).toHaveTextContent('Math settings2')
       // A floating panel's outside click finds it through `closest`, so it doesn't close and reopen.
       expect(item.querySelector('.dropdown-menu-item__text')!.closest('.sidebar-trigger')).not.toBeNull()
     })
@@ -299,7 +299,7 @@ describe('App', () => {
       await ready()
       await screen.findAllByRole('list', { name: 'Lines' })
 
-      expect(await sheetButton()).toHaveTextContent(/^Math Settings$/)
+      expect(await sheetButton()).toHaveTextContent(/^Math settings$/)
       expect(document.querySelector('[data-math-problems]')).toBeNull()
     })
 

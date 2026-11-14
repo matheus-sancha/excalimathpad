@@ -58,7 +58,7 @@ export function PlotSettings({
       aria-label="Plot settings"
       onKeyDown={keys}
       onBlur={(event) => {
-        if (!root.current?.contains(event.relatedTarget as Node | null)) onClose()
+        if (!root.current?.contains(event.relatedTarget)) onClose()
       }}
     >
       <Row label="Mark">

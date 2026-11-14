@@ -83,6 +83,8 @@ export interface MathOverlayProps {
   api: SceneApi
   /** The box Excalidraw fills, where the gestures listen (`SheetCanvasHandle.root`). */
   canvasRoot: HTMLElement
+  /** Where the gestures hear keys: unset on the web (the page), the view's container in a vault. */
+  keyScope?: HTMLElement
   forwardWheel: ForwardWheel
   /** Gives the keyboard back to Excalidraw, so its Ctrl+Z works after Esc. */
   focusCanvas: () => void
@@ -159,6 +161,7 @@ interface SceneSnapshot {
 export function MathOverlay({
   api,
   canvasRoot,
+  keyScope,
   forwardWheel,
   focusCanvas,
   control,
@@ -305,6 +308,7 @@ export function MathOverlay({
   useSheetGestures({
     api,
     canvasRoot,
+    keyScope,
     anchors: () => store.getSnapshot().anchors,
     rowsOf: (anchorId) => rowsOf(overlayRef.current, anchorId),
     headerOf: (anchorId) => headerOf(overlayRef.current, anchorId),
@@ -424,9 +428,7 @@ const runNow = (write: () => void) => write()
  * transforms, so they are in scene units, before zoom and rotation.
  */
 function rowsOf(overlay: HTMLElement | null, anchorId: string): RowBox[] {
-  const element = Array.from(overlay?.children ?? []).find(
-    (child) => child instanceof HTMLElement && child.dataset.anchorId === anchorId,
-  )
+  const element = elementsOf(overlay).find((child) => child.dataset.anchorId === anchorId)
   if (!element) return []
   return Array.from(element.querySelectorAll<HTMLElement>('[data-line]')).map((row) => ({
     top: row.offsetTop,
@@ -439,9 +441,9 @@ function rowsOf(overlay: HTMLElement | null, anchorId: string): RowBox[] {
  * topmost element first (later in the DOM paints above).
  */
 function slotAt(overlay: HTMLElement | null, clientX: number, clientY: number): SlotTarget | null {
-  const elements = Array.from(overlay?.children ?? []).reverse()
+  const elements = elementsOf(overlay).reverse()
   for (const element of elements) {
-    if (!(element instanceof HTMLElement) || !element.dataset.anchorId) continue
+    if (!element.dataset.anchorId) continue
     for (const slot of element.querySelectorAll<HTMLElement>('[data-unit-slot]')) {
       const box = slot.getBoundingClientRect()
       if (box.width === 0 && box.height === 0) continue
@@ -466,9 +468,9 @@ function slotAt(overlay: HTMLElement | null, clientX: number, clientY: number): 
  */
 function tipAt(overlay: HTMLElement | null, clientX: number, clientY: number): TipTarget | null {
   if (!overlay) return null
-  const elements = Array.from(overlay.children).reverse()
+  const elements = elementsOf(overlay).reverse()
   for (const element of elements) {
-    if (!(element instanceof HTMLElement) || !element.dataset.anchorId) continue
+    if (!element.dataset.anchorId) continue
     for (const mark of element.querySelectorAll<HTMLElement>('[data-tip]')) {
       const box = mark.getBoundingClientRect()
       if (box.width === 0 && box.height === 0) continue
@@ -508,17 +510,22 @@ function headerOf(overlay: HTMLElement | null, anchorId: string): RowBox | null 
   return header ? { top: header.offsetTop, height: header.offsetHeight } : null
 }
 
+/**
+ * The overlay's math elements, in DOM order. A query, not `instanceof`: a node
+ * in a pop-out window has that window's `HTMLElement` (section 12a).
+ */
+function elementsOf(overlay: HTMLElement | null): HTMLElement[] {
+  return Array.from(overlay?.querySelectorAll<HTMLElement>(':scope > [data-anchor-id]') ?? [])
+}
+
 function elementOf(overlay: HTMLElement | null, anchorId: string): HTMLElement | undefined {
-  return Array.from(overlay?.children ?? []).find(
-    (child): child is HTMLElement =>
-      child instanceof HTMLElement && child.dataset.anchorId === anchorId,
-  )
+  return elementsOf(overlay).find((child) => child.dataset.anchorId === anchorId)
 }
 
 function createSceneStore(api: SceneApi) {
   let current = readSnapshot(api)
   return {
-    subscribe(onStoreChange: () => void) {
+    subscribe: (onStoreChange: () => void) => {
       const offChange = api.onChange(onStoreChange)
       const offScroll = api.onScrollChange(onStoreChange)
       return () => {
@@ -528,7 +535,7 @@ function createSceneStore(api: SceneApi) {
     },
     // Must return the same object while nothing relevant changed:
     // Excalidraw fires onChange for every pointer move and selection change.
-    getSnapshot() {
+    getSnapshot: () => {
       const next = readSnapshot(api)
       if (!sameSnapshot(current, next)) current = next
       return current

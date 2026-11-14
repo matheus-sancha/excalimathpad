@@ -161,14 +161,16 @@ function readTitle(element: ExcalidrawElement): string {
 }
 
 export function toMathAnchor(element: ExcalidrawElement): MathAnchor {
-  const { id, x, y, width, height, angle, locked, opacity } = element
+  const { id, x, y, width, height, locked, opacity } = element
   return {
     id,
     x,
     y,
     width,
     height,
-    angle,
+    // Excalidraw types it as its `Radians` brand, from a module its published
+    // typings don't ship, so it reads as `any`: it is a number in radians.
+    angle: element.angle as number,
     locked,
     opacity,
     source: readSource(element),

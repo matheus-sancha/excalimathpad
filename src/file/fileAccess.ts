@@ -127,9 +127,10 @@ function fallbackAccess(document: Document): FileAccess {
         const input = document.createElement('input')
         input.type = 'file'
         input.accept = `${SHEET_EXTENSION},.excalidraw,application/json`
-        input.addEventListener('change', async () => {
+        input.addEventListener('change', () => {
           const file = input.files?.[0]
-          resolve(file ? { name: file.name, text: await file.text(), handle: null } : null)
+          if (!file) return resolve(null)
+          void file.text().then((text) => resolve({ name: file.name, text, handle: null }))
         })
         input.addEventListener('cancel', () => resolve(null))
         input.click()
@@ -146,7 +147,7 @@ function fallbackAccess(document: Document): FileAccess {
       link.href = url
       link.download = suggestedName
       link.click()
-      setTimeout(() => URL.revokeObjectURL(url), 0)
+      window.setTimeout(() => URL.revokeObjectURL(url), 0)
       return { name: suggestedName, handle: null }
     },
   }

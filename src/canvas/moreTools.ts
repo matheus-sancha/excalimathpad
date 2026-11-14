@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 
 /**
  * The app's items in Excalidraw's More tools dropdown (docs/spec-v1.md
- * section 8): Add math and Math Settings sit under Frame, Web Embed and Laser
+ * section 8): Add math and Math settings sit under Frame, Web Embed and Laser
  * pointer, with no buttons of their own on the canvas.
  *
  * Excalidraw has no slot for this, so the items are drawn into a box of the
@@ -26,7 +26,7 @@ export function useMoreToolsSlot(root: HTMLElement | null): HTMLElement | null {
       if (!menu) return setSlot(null)
       let host = menu.querySelector<HTMLElement>(`:scope > .${HOST_CLASS}`)
       if (!host) {
-        host = document.createElement('div')
+        host = menu.ownerDocument.createElement('div')
         host.className = HOST_CLASS
         menu.append(host)
       }

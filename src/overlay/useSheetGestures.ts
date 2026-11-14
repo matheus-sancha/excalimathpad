@@ -1,8 +1,8 @@
 import { useEffect, useLayoutEffect, useRef } from 'react'
 import type { AppState } from '@excalidraw/excalidraw/types'
 import type { ExcalidrawElement } from '@excalidraw/excalidraw/element/types'
-import { cancelPlacing, isPlacing, startPlacing, watchPlacing } from '../canvas/addMath.ts'
-import { listenToCanvas } from '../canvas/canvasEvents.ts'
+import { cancelPlacing, isPlacing, setCanvasCursor, startPlacing, watchPlacing } from '../canvas/addMath.ts'
+import { isCanvasElement, listenToCanvas } from '../canvas/canvasEvents.ts'
 import { isMathAnchor, type MathAnchor } from '../canvas/mathAnchor.ts'
 import { deselectAll } from '../canvas/selection.ts'
 import { splitLines } from '../math/evaluate.ts'
@@ -20,6 +20,11 @@ export interface SheetGestures {
    * (`listenToCanvas`).
    */
   canvasRoot: HTMLElement
+  /**
+   * Where keys are heard: the page's document on the web, the view's own
+   * container in a vault (section 12a). Unset: the canvas's document.
+   */
+  keyScope?: HTMLElement
   /** Live anchors in Excalidraw's z-order, bottom first. */
   anchors: () => readonly MathAnchor[]
   /** An element's rows as laid out, top first. */
@@ -73,7 +78,7 @@ export function useSheetGestures(gestures: SheetGestures) {
   useLayoutEffect(() => {
     latest.current = gestures
   })
-  const { api, canvasRoot } = gestures
+  const { api, canvasRoot, keyScope } = gestures
 
   useEffect(() => {
     const g = () => latest.current
@@ -104,158 +109,162 @@ export function useSheetGestures(gestures: SheetGestures) {
 
     const stopPlacing = watchPlacing(api, canvasRoot, (anchorId) => g().openLine(anchorId, 0))
 
-    const stopListening = listenToCanvas(canvasRoot, {
-      // Leaving comes before Excalidraw sees the press, so a drag starts on the
-      // committed scene: the line is one undo step and the move is its own.
-      pointerDown(event) {
-        press = null
-        // A press is never taken: Excalidraw still selects and drags from a
-        // mark. Its message goes, as a native tooltip's does.
-        g().hoverTip?.(null)
-        const slot = g().slotAt?.(event.clientX, event.clientY) ?? null
-        const slotAnchor = slot && anchorById(slot.anchorId)
-        slotPress = slotAnchor
-          ? { anchorId: slotAnchor.id, lineIndex: slot.line, x: slotAnchor.x, y: slotAnchor.y }
-          : null
-        const edit = g().edit()
-        if (!edit) return
-        const anchor = anchorById(edit.anchorId)
-        const point = toScene(event)
-        if (anchor && containsPoint(anchor, point)) {
-          const lineIndex = lineUnder(anchor, point)
-          press = { anchorId: anchor.id, lineIndex, x: anchor.x, y: anchor.y }
-        }
-        g().leaveLine()
-        g().focusCanvas()
-      },
+    const stopListening = listenToCanvas(
+      canvasRoot,
+      {
+        // Leaving comes before Excalidraw sees the press, so a drag starts on the
+        // committed scene: the line is one undo step and the move is its own.
+        pointerDown(event) {
+          press = null
+          // A press is never taken: Excalidraw still selects and drags from a
+          // mark. Its message goes, as a native tooltip's does.
+          g().hoverTip?.(null)
+          const slot = g().slotAt?.(event.clientX, event.clientY) ?? null
+          const slotAnchor = slot && anchorById(slot.anchorId)
+          slotPress = slotAnchor
+            ? { anchorId: slotAnchor.id, lineIndex: slot.line, x: slotAnchor.x, y: slotAnchor.y }
+            : null
+          const edit = g().edit()
+          if (!edit) return
+          const anchor = anchorById(edit.anchorId)
+          const point = toScene(event)
+          if (anchor && containsPoint(anchor, point)) {
+            const lineIndex = lineUnder(anchor, point)
+            press = { anchorId: anchor.id, lineIndex, x: anchor.x, y: anchor.y }
+          }
+          g().leaveLine()
+          g().focusCanvas()
+        },
 
-      click(event) {
-        const onSlot = slotPress
-        slotPress = null
-        if (onSlot) {
-          // A click, not a drag: the element is where the press found it, and
-          // the pointer is still on the same slot.
+        click(event) {
+          const onSlot = slotPress
+          slotPress = null
+          if (onSlot) {
+            // A click, not a drag: the element is where the press found it, and
+            // the pointer is still on the same slot.
+            const target = clickTarget(
+              canvasState(api.getAppState(), api.getSceneElements()),
+              g().anchors(),
+              toScene(event),
+              onSlot,
+              facts(event),
+            )
+            const slot = g().slotAt?.(event.clientX, event.clientY)
+            if (target && slot?.anchorId === onSlot.anchorId && slot.line === onSlot.lineIndex) {
+              press = null
+              g().openUnit?.(slot)
+              return
+            }
+          }
+          const pressed = press
+          press = null
+          if (!pressed) return
+          const elements = api.getSceneElements()
           const target = clickTarget(
-            canvasState(api.getAppState(), api.getSceneElements()),
+            canvasState(api.getAppState(), elements),
             g().anchors(),
             toScene(event),
-            onSlot,
+            pressed,
             facts(event),
           )
-          const slot = g().slotAt?.(event.clientX, event.clientY)
-          if (target && slot?.anchorId === onSlot.anchorId && slot.line === onSlot.lineIndex) {
-            press = null
-            g().openUnit?.(slot)
+          if (target) g().openLine(target.id, pressed.lineIndex)
+        },
+
+        pointerMove(event) {
+          if (event.buttons !== 0) {
+            g().hoverTip?.(null)
             return
           }
-        }
-        const pressed = press
-        press = null
-        if (!pressed) return
-        const elements = api.getSceneElements()
-        const target = clickTarget(
-          canvasState(api.getAppState(), elements),
-          g().anchors(),
-          toScene(event),
-          pressed,
-          facts(event),
-        )
-        if (target) g().openLine(target.id, pressed.lineIndex)
-      },
+          const point = toScene(event)
+          // Hover reads geometry alone: the topmost element under the pointer,
+          // selected or not, while the selection tool is idle.
+          const state = canvasState(api.getAppState(), api.getSceneElements())
+          const owner = state.tool === 'selection' && !state.busy ? anchorAt(g().anchors(), point) : null
+          const line = owner ? lineUnder(owner, point) : TITLE_LINE
+          g().hoverRow?.(owner && line !== TITLE_LINE ? { anchorId: owner.id, line } : null)
+          // A problem's message (section 4, Problems): from the mark's box, in any
+          // tool, unless Excalidraw is busy or Add math is placing. Only over the
+          // canvas itself, not Excalidraw's own menus and panels above it.
+          const onCanvas = isCanvasElement(event.target)
+          g().hoverTip?.(
+            onCanvas && !state.busy && !state.placing
+              ? (g().tipAt?.(event.clientX, event.clientY) ?? null)
+              : null,
+          )
+          // Excalidraw sets its own cursor on every move, after this capture
+          // listener, and again from a frame callback it queues then. The pointer
+          // goes back once the event is done (a microtask), and from a frame
+          // callback queued after Excalidraw's, so it runs last before the paint
+          // (#60, measured in Chromium: no frame shows Excalidraw's cursor).
+          window.cancelAnimationFrame(cursorFrame)
+          if (g().slotAt?.(event.clientX, event.clientY)) {
+            const point = () => setCanvasCursor(api, 'pointer')
+            queueMicrotask(() => {
+              point()
+              window.cancelAnimationFrame(cursorFrame)
+              cursorFrame = window.requestAnimationFrame(point)
+            })
+          }
+        },
 
-      pointerMove(event) {
-        if (event.buttons !== 0) {
+        pointerLeave() {
           g().hoverTip?.(null)
-          return
-        }
-        const point = toScene(event)
-        // Hover reads geometry alone: the topmost element under the pointer,
-        // selected or not, while the selection tool is idle.
-        const state = canvasState(api.getAppState(), api.getSceneElements())
-        const owner = state.tool === 'selection' && !state.busy ? anchorAt(g().anchors(), point) : null
-        const line = owner ? lineUnder(owner, point) : TITLE_LINE
-        g().hoverRow?.(owner && line !== TITLE_LINE ? { anchorId: owner.id, line } : null)
-        // A problem's message (section 4, Problems): from the mark's box, in any
-        // tool, unless Excalidraw is busy or Add math is placing. Only over the
-        // canvas itself, not Excalidraw's own menus and panels above it.
-        const onCanvas = event.target instanceof HTMLCanvasElement
-        g().hoverTip?.(
-          onCanvas && !state.busy && !state.placing
-            ? (g().tipAt?.(event.clientX, event.clientY) ?? null)
-            : null,
-        )
-        // Excalidraw sets its own cursor on every move, after this capture
-        // listener, and again from a frame callback it queues then. The pointer
-        // goes back once the event is done (a microtask), and from a frame
-        // callback queued after Excalidraw's, so it runs last before the paint
-        // (#60, measured in Chromium: no frame shows Excalidraw's cursor).
-        cancelAnimationFrame(cursorFrame)
-        if (g().slotAt?.(event.clientX, event.clientY)) {
-          const point = () => api.setCursor('pointer')
-          queueMicrotask(() => {
-            point()
-            cancelAnimationFrame(cursorFrame)
-            cursorFrame = requestAnimationFrame(point)
+        },
+
+        doubleClick(event) {
+          const point = toScene(event)
+          const elements = api.getSceneElements()
+          const owner = ownerAt(
+            canvasState(api.getAppState(), elements),
+            g().anchors(),
+            point,
+            facts(event),
+          )
+          if (!owner) return false
+          g().openLine(owner.id, lineUnder(owner, point))
+          return true
+        },
+
+        keyDown(event) {
+          const app = api.getAppState()
+          const elements = api.getSceneElements()
+          const math = new Set(elements.filter(isMathAnchor).map(({ id }) => id))
+          const selection = elements
+            .filter(({ id }) => app.selectedElementIds[id])
+            .map(({ id }) => id)
+          const action = keyAction(canvasState(app, elements), selection, (id) => math.has(id), {
+            key: event.key,
+            modifier: event.ctrlKey || event.metaKey || event.altKey || event.shiftKey,
+            composing: event.isComposing,
+            ...facts(event),
           })
-        }
-      },
-
-      pointerLeave() {
-        g().hoverTip?.(null)
-      },
-
-      doubleClick(event) {
-        const point = toScene(event)
-        const elements = api.getSceneElements()
-        const owner = ownerAt(
-          canvasState(api.getAppState(), elements),
-          g().anchors(),
-          point,
-          facts(event),
-        )
-        if (!owner) return false
-        g().openLine(owner.id, lineUnder(owner, point))
-        return true
-      },
-
-      keyDown(event) {
-        const app = api.getAppState()
-        const elements = api.getSceneElements()
-        const math = new Set(elements.filter(isMathAnchor).map(({ id }) => id))
-        const selection = elements
-          .filter(({ id }) => app.selectedElementIds[id])
-          .map(({ id }) => id)
-        const action = keyAction(canvasState(app, elements), selection, (id) => math.has(id), {
-          key: event.key,
-          modifier: event.ctrlKey || event.metaKey || event.altKey || event.shiftKey,
-          composing: event.isComposing,
-          ...facts(event),
-        })
-        if (!action) return false
-        if (action.kind === 'deselect') {
-          deselectAll(api)
+          if (!action) return false
+          if (action.kind === 'deselect') {
+            deselectAll(api)
+            return true
+          }
+          if (action.kind === 'add-math') {
+            startPlacing(api)
+            return true
+          }
+          if (action.kind === 'cancel-placing') {
+            cancelPlacing(api)
+            return true
+          }
+          const anchor = anchorById(action.anchorId)
+          if (anchor) g().openLine(anchor.id, splitLines(anchor.source).length - 1)
           return true
-        }
-        if (action.kind === 'add-math') {
-          startPlacing(api)
-          return true
-        }
-        if (action.kind === 'cancel-placing') {
-          cancelPlacing(api)
-          return true
-        }
-        const anchor = anchorById(action.anchorId)
-        if (anchor) g().openLine(anchor.id, splitLines(anchor.source).length - 1)
-        return true
+        },
       },
-    })
+      keyScope,
+    )
 
     return () => {
-      cancelAnimationFrame(cursorFrame)
+      window.cancelAnimationFrame(cursorFrame)
       stopPlacing()
       stopListening()
     }
-  }, [api, canvasRoot])
+  }, [api, canvasRoot, keyScope])
 }
 
 function canvasState(app: AppState, elements: readonly ExcalidrawElement[]): CanvasState {

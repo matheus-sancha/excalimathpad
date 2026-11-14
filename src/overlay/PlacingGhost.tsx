@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { NEW_ANCHOR_SIZE } from '../canvas/addMath.ts'
+import { isCanvasElement } from '../canvas/canvasEvents.ts'
 
 export interface PlacingGhostProps {
   /** The box Excalidraw fills: the pointer is followed there. */
@@ -18,7 +19,7 @@ export function PlacingGhost({ canvasRoot, zoom }: PlacingGhostProps) {
 
   useEffect(() => {
     const onPointerMove = (event: PointerEvent) => {
-      if (!(event.target instanceof HTMLCanvasElement)) return setAt(null)
+      if (!isCanvasElement(event.target)) return setAt(null)
       const { left, top } = canvasRoot.getBoundingClientRect()
       setAt({ x: event.clientX - left, y: event.clientY - top })
     }

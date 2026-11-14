@@ -19,6 +19,9 @@ jobs:
           node-version: '22.22.2'
           cache: npm
       - run: npm ci
+      # Chromium for the plugin's network-blocked run (docs/spec-v1.md
+      # section 12a, Data protection), at the version package.json pins.
+      - run: npx playwright install --with-deps chromium
       - run: npm run check
       # The build the check just made is the one that deploys, so the hosted
       # app is exactly what passed.

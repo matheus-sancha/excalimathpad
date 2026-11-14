@@ -2001,11 +2001,14 @@ touch in [section 4](#touch). Research: [`docs/research/obsidian-plugin.md`](res
 - **Checked on every pull request and in Release, blocking both:**
   - **Bundle audit** over `dist-plugin/`: exactly three files; each at most 5,000,000 bytes (both
     sizes printed); the manifest version equals `package.json`'s; and no `./fonts/` path,
-    `esm.sh`, `AIza`, `indexedDB`, `localStorage`, `new Function`, `<style>`/`<link>` creation,
-    or `http(s)://` host missing from a committed allowlist (XML namespaces, licence comments).
+    `esm.sh`, `AIza`, `indexedDB`, `localStorage`, `new Function`, `<style>`/`<link>` creation
+    outside React DOM's and Radix's own library code, or `http(s)://` host missing from a committed
+    allowlist (XML namespaces, licence comments, Excalidraw's Help links and its embed patterns, each
+    with why it can't load).
   - **Network-blocked run:** the built bundle loads in headless Chromium against the fake
     `obsidian`, with every non-local request blocked and logged, and opens a sample sheet with
-    math, a plot, an image and CJK text. Any attempted request fails.
+    math, a plot, an image and CJK text. Any attempted request fails, and so does any `<style>` or
+    `<link>` added at run time.
   - **Obsidian's lint:** `eslint-plugin-obsidianmd` over `plugin/` and `src/`, with
     `--max-warnings 0`. UI text is in sentence case in both homes.
 
@@ -2876,10 +2879,50 @@ Changes line if it changes behaviour.
 **M4d**
 
 - The app inside a real Obsidian `TextFileView`, with every listener and portal bound to the view: Excalidraw's
-  own keys, its dialogs and its sidebar in a pop-out window.
+  own keys, its dialogs and its sidebar in a pop-out window. **Not run in Obsidian (#135):** the build session
+  wasn't allowed to download and run Obsidian, so the real view is Matheus's hand check (the issue's copy into a
+  test vault). Against the fake `obsidian` in jsdom, the view opens the pump sheet with the reference values,
+  shows no file chrome, never writes the file, and adds no listener to the global `window` or `document`
+  beyond what the unforked Excalidraw adds by itself, measured against Excalidraw alone as the control
+  (`plugin/test/SheetView.test.ts`; the same measure finds the web app's own `keydown`, `drop` and
+  `beforeunload`). **Found:** Excalidraw 0.18.1 listens on the global `document` for copy, cut, paste, `keyup`,
+  `pointermove`, `pointerup`, `scroll`, `touchmove`, `fullscreenchange` and Safari's gesture events, and on
+  `window` for resize, blur, focus, message and unload, whatever `handleKeyboardGlobally` is (React adds
+  `selectionchange`). In a pop-out window those are the main window's, so a drag or a paste there is the risk
+  #137 has to check by hand.
 - The bundle under 5,000,000 bytes after the trims, and the network-blocked run making no request with a plot,
-  an image and CJK text.
-- `eslint-plugin-obsidianmd` at zero warnings over `src/`, and what the sentence-case rename touches.
+  an image and CJK text. **Passed (#135):** `main.js` is 3,434,970 bytes and `styles.css` 642,640 bytes, with 21
+  of Excalidraw's fonts inlined and Xiaolai's 209 paths `local:`. In headless Chromium with every non-local
+  request blocked, the pump sheet (`plugin/test/pump-sizing.excalimathpad`: the pump lines with their table
+  and plot, an image and CJK text) typeset with the reference values, drew the plot and the image, loaded
+  Excalifont, Nunito, Assistant and KaTeX's faces from `data:` URLs, and attempted no request. **Found on
+  the way**, each now handled by the build or the audit:
+  - Excalidraw's own bundle names `localStorage` (its `EditorLocalStorage`, used only by the Publish library
+    and Mermaid dialogs): the build rewrites it to no storage.
+  - Its build environment holds excalidraw.com's service URLs (`json.excalidraw.com` and others) as well as
+    the Firebase key: the build blanks every `VITE_APP_*` value.
+  - A file holding an embed would load its iframe (YouTube, Vimeo, Twitter's widget script): the plugin passes
+    Excalidraw `validateEmbeddable={false}`, so no embed loads; the web keeps Excalidraw's default.
+  - React DOM's resource hoisting and `react-style-singleton` (Radix's scroll lock) contain
+    `createElement("style")` and `createElement("link")`, so no bundle with React can pass a plain text check.
+    The audit lets through only those library sites, each known by a word near it
+    (`scripts/plugin-allowlist.json`), and the blocked run fails on any `<style>` or `<link>` added at run time.
+  - Besides XML namespaces and licence comments, the bundle names Excalidraw's Help links and its embed
+    patterns. Each host is in the allowlist with why it can't load: a link opens the browser only when
+    clicked, and the patterns never match with embeds off.
+- `eslint-plugin-obsidianmd` at zero warnings over `src/`, and what the sentence-case rename touches. **Passed
+  (#135), after fixes:** the recommended config's first run over `src/` gave 113 problems (77 errors, 36
+  warnings). Left out as the community scanner leaves them out (tests and Node build scripts), it gave 63 in
+  `src/` and none in `plugin/`, the manifest, `package.json` or `LICENSE`. All are fixed: window timers,
+  `ownerDocument` for `document`, a node-name test for `instanceof HTMLCanvasElement`, function properties for
+  callbacks passed unbound, a class in place of inline styles while measuring the floor, and typed shapes for
+  three Excalidraw members its published typings give as `any` (`setCursor`, `history`, an element's
+  `angle`). The config's exceptions are named in `eslint.config.mjs`: the web-only modules (`src/main.tsx`,
+  recovery, file access, `FileChrome`, which never reach the plugin, as the audit shows), the deprecated
+  `execCommand('insertText')` that keeps the line field's own Ctrl+Z, and the leave prompt's `returnValue`.
+  **Found:** `ui/sentence-case` reads Obsidian's API calls and DOM properties, not JSX text, so it can't see the
+  app's labels. The rename was by hand: only "Math Settings" (the More tools item's label and tooltip) broke
+  sentence case.
 - The `equal` / `unequal` text signatures inside the hardened math.js instance, and `if()` with `rawArgs` under
   the custom `toTex`.
 - With presses from `.sheet-sidebar` skipped in `listenToCanvas` and the panel-wide prevention on `document` in
@@ -3338,3 +3381,8 @@ Changes line if it changes behaviour.
   agreed by Matheus): the listing's id, name and description; a users-first README that is also the listing
   page; Bug and Idea forms and `SECURITY.md`; the BRAT beta and the gate to submit; UI text in sentence case in
   both homes, so "Math Settings" becomes "Math settings". The rename lands with the lint, in M4d's first issue.
+- 2026-11-14, [section 12a](#data-protection) (#135, found while building, for Matheus to confirm on the PR):
+  React DOM and Radix carry `createElement("style")` and `createElement("link")` in their own code, so the
+  bundle audit lets through those library sites only, each known by a word near it, and the network-blocked
+  run fails on any `<style>` or `<link>` added at run time. The allowlist also holds Excalidraw's Help links
+  and its embed patterns, and the plugin turns embeds off (`validateEmbeddable={false}`) so none loads.

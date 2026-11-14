@@ -1,4 +1,4 @@
-/* Add math and Math Settings (docs/spec-v1.md section 8) are items in
+/* Add math and Math settings (docs/spec-v1.md section 8) are items in
    Excalidraw's More tools dropdown, in its own markup and styles. The heading
    matches Excalidraw's "Generate". */
 .excalidraw .math-tools__heading {
@@ -7,7 +7,7 @@
   font-weight: 600;
 }
 
-/* One icon width for both items, so "Add math" (a ∑) and "Math Settings" (an
+/* One icon width for both items, so "Add math" (a ∑) and "Math settings" (an
    SVG) start their labels at the same place (#102). */
 .excalidraw .math-tools__heading ~ * .dropdown-menu-item__icon,
 .excalidraw .math-tools__heading ~ .dropdown-menu-item .dropdown-menu-item__icon {
@@ -17,7 +17,7 @@
   flex: none;
 }
 
-/* Section 8: a red badge counting errors and warnings, on Math Settings. */
+/* Section 8: a red badge counting errors and warnings, on Math settings. */
 .excalidraw .math-tools__badge,
 [data-math-problems] .App-toolbar__extra-tools-trigger::after {
   min-width: 1.125rem;
@@ -142,7 +142,7 @@
   user-select: text;
 }
 
-/* Math Settings' wrapper (#102): it carries Excalidraw's `sidebar-trigger`
+/* Math settings' wrapper (#102): it carries Excalidraw's `sidebar-trigger`
    class only so a floating panel's outside click ignores the item. It has no
    box, and it hands down the dropdown's text styles, not the square button's:
    that class sets `line-height: 0`, which hid the item's label. */

@@ -33,10 +33,24 @@ export function isPlacing({ activeTool }: Pick<AppState, 'activeTool'>): boolean
   return activeTool.type === 'custom' && activeTool.customType === ADD_MATH_TOOL
 }
 
+/**
+ * Excalidraw 0.18's typings take `setCursor` from a private member of its
+ * `App`, which resolves to `any`. This is its shape in the package: a CSS
+ * cursor for the canvas.
+ */
+interface CursorApi {
+  setCursor(cursor: string): void
+}
+
+/** Sets the canvas's cursor through Excalidraw's own `setCursor`. */
+export function setCanvasCursor(api: Pick<ExcalidrawImperativeAPI, 'setCursor'>, cursor: string) {
+  ;(api as unknown as CursorApi).setCursor(cursor)
+}
+
 /** Starts placing. Called again while placing, it changes nothing. */
 export function startPlacing(api: Pick<PlacingApi, 'setActiveTool' | 'setCursor'>) {
   api.setActiveTool({ type: 'custom', customType: ADD_MATH_TOOL })
-  api.setCursor('crosshair')
+  setCanvasCursor(api, 'crosshair')
 }
 
 /** Leaves placing with nothing added: no element and no undo step. */
@@ -84,10 +98,10 @@ export function watchPlacing(
   let frame = 0
   const onPointerMove = () => {
     if (!isPlacing(api.getAppState())) return
-    cancelAnimationFrame(frame)
-    frame = requestAnimationFrame(() => {
-      frame = requestAnimationFrame(() => {
-        if (isPlacing(api.getAppState())) api.setCursor('crosshair')
+    window.cancelAnimationFrame(frame)
+    frame = window.requestAnimationFrame(() => {
+      frame = window.requestAnimationFrame(() => {
+        if (isPlacing(api.getAppState())) setCanvasCursor(api, 'crosshair')
       })
     })
   }
@@ -95,7 +109,7 @@ export function watchPlacing(
 
   return () => {
     offPointerUp()
-    cancelAnimationFrame(frame)
+    window.cancelAnimationFrame(frame)
     root.removeEventListener('pointermove', onPointerMove, true)
   }
 }

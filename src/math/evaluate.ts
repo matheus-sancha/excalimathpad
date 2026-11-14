@@ -638,7 +638,7 @@ export function evaluateSheet(
       const condition = conditions[index]
       if (condition === null || condition.skipped) return false
       try {
-        const value = condition.code.evaluate(new LayeredScope(scope, own))
+        const value: unknown = condition.code.evaluate(new LayeredScope(scope, own))
         if (typeof value === 'boolean') return value
         throw new SheetError('not true or false')
       } catch (error) {
@@ -712,7 +712,7 @@ export function evaluateSheet(
       })
       const truth = counts.map((count, index) => count === length && !conditions[index]?.skipped)
       const shown = line.rules.flatMap((rule, index) =>
-        conditions[index] === null || conditions[index]!.skipped ? [] : [`${rule.text}: ${counts[index]} of ${length} points`],
+        conditions[index] === null || conditions[index].skipped ? [] : [`${rule.text}: ${counts[index]} of ${length} points`],
       )
       return { format: resolveRules(line.format, line.rules, truth), warnings, counts: shown }
     }
@@ -723,7 +723,7 @@ export function evaluateSheet(
         skip(index, 'a rule needs a value')
         return false
       }
-      return decide(index, single ? new Map([['result', value]]) : new Map())
+      return decide(index, single ? new Map<string, unknown>([['result', value]]) : new Map<string, unknown>())
     })
     return { format: resolveRules(line.format, line.rules, truth), warnings, counts: [] }
   }
@@ -957,7 +957,7 @@ export function evaluateSheet(
     if (line.args.length === 0) throw new SheetError('a table needs a list, such as table(Q_s)')
     const columns = line.args.map((arg) => {
       const lists = listsIn(arg.node)
-      const value: SheetList | unknown = lists.length > 0 ? iterate(arg.node, new Map()) : arg.node.compile().evaluate(scope)
+      const value: unknown = lists.length > 0 ? iterate(arg.node, new Map()) : arg.node.compile().evaluate(scope)
       return { arg, value, name: isSymbolNode(arg.node) ? arg.node.name : arg.node.toString() }
     })
     const listed = columns.filter((column) => isSheetList(column.value))

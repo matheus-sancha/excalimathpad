@@ -61,9 +61,8 @@ export function useFileRoutes(handlers: FileRouteHandlers) {
       event.preventDefault()
       event.stopPropagation()
       // Only during the event: the handle lets Ctrl+S write back to the file.
-      const item = Array.from(transfer.items ?? []).find(({ kind }) => kind === 'file') as
-        | (DataTransferItem & { getAsFileSystemHandle?: () => Promise<unknown> })
-        | undefined
+      const item: (DataTransferItem & { getAsFileSystemHandle?: () => Promise<unknown> }) | undefined =
+        Array.from(transfer.items ?? []).find(({ kind }) => kind === 'file')
       handlers.openDropped(
         file,
         item?.getAsFileSystemHandle?.().catch(() => null) ?? Promise.resolve(null),
@@ -126,10 +125,10 @@ export function useBesideMenu(root: HTMLElement | null): BesideMenuBox | null {
       root.querySelectorAll('.main-menu-trigger, .App-toolbar').forEach((el) => observer.observe(el))
       update()
     }
-    const frame = requestAnimationFrame(watchUi)
-    void document.fonts?.ready.then(watchUi)
+    const frame = window.requestAnimationFrame(watchUi)
+    void root.ownerDocument.fonts?.ready.then(watchUi)
     return () => {
-      cancelAnimationFrame(frame)
+      window.cancelAnimationFrame(frame)
       observer.disconnect()
     }
   }, [root])

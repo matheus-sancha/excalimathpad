@@ -19,8 +19,8 @@ export interface PendingDialog {
 export type Choice = 'restore' | 'discard' | 'save' | 'dont-save' | 'cancel'
 
 export interface DialogHost extends SessionDialogs {
-  getPending(): PendingDialog | null
-  subscribe(listener: () => void): () => void
+  getPending: () => PendingDialog | null
+  subscribe: (listener: () => void) => () => void
 }
 
 /** Section 13's wording. */

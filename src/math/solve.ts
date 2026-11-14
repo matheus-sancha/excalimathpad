@@ -229,7 +229,7 @@ export function createSolver(math: MathJsInstance) {
         const si = isUnit(start) ? start.toSI() : null
         const guessUnit = isUnit(start) ? valueless(start) : null
         const { residual, trial, state } = residualAt(scope, si, `guess ${unknown} = ${parts.guessText}`)
-        const x0 = si === null ? (start as number) : (si.value as number)
+        const x0 = si === null ? (start as number) : si.value
         const outcome = solveNear(residual, x0)
         const near = () => `${unknown} = ${text.show(start, guessUnit)}`
         const inner = () => (state.lastInner === null ? '' : `; last inner error: ${state.lastInner}`)

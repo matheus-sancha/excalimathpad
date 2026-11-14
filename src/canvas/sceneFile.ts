@@ -4,7 +4,6 @@ import {
   restore,
   serializeAsJSON,
 } from '@excalidraw/excalidraw'
-import type { ImportedDataState } from '@excalidraw/excalidraw/data/types'
 import type { AppState, ExcalidrawImperativeAPI } from '@excalidraw/excalidraw/types'
 
 /**
@@ -86,7 +85,7 @@ export function saveKey(api: SceneFileApi): string {
  * that aren't saved (theme, zoom) stay as they are.
  */
 export function loadScene(api: SceneFileApi, scene: Record<string, unknown>) {
-  const restored = restore(scene as ImportedDataState, api.getAppState(), null, {
+  const restored = restore(scene, api.getAppState(), null, {
     repairBindings: true,
   })
   api.updateScene({
@@ -101,8 +100,17 @@ export function loadScene(api: SceneFileApi, scene: Record<string, unknown>) {
   })
   const files = Object.values(restored.files)
   if (files.length > 0) api.addFiles(files)
-  api.history.clear()
+  clearHistory(api)
   if (restored.elements.length > 0) {
     api.scrollToContent(undefined, { fitToViewport: false, animate: false })
   }
+}
+
+/**
+ * Empties undo and redo. Excalidraw 0.18's typings give `history.clear` as
+ * `any` (its type comes from a module the published package doesn't ship),
+ * so this states its shape.
+ */
+function clearHistory(api: { history: { clear(): void } }) {
+  api.history.clear()
 }

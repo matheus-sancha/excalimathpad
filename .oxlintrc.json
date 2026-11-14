@@ -4,5 +4,24 @@
   "rules": {
     "react/rules-of-hooks": "error",
     "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
+  },
+  "overrides": [
+    {
+      "files": ["src/**"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "paths": [{ "name": "obsidian", "message": "Only plugin/ imports obsidian (docs/spec-v1.md section 12a)." }],
+            "patterns": [
+              {
+                "group": ["obsidian/*", "**/plugin", "**/plugin/**"],
+                "message": "src/ never imports obsidian or plugin/ (docs/spec-v1.md section 12a)."
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
 }
