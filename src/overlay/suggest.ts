@@ -224,6 +224,7 @@ export const FUNCTION_SUGGESTIONS: readonly Suggestion[] = [
   keyword('step', 'a range’s step: 1 .. 10 step 0.5'),
   call('plot', 'plot(x, y1, …)'),
   call('table', 'table(a, b, …)'),
+  call('if', 'if(cond, a, b)'),
   call('sqrt', 'square root'),
   call('cbrt', 'cube root'),
   call('nthRoot', 'nthRoot(x, n)'),

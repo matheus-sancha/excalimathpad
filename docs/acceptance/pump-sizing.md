@@ -3,7 +3,9 @@
 The real calculation v1 is judged on (the **pump sheet**): water lifted between
 two open tanks through one steel pipe with fittings. The sheet finds the system
 head and power at a duty flow, then plots the system curve against a chosen
-pump's curve and solves for where they cross.
+pump's curve and solves for where they cross. Last, it checks the pump's
+suction at that crossing: NPSH available against NPSH required, `OK` or
+`NOT OK`.
 
 - Water at 20 °C, SI inputs, commercial steel 4" Sch 40.
 - [`pump-sizing.py`](pump-sizing.py) is the reference calc. It uses plain floats
@@ -72,6 +74,15 @@ print.
 | 29 | `Q_s = 1 L/s .. 30 L/s step 1 L/s` | range with units |
 | 30 | `table(Q_s, Hs(Q_s), Hp(Q_s))` | 3 columns, 30 rows; a function with a solve runs at every point |
 | 31 | `plot(Q_s, Hs(Q_s), Hp(Q_s)), mark Q_op` | two series; the curves cross at the mark |
+| 32a | `p_atm = 101.325 kPa` | suction: the lower tank is open to the air |
+| 32b | `p_v = 2.339 kPa # water at 20 C` | vapour pressure |
+| 32c | `z_s = -5 m # pump above the lower tank's surface` | a suction lift is negative |
+| 32d | `L_s = 10 m` | suction pipe, part of `L_p` |
+| 32e | `K_s = 0.5 + 0.9 # entry and one elbow, part of K` | suction fittings |
+| 33 | `h_s = (f(Re(Q_op), eps/D) L_s/D + K_s) v(Q_op)^2 / (2 g_n)` | suction loss at the operating point |
+| 34 | `NPSH_a = (p_atm - p_v) / (rho g_n) + z_s - h_s` | NPSH available |
+| 35 | `NPSH_r = 3.5 m * (Q_op / Q_r)^2` | pump datasheet: 3.5 m at the rated flow, growing as the flow squared |
+| 36 | `NPSH = if(NPSH_a >= NPSH_r, "OK", "NOT OK") @text-green if result == "OK" @text-red if result != "OK"` | pass/fail line (M4d): `if()`, text, rules on a text |
 
 Why the lines are written this way:
 
@@ -86,6 +97,11 @@ Why the lines are written this way:
   `g` (gram) and `Qs` (quettasecond).
 - **The range starts above 0,** because Colebrook has no solution at Re = 0. It
   goes to 30 L/s so the 5" crossing (25.21 L/s) is still on the plot.
+- **The NPSH check is at the operating point,** and it fails at 5" on purpose:
+  the bigger pipe lowers the system curve, so the pump runs further out on its
+  own curve (25.21 L/s), where it needs more NPSH than the suction gives. Both
+  branches of line 36 are checked, about 1 m from the limit either way.
+- **Line 35 needs the `*`:** `m` directly before `(` would be a call.
 
 ## Expected results
 
@@ -107,6 +123,10 @@ From `pump-sizing.py`, to 4 significant figures, in the unit shown.
 | `Q_op` | 18.81 L/s | 25.21 L/s |
 | `H_op` | 20.58 m | 17.06 m |
 | `P_op` | 5.412 kW | 6.013 kW |
+| `h_s` | 0.8495 m | 0.5393 m |
+| `NPSH_a` | 4.262 m | 4.573 m |
+| `NPSH_r` | 3.094 m | 5.56 m |
+| `NPSH` | OK, green | NOT OK, red |
 
 - **The CI test compares values in the unit shown here,** whatever prefix the
   sheet's unit system picks. So `A_p` passes as `8219 mm²` or `82.19 cm²`. In SI

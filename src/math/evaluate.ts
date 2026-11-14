@@ -21,7 +21,7 @@ import {
   type UnitSlot,
 } from './display.ts'
 import { createCalls, isSheetFunction, messageOf, SheetError } from './functions.ts'
-import { applyFormatWord, NO_FORMAT, readLine, type FormatRule, type FormatWord, type LineFormat } from './lineForm.ts'
+import { applyFormatWord, hasTopLevelSemicolon, NO_FORMAT, readLine, type FormatRule, type FormatWord, type LineFormat } from './lineForm.ts'
 import { DEFAULT_DIGITS, leadingNumber, tableColumn } from './numbers.ts'
 import { createSolver, LayeredScope, type CompiledSolve, type SolveDetails, type SolveParts, type SolveText } from './solve.ts'
 import { readSolve } from './solveLine.ts'
@@ -29,6 +29,7 @@ import { readRange } from './rangeLine.ts'
 import { readTable } from './tableLine.ts'
 import { PLOT_SIZES, readPlot, type PlotClause } from './plotLine.ts'
 import { createIndex, INDEX_FN, indexParts, readIndexes, withoutIndexes } from './indexes.ts'
+import { comparisonSignatures, createIf, IF_FN, strictConditionals } from './conditionals.ts'
 import { AGGREGATES, createRanges, isSheetList, listSummary, SheetList, type Point } from './lists.ts'
 import { lineTex, rangeTex, resultTex, solveTex, textTex, unitTex, type Names } from './typeset.ts'
 import { bodyNames, lineWarnings, solveWarnings, usedNames } from './warnings.ts'
@@ -102,6 +103,14 @@ registerShortConstants()
 // `import` is disabled; it takes its arguments raw.
 math.import({ [INDEX_FN]: createIndex(math) })
 
+// Conditionals and text (section 3; section 14, Engine): the app's lazy
+// `if()`, a condition that must be true or false for `? :` too, and text
+// `==` / `!=`, merged into math.js's comparisons before `import` is disabled.
+// A comparison's message writes its values as the run being evaluated does.
+math.import({ [IF_FN]: createIf(math) })
+strictConditionals(math)
+math.import(comparisonSignatures(math, (value) => display.show(value, null, messageSettings)))
+
 // Keep our own reference before hardening: the `parse` that expressions can
 // see is disabled below; this one stays usable. The sheet parses each line
 // once with it (to learn which names the line defines) and evaluates the
@@ -132,6 +141,13 @@ export const DEFAULT_DISPLAY: DisplaySettings = {
   units: { system: 'si-prefixed', custom: {} },
   digits: DEFAULT_DIGITS,
 }
+
+/**
+ * The settings of the run being evaluated, for the messages math.js's own
+ * functions throw (a comparison's values, section 13). `evaluateSheet` is
+ * synchronous and sets it at the start of each run.
+ */
+let messageSettings: DisplaySettings = DEFAULT_DISPLAY
 
 const disabled = (name: string) => () => {
   throw new Error(`${name} is not supported in a math element`)
@@ -515,6 +531,7 @@ export function evaluateSheet(
   blocks: readonly SheetBlock[],
   settings: DisplaySettings = DEFAULT_DISPLAY,
 ): ReadonlyMap<string, SheetLine[]> {
+  messageSettings = settings
   const sheet = blocks.map(({ id, source }) => ({
     id,
     lines: splitLines(source).map(parseLine),
@@ -783,6 +800,7 @@ export function evaluateSheet(
     if (line.kind === 'syntax-error') return fail(line.message)
     const reserved = line.defines.find((name) => RESERVED.includes(name))
     if (reserved !== undefined) return fail(`${reserved} is a line form: choose another name`)
+    if (line.defines.includes(IF_FN)) return fail(`${IF_FN} is a function: choose another name`)
     // `in <unit>` belongs on the line that calls a function (section 3).
     const definesFunction =
       line.kind === 'solve' ? line.params !== null : line.kind === 'parsed' && isFunctionAssignmentNode(line.node)
@@ -828,6 +846,10 @@ export function evaluateSheet(
       // unit and a line whose value is a function leave the result cell empty,
       // though the value still reaches the lines below (section 3).
       if (value === undefined || typeof value === 'function') return { kind: 'empty' }
+      // Section 5: a text has no unit. Its value still reaches the lines below.
+      if (line.display !== null && isText(value)) {
+        return { kind: 'error', message: `text has no unit: take off "in ${line.displayText}"` }
+      }
       try {
         const shown = line.display
         const unit = shown?.kind === 'unit' ? shown.unit : shown?.kind === 'percent' ? 'percent' : null
@@ -883,7 +905,7 @@ export function evaluateSheet(
     const folded = foldAggregates(node, bound)
     const assigned = isAssignmentNode(folded) && !folded.index ? folded : null
     const expression = assigned ? assigned.value : folded
-    if (listsIn(expression).length > 0 && !isBlockNode(folded) && !isFunctionAssignmentNode(folded)) {
+    if (listsIn(expression).length > 0 && !isFunctionAssignmentNode(folded)) {
       const list = iterate(expression, bound)
       if (assigned) scope.set(assigned.name, list)
       return list
@@ -1347,6 +1369,12 @@ export function evaluateSheet(
   }
 }
 
+/** A text, or a list with a text among its points (section 3, Conditionals and text). */
+function isText(value: unknown): boolean {
+  if (typeof value === 'string') return true
+  return isSheetList(value) && value.points.some((point) => point.ok && typeof point.value === 'string')
+}
+
 /** The plain format with the first true rule applied for each property it sets (section 3, A rule). */
 function resolveRules(plain: LineFormat, rules: readonly FormatRule[], truth: readonly boolean[]): LineFormat {
   const property = (word: FormatWord) => (word.kind === 'highlight' ? 'color' : word.kind === 'text' ? 'textColor' : word.kind)
@@ -1527,6 +1555,11 @@ function parseLine(text: string): ParsedLine {
   if (form.kind === 'comment') return { kind: 'blank', comment: form.text }
   // A trailing `in <unit>` comes off only when its target is a pure unit
   // expression; otherwise the conversion stays math.js's own (ADR 0005).
+  // Step 6, one statement: math.js would run `x1 = 5; y1 = x1 * 2` as a block,
+  // both names reaching the lines below. Read first, so no line form hides it.
+  if (hasTopLevelSemicolon(form.code)) {
+    return { kind: 'syntax-error', message: ONE_STATEMENT, defines: statementNames(form.code), source: text }
+  }
   const target = form.displayUnit === null ? null : display.readTarget(form.displayUnit)
   const line = target === null ? form.code : form.expression
   const plotForm = readPlot(line)
@@ -1681,19 +1714,34 @@ function parseLine(text: string): ParsedLine {
   }
 }
 
+/** Every name a line split by `;` assigns, or its first target if it doesn't parse. */
+function statementNames(code: string): string[] {
+  try {
+    return definedNames(parse(code))
+  } catch {
+    const target = ASSIGNMENT_TARGET.exec(code)?.[1]
+    return target === undefined ? [] : [target]
+  }
+}
+
 // `name = ...` or `name(args) = ...` (not `==`), for lines that do not parse.
 const ASSIGNMENT_TARGET = /^\s*([A-Za-z_]\w*)\s*(?:\([^)]*\))?\s*=(?!=)/
 
 /** Names that start a line form (ADR 0005): assigning to one is an error. */
 const RESERVED = ['table', 'plot', 'solve']
 
-/** The function definitions of a line: one, or several `;`-separated. */
+/** A line split by a top-level `;` (section 3; ADR 0005, step 6), in the wording of section 13. */
+const ONE_STATEMENT = 'one statement per line: split the line at the ;'
+
+/** The function a line defines, if it is a definition. */
 function functionDefinitions(node: MathNode) {
-  if (isBlockNode(node)) return node.blocks.map((block) => block.node).filter(isFunctionAssignmentNode)
   return isFunctionAssignmentNode(node) ? [node] : []
 }
 
-/** The names a statement assigns: `x = ...`, `f(x) = ...`, or several `;`-separated. */
+/**
+ * The names a statement assigns: `x = ...`, `f(x) = ...`, or, on a line
+ * split by a `;` (its error, section 3), every statement's, so each fails.
+ */
 function definedNames(node: MathNode): string[] {
   if (isBlockNode(node)) return node.blocks.flatMap((block) => definedNames(block.node))
   if (isFunctionAssignmentNode(node)) return [node.name]

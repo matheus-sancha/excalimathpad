@@ -125,6 +125,15 @@ describe('sheetNames', () => {
 })
 
 describe('the fixed lists', () => {
+  it('offers if among the functions, with its hint (section 4, M4d)', () => {
+    expect(FUNCTION_SUGGESTIONS.find((item) => item.name === 'if')).toEqual({
+      name: 'if',
+      kind: 'function',
+      detail: 'if(cond, a, b)',
+      insert: 'if(',
+    })
+  })
+
   it('every function, constant and unit is a name the engine reads', () => {
     const all = [...FUNCTION_SUGGESTIONS.filter((item) => item.kind === 'function'), ...constantSuggestions(listConstants()), ...unitSuggestions()]
     for (const item of all) {

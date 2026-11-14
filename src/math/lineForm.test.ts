@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   codeLength,
+  hasTopLevelSemicolon,
   NO_FORMAT,
   readLine,
   splitDisplayUnit,
@@ -199,6 +200,22 @@ describe('writeFormat (what the format bar writes)', () => {
   it('says where the code ends, for the caret', () => {
     expect(codeLength('x = 1 @bold # n')).toBe(5)
     expect(codeLength('x = 1')).toBe(5)
+  })
+})
+
+describe('hasTopLevelSemicolon (docs/spec-v1.md section 3, step 6: one statement)', () => {
+  it.each([
+    ['x1 = 5; y1 = x1 * 2', true],
+    ['x = 5;', true],
+    ['Q = 1 .. 3; R = 2', true],
+    ['[1, 2; 3, 4]', false],
+    ['f([1; 2])', false],
+    ['s = "a; b"', false],
+    ["s = 'a; b'", false],
+    ["A'; B", true],
+    ['x = 2', false],
+  ])('%s', (code, expected) => {
+    expect(hasTopLevelSemicolon(code)).toBe(expected)
   })
 })
 

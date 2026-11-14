@@ -219,7 +219,28 @@ come, and their terms move in here as each M4d issue makes them true.
   stops recursion at a fixed depth, prefixes an error from its body with
   `in k(1 s): `, and carries `sheetFunction` (name, parameters); `messageOf`
   rewords math.js's errors (a value called, a function used as a number) in
-  section 13's words. `table`, `plot` and `solve` can't be assigned.
+  section 13's words. `table`, `plot` and `solve` can't be assigned, nor
+  `if` (a function, with its own message).
+  **One statement** (spec section 3, ADR 0005 step 6): `hasTopLevelSemicolon`
+  (`lineForm.ts`, pure) finds a `;` outside brackets and strings, and
+  `parseLine` makes it the line's error before any line form is read; every
+  name the line assigns fails. A `;` in a matrix (`[1, 2; 3, 4]`) is
+  math.js's.
+  **Conditionals and text** (spec section 3, M4d; `conditionals.ts`, given
+  the instance at setup, before `import` is disabled): `if(cond, a, b)` is a
+  raw-args function in the namespace (`IF_FN`), so only the branch taken
+  runs. `testCondition` takes only `true` or `false` (a matrix or a list is
+  its own message), for `if()` and for `? :`, whose `_compile` on this
+  instance's `ConditionalNode` class `strictConditionals` replaces, so the
+  node, its TeX and its text are math.js's own. `comparisonSignatures` merges
+  signatures into `equal`, `unequal`, `larger`, `largerEq`, `smaller` and
+  `smallerEq` (`math.import` merges typed functions): two texts compare
+  exactly with `==` / `!=`; `<` on text, text against a number or a unit, and a
+  unit against a bare number are the app's errors, the last naming both values
+  in the run's settings (`messageSettings`, set by each `evaluateSheet`). A text
+  shows plain (`display.ts`); `in <unit>` on a text is the line's error after
+  it ran; a list whose points are all texts summarises as each text counted,
+  most frequent first (`3 OK, 1 NOT OK`, failed points last).
   **Constants** (spec section 5, `constants.ts`, pure data): every math.js
   constant in groups, some with a short name (`c`, `k`, `R`, `h`), which
   `registerShortConstants` adds to the namespace once at setup. `h` is the
