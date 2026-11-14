@@ -3002,6 +3002,15 @@ Changes line if it changes behaviour.
 - Two taps becoming a `dblclick` on iOS and Android, Excalidraw's phone toolbar reaching Add math, and the
   bottom sheet staying above the on-screen keyboard (`visualViewport`).
 - Whether Obsidian's review passes without a committed `main.js`, by the preview scan.
+- The Release workflow's permission to push the version commit and tag to `main` (#138). **Checked from the
+  repository's settings as far as the build session could, on 2026-11-14:** `main` has no branch protection
+  (GitHub's branch list reports it unprotected), and the workflow asks for `contents: write`, which a
+  workflow in its own repository may take whatever the default token setting is. Rulesets couldn't be read
+  from the build session, so the first press of the button is the full check. It fails safe: the commit and
+  tag go up in one atomic push after `npm run check`, and the draft is made only once the push has landed.
+  **Found:** a push made with the workflow's own token starts no other workflow, so CI and the hosted
+  deploy don't run for the release commit; the next push to `main` deploys as usual. The commit changes
+  only version numbers, which the web app doesn't show.
 
 **M5**
 
@@ -3487,3 +3496,13 @@ Changes line if it changes behaviour.
   - **Also hidden:** More tools' Generate heading, left empty once Web Embed and Mermaid go, and Excalidraw's
     AI items (`aiEnabled={false}`).
   - **Open Math guide** is registered with the guide (#148), and **Print…** with M5.
+- 2026-11-14, [sections 12a](#releases) and [17](#17-verify-first) (#138, found while building, for Matheus
+  to confirm on the PR):
+  - **The Release button pushes last:** it bumps and tags locally, runs `npm run check` on the bumped build,
+    then pushes the commit and tag to `main` together, and drafts the release only after the push, so a
+    failed check changes nothing on `main`.
+  - **The first release is the button's minor,** from `0.0.0`; `versions.json` holds `{}` until then and
+    gains `"0.1.0": "1.7.2"` in that release's commit. The commit reads "Release x.y.z".
+  - Not asked: the checklist's phone or tablet step says to skip it while `manifest.json` has
+    `isDesktopOnly: true`, since Obsidian there doesn't load the plugin. `isDesktopOnly` stays `true` until
+    Touch (#147).

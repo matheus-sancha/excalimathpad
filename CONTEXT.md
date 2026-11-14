@@ -6,9 +6,9 @@ a Vite + React + TypeScript app that builds to static files; there is no
 server. v1 target: for anyone, built around Matheus's own engineering work;
 free and best effort. M4d adds an Obsidian community plugin built from this
 source (`docs/spec-v1.md` section 12a, ADR 0006): **one source, two builds**.
-Built so far (#135–#137): the plugin bundle, a view that opens a sheet and
-saves it in the vault, New sheet, and the tab's chrome (keys, theme, hidden
-items, commands, pop-out windows); releases and the rest of M4d are still to
+Built so far (#135–#138): the plugin bundle, a view that opens a sheet and
+saves it in the vault, New sheet, the tab's chrome (keys, theme, hidden
+items, commands, pop-out windows) and releases; the rest of M4d is still to
 come, and their terms move in here as each M4d issue makes them true.
 
 ## Entry points
@@ -28,6 +28,20 @@ come, and their terms move in here as each M4d issue makes them true.
   (`scripts/popout-run.mjs`: the built plugin with sheet tabs in a second,
   same-origin window, as an Obsidian pop-out). CI installs Playwright's
   Chromium (the version `package.json` pins) for the last two.
+- `.github/workflows/release.yml` — the **Release button** (section 12a,
+  Releases): run by hand on `main` with patch, minor or major. It runs
+  `npm version`, `npm run check`, then one atomic push of the commit and tag
+  to `main`, then drafts a GitHub release with `dist-plugin/`'s three files,
+  `.github/release-checklist.md` (the pre-publish checklist, also in
+  `CONTRIBUTING.md`; `scripts/release.test.mjs` keeps them equal) and
+  generated notes. Its push starts no other workflow.
+- `scripts/version.mjs` — npm's `version` lifecycle script: **one version**
+  from `package.json`, copied into `manifest.json`, with a line added to
+  `versions.json` when `minAppVersion` (1.7.2) changes, staged so
+  `npm version` moves them in one commit. `.npmrc` makes tags `x.y.z` with no
+  `v` and the commit "Release x.y.z". The plugin's ☰ stamp is that version
+  (`esbuild.plugin.mjs` defines `__BUILD_STAMP__`), and the network-blocked
+  run reads it from the built plugin.
 - `.github/workflows/ci.yml` — runs `npm run check` on pushes to `main`
   and on pull requests. On a push to `main` its `deploy` job then publishes
   that run's `dist/` to Cloudflare Pages (spec section 12, Hosted build); it
