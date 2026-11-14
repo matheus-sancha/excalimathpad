@@ -2599,22 +2599,22 @@ and #99, both built, and #102.
 **M4d's issue order** (added on 2026-11-14 from Matheus's second batch, on the map
 [Spec for the second improvements batch and the Obsidian plugin, before M5](https://github.com/matheus-sancha/excalimathpad/issues/114); M4c's eight are built, #104 to #111; built before M5):
 
-1. The plugin bundle: one source, two builds, audited (M4D-1)
-2. A sheet in a vault: autosave, New sheet, outside changes (M4D-2)
-3. Inside an Obsidian tab: chrome, keys, theme, confinement (M4D-3)
-4. Releases: one version, the Release button, the stamp (M4D-4)
-5. Warnings show only while editing (M4D-5)
-6. `if()` and text: the engine, with the pump sheet's check line in CI (M4D-6)
-7. Conditionals typeset as one brace; text and `true` / `false` upright (M4D-7)
-8. Comment-line formats (M4D-8)
-9. Panel footing: presses keep the line, six icon tabs, open then restore (M4D-9)
-10. The Format tab replaces the bars (M4D-10)
-11. The Rules list, and joined words (M4D-11)
-12. The Symbols tab (M4D-12)
-13. Touch: phone and tablet (M4D-13)
-14. The Math guide (M4D-14)
-15. The community listing (M4D-15)
-16. Clean the history, then submit, by hand (M4D-16)
+1. The plugin bundle: one source, two builds, audited (#135)
+2. A sheet in a vault: autosave, New sheet, outside changes (#136)
+3. Inside an Obsidian tab: chrome, keys, theme, confinement (#137)
+4. Releases: one version, the Release button, the stamp (#138)
+5. Warnings show only while editing (#139)
+6. `if()` and text: the engine, with the pump sheet's check line in CI (#140)
+7. Conditionals typeset as one brace; text and `true` / `false` upright (#141)
+8. Comment-line formats (#142)
+9. Panel footing: presses keep the line, six icon tabs, open then restore (#143)
+10. The Format tab replaces the bars (#144)
+11. The Rules list, and joined words (#145)
+12. The Symbols tab (#146)
+13. Touch: phone and tablet (#147)
+14. The Math guide (#148)
+15. The community listing (#149)
+16. Clean the history, then submit, by hand (#150)
 
 The plugin comes first ("Plugin first"): it carries the milestone's open risks (the bundle, the app
 inside an Obsidian view, the review), and once it lands its audits, the network-blocked run and the
@@ -3256,7 +3256,7 @@ Changes line if it changes behaviour.
   counts toward the floor; emptying the title removes its format.
 - 2026-11-14, [section 16](#16-milestones-and-finish-line) (agreed by Matheus on the map
   [Spec for the second improvements batch and the Obsidian plugin, before M5](https://github.com/matheus-sancha/excalimathpad/issues/114),
-  from his second batch): a new milestone, M4d Plugin & panel, built before M5, in sixteen issues, the plugin
+  from his second batch): a new milestone, M4d Plugin & panel, built before M5, in sixteen issues (#135 to #150), the plugin
   first ("Plugin first"). M4b's work-laptop check (#85) is closed as superseded ("Close as superseded"); the
   history rewrite is its own last by-hand issue ("Own [Matheus] issue, last"); the Settings `<select>` Delete
   defect is fixed in the panel footing issue ("In the panel footing issue"). Each entry below is one of the
