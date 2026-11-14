@@ -2947,8 +2947,8 @@ Changes line if it changes behaviour.
   the round trip with the web app all passed. **Found:** in Obsidian's dark theme the Sheet panel's rows
   took Obsidian's global button style (dark, 30 px, centred), since its `button:not(.clickable-icon)`
   outweighs the app's one-class rules. Fixed by the view's CSS guard ([12a](#one-source-two-builds)) and
-  held by the network-blocked run. A white box near Obsidian's left sidebar after Split right is not yet
-  reproduced.
+  held by the network-blocked run. A white box near Obsidian's left sidebar after Split right, never
+  reproduced outside Obsidian, was gone in Matheus's retest with the guard; the rows matched the web.
 - The `equal` / `unequal` text signatures inside the hardened math.js instance, and `if()` with `rawArgs` under
   the custom `toTex`.
 - With presses from `.sheet-sidebar` skipped in `listenToCanvas` and the panel-wide prevention on `document` in
