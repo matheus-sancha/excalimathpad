@@ -5,11 +5,17 @@ until v1 is done
 
 ## 1. What v1 is, and what it isn't
 
-Excalimathpad v1 is a calc sheet for one user, in the browser, with no server: the
-Excalidraw whiteboard with live, unit-aware math on it. You type math where you
-want it on the canvas, see it typeset with results and units, edit an input and
-everything below recalculates, save the sheet to a file, and print it to PDF. It
-installs as an offline app. It runs on Chrome and Edge on desktop.
+Excalimathpad v1 is a calc sheet for anyone, built around Matheus's own engineering
+work, with no server; it is free and best effort. It is the Excalidraw whiteboard
+with live, unit-aware math on it. You type math where you want it on the canvas,
+see it typeset with results and units, edit an input and everything below
+recalculates, save the sheet to a file, and print it to PDF. It installs as an
+offline app. It runs on Chrome and Edge on desktop.
+
+From M4d it has a second home: an **Obsidian community plugin** that opens
+`.excalimathpad` files from a vault in its own tab, on desktop, phone and tablet,
+built from the same source ([section 12a](#12a-obsidian-plugin)). The web app stays.
+Both homes read and write the same file.
 
 **How to read this spec:**
 
@@ -32,18 +38,24 @@ installs as an offline app. It runs on Chrome and Edge on desktop.
 | Units | Units defined by a sheet; scaled display units (`1000 Pa`) |
 | Numbers | Digits per result; thousands separators |
 | Lists | Two lists forming a grid (cartesian product); lists of lists |
-| Formats | A rule builder in the format bar; text size, italic or alignment on a line; a colour picker or hex colours; rules on a title |
+| Formats | Sheet-wide rules (an "applies to"); text size, italic or alignment on a math line; alignment on a comment line; a colour picker or hex colours; rules on a title or a comment line; formatting a selected element, or several lines at once, from the Format tab |
+| Programs | Mathcad's program block across lines (local names, `for`, `while`, `return`, the vertical bar); Calcpad-style `#if` / `#else` / `#end` lines; `ifs()` and `error()`; `<` and `>` on text; several statements on one line |
 | Plots | A second y axis; zoom, pan or hover values on curves; renamed axis titles; chosen colours |
 | Print | Printing a selection, frame or viewport; a scale setting; page guides on the canvas |
-| Editing | Cancelling a line edit; placing the caret at the clicked character |
-| Files | Excalidraw's image export; a supported round trip through plain Excalidraw; several sheets in one window |
-| Platforms | Touch and mobile layouts; browsers other than Chrome and Edge on desktop (a save and open fallback exists, untested); an Obsidian plugin, planned after v1 |
+| Editing | Cancelling a line edit; placing the caret at the clicked character; Greek or operator characters in the source (`ρ`, `≤`) and new operators (integral, derivative): the Symbols tab types the text the engine already reads |
+| Help | A Help tab in the panel, an example sheet, or a PDF guide: the Math guide is one Markdown file shown in a dialog |
+| Files | Excalidraw's image export; a supported round trip through plain Excalidraw; several sheets in one window; embedding a sheet in an Obsidian note (`![[…]]`, as a picture or a live sheet); resolving links between sheets, or to notes, from inside a sheet |
+| Platforms | Touch and mobile layouts in the web app; browsers other than Chrome and Edge on desktop (a save and open fallback exists, untested); the plugin on iOS below 16.4; Excalidraw's embeds and library browsing in the plugin; the Sheet panel as a view in Obsidian's sidebar; a plugin settings tab |
 
-v1 makes no promises on a touch device. A double tap on a math element would still
-add a text label to its anchor, and Add math and Enter need a keyboard or button.
+The web app makes no promises on a touch device. The plugin does, from M4d: a phone
+and a tablet edit everything desktop does ([section 4](#touch), [section 8](#on-a-phone)),
+once the device checklist of [section 12a](#releases) has passed. Until then a
+release ships desktop-only.
 
 Decided in: [map](https://github.com/matheus-sancha/excalimathpad/issues/8),
-[spec contents](https://github.com/matheus-sancha/excalimathpad/issues/38).
+[spec contents](https://github.com/matheus-sancha/excalimathpad/issues/38),
+[the community listing](https://github.com/matheus-sancha/excalimathpad/issues/130),
+[phone and tablet](https://github.com/matheus-sancha/excalimathpad/issues/127).
 
 ## 2. Terms and invariants
 
@@ -88,14 +100,26 @@ One name per concept, used the same in conversation, code, tests, docs and the U
 | **Clause** | A comma-separated setting after a plot line or solve line, such as `mark Q_op`, `guess f = 0.02` or `for Q = 1 L/s .. 30 L/s` |
 | **Series, mark** | One list drawn on a plot; a value of the x kind drawn as a guide, dot and label |
 | **Comment line, note** | A line starting with `#`; the text after `#` on a line with code |
-| **Format** | A line's `@` words, after its code and before its note: bold, underline, one text colour, one highlight |
+| **Formatted comment line** | A line whose code is only a format clause, followed by comment text: `@bold @L # Pumps` (M4d) |
+| **Format** | A line's `@` words, after its code and before its note: bold, underline, one text colour, one highlight. A comment line's also take italic off and a size (M4d) |
 | **Plain format, rule** | A format word with no `if`, which always applies; `@word if <condition>`, which applies while its condition is true |
+| **Joined word** | Several format words joined by `+` with no spaces, read as one word: `@text-red+red+bold` (M4d). One rule with one condition |
+| **Conditional** | `cond ? a : b` or `if(cond, a, b)`: a value chosen by a condition, only the branch taken run (M4d) |
+| **Text value** | A result that is text, such as `"Approved"`. Shown plain, without quotes (M4d) |
 | **Text colour, highlight** | One of six colours for a line's or title's text; one of five soft bands behind a row or a header |
 | **Result colour** | One per sheet: the text colour of every result's number and unit. Blue by default |
 | **Sheet file** | Excalidraw scene JSON + the `excalimathpad` block. The sheet's only durable form |
 | **Dirty** | The scene or settings changed since the last save or open |
 | **Recovery copy** | The whole sheet file, its name and its file handle in IndexedDB. Exists only while dirty |
-| **Sheet panel** | Excalidraw's sidebar with the tabs Variables, Problems, Settings and Constants |
+| **Sheet panel** | Excalidraw's sidebar, labelled **Math settings**, with the tabs Variables, Problems, Settings and Constants. From M4d: Format, Symbols, Variables, Problems, Constants, Settings |
+| **Format tab** | The Sheet panel's tab that formats the open line or title (M4d). The only place to format; it replaced the format bar and the title's bar |
+| **Symbols tab** | The Sheet panel's tab of buttons that type, at the caret, text the engine reads (M4d) |
+| **Sample** | The top of the Format tab: the open line or title drawn as the sheet draws it (M4d) |
+| **No-focus control** | A panel button that prevents `mousedown` and has `tabIndex={-1}`, so a press acts on the open line without leaving it (M4d) |
+| **Math guide** | `docs/math-guide.md`, every form, key and setting with examples, shown in a dialog from ☰ (M4d) |
+| **Plugin, vault sheet** | The Obsidian community plugin (`plugin/`); a `.excalimathpad` file opened from a vault in its view (M4d) |
+| **Conflict copy** | `<name> (conflict YYYY-MM-DD HHmm).excalimathpad`, written beside a vault sheet when an outside change meets unwritten work (M4d) |
+| **Quick keys** | The pinned row of no-focus keys above the panel's tab icons, on touch, while a line or title is open (M4d) |
 | **Title** | A math element's optional name: plain text on one line, shown in a header above its lines. Never evaluated |
 | **Title format** | How a title looks: bold, italic, underline, alignment, size, text colour and highlight. Stored beside the title, never in its text |
 | **Chosen width** | A math element's optional width, set with the resize handles. Without one the element is **automatic** |
@@ -108,7 +132,8 @@ One name per concept, used the same in conversation, code, tests, docs and the U
 
 **Retired names:** *placeholder* (unit slot or display unit), *sheet default*
 (unit system), *solve block* (solve line), *side panel* (Sheet panel), *pipe-flow
-acceptance sheet* (pump sheet).
+acceptance sheet* (pump sheet). From M4d: *format bar* and *title's bar* (Format tab),
+*cheat sheet* (Math guide), *Math Settings* (Math settings, in sentence case).
 
 ### Invariants
 
@@ -141,6 +166,11 @@ acceptance sheet* (pump sheet).
   and a note is always the last part of a line.
 - A format never changes a result. A rule's condition reads the scope and never
   changes it, and a rule that can't be decided is skipped with a warning.
+- A warning's `⚠` shows only while a line or the title of its element is open, or on
+  its line while a jump flashes it (M4d). An error's `●` always shows.
+- A line is one statement: a `;` at its top level is its error (M4d).
+- Only the branch a conditional takes is run. Text compared with a number or a unit
+  is an error, never a conversion (M4d).
 - A title's text is exactly what was typed. Its format is never read from it.
 
 **Units and numbers**
@@ -183,32 +213,55 @@ acceptance sheet* (pump sheet).
 
 - A line commit's source change is exactly one undo step, and keystrokes are none. A commit
   can also record a nudge or Link edit before it as a step of its own ([section 6](#6-undo)).
-- A press on the title's bar and a change of chosen width are each exactly one undo step.
+- A press in the Format tab, a format key, an insert from the Symbols tab and a change
+  of chosen width are each exactly one undo step (M4d; before it, a press on the
+  title's bar).
 - Sheet undo never runs while a line is being edited.
 - A source write is never `EVENTUALLY` or the default capture.
 - Settings changes never enter Excalidraw's undo history.
-- A file is written only by Save or Save as.
+- In the web app, a file is written only by Save or Save as. In a vault (M4d), a
+  sheet's file is written only by the view that loaded it, and only when its
+  `saveKey` changes or its tab closes; viewing never writes. The one automatic write
+  besides it is a conflict copy, which goes in the sheet's folder, never overwrites
+  and is always announced.
 - The app never writes a file whose `format` is newer than its own, and never opens
   one.
-- Excalidraw's own file and export actions are never reachable.
+- Excalidraw's own file and export actions are never reachable. In the plugin, nor
+  are Web Embed, Mermaid to Excalidraw, Browse libraries, Copy to clipboard as SVG
+  and Excalidraw's command palette (M4d).
 - The Sheet panel shows only what the last evaluation produced.
 - The same scene, results and Page give the same print pages. Printing never changes
   the scene.
+
+**Plugin** (M4d)
+
+- The plugin makes no network request, ever. A link on an element still opens the
+  browser, as the user's own action.
+- It stores nothing outside the vault: sheets in their files, its own memory in
+  `data.json`. No IndexedDB, no `localStorage`.
+- It reads only the sheet open in its view and one image the user picks. It never
+  lists, renames or deletes another note.
+- `src/` never imports `obsidian` or `plugin/`. The same `.excalimathpad` file opens
+  unchanged in both homes.
 
 Decided in: the Model part of each ticket in [section 18](#18-decision-index).
 
 ## 3. Sheet lines: every form
 
-Built in M1 to M4c, as tagged below. Assignment is plain `=`; `:=` isn't accepted.
-Typeset, an assignment shows `≔`. One line is one statement.
+Built in M1 to M4d, as tagged below. Assignment is plain `=`; `:=` isn't accepted.
+Typeset, an assignment shows `≔`. One line is one statement: from M4d a `;` at a line's
+top level is its error, and the message says to split the line there. A `;` inside
+brackets (a matrix row, `[1, 2; 3, 4]`) is unaffected.
 
 | Form | Example | Built in | Result cell |
 |---|---|---|---|
 | Blank | an empty line, or a bare `#` | M1 | Empty; a spacer row |
 | Comment line | `# Water at 20 C` | M1 | None; one text cell spans the row |
+| Formatted comment line | `@bold @L @text-blue # Pumps and pipes` | M4d | None; one text cell spans the row, in its format |
 | Assignment | `v_d = v(Q_d)` | M0, M1 | Value |
 | Plain input | `D = 102.3 mm` | M0, M1 | Empty, unless it has a display unit |
 | Bare expression | `2 * pi` | M0, M1 | Value; name and `≔` cells empty |
+| Conditional | `check = if(sigma <= sigma_allow, "Approved", "Rejected")` | `? :` M0; `if()` and text M4d | The branch taken: a value, or a text |
 | Function definition | `Hp(Q) = H_0 - (H_0 - H_r) (Q/Q_r)^2` | M0, M1 | Empty; problems only |
 | Solve line, value | `Q_op = solve Hp(Q) = Hs(Q), for Q = 1 L/s .. 30 L/s` | M3; the range in M4c | The roots found: a value, or several |
 | Solve line, function | `f(Re, r) = solve …, guess f = 0.02` | M3 | Empty; problems only |
@@ -243,7 +296,33 @@ U = I_load * R in V @bold @text-red @yellow # check
   reaches the lines below.
 - The clause starts at the first `@` outside a string and runs to the note. An `@` in a
   string or in a note is left alone.
-- Comment lines and blank lines take no format.
+- **Joined words** (M4d): several words joined by `+` with no spaces are one word,
+  `@bold+underline` meaning `@bold @underline`. A property named twice in one joined word
+  keeps the last. A part that isn't a format (`@text-red+blod`) is the line's error.
+- Blank lines take no format.
+
+**A comment line's format** (M4d) is a clause written in front of its `#`:
+`@bold @L @text-red # Pumps and pipes`. The comment split stays the first step of reading,
+so nothing after a `#` is read: `# call me @home` stays plain text, and every comment
+saved before M4d reads as before. The clause is text in the line, so split, join, copy,
+paste, undo and save carry it, and nothing goes into `customData`.
+
+| Word, on a comment line | Sets | Without it |
+|---|---|---|
+| `@bold`, `@underline` | Bold; underline | Off |
+| `@upright` | Not italic | Italic |
+| `@S`, `@L`, `@XL` | Size: 13, 20 or 26 px | M, 15 px |
+| `@text-black` … `@text-gray` | The six text colours | Grey (`--math-quiet`) |
+| `@yellow` … `@gray` | The five highlights, a band behind the row | None |
+
+- There is no alignment: a comment runs from the row's left edge. A comment line takes no
+  rules: a word followed by `if` is the line's error ("rules need a math line").
+- A clause with no comment text after it (`@bold`, or `@bold #`) formats nothing: the line
+  stays a blank line, and the Format tab offers no format on it.
+- `@S`, `@L`, `@XL` and `@upright` are comment words. On a math line each is the line's
+  error ("@L is for comment lines"), and the line's value still reaches the lines below.
+- A note (the `#` text after code) is unchanged: it follows its line's bold, underline
+  and highlight, and stays grey, italic and 15 px whatever the line's text colour.
 
 **A rule** (M4c) is a format word followed by `if` and a condition. The word applies while
 the condition is true. A word with no `if` is a **plain format** and always applies.
@@ -253,8 +332,9 @@ v = Q / A @bold @text-red if v > 3 m/s @text-orange if v > 2 m/s # check
 ```
 
 - **Each word takes its own `if`.** A condition runs from `if` to the next `@`, or to the
-  end of the code. Two formats under one condition are written twice:
-  `@text-red if v > 3 m/s @red if v > 3 m/s`.
+  end of the code. From M4d, two formats under one condition are one joined word with one
+  `if`: `@text-red+red if v > 3 m/s`. Written twice, `@text-red if v > 3 m/s @red if v > 3 m/s`,
+  they stay valid: two rules.
 - A line can hold any number of rules, in any order with its plain formats.
 - **The first true rule wins, left to right,** like `if / else if`, so the strictest limit
   is written first. Text colour, highlight, bold and underline are each decided on their
@@ -281,7 +361,33 @@ v = Q / A @bold @text-red if v > 3 m/s @text-orange if v > 2 m/s # check
   has a value, so its rules run. A line with no single value (a function definition, a
   plot) can't use `result`: that is a warning.
 - On a list or a table a rule is tested per point ([section 10](#ranges-and-lists)).
-- Rules are typed. The format bar never writes or changes one.
+- Rules are typed, in the line. From M4d the Format tab's **Rules list**
+  ([section 4](#rules-list)) adds, removes, reorders and formats them, writing the same
+  clause; the condition is always typed in the line.
+
+**Conditionals and text** (M4d)
+
+- **Two forms choose a value:** `cond ? a : b`, as before, and `if(cond, a, b)`, an app
+  function. Both run only the branch taken. Several branches are written by nesting:
+  `if(sigma < 100 MPa, "low", sigma < 140 MPa ? "mid" : "high")`. There is no `ifs()`
+  and no `error()`. `if` becomes a reserved name; it never clashes with a rule's `if`,
+  because the clause starts at the first `@` outside a string.
+- **Branches of different kinds are allowed,** with no check: `if(ok, sigma, "too high")`.
+  A mistake surfaces where the value is used.
+- **Text** is written in double quotes. `==` and `!=` compare two texts exactly, case
+  included: `"Approved" == "approved"` is false. Comparing text with a number or a unit is
+  the line's error ("can't compare text with a number"); `"10" == 10` is that error, not
+  true. `<` and `>` on text are not supported.
+- **`true` and `false`** are values like any other. Arithmetic on them is math.js's
+  (`ok + 0` is 1).
+- So a check reads, and colours, as text:
+
+  ```
+  check = if(sigma <= sigma_allow, "Approved", "Rejected") @text-green if result == "Approved" @text-red if result != "Approved"
+  ```
+
+  How a text result, a conditional and `true` / `false` show is in
+  [section 4](#conditionals-and-text-typeset) and [section 5](#shown-result).
 
 A solve line follows the same order: `in <unit>` comes after the range or the guess, and the
 format after that. `in <unit>` sets the result's display unit and doesn't convert the range
@@ -306,10 +412,12 @@ Q_op = solve Hp(Q) = Hs(Q), for Q = 1 L/s .. 30 L/s in L/s
 **How a line is read, in this order:**
 
 1. **Comment:** split at the first `#` outside a string. Nothing after it is read.
+   From M4d, a line whose code is only a format clause, with comment text after the `#`,
+   is a formatted comment line, and its clause is read as the comment's format.
 2. **Format:** take off everything from the first `@` outside a string: the format
-   words and, from M4c, each word's `if <condition>`. math.js rejects `@`, so a clause
-   can never be read as code. A condition goes to math.js on its own, after the line
-   has run.
+   words (from M4d, `+`-joined words too) and, from M4c, each word's `if <condition>`.
+   math.js rejects `@`, so a clause can never be read as code. A condition goes to
+   math.js on its own, after the line has run.
 3. **Display unit:** take off a trailing top-level `in` or `to` whose target is a
    pure unit. The target is read outside the sheet's scope, so a variable named `K`
    doesn't change what `in K` means. A conversion inside the expression
@@ -318,13 +426,22 @@ Q_op = solve Hp(Q) = Hs(Q), for Q = 1 L/s .. 30 L/s in L/s
    take off their clauses. A solve line's `for … = a .. b` is its clause, not a range line.
 5. **Index:** from M4c, read each `name[…]` as the app's own index. math.js never sees
    it, because lists are the app's and not math.js matrices.
-6. **The rest goes to math.js.**
+6. **One statement:** from M4d, a `;` at the top level of what is left is the line's
+   error. math.js would otherwise run both statements.
+7. **The rest goes to math.js.**
 
-**Rules for what the app writes:** the unit slot, the plot popover and the format bar
-write before the `#`, so a line reads `D = 102.3 mm in cm @bold # 4" Sch 40`. The slot
-and the popover don't put the line in source. Each write is one line commit. The bar
-writes the plain words in a fixed order, `@bold @underline @text-<name> @<highlight>`,
-and then every rule exactly as it was typed.
+**Rules for what the app writes:** the unit slot, the plot popover and the Format tab
+(before M4d, the format bar) write before the `#`, so a line reads
+`D = 102.3 mm in cm @bold # 4" Sch 40`. The slot and the popover don't put the line in
+source. Each write is one line commit.
+
+- The Format tab writes a math line's plain words in a fixed order,
+  `@bold @underline @text-<name> @<highlight>`, and then every rule.
+- It writes a comment line's words in the order
+  `@bold @upright @underline @<size> @text-<name> @<highlight>`, before the `#`.
+- A rule the Rules list adds or changes is written as one joined word and one
+  condition: `@text-red+red+bold if v > 3 m/s`. A rule it didn't change is kept exactly
+  as typed, joined or not, and is never rewritten.
 
 **Parsing notes that catch people:**
 
@@ -332,7 +449,8 @@ and then every rule exactly as it was typed.
   number; write `f_d * (L_p/D)`. See [section 13](#13-messages) for the message.
   `(…)(…)` and `2 (…)` multiply as usual.
 - `min` is a math.js function, so litres per minute is `L/minute`.
-- `table`, `plot` and `solve` are reserved. Assigning to one is an error on the line.
+- `table`, `plot` and `solve` are reserved, and from M4d `if`. Assigning to one is an
+  error on the line.
   `result` isn't reserved: it has its special meaning only inside a rule's condition.
 
 **Function definitions:**
@@ -360,12 +478,17 @@ Decided in: [solve](https://github.com/matheus-sancha/excalimathpad/issues/19),
 [spec contents](https://github.com/matheus-sancha/excalimathpad/issues/38),
 [all-roots solve](https://github.com/matheus-sancha/excalimathpad/issues/92),
 [text colours](https://github.com/matheus-sancha/excalimathpad/issues/93),
-[conditional formats](https://github.com/matheus-sancha/excalimathpad/issues/94).
+[conditional formats](https://github.com/matheus-sancha/excalimathpad/issues/94),
+[comment-line formats](https://github.com/matheus-sancha/excalimathpad/issues/119),
+[the Rules list](https://github.com/matheus-sancha/excalimathpad/issues/123),
+[programming forms](https://github.com/matheus-sancha/excalimathpad/issues/132).
 
 ## 4. Math element: look and editing
 
 Built in M1. Hover details arrive with M3; the unit slot with M2. Text colours, rules, the
-title's format and the chosen width arrive with M4c.
+title's format and the chosen width arrive with M4c. With M4d the Format tab replaces the
+format bar and the title's bar; comment lines take a format; conditionals draw a brace;
+the Symbols tab inserts at the caret; and the sheet works by touch.
 
 ### Typeset grid
 
@@ -382,7 +505,11 @@ title's format and the chosen width arrive with M4c.
   with the others.
 - **Comment line:** plain literal text from the row's left edge, ignoring the
   columns. A comment longer than the element is wide wraps onto more rows, so it never
-  sticks out past the results and notes. No formatting, typeset math or `##` headings.
+  sticks out past the results and notes. No typeset math or `##` headings. From M4d a
+  comment line takes its [format](#3-sheet-lines-every-form): bold, italic off, underline,
+  size S/L/XL (13, 20, 26 px; M stays 15 px), a text colour and a highlight that fills its
+  row. Its line height keeps the ratio 1.6 to its size. Underline may be a plain text
+  decoration, since a comment has no KaTeX.
 - **Title:** optional. An element with a title shows it in a **header** at the top of its
   box, above the lines: plain text on one line, with a thin rule under it. It is
   never evaluated and takes no typeset math. With no format of its own it is bold, black,
@@ -427,8 +554,9 @@ don't change.
   the expression, the result's number and unit. On its line it wins over the result colour.
   **The note stays grey.**
 - **It also colours** a list's summary, written-out roots and a table's cells on that line.
-- **Never recoloured:** an error's message (red), the gutter's marks, a note, a comment
-  line, a solve's range or guess and a range's step (grey), and plot series.
+- **Never recoloured:** an error's message (red), the gutter's marks, a note, a solve's
+  range or guess and a range's step (grey), and plot series. A comment line is grey unless
+  its own format names a text colour (M4d); the result colour never reaches it.
 - A line being edited shows its source uncoloured. Its live result takes its colour.
 - The Variables, Problems and Constants tabs keep their own colours.
 - In the dark theme the six darken with everything else, under the canvas's filter. In print
@@ -441,6 +569,8 @@ don't change.
 - **A rule that can't be decided** puts an amber `⚠` in the gutter, with the reason on hover
   and in the Problems tab. The result still shows, with the line's other formats.
 - A warning from a condition is reported once per rule, not once per point of a list.
+- A rule's `⚠` shows by the rule of [Problems](#problems): only while its element is being
+  edited.
 
 ### Typesetting names
 
@@ -459,16 +589,52 @@ Lines typeset through math.js `toTex` with one custom handler, then KaTeX.
 - Micro shows as `µm`, not math.js's `um`. `ohm` shows as Ω (`kohm` as kΩ), `deg` as °.
 - An index (M4c) shows in square brackets after the whole name, at the baseline: `x_r[2]`.
 
+### Conditionals and text, typeset
+
+From M4d.
+
+- **`? :` and `if()` draw the same brace, flattened.** Each row reads the value, then "if"
+  and its condition; the last row reads the value, then "otherwise". A conditional nested
+  in the last branch adds a row, never a brace inside a brace.
+
+  ```
+  band = if(sigma < 100 MPa, "low", sigma < 140 MPa ? "mid" : "high")
+
+            ⎧ “low”,   if σ < 100 MPa
+   band ≔   ⎨ “mid”,   if σ < 140 MPa        mid
+            ⎩ “high”,  otherwise
+  ```
+
+- **A text literal in an equation** is upright, in quotes: `“Approved”`, not math.js's
+  monospace.
+- **`true` and `false`** are upright words, in an equation and in a result.
+- **A text result** shows plain, without quotes, upright, in the result colour (or the
+  line's text colour), in the result cell and in table cells. The Variables tab shows it
+  the same way.
+
 ### Problems
 
 | Problem | Gutter | Elsewhere |
 |---|---|---|
 | Error | Red `●` | Its message takes the result cell, in red |
 | Line that doesn't parse | Red `●` | Raw source in red with a wavy underline, over the line's equation space (where the field opens); any `#` part stays in it, so no note cell. Its message takes the result cell, as for any error |
-| Warning | Amber `⚠` | Message on hover over the mark; the line's value still shows |
+| Warning | Amber `⚠` | Message on hover over the mark; the line's value still shows. From M4d the mark shows only while its element is being edited (below) |
 
 **An error is capped** at about 320 px of the result column and ends in an ellipsis.
 The full text is on hover and in the Problems tab.
+
+**A warning at rest** (M4d). An element's `⚠` marks show while any of its lines or its
+title is open, and are hidden otherwise. Being selected is not being edited. While an
+edit is open, other elements keep theirs hidden, even when the edit causes a warning
+there.
+
+- The gutter keeps its fixed column, so rows don't shift when an edit opens. A hidden
+  mark has no hover.
+- A jump from a `⚠` row in the Problems tab shows that line's `⚠` for as long as the
+  line is flashed or outlined, then hides it again. Nothing opens.
+- The Problems tab still lists every warning. Its badge counts errors only
+  ([section 8](#sheet-panel)).
+- It is fixed behaviour, with no setting. Print already leaves `⚠` off.
 
 ### Solve details
 
@@ -505,6 +671,7 @@ function's definition show none. Hover is screen-only.
   changes the scene while the handle moves.
 - **From M4c the resize handles set the element's width** ([Size](#size)). A change of
   height by a handle is still discarded.
+- **By touch** (M4d), see [Touch](#touch).
 
 ### While editing a line
 
@@ -516,32 +683,22 @@ function's definition show none. Hover is screen-only.
 - **Enter** splits the line at the caret and continues on the new line below. At the
   end of a line, that opens an empty line.
 - **↑ / ↓** move the edit to the line above or below.
-- **↑ on the first line** goes to the title, and so does the bar's **Title** button, from
-  any line. If the element has no title, this opens an empty one. In the title, **↓** or
-  **Enter** go to the first line, and Esc or a click outside leave. The title keeps what
-  was typed, trimmed; an empty one removes the header. Until M4c the title has no bar;
-  from M4c it has [its own](#title-format).
+- **↑ on the first line** goes to the title, and so does the Format tab's **Edit title ↑**
+  link (before M4d, the bar's **Title** button), from any line. If the element has no
+  title, this opens an empty one. In the title, **↓** or **Enter** go to the first line,
+  and Esc or a click outside leave. The title keeps what was typed, trimmed; an empty one
+  removes the header.
 - **Backspace** at the start joins the line to the one above.
 - A **single click on another line** of the element moves the edit there.
-- **The format bar** sits beside the open line, outside the element's box: Title, then Bold,
-  Underline, the five colours and no colour, with the line's format shown pressed.
-  **Ctrl+B** and **Ctrl+U** do the same from the field. A press writes the clause into
-  the line and keeps the line open, with the caret where it was in the code. Pressing a
-  pressed button takes that format off. On a comment line or an empty line the bar has Title alone. A
-  clause typed by hand shows live, like any other typing.
-- **From M4c the bar has two rows of dots,** and gets no wider: the six text colours on one
-  row, the five highlights on the other, each with its "none".
-
-  ```
-  [T] | [B] [U] | A: ● ● ● ● ● ●  ⊘
-                | ■: ● ● ● ● ●    ⊘
-  ```
-
-  One click each. Pressing the pressed text colour takes it off, which returns the line to the
-  defaults: a black equation and the sheet's result colour.
-- **The bar shows and changes the line's plain formats only.** It leaves every rule exactly as
-  typed. A press while a rule is overriding sets the plain format under it, and the rule still
-  wins while it is true.
+- **Formatting** is done in the [Format tab](#format-tab), which opens when an edit starts
+  (M4d). Until M4d a floating **format bar** beside the open line did it; the bar and the
+  title's bar are removed. **Ctrl+B** and **Ctrl+U** toggle bold and underline from the
+  field, on a math line, a comment line and the title. **Ctrl+I** toggles italic on a
+  comment line (writing or removing `@upright`) and on the title, and does nothing on a
+  math line. A clause typed by hand shows live, like any other typing.
+- The line and title fields set `autocapitalize="off"`, `autocorrect="off"` and
+  `spellcheck={false}`, and carry `data-prevent-outside-click`, so a press in the field
+  never closes a floating panel (M4d).
 
 **Suggestions:** while a name is typed, a list under the field offers the names that start
 with it, from the first letter, at most eight.
@@ -559,7 +716,11 @@ with it, from the first letter, at most eight.
   click on a name takes it. **↑** with nothing highlighted moves to the line above.
 - **Taking a name** replaces the typed word. A function adds its bracket (`sqrt(`), and
   `solve`, `guess`, `for` and `step` a space. It is typing: the field's own Ctrl+Z takes it back.
-- **After `@`** (M4c) the list holds the format words, and `if` after a word.
+- **After `@`** (M4c) the list holds the format words, and `if` after a word. On a
+  comment line's clause (M4d) it holds the comment words.
+- **`if`** (M4d) is among the functions, with its hint `if(cond, a, b)`.
+- **Above the field** (M4d) when below it would be covered by the on-screen keyboard or a
+  bottom sheet. A tap on a name takes it, as a click does.
 - **No list** where there is nothing to complete: inside a word, after a number (`10k`),
   in a comment, in a quoted plot title, on the element's title, after a name typed in full,
   or after a unit typed in full (`3 m/s`), where one more letter brings it back.
@@ -593,7 +754,9 @@ from M4c it can be the user's ([Chosen width](#chosen-width)).
   and the title, at its size. The header adds to the height, and a larger title makes it taller.
 - **Doesn't:** error text past its cap, and a comment past 320 px: the math lines and their
   notes set the width a comment wraps at, and a comment asks for at most 320 px itself, so
-  prose alone or beside short math isn't broken into a thin column.
+  prose alone or beside short math isn't broken into a thin column. From M4d the request
+  scales with the comment's size: about 277 px at S, 320 at M, 427 at L and 555 at XL, so
+  a heading wraps at about as many characters as an ordinary comment.
 - **A very long line widens the element.** One source line of math stays one row; a comment
   line wraps. You can
   split it yourself with Enter.
@@ -615,7 +778,7 @@ Built in M4c. A math element has an optional **chosen width**. Without one it is
   tables and charts, the gutter, the padding, and the title at its size. Comments don't count
   toward it. Math never wraps; comment lines always do. An element holding only comments has a
   floor of about 120 px.
-- **A comment's own request of up to 320 px applies to automatic elements only.** A chosen
+- **A comment's own request of up to 320 px** (scaled by its size from M4d) **applies to automatic elements only.** A chosen
   width replaces it, so a chosen width between the floor and 320 px is kept, and comments wrap
   to it.
 - **Content that grows past the chosen width widens the element,** as today. The chosen width
@@ -649,7 +812,8 @@ It is saved with the element and copied with it. Print uses the laid-out width.
 
 Built in M4c. The title's text stays exactly what was typed, so `@` and `#` in a title are
 ordinary characters ("Pump @ 50 Hz", "Case #2"). Its format is kept beside it and is set only
-from the title's bar. Nothing is typed to format a title, and a title takes no rules.
+from the Format tab (before M4d, the title's bar). Nothing is typed to format a title, and a
+title takes no rules.
 
 | Option | Choices | Without a format |
 |---|---|---|
@@ -672,20 +836,152 @@ from the title's bar. Nothing is typed to format a title, and a title takes no r
 - Emptying the title removes the header and its format with it. The format is copied with the
   element, prints as shown, and takes the dark theme's filter like the rest.
 
-**The title's bar** shows beside the title, outside the element's box, only while the title is
-open. It replaces the line's bar there.
-
-```
-[B] [I] [U] | [←] [↔] [→] | [S] [M] [L] [XL]
-A: ● ● ● ● ● ●  ⊘
-■: ● ● ● ● ●    ⊘
-```
+**Setting it** (M4d): the [Format tab](#format-tab)'s Style, Size, Align, Text and Highlight
+rows, while the title is open. Until M4d the title's bar, beside the title, did it.
 
 - The current format shows pressed. Bold is on without a format, so B shows pressed on a new
   title, and pressing it stores "not bold".
 - **Each press is one undo step** and keeps the title open. **Ctrl+B**, **Ctrl+I** and
   **Ctrl+U** do the same from the field.
-- Like the line's bar, it never takes the keyboard from the field.
+
+### Format tab
+
+From M4d, the only place to format a line or a title. It is the Sheet panel's first tab
+([section 8](#sheet-panel)), and acts only on the open line or title, never on a selection.
+
+**The sample.** At the top, in a light box: a caption naming what is open and where, in the
+Variables tab's naming ("MATH LINE — PIPE FLOW, LINE 3", "COMMENT LINE — …",
+"TITLE — PIPE FLOW"), then the open thing drawn as the sheet draws it: a math line typeset
+with its result and note, rules applied, live as it is typed; a comment line or a title in
+its format.
+
+- When a true rule overrides a property the buttons set, a line under the sample says so:
+  "A rule sets the text colour while v > 3 m/s." The buttons still show and set the plain
+  format under it.
+- Beside the sample, a link moves the edit: "Edit title ↑" (or "Add title ↑") under an open
+  line, "First line ↓" on the open title. ↑ on the first line and a double-click on the
+  header stay.
+- The sample row also holds **Done** (leaves the line, as Esc), **↑** and **↓** (move the
+  edit, as the arrow keys, from the first line to the title and back), on every device.
+
+**The rows.** One labelled row per property, of large [no-focus](#2-terms-and-invariants)
+buttons. A row that doesn't apply is left out, not greyed:
+
+| Open | Style | Size | Align | Text | Highlight |
+|---|---|---|---|---|---|
+| Math line | B, U | – | – | six text colours + none | five highlights + none |
+| Comment line | B, I (pressed by default; off writes `@upright`), U | S M L XL | – | six + none | five + none |
+| Title | B (pressed by default), I, U | S M L XL | ⇤ ↔ ⇥ | six + none | five + none |
+
+- On a math line the [Rules list](#rules-list) sits below the rows.
+- A blank line, or a clause with no comment text, shows the sample and "This line takes no
+  format."
+- With nothing open: "Open a line or a title to format it: double-click it, or select its
+  element and press Enter." With one math element selected, an **Edit** button beside the
+  hint opens its last line, as Enter does; on touch the hint reads "Double-tap a line, or
+  tap Edit".
+- Tooltips name the keys: "Bold (Ctrl+B)". There are no keys for size, alignment or
+  colours.
+
+**Writes.** Each press is one undo step, written at once, as the bar's were: a line press is a
+line commit that keeps the line open with its caret in the code
+(`min(selectionStart, codeLength)`) and remounts the field, whose text undo then starts empty;
+a title press is one step. Pressing a pressed button takes that format off.
+
+### Rules list
+
+From M4d, on a math line only, under the Format tab's rows. Its header says "first true wins,
+top to bottom". No field in the panel takes the keyboard, so the line never leaves while rules
+are edited: **the condition is typed in the line itself**, with its suggestions and units.
+
+Each row is one rule, in the line's order, and holds no-focus controls:
+
+- a **format chip**, drawn in the rule's format, which opens the Text, Highlight and Style
+  rows for that rule under it. A rule's last property can't be taken off: its "none" is
+  disabled, and ✕ removes the rule;
+- its **condition**, read-only, as typed; a click puts the caret at the end of that
+  condition in the line;
+- **↑ ↓** to reorder, and **✕** to remove;
+- its **live state**, beside the condition: "true" or "false"; on a list "12 of 30 points",
+  on a table "4 of 10 rows"; "true, overridden" when every property it sets is won by a
+  rule above; or `⚠` and the reason, in amber ("units of different kinds", "not true or
+  false", an undefined name), the same warning the line carries.
+
+**+ Add rule** writes ` @text-red if <name> ` at the end of the clause, before any note, and
+puts the caret after it, so the user types `> 3 m/s`. `<name>` is the name the line defines,
+or `result` on a line with none; on a table line it writes ` @text-red if ` alone. The new
+rule is last, so lowest in priority, and its row opens its format controls at once.
+
+- A row the list writes is one joined word and one condition
+  ([section 3](#3-sheet-lines-every-form)). A rule typed the old way is its own row and is
+  never rewritten unless changed.
+- Add, remove, reorder and each format change is one press: one line commit, the line kept
+  open. A press made with the caret inside the clause puts it back at the same rule's
+  condition. Typing a condition is ordinary typing, under the field's own Ctrl+Z.
+
+### Symbols tab
+
+From M4d, the panel's second tab. Every button types, at the caret, text the engine already
+reads. It adds no grammar.
+
+**Groups, top to bottom:**
+
+1. **Greek:** the 24 lowercase letters except omicron; the variants `varepsilon`, `vartheta`,
+   `varpi`, `varrho`, `varsigma`, `varphi` on a second row; the 11 capitals unlike Latin
+   (Γ Δ Θ Λ Ξ Π Σ Υ Φ Ψ Ω). A button shows ρ and inserts `rho`. π, σ and α carry a small dot:
+   "also the constant …; a sheet may take the name".
+2. **Operators:** `+` `−` (`-`) `·` (`*`) `÷` (`/`) `x²` (`^2`) `xⁿ` (`^`) `√` (`sqrt`)
+   `∛` (`cbrt`) `ⁿ√` (`nthRoot`) `|x|` (`abs`) `n!` `( )` `[ ]` `<` `>` `≤` (`<=`) `≥` (`>=`).
+3. **Functions:** today's function suggestions, in that order.
+4. **Logic:** `if()`, `? :`, `==`, `!=`, `and`, `or`, `not`, `true`, `false`, a pair of quotes.
+5. **Sheet forms:** `solve`, `for`, `..`, `step`, `table()`, `plot()`, `in`, an index `[ ]`. A
+   button inserts its keyword only; its hover shows the whole form as a runnable example
+   (`x = solve x^2 = 2, for x = 0 .. 10`).
+
+A filter box at the top matches the spelling, the letter's name and the hint (`rho`, `root`,
+`less`). It takes focus, so typing in it leaves an open line; the buttons below are no-focus.
+
+**What a click inserts:**
+
+- **Greek joins a name only right after `_`:** `T_` + α gives `T_alpha`. Right after another
+  name character a space comes first (`a` + ρ gives `a rho`). The caret ends after the
+  spelling. The hover reads "rho — type _ for a subscript: rho_w".
+- **Calls** (`sqrt`, `abs`, `if`, `table` …) put the caret between the brackets, or wrap a
+  selection: select `a + b`, click √, get `sqrt(a + b)|`. The quote pair and `( )` wrap too.
+- **Binary operators and comparisons** go in with one space each side, never doubling one.
+  **`^`, `^2` and `[ ]`** go in tight. Any other symbol replaces a selection.
+- **Each insert is one Ctrl+Z step** in the field (`execCommand('insertText')`, then the
+  caret by `setSelectionRange`).
+- **With no line open:** one math element selected, a click opens its last line and inserts
+  at its end; nothing or several selected, the buttons are dimmed under "Open a line to
+  insert", and their hovers still show each spelling. An open title or comment line takes
+  the insert as plain text.
+
+The Constants tab's rows insert their short name (`c`, `N_A`), else the math.js name
+(`gravity`), by the same rules, with the hover "Insert c". One catalogue module holds every
+Symbols entry, and the typing suggestions' functions are built from it.
+
+### Touch
+
+From M4d, in the plugin on a phone and a tablet ([section 12a](#12a-obsidian-plugin)). One
+behaviour on every device; touch is told by `pointerType === 'touch'`, so a mouse or a pen
+that hovers keeps hover.
+
+- **A double tap on a line** opens it, by the double-click rule of [Gestures](#gestures):
+  math's only when the first tap selected the element; a drawing on top keeps Excalidraw's
+  double tap; a locked element still edits.
+- **The keys' places** are taken by the Format tab's **Done**, **↑ ↓** and **Edit**. A tap on
+  another line of the element moves the edit; a tap outside or a drag leaves; Enter on the
+  on-screen keyboard splits the line; a tap on empty canvas deselects. Hiding the
+  keyboard doesn't leave the line; a tap in the field brings it back.
+- **Add math** is ∑ Add math under More tools, then a tap to place.
+- **A tap shows a tip** where hover would: a gutter `●` or `⚠` (when shown), a table's red
+  —, a solve's result, a list's summary. The next tap anywhere closes it.
+- **A math element selected by touch** shows its result unit slots outlined (a tap opens
+  the unit choice) and each plot's ⚙.
+- **Quick keys:** while a line or the title is open, a pinned row above the panel's tab icons:
+  `_` `^` `=` `(` `)` `*` `/` `,` `..` and a pair of quotes, no-focus, inserting by the
+  Symbols tab's rules, one Ctrl+Z step each.
 
 ### Selected math element
 
@@ -727,7 +1023,14 @@ Decided in: [look](https://github.com/matheus-sancha/excalimathpad/issues/14),
 [text colours](https://github.com/matheus-sancha/excalimathpad/issues/93),
 [conditional formats](https://github.com/matheus-sancha/excalimathpad/issues/94),
 [title format](https://github.com/matheus-sancha/excalimathpad/issues/95),
-[all-roots solve](https://github.com/matheus-sancha/excalimathpad/issues/92).
+[all-roots solve](https://github.com/matheus-sancha/excalimathpad/issues/92),
+[warnings at rest](https://github.com/matheus-sancha/excalimathpad/issues/118),
+[comment-line formats](https://github.com/matheus-sancha/excalimathpad/issues/119),
+[Format tab](https://github.com/matheus-sancha/excalimathpad/issues/121),
+[Symbols tab](https://github.com/matheus-sancha/excalimathpad/issues/122),
+[Rules list](https://github.com/matheus-sancha/excalimathpad/issues/123),
+[phone and tablet](https://github.com/matheus-sancha/excalimathpad/issues/127),
+[programming forms](https://github.com/matheus-sancha/excalimathpad/issues/132).
 
 ## 5. Results: units and numbers
 
@@ -737,6 +1040,10 @@ Built in M2. A result's colour is the sheet's [result colour](#colours-and-rules
 
 A shown result is the line's value in its display unit, balanced if the kinds differ;
 else in the unit system for its kind; else in composed base units of the system.
+
+From M4d a **text value** shows plain, without quotes (`Approved`), and `true` / `false`
+as upright words, never ✓ / ✗, Yes / No or 1 / 0. A text has no unit slot, and `in <unit>`
+on a text is the line's error.
 
 ### Unit slot
 
@@ -929,12 +1236,16 @@ Excalidraw's own selection steps, and a nudge or Link edit that a line commit fo
 - **A unit slot or plot popover change** is one line commit.
 - **A title change** is one step, written when the edit leaves the title: adding one,
   changing it, or removing it. A title left unchanged writes nothing.
-- **A press on the title's bar or its keys** (M4c) is one step, written at once.
+- **A press in the Format tab on the title, or a title format key** (M4c on the title's
+  bar; M4d in the Format tab) is one step, written at once.
 - **A change of chosen width** (M4c) is one step: Ctrl+Z restores the previous width, or
   automatic. Excalidraw's resize and the stored width land in the same step.
-- **A format from the bar or its keys** is one line commit too, written at once with the
-  line's typed text, so each press is one step. The field's text undo starts fresh after
-  it, because the app rewrote the field.
+- **A format from the Format tab, its Rules list or a format key** (before M4d, the bar) is
+  one line commit too, written at once with the line's typed text, so each press is one
+  step. The line stays open. The field's text undo starts fresh after it, because the app
+  rewrote the field.
+- **An insert from the Symbols tab, the Constants tab or a quick key** (M4d) is typing:
+  one step of the field's own Ctrl+Z, and part of the line's one commit.
 - **Redo** (Ctrl+Y, Ctrl+Shift+Z) is Excalidraw's own and mirrors undo.
 - **Undoing a line shows nothing extra:** no selection, scroll or highlight. An undo off
   screen shows only as changed results.
@@ -961,11 +1272,14 @@ Decided in: [undo steps](https://github.com/matheus-sancha/excalimathpad/issues/
 [auto-size](https://github.com/matheus-sancha/excalimathpad/issues/29),
 [chrome](https://github.com/matheus-sancha/excalimathpad/issues/17),
 [chosen width](https://github.com/matheus-sancha/excalimathpad/issues/100),
-[title format](https://github.com/matheus-sancha/excalimathpad/issues/95).
+[title format](https://github.com/matheus-sancha/excalimathpad/issues/95),
+[Format tab](https://github.com/matheus-sancha/excalimathpad/issues/121),
+[Symbols tab](https://github.com/matheus-sancha/excalimathpad/issues/122).
 
 ## 7. File and save
 
-Built in M1. Settings fill in as M2, M4c and M5 add them.
+Built in M1. Settings fill in as M2, M4c and M5 add them. In a vault (M4d) the same file is
+saved the Obsidian way: see [A sheet in a vault](#a-sheet-in-a-vault).
 
 ### The file
 
@@ -985,6 +1299,9 @@ From M4c an anchor's `customData` can also hold:
 - `width`: the chosen width, in scene units. An element without one is automatic.
 
 Files saved before M4c have neither key and open as they looked, so the format number stays 1.
+M4d adds nothing to the file: a comment line's format, joined words and conditionals are
+text in the source, so the format number still stays 1, and a sheet moves between the web
+app and a vault unchanged.
 
 ```json
 {
@@ -1060,6 +1377,45 @@ Files saved before M4c have neither key and open as they looked, so the format n
 Save falls back to a download and Open to a file picker, with no write-back. Not tested
 in v1.
 
+### A sheet in a vault
+
+From M4d, in the plugin ([section 12a](#12a-obsidian-plugin)). The web app's Saving and
+Opening above are unchanged. In a vault the file is the sheet, and it autosaves as
+Obsidian's views do.
+
+- **Autosave.** The view is a `TextFileView`. After a line commit or a scene change it asks
+  Obsidian to save (`requestSave`, 2 s), and it writes at once when its tab closes or
+  Obsidian quits, committing an open line first. Only a change of `saveKey` writes, so
+  opening, selecting, scrolling, zooming or a theme change never touches the file.
+  Obsidian's "Save current file" (Ctrl+S) writes at once.
+- **Dropped in a vault:** Save, Save as, Open (Ctrl+O and ☰ Open…), a sheet file dropped on
+  the canvas (ignored; dropped images stay Excalidraw's), the `●` mark, the leave question,
+  the recovery copy with Restore and Discard, and the untitled sheet. Obsidian's own copy,
+  rename, move, file explorer, quick switcher and links take their places. Undoing a bad edit
+  is Ctrl+Z, Obsidian's File recovery or sync history.
+- **Opening** is `setViewData`: today's open, with no undo step and the history cleared.
+  The refusals of [Opening](#opening) hold: a newer `format` or a file that doesn't parse
+  shows its message, and the view never writes it. Only `.excalimathpad` is registered;
+  `.excalidraw` stays the Excalidraw plugin's.
+- **New sheet:** the command "New sheet", a ribbon icon, and "New sheet" in a folder's
+  menu in the file explorer (in that folder). The command and the ribbon follow Obsidian's
+  *Default location for new notes*. It is named `Untitled.excalimathpad`, then `Untitled 1`,
+  `Untitled 2`…, holds an empty sheet (format 1, default settings) and opens in a new tab on
+  the welcome screen.
+- **An outside change** (sync, git, another app, a second tab on the same file):
+  - an idle tab (nothing unwritten, no line open) reloads in place, keeping scroll and zoom,
+    with no undo step and the history cleared;
+  - a busy tab keeps the outside version in the file, writes its own beside it as
+    `<name> (conflict YYYY-MM-DD HHmm).excalimathpad` (never overwriting a file, in the same
+    folder), shows a notice naming the copy, then reloads.
+- **Each tab** has its own view, scene, undo history and file adapter. A rename or move keeps
+  the tab open, and Obsidian updates links. A wikilink to the sheet opens it; an embed shows
+  Obsidian's default.
+- **A failed write** shows Obsidian's notice with the message and leaves the work in the
+  tab, so the next change or close writes again.
+- Obsidian Sync carries `.excalimathpad` files only with "Sync all other types" on; the
+  README says so.
+
 Decided in: [file](https://github.com/matheus-sancha/excalimathpad/issues/12),
 [undo research](https://github.com/matheus-sancha/excalimathpad/issues/10),
 [unit slot](https://github.com/matheus-sancha/excalimathpad/issues/16),
@@ -1067,11 +1423,14 @@ Decided in: [file](https://github.com/matheus-sancha/excalimathpad/issues/12),
 [print](https://github.com/matheus-sancha/excalimathpad/issues/21),
 [chosen width](https://github.com/matheus-sancha/excalimathpad/issues/100),
 [text colours](https://github.com/matheus-sancha/excalimathpad/issues/93),
-[title format](https://github.com/matheus-sancha/excalimathpad/issues/95).
+[title format](https://github.com/matheus-sancha/excalimathpad/issues/95),
+[a sheet in a vault](https://github.com/matheus-sancha/excalimathpad/issues/124).
 
 ## 8. App chrome
 
-Built in M1 (☰ file items, file name, Add math) and M2 (Math Settings and the Sheet panel). Print…
+Built in M1 (☰ file items, file name, Add math) and M2 (Math settings and the Sheet panel). From
+M4d the label is **Math settings**, in sentence case in both homes (until M4d "Math
+Settings"), and so is every UI text, for Obsidian's lint. Print…
 and the Page row arrive in M5; until then Ctrl+P is the browser's own and prints the
 screen. There is no app bar: the chrome lives inside Excalidraw's own UI slots.
 
@@ -1079,13 +1438,14 @@ screen. There is no app bar: the chrome lives inside Excalidraw's own UI slots.
 ☰  ● pump-sizing.excalimathpad      [ Excalidraw's toolbar … More tools ② ]      Library
                                                     Math
                                                     ∑ Add math        M
-                                                    Math Settings ②
+                                                    Math settings ②
 ```
 
 - **☰ menu:** Open… (Ctrl+O), Save (Ctrl+S), Save as… (Ctrl+Shift+S) and Print… (Ctrl+P)
   at the top. Excalidraw's own Open, Save to… and Export image… are removed. Its other
   items stay: Find on canvas, Help, Reset the canvas, dark mode, canvas background. From M4b the
-  menu's last line is the [build stamp](#hosted-build), which is text, not an item.
+  menu's last line is the [build stamp](#hosted-build), which is text, not an item. From M4d
+  **Math guide** sits just above Excalidraw's Help ([Math guide](#math-guide)).
 - **File name** beside the ☰ button, with `●` while dirty.
 - **Window title:** the name without its extension, with `●` while dirty: `● pump-sizing`.
   An unsaved sheet reads `● Untitled`. While printing, the title drops the mark, so the PDF is
@@ -1095,9 +1455,10 @@ screen. There is no app bar: the chrome lives inside Excalidraw's own UI slots.
   the canvas. Choosing an item closes the dropdown.
 - **∑ Add math** is the first, labelled with its shortcut **M**. It reads as pressed while
   placing, and so does the More tools button, as it does for Excalidraw's Frame tool.
-- **Math Settings** opens and closes the Sheet panel, and reads as pressed while it is open.
-  It carries a red badge counting errors and warnings while the sheet has problems; the
-  More tools button carries the same badge, so the count shows with the dropdown closed.
+- **Math settings** opens and closes the Sheet panel, and reads as pressed while it is open.
+  It carries a red badge counting errors while the sheet has any (until M4d, errors and
+  warnings); the More tools button carries the same badge, so the count shows with the
+  dropdown closed. A sheet with warnings alone shows no badge.
 - An empty untitled sheet shows Excalidraw's welcome screen: the app's name, the hint
   "Press M, or choose Add math under More tools, then click the sheet to place math", and Open… (Ctrl+O).
   Excalidraw's own logo and collaboration items are left out.
@@ -1119,18 +1480,38 @@ Placing isn't in the scene and isn't an undo step until the click.
 
 ### Sheet panel
 
-Excalidraw's docked sidebar, opened by Math Settings. Its four tabs, the dock button and
+Excalidraw's docked sidebar, opened by Math settings. Its tabs, the dock button and
 the close button all fit its width (the panel is 384 px wide, since Excalidraw's own 302 px is too narrow for four tabs), so the close button is never cut by the window. Open at
 launch on a wide window, on Variables, or on Problems
-if the opened sheet has any. Open or closed is remembered per browser, not in the file. On
-a small window it floats over the canvas, and closes after a jump or a click on the canvas.
+if the opened sheet has any errors (from M4d; before, any problem). Open or closed is
+remembered per browser, not in the file. On a small window (1229 px or less) it floats over
+the canvas, and closes after a jump or a click on the canvas.
+
+**From M4d the panel has six tabs,** in the order **Format, Symbols, Variables, Problems,
+Constants, Settings**. Each is an icon with a tooltip; the active tab also shows its name.
+The Problems badge sits on its icon. Format is the [Format tab](#format-tab) and Symbols the
+[Symbols tab](#symbols-tab).
+
+- **An edit opens the panel on Format.** When a line or the title opens and none was open,
+  the panel opens on Format, or switches to it. Moving within the edit keeps whichever tab
+  shows, so a tab picked during the edit stays. When the edit ends, the panel returns to how
+  it was: closed if it was, else its tab. Closed during an edit, it stays closed until the
+  next. The automatic open and restore are never remembered as the user's choice.
+- **On a small window** the same rule holds. The fields carry `data-prevent-outside-click`,
+  so a press in them keeps the floating panel; a press on the canvas still closes it, and
+  the next edit reopens it. If the open line would sit under the panel, the view scrolls it
+  clear, as a jump does.
+- **A press in the panel never leaves the line.** Its controls that act on the open line
+  are no-focus buttons. A typed field in it (a filter) takes focus, and so leaves an open
+  line. A focused control in the panel never passes a key to Excalidraw: Delete on a focused
+  `<select>` doesn't delete the selected element (a defect until M4d).
 
 | Tab | Holds |
 |---|---|
-| **Variables** | A filter box, then every name in reading order, grouped by element, labelled by the element's position. Row: typeset name, value, unit, in the unit system and Digits. A name defined twice appears twice. A line with an error shows "error". A list shows its summary (`30 values, 1 … 30 L/s`). A function shows its signature, `H_s(Q)`, with `function` or `solve function` as the value and a blank unit. Comments and notes don't appear |
+| **Variables** | A filter box, then every name in reading order, grouped by element, labelled by the element's position. Row: typeset name, value, unit, in the unit system and Digits. A name defined twice appears twice. A line with an error shows "error". A text shows plain, as in its result cell (M4d). A list shows its summary (`30 values, 1 … 30 L/s`). A function shows its signature, `H_s(Q)`, with `function` or `solve function` as the value and a blank unit. Comments and notes don't appear |
 | **Problems** | Errors `●` and warnings `⚠` in one list in reading order, each with its message and "element, line n · name". Comments and notes don't appear |
 | **Settings** | Unit system, and for Custom its kind → unit table. Digits, 2 to 15. Result colour, one of six (M4c). Page: A4 or Letter, portrait or landscape |
-| **Constants** | A filter box, then every [built-in constant](#constants) in its group. Row: its symbol typeset and its value in the unit system and Digits, then what it is and the names a line reads it by (`c or speedOfLight`). The filter matches names and descriptions. Nothing here is the sheet's, so a row doesn't jump |
+| **Constants** | A filter box, then every [built-in constant](#constants) in its group. Row: its symbol typeset and its value in the unit system and Digits, then what it is and the names a line reads it by (`c or speedOfLight`). The filter matches names and descriptions. Nothing here is the sheet's, so a row doesn't jump. From M4d a click inserts its name at the caret ([Symbols tab](#symbols-tab)) |
 
 - **An element with a title is named by it** in Variables and Problems ("Pipe flow, line 3"),
   in place of its position. Built with the panel (#58).
@@ -1140,12 +1521,82 @@ a small window it floats over the canvas, and closes after a jump or a click on 
 - **Settings aren't part of undo.** Changing one re-shows every result, refits boxes and
   marks the sheet dirty. Ctrl+Z doesn't reach it.
 
+### Math guide
+
+From M4d. **☰ → Math guide** opens `docs/math-guide.md`, turned into HTML at build time, in an
+in-app dialog that scrolls and starts at its contents list. It has no shortcut (`?` stays
+Excalidraw's Help). It is the same on the web, offline and in a vault, and makes no request.
+
+- It is written for a newcomer engineer, about 400 to 600 lines, in 17 sections in learning
+  order: a first sheet; lines and names; units; numbers and constants; functions; checks
+  and conditions; solve; ranges and lists; tables; plots; comments and notes; formatting;
+  the Symbols tab; the Sheet panel; files and recovery; keys and gestures (saying that
+  Excalidraw's Help lists the drawing keys); common messages.
+- Each form is a row of **Write | Shows | Note**; a multi-line example is a code block with
+  each line's result after `→`. No screenshots.
+- It links only to its own sections, and to no file or site.
+- A CI test (`src/math/math-guide.test.ts`) evaluates each section's Write cells in order as
+  one sheet and checks each against its Shows cell, at the default Digits. Rows that aren't
+  math carry a marker the test skips.
+- The dialog closes on Esc, ✕ or a click outside, and is as wide as the view allows up to
+  about 760 px.
+
+### Inside an Obsidian tab
+
+From M4d, in the plugin. The web app's chrome above is unchanged.
+
+- **☰ menu:** Math guide, Find on canvas (Ctrl+F), Help (`?`), Reset the canvas, a separator,
+  Dark mode (Alt+Shift+D), Canvas background, then the version stamp (`0.1.0`) as text. The
+  file items are gone ([A sheet in a vault](#a-sheet-in-a-vault)).
+- **No file name** beside ☰ and no `document.title`: Obsidian's tab header names the sheet.
+- **The welcome screen** keeps the name and the hint, without Open…. On touch the hint reads
+  "Tap More tools, then Add math, then tap the sheet".
+- **Theme:** a tab opens in Obsidian's light or dark mode (`body.theme-dark`, kept current by
+  `css-change`). Dark mode in ☰ flips that tab only, until it closes or Obsidian's mode
+  changes. Nothing is stored. Canvas background is saved in the file, as on the web.
+- **Keys** act only while the tab has focus. Obsidian's core keys always pass through, even
+  from the canvas or a line: Ctrl/Cmd+P, O, N, W, `,`, Shift+F, S (Obsidian's save), and
+  Ctrl+Tab / Ctrl+Shift+Tab. Ctrl+Shift+E stays swallowed. Everything else the sheet uses
+  stays the sheet's: M, Enter, Esc, ↑ ↓, Tab in suggestions, Ctrl+B/U/I, Ctrl+Z/Y,
+  Excalidraw's letters, Ctrl+C/V/D/A/F, `?` and Alt+Shift+D.
+- **The Sheet panel** is Excalidraw's sidebar inside the tab, docking when the **tab** is
+  wider than 1229 px and floating when narrower, so a split pane floats it. Each tab has its
+  own panel. Its open or closed memory is kept in the plugin's `data.json`.
+- **Hidden in the plugin:** Web Embed and Mermaid to Excalidraw in More tools; Browse
+  libraries (the library keeps the session's items); Copy to clipboard as SVG (Copy as PNG
+  stays); Excalidraw's command palette, whose keys (Ctrl+/, Ctrl+Shift+P) are swallowed.
+- **Obsidian's entries:** the commands **New sheet** (always), **Add math**, **Toggle Math
+  settings** and **Open Math guide** (only while a sheet tab is active), with no default
+  hotkeys; the ribbon icon (New sheet); no settings tab.
+- Excalidraw's Help and `?` stay. Its outbound links open the browser only when clicked.
+- Reset the canvas keeps Excalidraw's confirm, is one undo step and autosaves.
+
+### On a phone
+
+From M4d, in the plugin on a phone (`Platform.isPhone`). A tablet follows the 1229 px rule
+above.
+
+- **The Sheet panel is a bottom sheet** across the view instead of the right sidebar. While a
+  line is open it sits just above the on-screen keyboard and is short: the quick keys, the
+  tab icons and a few rows of the tab, which scroll inside it. With no line open it is
+  taller, about half the view. The tab contents are the same components.
+- The open-then-restore rule holds, and the view scrolls the open line into the space left
+  above the sheet and the keyboard.
+- Buttons for a finger are at least 40 px. The quick keys sit in the order
+  `_ ^ = ( ) * / , ..` then the quotes.
+
 Decided in: [chrome](https://github.com/matheus-sancha/excalimathpad/issues/17),
 [gestures](https://github.com/matheus-sancha/excalimathpad/issues/28),
 [functions](https://github.com/matheus-sancha/excalimathpad/issues/27),
 [numbers](https://github.com/matheus-sancha/excalimathpad/issues/30),
 [ranges](https://github.com/matheus-sancha/excalimathpad/issues/20),
-[Chromium PDF](https://github.com/matheus-sancha/excalimathpad/issues/34).
+[Chromium PDF](https://github.com/matheus-sancha/excalimathpad/issues/34),
+[warnings at rest](https://github.com/matheus-sancha/excalimathpad/issues/118),
+[Math guide](https://github.com/matheus-sancha/excalimathpad/issues/120),
+[Format tab](https://github.com/matheus-sancha/excalimathpad/issues/121),
+[Obsidian tab](https://github.com/matheus-sancha/excalimathpad/issues/129),
+[phone and tablet](https://github.com/matheus-sancha/excalimathpad/issues/127),
+[listing](https://github.com/matheus-sancha/excalimathpad/issues/130).
 
 ## 9. Solve
 
@@ -1295,6 +1746,8 @@ length: `H_s = Hs(Q_s)` is 30 values, from 30 Colebrook solves.
 
 **A list result shows one row high,** as a summary: `30 values, 12.04 … 33.18 m` (count,
 first … last, unit). Hovering it shows the first and last few values with their index.
+From M4d a list of texts (a verdict per point) counts each distinct text instead, most
+frequent first: `3 OK, 1 NOT OK`. The hover and `table()` still show each point.
 
 **A failed point fails only itself:**
 
@@ -1424,6 +1877,9 @@ title's format print as they show on a light screen, and an element prints at it
 - **Both routes** set the window title to the plain name while printing
   ([section 8](#8-app-chrome)), and restore it afterwards.
 - **No page guides.** To change a bad break, close the dialog, move something and print again.
+- **In a vault** (the plugin, from M4d), Ctrl+P is Obsidian's command palette, so Print… is a
+  command, "Print…", with no default key, and a ☰ item as on the web. The footer's file name is
+  the vault file's name.
 
 Decided in: [print](https://github.com/matheus-sancha/excalimathpad/issues/21),
 [Chromium PDF](https://github.com/matheus-sancha/excalimathpad/issues/34),
@@ -1458,21 +1914,168 @@ machine, the work laptop first.
 - **Host:** Cloudflare Pages, public, with no login gate. The app holds no data and sheet files stay on
   each machine's disk, so a public address is acceptable.
 - **Deploy:** a push to `main` that passes `npm run check` publishes its `dist/` from CI. Nothing else
-  deploys: a pull request publishes nothing, and there are no versions, tags or release notes while
-  Matheus is the only user.
+  deploys: a pull request publishes nothing. From M4d the web app and the plugin share one version
+  number, released by hand ([section 12a](#releases)); the hosted app still deploys on every `main`
+  push, and the README links it as a way to try the app before installing the plugin.
 - **Build stamp:** the ☰ menu's last line shows the build's short commit and date, such as
-  `389dd51 · 2026-11-12`, so two machines can be compared. A local build shows `dev`.
+  `389dd51 · 2026-11-12`, so two machines can be compared. A local build shows `dev`. The plugin's
+  stamp shows only its version (`0.1.0`).
 - **Until M6** there is no service worker: the app needs the network at each launch, a reload takes the
   newest build, and Excalidraw's fonts aren't yet served from our own origin.
 - **Between machines** a sheet moves as its `.excalimathpad` file. The recovery copy belongs to one
   browser and doesn't travel.
-- **If the work laptop can't use it**, the fix is chosen from what the check finds, as a new issue: a
-  custom domain if the address is blocked, M6's font self-hosting pulled forward if only the fonts are,
-  or a zip of `dist/` served by a local static server if everything is.
+- **The work laptop can't use it** (found on 2026-11-14, #115): the hosted app doesn't open there,
+  while Obsidian there takes community plugins and runs the Excalidraw plugin. Which part is blocked
+  wasn't recorded. The fallbacks once planned (a custom domain, fonts pulled forward, a zip of
+  `dist/`) are dropped: the [plugin](#12a-obsidian-plugin) is the route to that machine.
 
 Decided in: [PWA](https://github.com/matheus-sancha/excalimathpad/issues/22),
 [file](https://github.com/matheus-sancha/excalimathpad/issues/12),
-[libraries](https://github.com/matheus-sancha/excalimathpad/issues/18).
+[libraries](https://github.com/matheus-sancha/excalimathpad/issues/18),
+[work laptop](https://github.com/matheus-sancha/excalimathpad/issues/115).
+
+## 12a. Obsidian plugin
+
+Built in M4d. A community plugin, id `excalimathpad`, that opens `.excalimathpad` files from a
+vault in its own tab, on desktop, phone and tablet. It bundles the whole app, built from the same
+source as the web app, which stays. How a sheet saves there is in
+[section 7](#a-sheet-in-a-vault), its chrome and keys in [section 8](#inside-an-obsidian-tab),
+touch in [section 4](#touch). Research: [`docs/research/obsidian-plugin.md`](research/obsidian-plugin.md).
+
+### One source, two builds
+
+- **`plugin/`**, at the top level, is the only code that imports `obsidian`: `plugin/main.ts`
+  (the `Plugin`: `registerView`, `registerExtensions(["excalimathpad"])`, the commands, the
+  ribbon, the folder menu) and its siblings (the `TextFileView` mounting `<App>` on `contentEl`,
+  the vault file adapter that replaces `sheetSession`, the key scope, the theme). It imports
+  `src/`; `src/` never imports `obsidian` or `plugin/`, enforced by an oxlint rule and a test.
+  `src/main.tsx` stays the web entry. `tsconfig.plugin.json`; one `package.json`.
+  `manifest.json` sits at the repository root.
+- **The plugin build** is `esbuild.plugin.mjs`: one CommonJS `main.js` with no splitting (the
+  KaTeX and Plot `import()`s fold in), minified, `obsidian` external, fonts as `data:` URLs, a
+  post-build rewrite of Excalidraw's run-time `./fonts/…` strings to `data:` URLs, no worker,
+  and one `styles.css` keeping KaTeX's woff2 only. Licence notices stay at the end of `main.js`
+  (`legalComments: 'eof'`). No `<style>` or `<link>` is created at run time.
+- **Trims, plugin only:** Mermaid to Excalidraw, the non-English locales and font subsetting are
+  stubbed; Xiaolai's paths become `local:`, so CJK text uses system fonts. Measured: 3.46 MB.
+  The web build is untrimmed.
+- **Scripts:** `build:web` (`vite build` → `dist/`), `build:plugin` (→ `dist-plugin/`: `main.js`,
+  `styles.css`, a copy of `manifest.json`), and `build` runs `tsc -b` and both, so
+  `npm run check` proves both homes on every pull request. `main.js` is not committed (see
+  [Listing](#listing) for the one exception).
+- **The view is confined to itself.** Every key and pointer listener and every dialog or portal
+  (the Math guide, plot settings, notices) is bound to the view's own container and window
+  (`registerDomEvent`, `activeDocument`, `element.doc`), so pop-out windows work. Nothing listens
+  on the global `window` or `document`; Excalidraw keeps `handleKeyboardGlobally: false`.
+  `html` and `body` CSS is scoped to the view.
+- **A device without regex lookbehind** (iOS below 16.4) is detected at view open
+  (`new RegExp('(?<=a)b')` in a try): the view shows "Excalimathpad needs iOS 16.4 or later" and
+  neither opens nor writes the sheet.
+- **Tests:** Vitest aliases `obsidian` to a hand-written fake in `plugin/test/` (Plugin,
+  TextFileView, Vault, Scope, Platform). The view's load and save, rename, outside change,
+  conflict copy, key pass-through, commands, theme and "no global listener" are tested in jsdom.
+
+### Data protection
+
+"ALL my data is protected" is Matheus's identity in public, and every user's vault.
+
+- **No network, ever.** Excalidraw's embeds, Browse libraries, the `esm.sh` fallback and
+  excalidraw.com's Firebase config (the `AIza…` key) are removed or stripped; Xiaolai is `local:`;
+  there is no telemetry and no account. A link on an element opens the browser when clicked.
+- **Storage only in the vault:** sheets in their files; the plugin's memory (the panel's open or
+  closed state) in `data.json` through `loadData`/`saveData`. No IndexedDB, `localStorage` or
+  `App#saveLocalStorage`.
+- **Reach:** it reads only the sheet open in the view and one image the user picks from a vault
+  image picker (image files listed by name; the picked image is copied into the sheet, as
+  Excalidraw stores any image). It writes only the open sheet (a path the view itself loaded),
+  `data.json`, the new sheets the user creates, and the conflict copy. It never lists, renames or
+  deletes another note.
+- **Identity:** `manifest.json`'s `author` is `matheus-sancha` and `authorUrl`
+  `https://github.com/matheus-sancha`, with no email and no `fundingUrl`; the listing matches.
+  `LICENSE` stays "Excalimathpad Contributors". Before listing, the history is rewritten to his
+  GitHub `noreply` address ([Listing](#listing)).
+- **Written promise:** a README "Privacy" section for both homes (no network requests, no
+  telemetry, no account, nothing outside the vault, the plugin reads only the open sheet and an
+  image you pick; the web app keeps its recovery copy in the browser's IndexedDB), and the
+  listing's "Works fully offline; makes no network requests."
+- **Checked on every pull request and in Release, blocking both:**
+  - **Bundle audit** over `dist-plugin/`: exactly three files; each at most 5,000,000 bytes (both
+    sizes printed); the manifest version equals `package.json`'s; and no `./fonts/` path,
+    `esm.sh`, `AIza`, `indexedDB`, `localStorage`, `new Function`, `<style>`/`<link>` creation,
+    or `http(s)://` host missing from a committed allowlist (XML namespaces, licence comments).
+  - **Network-blocked run:** the built bundle loads in headless Chromium against the fake
+    `obsidian`, with every non-local request blocked and logged, and opens a sample sheet with
+    math, a plot, an image and CJK text. Any attempted request fails.
+  - **Obsidian's lint:** `eslint-plugin-obsidianmd` over `plugin/` and `src/`, with
+    `--max-warnings 0`. UI text is in sentence case in both homes.
+
+### Releases
+
+- **One version** for the web app and the plugin, from `package.json`. npm's `version` script
+  copies it into `manifest.json` and adds a line to `versions.json` when `minAppVersion` changes,
+  so `npm version <bump>` moves all three in one commit. Tags are `x.y.z`, with no `v`. The first
+  release is `0.1.0`; `1.0.0` waits for v1's finish line. `minAppVersion` is `1.7.2`, and
+  `versions.json` starts `"0.1.0": "1.7.2"`.
+- **The Release button:** a manual Actions workflow (`workflow_dispatch`, patch, minor or major)
+  runs `npm version`, commits and tags on `main`, runs `npm run check`, and drafts a GitHub
+  release with `main.js`, `manifest.json` and `styles.css` and generated notes. Matheus publishes
+  it. The workflow may push to `main`.
+- **Before Publish,** Matheus ticks the draft's checklist, kept also in `CONTRIBUTING.md`: install
+  the three files in a test vault (by hand or with BRAT), open a sheet, type a line and see its
+  result, close and reopen, and repeat on one phone or tablet.
+- **Phone and tablet:** `isDesktopOnly: false` ships to strangers only after the CI touch tests
+  (Playwright with `hasTouch`, at a phone and a tablet viewport) and Matheus's **device
+  checklist** have passed on an iPhone, an iPad, an Android phone and an Android tablet: open
+  from the vault, Add math, edit lines and the title, format and rules, Symbols and quick keys,
+  tips, save, close and reopen, a sync round trip, and the keyboard with the bottom sheet. It runs
+  before the first such release and before any release that changes touch, panel or overlay
+  code, and its result, with devices and OS versions, goes in the release notes. If any device
+  fails, that release ships `isDesktopOnly: true`.
+- **Betas through BRAT:** releases before the listing are installed by Matheus through BRAT, on
+  the work laptop and his devices, and carry `isDesktopOnly: false` so the device checklist can
+  run on them. Fixes ship as `0.1.x`.
+
+### Listing
+
+- **Manifest and listing:** id `excalimathpad` (fixed once published), name "Excalimathpad",
+  description (172 characters): "Open and edit .excalimathpad calc sheets: an Excalidraw
+  whiteboard with live, unit-aware math that recalculates as you edit. Works fully offline; makes
+  no network requests."
+- **The README, users first** (it is the listing page): the name and that one line; a screenshot
+  of a sheet in Obsidian (`.github/assets/obsidian.png`, desktop, light theme, the panel on
+  Format, taken by Matheus for the version submitted); **Get it** (Obsidian's Community plugins,
+  or the web app with today's screenshot); **Your first sheet** in about five steps; **Math
+  guide**; **Privacy**; **Support**; **Contributing** (a link to `CONTRIBUTING.md` and one line
+  to the spec, `CONTEXT.md` and the ADRs); **Licence and credits** (MIT; Excalidraw, math.js,
+  KaTeX and the other bundled libraries). Scripts, Build and Deploy, Architecture, Tech Stack and
+  Roadmap move to `CONTRIBUTING.md`; Line forms, Things to know and Keyboard Shortcuts move to
+  the Math guide.
+- **Support, free and best effort:** GitHub Issues with a Bug form (version, home, device, steps,
+  a sheet only if it holds nothing confidential) and an Idea form; blank issues and Discussions
+  off; no response time; the roadmap follows Matheus's needs. `SECURITY.md` points to GitHub's
+  private vulnerability reporting.
+- **The preview scan** runs on the listing branch before submission. If it fails only because
+  no built `main.js` is committed, the Release workflow commits the built `main.js` at the root in
+  the release commit; otherwise `main.js` is never committed.
+- **Before submitting, by hand (Matheus):** the history is rewritten so every commit carries
+  `110572403+matheus-sancha@users.noreply.github.com` (`git filter-repo` with a mailmap, one
+  force-push; every clone re-clones), GitHub support is asked to purge cached refs, and "Block
+  command line pushes that expose my email" is turned on. A rewrite cannot recall copies already
+  made.
+- **The gate to submit** at community.obsidian.md: a clean preview scan, and at least one real
+  calculation at work with no data-loss or blocker bug. The version submitted keeps
+  `isDesktopOnly: false` only if the device checklist passed. After listing, BRAT is removed and
+  the plugin installs from the list.
+
+Decided in: [work laptop](https://github.com/matheus-sancha/excalimathpad/issues/115),
+[plugin research](https://github.com/matheus-sancha/excalimathpad/issues/116),
+[a sheet in a vault](https://github.com/matheus-sancha/excalimathpad/issues/124),
+[data protection](https://github.com/matheus-sancha/excalimathpad/issues/126),
+[phone and tablet](https://github.com/matheus-sancha/excalimathpad/issues/127),
+[build and release](https://github.com/matheus-sancha/excalimathpad/issues/128),
+[Obsidian tab](https://github.com/matheus-sancha/excalimathpad/issues/129),
+[listing](https://github.com/matheus-sancha/excalimathpad/issues/130),
+[M4d](https://github.com/matheus-sancha/excalimathpad/issues/125).
 
 ## 13. Messages
 
@@ -1486,6 +2089,8 @@ The wording of every user-facing message. `<…>` is filled in. Numbers follow
 | A name used above its definition | `x is defined below` | M0 |
 | A name whose assignment failed | `x has an error above` | M0 |
 | `table`, `plot` or `solve` assigned to | `table is a line form: choose another name` | M2 |
+| `if` assigned to | `if is a function: choose another name` | M4d |
+| A `;` at a line's top level | `one statement per line: split the line at the ;` | M4d |
 | A name shadows a unit or built-in (warning) | `K shadows the unit K` | M2 |
 | A use that falls back to the unit (warning) | `V reads as the unit V here: the variable is defined below` or `… its definition failed` | M2 |
 | A body name not defined above (warning) | `y isn't defined above this line` | M2 |
@@ -1507,6 +2112,21 @@ The wording of every user-facing message. `<…>` is filled in. Numbers follow
 |---|---|---|
 | Unknown `in xyz` in source | `Unknown unit xyz` | M2 |
 | A clause word that isn't a format | `Unknown format @bolt`, `Unknown format @text-purple` | #63, M4c |
+| A part of a joined word that isn't a format | `Unknown format @blod in @text-red+blod` | M4d |
+| A comment word on a math line | `@L is for comment lines`, `@upright is for comment lines` | M4d |
+| A rule on a comment line | `rules need a math line` | M4d |
+
+**Conditionals and text**
+
+| When | Message | Arrives |
+|---|---|---|
+| Text compared with a number or a unit | `can't compare text with a number` | M4d |
+| `<` or `>` on text | `text can only be compared with == or !=` | M4d |
+| `if()` with other than three arguments | `if needs 3 arguments: if(cond, a, b)` | M4d |
+| A condition that isn't true or false | `if: the condition must be true or false` (the same for `? :`) | M4d |
+| A condition that is a list or a matrix | `if: the condition must be one value; use a list line instead` | M4d |
+| A unit compared with a bare number | `can't compare 3 m/s with 0: give the 0 a unit` | M4d |
+| `in <unit>` on a text | `text has no unit: take off "in kPa"` | M4d |
 
 **Rules** (all warnings)
 
@@ -1587,6 +2207,25 @@ The wording of every user-facing message. `<…>` is filled in. Numbers follow
 | Hint, one math element selected | `Double-click a line or press Enter to edit` | M1 |
 | Browser's Print with an empty cache | `Use Print… from the app's menu` | M5 |
 
+**Panel** (M4d)
+
+| When | Message | Arrives |
+|---|---|---|
+| Format tab, nothing open | `Open a line or a title to format it: double-click it, or select its element and press Enter.` (on touch: `Double-tap a line, or tap Edit`) | M4d |
+| Format tab, a blank line | `This line takes no format.` | M4d |
+| A true rule overriding a pressed property | `A rule sets the text colour while v > 3 m/s.` | M4d |
+| Symbols tab, no line open | `Open a line to insert` | M4d |
+
+**In a vault** (M4d)
+
+| When | Message | Arrives |
+|---|---|---|
+| An outside change met unwritten work (notice) | `pump-sizing changed elsewhere. Your version was saved beside it as pump-sizing (conflict 2026-11-14 1532).` | M4d |
+| A write that fails (notice) | `Couldn't save pump-sizing.excalimathpad: <reason>. Your work is still open.` | M4d |
+| A newer or unreadable file | The two file messages above, in the view; it never writes the file | M4d |
+| No regex lookbehind (iOS below 16.4) | `Excalimathpad needs iOS 16.4 or later.` | M4d |
+| Welcome hint, on touch | `Tap More tools, then Add math, then tap the sheet` | M4d |
+
 Decided in: [solve](https://github.com/matheus-sancha/excalimathpad/issues/19),
 [functions](https://github.com/matheus-sancha/excalimathpad/issues/27),
 [ranges](https://github.com/matheus-sancha/excalimathpad/issues/20),
@@ -1594,7 +2233,10 @@ Decided in: [solve](https://github.com/matheus-sancha/excalimathpad/issues/19),
 [file](https://github.com/matheus-sancha/excalimathpad/issues/12),
 [spec contents](https://github.com/matheus-sancha/excalimathpad/issues/38),
 [all-roots solve](https://github.com/matheus-sancha/excalimathpad/issues/92),
-[conditional formats](https://github.com/matheus-sancha/excalimathpad/issues/94).
+[conditional formats](https://github.com/matheus-sancha/excalimathpad/issues/94),
+[programming forms](https://github.com/matheus-sancha/excalimathpad/issues/132).
+The M4d wordings not quoted in a ticket were written for this spec and are for Matheus to
+confirm on its pull request.
 
 ## 14. Engineering constraints
 
@@ -1645,6 +2287,20 @@ Engineer's design gate. Tested on Excalidraw 0.18.1, math.js 15.2 and Chromium.
   know. The clause reader has to accept the hyphen in `@text-red`.
 - **An index (M4c)** is read by the app before math.js, whose own `x[2]` indexes its matrices. Lists never
   become matrices.
+- **Text `==` and `!=` (M4d):** math.js 15.2 errors on `"Approved" == "Approved"`. Add `equal` and `unequal`
+  signatures for two strings, and a text-against-number error, at setup, before `import` is disabled.
+  The research probed a fresh instance only: confirm them in the hardened one, and pin them with a test.
+  ([`mathcad-programming.md`](research/mathcad-programming.md))
+- **`if()` (M4d)** is an app function with `rawArgs`, so only the branch taken is evaluated, as the index
+  is. `toTex` gains cases for `ConditionalNode`, `if()`, and string and boolean constants, flattening a
+  conditional in the last branch into the same brace. `display.ts` shows text unquoted.
+- **One statement (M4d):** math.js runs `x1 = 5; y1 = x1 * 2` as a block and shows `[10]`. The reader finds
+  a top-level `;` (outside brackets and strings) and makes it the line's error before math.js.
+- **Joined words (M4d):** `readSegment` in `lineForm.ts` reads `+`-joined words, `FormatRule.word` becomes
+  a list, and a writer for rules (`{ words, condition }` rows in order) sits next to `writeFormat`. A rule
+  the panel didn't change keeps its exact `text`.
+- **A comment's format (M4d):** the comment split stays first. A line whose code is only a clause, with
+  text after the `#`, is read as a formatted comment line; ADR 0005 is amended.
 
 **Scene writes**
 
@@ -1685,10 +2341,25 @@ Engineer's design gate. Tested on Excalidraw 0.18.1, math.js 15.2 and Chromium.
 
 **Gestures**
 
-- **Overlay stays `pointer-events: none`,** except the open line editor, its format bar, the unit field and
-  the plot popover. The bar's buttons never take focus (`mousedown` is prevented, `tabIndex` -1): a blur
-  would leave the line. The bar is absolutely placed, so it never counts toward the element's size. The
-  unit slot and ⚙ let pointer-down through and open on `click`.
+- **Overlay stays `pointer-events: none`,** except the open line editor, the unit field and the plot
+  popover (until M4d, also the format bar, whose `.math-format-bar` CSS and exception go). The unit slot and
+  ⚙ let pointer-down through and open on `click`.
+- **Panel controls that act on the open line (M4d)** never take focus: `mousedown` prevented,
+  `tabIndex={-1}`, as the bar's buttons were; a blur would leave the line. This covers the Format tab, the
+  Rules list, the Symbols and Constants buttons, Done, ↑ ↓, Edit and the quick keys. Option B of
+  [`panel-acts-on-open-line.md`](research/panel-acts-on-open-line.md):
+  - `listenToCanvas` skips presses from inside `.sheet-sidebar`. Today it hears them in capture on
+    `root`, which holds the panel, and leaves the line before the button sees its press.
+  - One panel-wide `mousedown` prevention sits on the view's document, in the **bubble** phase. In
+    capture, or on the sidebar itself, Radix's tab triggers stopped switching.
+  - `MathOverlay` reports the open target: `onEdit(target)`, with `target` null or
+    `{ anchorId, lineIndex | 'title', text }`, on each keystroke. `LineEditControl` gains
+    `setFormat(format)`, `setTitleFormat(format)`, `moveTo('title' | 'first')` and `insert(text)`; the
+    insert reaches the live `LineField` through a ref and uses `execCommand('insertText')`, so the
+    field's text undo keeps it.
+  - A focused `<select>` isn't a text input to Excalidraw's shortcuts, so Delete there deleted the
+    selected element and R switched to Rectangle. Every panel control stops its keys reaching
+    Excalidraw. The `type="text"` rule for fields inside Excalidraw's container gains a `<select>` clause.
   - As built (#7 and #58 follow-up): an overlay hover is found from geometry on the canvas's `pointermove`
     (`slotAt`, `tipAt`), never from the overlay's own events; a `title` attribute there never shows. The
     root's `pointerleave` (not in capture) hides a problem's tip.
@@ -1729,6 +2400,9 @@ Engineer's design gate. Tested on Excalidraw 0.18.1, math.js 15.2 and Chromium.
     and the deselect in one `IMMEDIATELY` write, after the same pending-change record a source write makes.
 - **Anything in `src/canvas/` only:** runtime imports of Excalidraw, `exportToSvg`, and the `.excalidraw`
   focus query.
+- **In the plugin (M4d)** the keys and pointer listeners registered on `document` and `window` today
+  (`canvasEvents.ts`, `FileChrome`, `useFileRoutes`) are bound to the view's own container and document
+  instead, and `useFileRoutes` isn't installed. The core-key pass-through list is a tested constant.
 
 Evidence: [`excalidraw-gestures.md`](research/excalidraw-gestures.md).
 
@@ -1748,6 +2422,11 @@ Evidence: [`excalidraw-gestures.md`](research/excalidraw-gestures.md).
 | Order of the panel's children in `.panelColumn` | The reduced panel hides what comes before Opacity | #46, `mathSelection.excalidraw.test.tsx` |
 | `.HintViewer` holds the hint | The hint's replacement shows | #46, `mathSelection.excalidraw.test.tsx` |
 | A `NEVER` restore from `onChange` lands before the change is recorded | Paste styles on math adds no undo step (control: without the restore, it adds one) | #46, `anchorStyle.excalidraw.test.tsx` |
+| Radix's tab trigger switches on its own `mousedown` | With the panel-wide prevention on `document` in bubble, a tab press switches tabs and the line stays open | M4d |
+| `data-prevent-outside-click` keeps a floating sidebar open | A press in the line field leaves the floating panel open (control: without it, it closes) | M4d |
+| A focused `<select>` gets Excalidraw's shortcuts | Delete on a focused Settings `<select>` leaves the selected element (control: unpatched, it deletes it) | M4d |
+| Two taps become a `dblclick` | A double tap (Playwright `hasTouch`) on a selected element's line opens it | M4d |
+| Hidden items in the plugin | Web Embed, Mermaid, Browse libraries and Copy as SVG aren't in their menus, and Ctrl+/ and Ctrl+Shift+P open no palette | M4d |
 
 **File:** serialize with `serializeAsJSON(…, "local")`, then add the block. Excalidraw's own Ctrl+S and Ctrl+O
 must be taken over, because its save drops the block. `UIOptions.canvasActions` turns off `loadScene`,
@@ -1789,7 +2468,20 @@ Evidence: [Chromium PDF](https://github.com/matheus-sancha/excalimathpad/issues/
 
 Evidence: [`offline-pwa.md`](research/offline-pwa.md).
 
+**Plugin** (M4d)
+
+- Mount `<App>` in the view's `contentEl`. The view's `getViewData()` is the existing serialiser, and
+  `setViewData(data, clear)` today's open. A write follows `saveKey`, not every `onChange`.
+- `fileManager.getNewFileParent` gives the folder for a new sheet; `onRename` keeps the tab.
+- Excalidraw's run-time font URLs are strings in its code, not imports: the build rewrites them, and the
+  audit fails on any `./fonts/` left.
+- `minAppVersion` 1.7.2 covers `DeferredView` (1.7.2) and `View.scope` (1.5.7).
+
+Evidence: [`obsidian-plugin.md`](research/obsidian-plugin.md).
+
 **Other research notes:** [`excalidraw-undo-customdata.md`](research/excalidraw-undo-customdata.md),
+[`panel-acts-on-open-line.md`](research/panel-acts-on-open-line.md),
+[`mathcad-programming.md`](research/mathcad-programming.md),
 [`mathcad-units.md`](research/mathcad-units.md),
 [`mathjs-katex-typesetting.md`](research/mathjs-katex-typesetting.md),
 [`solver-and-plot-libraries.md`](research/solver-and-plot-libraries.md).
@@ -1814,7 +2506,7 @@ Decided in: [acceptance](https://github.com/matheus-sancha/excalimathpad/issues/
 
 ## 16. Milestones and finish line
 
-v1 is built in eight milestones, each usable on a real sheet, with a saved typeset sheet first. The existing
+v1 is built in nine milestones, each usable on a real sheet, with a saved typeset sheet first. The existing
 spike is M0, done.
 
 | Milestone | What it lets Matheus do | Sections |
@@ -1825,6 +2517,7 @@ spike is M0, done.
 | **M4 Ranges & plots** | Run lines over a range, draw tables and plots | [10](#10-ranges-tables-plots) |
 | **M4b Hosted build** | Open the app at a public address on a second machine | [12](#hosted-build) |
 | **M4c Improvements** | Find every root in a range, colour text and results, format by rule, set an element's width, format a title | [3](#3-sheet-lines-every-form), [4](#4-math-element-look-and-editing), [9](#9-solve), [10](#10-ranges-tables-plots) |
+| **M4d Plugin & panel** | Open and edit sheets in Obsidian on the work laptop, phone and tablet; format from the panel, with rules; insert symbols; write checks that say "Approved"; format comment lines; read the Math guide | [1](#1-what-v1-is-and-what-it-isnt), [3](#3-sheet-lines-every-form), [4](#4-math-element-look-and-editing), [5](#5-results-units-and-numbers), [7](#a-sheet-in-a-vault), [8](#8-app-chrome), [12a](#12a-obsidian-plugin), [13](#13-messages) |
 | **M5 Print** | Print the sheet to clean PDF pages | [11](#11-print) |
 | **M6 Offline PWA** | Install the app, work offline, open a `.excalimathpad` file from Windows | [12](#12-offline-pwa) |
 
@@ -1876,7 +2569,8 @@ writes clauses the plot already reads.
 
 1. Deploy on merge to Cloudflare Pages (#83)
 2. Build stamp in the ☰ menu (#84)
-3. Work-laptop check (#85)
+3. Work-laptop check (#85): closed on 2026-11-14 as superseded. The hosted app doesn't open on the
+   work laptop (#115), and M4d's BRAT beta there is the check.
 
 The deploy comes first, since the other two need an address. The check is Matheus's, by hand, and comes
 last so the stamp can tell him which build each machine runs. It is done before M5 so a blocked laptop is
@@ -1902,7 +2596,44 @@ whose alignment needs a width to align in.
 The batch's other items held no decision and went straight to the Engineer, outside this milestone: #98
 and #99, both built, and #102.
 
-**M5's issue order** (M4's five are built, #74 to #78; M5 follows M4c):
+**M4d's issue order** (added on 2026-11-14 from Matheus's second batch, on the map
+[Spec for the second improvements batch and the Obsidian plugin, before M5](https://github.com/matheus-sancha/excalimathpad/issues/114); M4c's eight are built, #104 to #111; built before M5):
+
+1. The plugin bundle: one source, two builds, audited (M4D-1)
+2. A sheet in a vault: autosave, New sheet, outside changes (M4D-2)
+3. Inside an Obsidian tab: chrome, keys, theme, confinement (M4D-3)
+4. Releases: one version, the Release button, the stamp (M4D-4)
+5. Warnings show only while editing (M4D-5)
+6. `if()` and text: the engine, with the pump sheet's check line in CI (M4D-6)
+7. Conditionals typeset as one brace; text and `true` / `false` upright (M4D-7)
+8. Comment-line formats (M4D-8)
+9. Panel footing: presses keep the line, six icon tabs, open then restore (M4D-9)
+10. The Format tab replaces the bars (M4D-10)
+11. The Rules list, and joined words (M4D-11)
+12. The Symbols tab (M4D-12)
+13. Touch: phone and tablet (M4D-13)
+14. The Math guide (M4D-14)
+15. The community listing (M4D-15)
+16. Clean the history, then submit, by hand (M4D-16)
+
+The plugin comes first ("Plugin first"): it carries the milestone's open risks (the bundle, the app
+inside an Obsidian view, the review), and once it lands its audits, the network-blocked run and the
+zero-warning lint guard every later pull request. The first issue therefore also renames UI text
+to sentence case, which the lint needs, so later panel text is born in it. The fourth gives Matheus
+a beta on the work laptop, the reason the plugin exists, before the panel work starts; the
+work-laptop check of M4b ([#85](https://github.com/matheus-sancha/excalimathpad/issues/85),
+closed) is that beta. The first release, `0.1.0`, therefore has no Format tab, so the listing's
+screenshot is taken for the version submitted.
+
+The engine follows: the warning rule is the smallest change, then `if()` and text, then their
+typesetting, and comment-line formats, all usable typed before any panel exists. The panel footing
+comes before every tab that acts on the open line, and the Format tab before the Rules list that sits
+in it and the Symbols tab that shares its footing. Touch comes after both the plugin and the panel,
+since its controls live in the Format tab and its bottom sheet in the plugin. The Math guide describes
+the finished app, so it is the last build issue, and the listing points to it. The history is rewritten
+last, once everything is merged, then the plugin is submitted.
+
+**M5's issue order** (M4's five are built, #74 to #78; M5 follows M4d):
 
 1. Page row and page breaks (#80)
 2. Print view and Print… (Ctrl+P) (#81)
@@ -1926,6 +2657,7 @@ lines through `evaluateSheet` and compares with the reference at 4 s.f. It grows
 | M4 | Adds lines 29-31, and the 4" and 5" columns | Step 2: edit `D` to 5" on screen |
 | M4b | none | None from the sheet: the work-laptop check (#85) |
 | M4c | Line 26 with its range, in both columns | none |
+| M4d | A pass/fail line (NPSH available against required gives `OK` or `NOT OK`), in both columns | Open the pump sheet in a vault on the work laptop; the device checklist ([12a](#releases)) |
 | M5 | none new | Steps 3-4: save and reopen, print to PDF |
 | M6 | none | None from the sheet: finish-line condition 2 checks it |
 
@@ -1959,9 +2691,15 @@ lines through `evaluateSheet` and compares with the reference at 4 s.f. It grows
 - M4c's range solve: its cost on the pump sheet (about 10 ms for `Q_op`) is projected from measured
   per-evaluation costs, not measured with a search in the engine. Every solved value saved with a guess
   becomes an error until its line is rewritten.
+- M4d's plugin: the app ran from one 3.5 MB file offline in a probe (#116), not yet inside a real
+  Obsidian view with its listeners confined. Two taps becoming a `dblclick`, and Excalidraw's phone
+  toolbar reaching Add math, are unverified on a device. Obsidian's review, including "build matches
+  what's committed", is unverified until the preview scan.
+- M4d's text `==`: the `equal` override was probed in a fresh math.js, not in the hardened instance.
 
 Decided in: [milestones](https://github.com/matheus-sancha/excalimathpad/issues/37),
-[M4c](https://github.com/matheus-sancha/excalimathpad/issues/97).
+[M4c](https://github.com/matheus-sancha/excalimathpad/issues/97),
+[M4d](https://github.com/matheus-sancha/excalimathpad/issues/125).
 
 ## 17. Verify first
 
@@ -2135,6 +2873,23 @@ Changes line if it changes behaviour.
   showed the same, and a table's rows over a rule's limit took its band. Not checked: the six colours
   under the dark theme's filter.
 
+**M4d**
+
+- The app inside a real Obsidian `TextFileView`, with every listener and portal bound to the view: Excalidraw's
+  own keys, its dialogs and its sidebar in a pop-out window.
+- The bundle under 5,000,000 bytes after the trims, and the network-blocked run making no request with a plot,
+  an image and CJK text.
+- `eslint-plugin-obsidianmd` at zero warnings over `src/`, and what the sentence-case rename touches.
+- The `equal` / `unequal` text signatures inside the hardened math.js instance, and `if()` with `rawArgs` under
+  the custom `toTex`.
+- With presses from `.sheet-sidebar` skipped in `listenToCanvas` and the panel-wide prevention on `document` in
+  bubble: every Format, Rules, Symbols and Constants press keeps the line open with its caret, and Radix's tabs
+  still switch. Firefox and Safari, a classic scrollbar press and pen input were not probed (#117).
+- `data-prevent-outside-click` keeping the floating panel open, since it is undocumented.
+- Two taps becoming a `dblclick` on iOS and Android, Excalidraw's phone toolbar reaching Add math, and the
+  bottom sheet staying above the on-screen keyboard (`visualViewport`).
+- Whether Obsidian's review passes without a committed `main.js`, by the preview scan.
+
 **M5**
 
 - Excalidraw text in Nunito on the pump sheet's heading.
@@ -2188,6 +2943,24 @@ Changes line if it changes behaviour.
 | [How is a title's format stored and set?](https://github.com/matheus-sancha/excalimathpad/issues/95) | 2, 4, 6, 7 |
 | [Can the user set a math element's width, with comments wrapping to it?](https://github.com/matheus-sancha/excalimathpad/issues/100) | 2, 4, 6, 7, 14, 17 |
 | [What does milestone M4c hold in the spec, and in what issue order?](https://github.com/matheus-sancha/excalimathpad/issues/97) | 16, 17, ADR amendments |
+| [What does the work laptop block, and can it run an Obsidian community plugin?](https://github.com/matheus-sancha/excalimathpad/issues/115) | 1, 12, 12a |
+| [What does an Obsidian community plugin need to open .excalimathpad files in its own view?](https://github.com/matheus-sancha/excalimathpad/issues/116) | 7, 12a, 14, 17 |
+| [Can a control in the Sheet panel act on the open line without the line edit leaving?](https://github.com/matheus-sancha/excalimathpad/issues/117) | 8, 14, 17 |
+| [When does a warning's ⚠ show, and what counts as editing a math element?](https://github.com/matheus-sancha/excalimathpad/issues/118) | 2, 4, 8 |
+| [How does a comment line carry bold, underline, size and colour?](https://github.com/matheus-sancha/excalimathpad/issues/119) | 2, 3, 4, ADR 0005 |
+| [What does the cheat sheet cover, and where does Help open it?](https://github.com/matheus-sancha/excalimathpad/issues/120) | 1, 2, 8 |
+| [How does the Format tab replace the line's and the title's floating bars?](https://github.com/matheus-sancha/excalimathpad/issues/121) | 2, 4, 6, 8, 14 |
+| [What does the Symbols tab hold, and what does each symbol insert?](https://github.com/matheus-sancha/excalimathpad/issues/122) | 1, 2, 4, 6, 8 |
+| [How does the Format tab list and edit a line's conditional rules?](https://github.com/matheus-sancha/excalimathpad/issues/123) | 1, 2, 3, 4, 14, ADR 0005 |
+| [How do save, open, the clean mark and recovery work for a sheet in a vault?](https://github.com/matheus-sancha/excalimathpad/issues/124) | 1, 2, 7, 13, ADR 0004 |
+| [What must the plugin do so that all of a user's data stays protected?](https://github.com/matheus-sancha/excalimathpad/issues/126) | 1, 2, 12a |
+| [How does a sheet work on a phone and a tablet in Obsidian?](https://github.com/matheus-sancha/excalimathpad/issues/127) | 1, 4, 8, 12a, 13, 17 |
+| [How does one source build the web app and the plugin, and how is a version released?](https://github.com/matheus-sancha/excalimathpad/issues/128) | 12, 12a, 14, ADR 0006 |
+| [Which of the app's chrome and keys remain inside an Obsidian tab?](https://github.com/matheus-sancha/excalimathpad/issues/129) | 2, 8, 11, 14 |
+| [What does the community plugin listing need: id, name, description and review?](https://github.com/matheus-sancha/excalimathpad/issues/130) | 1, 8, 12a |
+| [How do Mathcad and its peers write programs in a sheet, and which of it can math.js already run?](https://github.com/matheus-sancha/excalimathpad/issues/131) | 14, 17 |
+| [What programming forms does a sheet gain, and how does a text result such as "Approved" show?](https://github.com/matheus-sancha/excalimathpad/issues/132) | 1, 2, 3, 4, 5, 10, 13, 14, acceptance file |
+| [What does milestone M4d hold in the spec, and in what issue order?](https://github.com/matheus-sancha/excalimathpad/issues/125) | 16, 17, 18, ADR amendments |
 
 ## Changes since agreed
 
@@ -2481,3 +3254,87 @@ Changes line if it changes behaviour.
   has no bar". With no format a title looks as it did. Not asked: stored as `customData.titleFormat`, holding
   only what differs; each press is one undo step; Ctrl+B, Ctrl+I and Ctrl+U; the title's width at its size
   counts toward the floor; emptying the title removes its format.
+- 2026-11-14, [section 16](#16-milestones-and-finish-line) (agreed by Matheus on the map
+  [Spec for the second improvements batch and the Obsidian plugin, before M5](https://github.com/matheus-sancha/excalimathpad/issues/114),
+  from his second batch): a new milestone, M4d Plugin & panel, built before M5, in sixteen issues, the plugin
+  first ("Plugin first"). M4b's work-laptop check (#85) is closed as superseded ("Close as superseded"); the
+  history rewrite is its own last by-hand issue ("Own [Matheus] issue, last"); the Settings `<select>` Delete
+  defect is fixed in the panel footing issue ("In the panel footing issue"). Each entry below is one of the
+  map's decisions; the ticket it names holds his chosen options, word for word. Items after "Not asked:" are
+  choices made while writing this spec, for Matheus to confirm on the PR. Not asked: the listing's screenshot
+  is taken for the version submitted, not for `0.1.0`, because the plugin ships before the Format tab.
+- 2026-11-14, [sections 1](#1-what-v1-is-and-what-it-isnt), [12](#hosted-build) and
+  [12a](#12a-obsidian-plugin) (#115, #116, #126, #128, #130, agreed by Matheus): v1 is "for anyone, built
+  around Matheus's own engineering work; free and best effort", and gains a second home, an Obsidian
+  community plugin built from the same source, for desktop, phone and tablet. It makes no network request,
+  stores only in the vault, reads only the open sheet and a picked image, and is audited for both on every
+  pull request. One semver for both homes, first `0.1.0`, released from an Actions button as a draft. The
+  hosted app's work-laptop fallbacks are dropped. This replaces section 12's "no versions, tags or release
+  notes" and "an Obsidian plugin, planned after v1". Not asked: a failed vault write's notice wording.
+- 2026-11-14, [sections 2](#invariants), [7](#a-sheet-in-a-vault) and [13](#13-messages) (#124, agreed by
+  Matheus): a vault sheet autosaves the Obsidian way; Save, Open, `●`, the leave question, the recovery copy
+  and the untitled sheet are dropped there; New sheet by command, ribbon and folder menu; an outside change
+  reloads an idle tab and writes a conflict copy for a busy one. The web app's saving is unchanged. ADR 0004
+  gains a note. Not asked: the conflict notice's wording; a newer or unreadable file is refused in the view
+  as on the web.
+- 2026-11-14, [sections 8](#inside-an-obsidian-tab) and [11](#11-print) (#129, agreed by Matheus): inside an
+  Obsidian tab, ☰ is the web's minus the file items; the theme follows Obsidian with a per-tab override;
+  Obsidian's core keys pass through; the panel stays in the tab and docks by the tab's width; Web Embed,
+  Mermaid, Browse libraries, Copy as SVG and the command palette are hidden; four commands, no settings tab;
+  everything bound to the view; M5's Print is a command there. Not asked: Print… also stays a ☰ item in the
+  plugin.
+- 2026-11-14, [sections 1](#1-what-v1-is-and-what-it-isnt), [4](#touch), [8](#on-a-phone) and
+  [12a](#releases) (#127, #130, agreed by Matheus): full editing on phone and tablet: a double tap opens a
+  line; Done, ↑ ↓ and Edit on the Format tab, on every device; a tap shows a tip; a touch selection reveals
+  unit slots and ⚙; quick keys; a bottom sheet on a phone. `isDesktopOnly: false` reaches strangers only after
+  CI touch tests and the four-device checklist; betas carry it for Matheus. Below iOS 16.4 the view refuses
+  the sheet. This replaces "v1 makes no promises on a touch device" for the plugin. Not asked: the bottom
+  sheet about half the view with no line open; finger buttons at least 40 px; the quick keys' order.
+- 2026-11-14, [sections 2](#invariants), [4](#problems) and [8](#8-app-chrome) (#118, agreed by Matheus): a
+  warning's `⚠` shows only while a line or the title of its element is open, or on its line while a jump
+  flashes it; the badge counts errors only, and the panel opens on Problems at launch only for an error. The
+  red `●` is unchanged. Fixed behaviour, no setting.
+- 2026-11-14, [sections 2](#terms), [3](#3-sheet-lines-every-form) and [4](#typeset-grid) (#119, agreed by
+  Matheus): a comment line takes a format, as a clause before its `#`: bold, `@upright`, underline, `@S` /
+  `@L` / `@XL` (13, 20, 26 px; M stays 15 px), the six text colours and the five highlights; no alignment, no
+  rules; a note is unchanged; size or `@upright` on a math line is its error; the 320 px request scales with
+  size. This replaces "Comment lines … take no format" and a comment line among the "never recoloured". ADR
+  0005 is amended. Not asked: the order the Format tab writes a comment's words.
+- 2026-11-14, [sections 2](#terms), [4](#format-tab), [6](#6-undo), [8](#sheet-panel) and
+  [14](#14-engineering-constraints) (#117, #121, agreed by Matheus): the Format tab, first of six icon tabs
+  (Format, Symbols, Variables, Problems, Constants, Settings), replaces the format bar and the title's bar: a
+  live sample, labelled rows of no-focus buttons, a hint when nothing is open, the title link; an edit opens
+  the panel on Format and its end restores it; Ctrl+I on comments; undo unchanged. Panel presses skip
+  `listenToCanvas`, with a panel-wide prevention on `document` in bubble. This replaces section 4's format
+  bar and title's bar, and #95's "set only from the title's bar". Not asked: the hint wordings as written in
+  section 13.
+- 2026-11-14, [sections 3](#3-sheet-lines-every-form) and [4](#rules-list) (#123, agreed by Matheus): the
+  Format tab's Rules list adds, removes, reorders and formats a line's rules while the condition is typed in
+  the line; each row shows its live state or its warning; several words share one `if` as a joined word,
+  `@text-red+red+bold if v > 3 m/s`, also valid on plain formats. This replaces "Rules are typed. The format
+  bar never writes or changes one" and reverses the last map's out-of-scope "rule builder". #94's
+  "two formats under one condition are written twice" stays valid input. Not asked: the joined-word error
+  wording.
+- 2026-11-14, [sections 1](#1-what-v1-is-and-what-it-isnt), [4](#symbols-tab) and [8](#sheet-panel) (#122,
+  agreed by Matheus): the Symbols tab, five groups (Greek, Operators, Functions, Logic, Sheet forms), inserts
+  the text the engine already reads at the caret, by the joining, wrapping and spacing rules; one undo step
+  each; with no line open, one selected element's last line opens. Constants rows insert their name. One
+  catalogue feeds the tab and the typing suggestions. No engine change.
+- 2026-11-14, [sections 1](#1-what-v1-is-and-what-it-isnt), [2](#invariants), [3](#3-sheet-lines-every-form),
+  [4](#conditionals-and-text-typeset), [5](#shown-result), [10](#ranges-and-lists), [13](#13-messages) and
+  [14](#14-engineering-constraints) (#131, #132, agreed by Matheus): readable one-liners only: `? :` and a lazy
+  `if(cond, a, b)`, drawn as one flattened brace; `==` / `!=` compare text exactly, and text against a number
+  is an error; a text result shows plain; `true` / `false` upright; a top-level `;` is the line's error; a list
+  of texts counts each text. The pump sheet gains a pass/fail line. Mathcad's multi-line program and directive
+  lines are out of scope. Not asked: the message wordings, apart from "split the line at the ;" and
+  "can't compare text with a number"; `in <unit>` on a text is an error; a text has no unit slot.
+- 2026-11-14, [sections 2](#terms) and [8](#math-guide) (#120, agreed by Matheus, who typed "Add Cheat Sheet
+  but any other name?"): the **Math guide**, `docs/math-guide.md`, for a newcomer engineer, 17 sections, Write |
+  Shows | Note tables, self-contained, opened from ☰ → Math guide above Excalidraw's Help in a dialog, offline,
+  with every example run in CI. The README's Line forms and Keyboard Shortcuts move into it. Not asked: the
+  dialog closes on Esc, ✕ or a click outside and is up to about 760 px wide; the skip marker and build tool
+  are the Engineer's.
+- 2026-11-14, [sections 1](#1-what-v1-is-and-what-it-isnt), [8](#8-app-chrome) and [12a](#listing) (#130,
+  agreed by Matheus): the listing's id, name and description; a users-first README that is also the listing
+  page; Bug and Idea forms and `SECURITY.md`; the BRAT beta and the gate to submit; UI text in sentence case in
+  both homes, so "Math Settings" becomes "Math settings". The rename lands with the lint, in M4d's first issue.

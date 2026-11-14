@@ -13,6 +13,8 @@
   2026-11-13 (M4c; #92, #94): rules in the format clause, a solved value's
   `for` range, and the index. The index (#104), the `for` range (#105) and the rules
   (#109) are built.
+  2026-11-14 (M4d, not built; #119, #123, #132): a comment line's format clause, joined
+  words, `if()` and the one-statement check.
 - **Date**: 2026-11-03
 
 ## Context
@@ -50,6 +52,21 @@ Amended on 2026-11-13 for M4c, decided by Matheus (#92, #94):
   from 1. Lists are the app's own (see the engineering rules), so math.js's matrix index never
   sees them.
 
+Amended on 2026-11-14 for M4d, decided by Matheus (#119, #123, #132). Not built:
+
+- **Step 1 stays first, and a comment line can carry a format.** A line whose code is only a
+  format clause, with comment text after the `#`, is a formatted comment line:
+  `@bold @L # Pumps`. Nothing after a `#` is ever read, so `# call me @home` stays plain. The
+  comment-only words (`@upright`, `@S`, `@L`, `@XL`) are the line's error on a math line, and
+  a rule on a comment line is its error.
+- **Step 2 reads joined words:** `@text-red+red+bold` is one word, and one rule when an `if`
+  follows. Rules typed as separate words stay valid and are never rewritten.
+- **6. One statement:** a `;` at the top level of what is left is the line's error, so a line
+  stays one statement. A `;` inside brackets is math.js's matrix row.
+- **`if(cond, a, b)`** is an app function given at setup, lazy (`rawArgs`), so it is not a line
+  form and needs no step; `if` becomes a reserved name. Text `==` / `!=` are `equal` /
+  `unequal` signatures added at setup, before `import` is disabled.
+
 What the app writes into a line (a display unit, plot clauses, a format) is text in that same line, in
 front of any `#`. So split, join, copy, paste, undo and save carry it, and one line stays one
 string.
@@ -60,7 +77,7 @@ Engineering rules (Engineer's):
   residual and a list line's expression. Sheet lines can't reach it.
 - Iteration over a list is the app's: one run of the expression per index, with no math.js
   matrix arithmetic, so `Q_s^2` means each point squared.
-- `table`, `plot` and `solve` are reserved names.
+- `table`, `plot` and `solve` are reserved names, and from M4d `if`.
 
 ## Alternatives considered
 

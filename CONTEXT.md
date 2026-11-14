@@ -3,7 +3,10 @@
 Excalimathpad is a single-user, browser-only "calc sheet": the Excalidraw
 whiteboard with a layer of live, unit-aware math on top (Mathcad-style). It is
 a Vite + React + TypeScript app that builds to static files; there is no
-server. v1 target: one sheet, for Matheus's own use.
+server. v1 target: for anyone, built around Matheus's own engineering work;
+free and best effort. M4d (specified, not built) adds an Obsidian community
+plugin built from this source (`docs/spec-v1.md` section 12a, ADR 0006); its
+terms move in here as each M4d issue makes them true.
 
 ## Entry points
 
