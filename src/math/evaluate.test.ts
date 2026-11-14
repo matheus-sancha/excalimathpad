@@ -1717,10 +1717,10 @@ describe('conditionals and text (docs/spec-v1.md section 3, Conditionals and tex
       expect(line.warnings).toEqual([])
     })
 
-    it('typesets with no error while the brace waits for #141', () => {
+    it('typesets as one brace (#141; typeset.test.ts has the cases)', () => {
       const [, , line] = lines(`${SIGMA}\ncheck = if(sigma <= sigma_allow, "Approved", "Rejected")`)
       expect(line.typeset.kind).toBe('math')
-      expect(line.typeset.kind === 'math' && line.typeset.expression).toContain('\\mathrm{if}')
+      expect(line.typeset.kind === 'math' && line.typeset.expression).toMatch(/^\\begin\{cases\}.*\\end\{cases\}$/)
     })
   })
 

@@ -203,6 +203,85 @@ describe('typesetResult (section 4: from the result’s plain text)', () => {
   })
 })
 
+describe('conditionals and text (docs/spec-v1.md section 4, Conditionals and text, typeset; #141)', () => {
+  const SIGMA = 'sigma = 120 MPa\nok = true\nnok = false'
+  /** The expression cell of the sheet's last line, after the inputs above. */
+  const expression = (line: string) => math(typeset(`${SIGMA}\n${line}`).at(-1)!).expression
+  const row = (value: string, condition: string) => `{${value}}, &\\quad{\\text{if }\\;  ${condition}}`
+  const otherwise = (value: string) => `{${value}}, &\\quad{\\text{otherwise}}`
+  const cases = (...rows: string[]) => `\\begin{cases} ${rows.join('\\\\')}\\end{cases}`
+  const LOW = '\\sigma< 100\\,\\mathrm{MPa}'
+  const MID = '\\sigma< 140\\,\\mathrm{MPa}'
+
+  it('draws the issue’s three-branch nest as one brace of three rows, and KaTeX renders it', () => {
+    const tex = expression('band = if(sigma < 100 MPa, "low", sigma < 140 MPa ? "mid" : "high")')
+    expect(tex).toBe(cases(row(' \\text{“low”}', LOW), row(' \\text{“mid”}', MID), otherwise(' \\text{“high”}')))
+    expect(tex.match(/\\begin\{cases\}/g)).toHaveLength(1)
+    expect(() => render(tex)).not.toThrow()
+  })
+
+  it('draws ? : and if() the same', () => {
+    expect(expression('x = ok ? 1 : 2')).toBe(expression('x = if(ok, 1, 2)'))
+    expect(expression('x = ok ? 1 : 2')).toBe(cases(row('1', '\\mathit{ok}'), otherwise('2')))
+  })
+
+  it.each([
+    ['? : in ? :, bracketed', 'c = sigma < 100 MPa ? 1 : (sigma < 140 MPa ? 2 : 3)'],
+    ['if() in if()', 'c = if(sigma < 100 MPa, 1, if(sigma < 140 MPa, 2, 3))'],
+    ['? : in if()', 'c = if(sigma < 100 MPa, 1, sigma < 140 MPa ? 2 : 3)'],
+    ['if() in ? :', 'c = sigma < 100 MPa ? 1 : if(sigma < 140 MPa, 2, 3)'],
+  ])('flattens a conditional in the last branch into the same brace: %s', (_, line) => {
+    expect(expression(line)).toBe(cases(row('1', LOW), row('2', MID), otherwise('3')))
+  })
+
+  it('keeps a conditional in an earlier branch as its own brace, inside its row', () => {
+    const tex = expression('e = if(ok, if(nok, 1, 2), 3)')
+    expect(tex).toBe(cases(row(` ${cases(row('1', '\\mathit{nok}'), otherwise('2'))}`, '\\mathit{ok}'), otherwise('3')))
+    expect(() => render(tex)).not.toThrow()
+  })
+
+  it('brackets a brace that is an operand, so the operator doesn’t run into its last row', () => {
+    const brace = cases(row('1', '\\mathit{ok}'), otherwise('2'))
+    expect(expression('d = if(ok, 1, 2) + 3')).toBe(`\\left(${brace}\\right)+3`)
+    expect(expression('d = (ok ? 1 : 2) + 3')).toBe(`\\left(${brace}\\right)+3`)
+    expect(expression('d = 2 * if(ok, 1, 2)')).toBe(`2\\cdot \\left(${brace}\\right)`)
+    expect(expression('d = -if(ok, 1, 2)')).toBe(`- \\left(${brace}\\right)`)
+    // A fraction's bar and a root's sign already set it apart.
+    expect(expression('d = if(ok, 1, 2) / 2')).toBe(`\\frac{ ${brace}}{2}`)
+    expect(expression('d = sqrt(if(ok, 1, 2))')).toBe(`\\sqrt{ ${brace}}`)
+  })
+
+  it('leaves if() with the wrong number of arguments, the line’s error, as a call', () => {
+    expect(expression('x = if(ok, 1)')).toBe('\\mathrm{if}\\left( \\mathit{ok},1\\right)')
+  })
+
+  it('sets a text literal upright, in quotes, not in math.js’s monospace', () => {
+    const tex = expression('check = "Approved"')
+    expect(tex).toBe('\\text{“Approved”}')
+    expect(tex).not.toContain('\\mathtt')
+    expect(expression('s = "a{b}#"')).toBe('\\text{“a\\{b\\}\\#”}')
+    expect(() => render(expression('s = "a{b}#"'))).not.toThrow()
+  })
+
+  it('sets true and false as upright words, not as letters', () => {
+    expect(expression('t = true')).toBe('\\mathrm{true}')
+    expect(expression('f = ok == false')).toBe('\\mathit{ok}= \\mathrm{false}')
+    expect(() => render('\\mathrm{true}')).not.toThrow()
+  })
+
+  it('shows a text result and true / false plain and upright, in the result and the Variables tab', () => {
+    const lines = evaluateSheet([
+      { id: 'b', source: `${SIGMA}\nband = if(sigma < 100 MPa, "low", sigma < 140 MPa ? "mid" : "high")\nsigma < 100 MPa` },
+    ]).get('b')!
+    const [band, test] = lines.slice(-2)
+    expect(band.result).toEqual({ kind: 'value', text: 'mid' })
+    expect(band.variables).toEqual([{ name: 'band', kind: 'value', text: 'mid' }])
+    expect(test.result).toEqual({ kind: 'value', text: 'false' })
+    expect(typesetResult('mid')).toBe('\\text{mid}')
+    expect(typesetResult('false')).toBe('\\text{false}')
+  })
+})
+
 describe('an index (docs/spec-v1.md section 4, Typesetting names; #104)', () => {
   it('shows in square brackets after the whole name, at the baseline, not as a subscript', () => {
     const [, line] = typeset('Q_s = 1 .. 3\nQ_5 = Q_s[2] + 1')

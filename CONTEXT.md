@@ -179,7 +179,12 @@ come, and their terms move in here as each M4d issue makes them true.
   (the summary takes the format only if all are true; the hover counts them);
   on a table, per row (`TableView.rowFormats`). `typeset.ts` is the
   `toTex` handler of spec section 4, Typesetting names; a name counts as the
-  sheet's from the line that assigns it down. `typesetResult` sets a result's
+  sheet's from the line that assigns it down. It also draws **Conditionals and
+  text, typeset** (#141): `? :` and a three-argument `if()` are one `cases`
+  brace (`casesTex`), a conditional in the last branch (bracketed or not)
+  adding rows to it, one in an earlier branch its own brace in its row, and
+  a brace that is an operator's operand (not a fraction's) in brackets; a
+  text constant is `\text{“…”}` and `true` / `false` are `\mathrm`. `typesetResult` sets a result's
   `math.format` text as number and unit. A plain
   input and any line whose value is a function are empty, and their value still
   reaches the lines below. All lines
@@ -232,7 +237,7 @@ come, and their terms move in here as each M4d issue makes them true.
   runs. `testCondition` takes only `true` or `false` (a matrix or a list is
   its own message), for `if()` and for `? :`, whose `_compile` on this
   instance's `ConditionalNode` class `strictConditionals` replaces, so the
-  node, its TeX and its text are math.js's own. `comparisonSignatures` merges
+  node and its text are math.js's own (its TeX is `typeset.ts`'s). `comparisonSignatures` merges
   signatures into `equal`, `unequal`, `larger`, `largerEq`, `smaller` and
   `smallerEq` (`math.import` merges typed functions): two texts compare
   exactly with `==` / `!=`; `<` on text, text against a number or a unit, and a

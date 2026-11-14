@@ -1,5 +1,6 @@
 import {
   isAssignmentNode,
+  isConditionalNode,
   isConstantNode,
   isFunctionAssignmentNode,
   isFunctionNode,
@@ -8,6 +9,7 @@ import {
   isSymbolNode,
   type MathNode,
 } from 'mathjs'
+import { IF_FN } from './conditionals.ts'
 import { indexParts } from './indexes.ts'
 import { leadingNumber, numberTex } from './numbers.ts'
 
@@ -157,7 +159,21 @@ function withoutConversion(node: MathNode): MathNode {
 }
 
 function toTex(node: MathNode, names: Names): string {
+  // Conditionals that are an operator's operand, which the brace draws in brackets.
+  const operands = new WeakSet<MathNode>()
   const handler = (child: MathNode, options: object): string | undefined => {
+    if (isConditional(child)) {
+      const brace = casesTex(child, options)
+      return operands.has(child) ? ` \\left(${brace}\\right)` : ` ${brace}`
+    }
+    // math.js's types narrow a ConstantNode to a number's; it holds text and true / false too.
+    const constant: unknown = isConstantNode(child) ? child.value : undefined
+    if (typeof constant === 'string') return ` ${textTex(`“${constant}”`)}`
+    if (typeof constant === 'boolean') return ` \\mathrm{${String(constant)}}`
+    if (isOperatorNode(child) && child.fn !== 'divide') {
+      // A fraction's bar already sets the brace apart; any other operator would run into its rows.
+      child.args.map(unwrapParentheses).filter(isConditional).forEach((arg) => operands.add(arg))
+    }
     if (isSymbolNode(child)) {
       const tex = symbolTex(child.name, names)
       // math.js glues operands onto operators: `\cdot` then `v` is `\cdotv`.
@@ -176,6 +192,41 @@ function toTex(node: MathNode, names: Names): string {
     return quantity === null ? undefined : ` ${quantity}`
   }
   return node.toTex({ parenthesis: 'auto', implicit: 'hide', handler }).trim()
+}
+
+/** A conditional's parts, from `cond ? a : b` or `if(cond, a, b)`; null for anything else. */
+function conditionalParts(node: MathNode): { condition: MathNode; then: MathNode; otherwise: MathNode } | null {
+  if (isConditionalNode(node)) return { condition: node.condition, then: node.trueExpr, otherwise: node.falseExpr }
+  if (isFunctionNode(node) && isSymbolNode(node.fn) && node.fn.name === IF_FN && node.args.length === 3) {
+    const [condition, then, otherwise] = node.args
+    return { condition, then, otherwise }
+  }
+  return null
+}
+
+const isConditional = (node: MathNode) => conditionalParts(node) !== null
+
+function unwrapParentheses(node: MathNode): MathNode {
+  return isParenthesisNode(node) ? unwrapParentheses(node.content) : node
+}
+
+/**
+ * A conditional as one brace (section 4, Conditionals and text, typeset): a
+ * row per branch, the value then "if" and its condition, the last row
+ * "otherwise". A conditional in the last branch, bracketed or not, adds rows
+ * to the same brace, so a nest never draws a brace inside a brace there.
+ */
+function casesTex(node: MathNode, options: object): string {
+  const rows: string[] = []
+  let parts = conditionalParts(node)
+  let last = node
+  while (parts !== null) {
+    rows.push(`{${parts.then.toTex(options)}}, &\\quad{\\text{if }\\; ${parts.condition.toTex(options)}}`)
+    last = parts.otherwise
+    parts = conditionalParts(unwrapParentheses(last))
+  }
+  rows.push(`{${last.toTex(options)}}, &\\quad{\\text{otherwise}}`)
+  return `\\begin{cases} ${rows.join('\\\\')}\\end{cases}`
 }
 
 function symbolTex(name: string, names: Names): string | undefined {
