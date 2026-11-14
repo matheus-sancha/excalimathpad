@@ -178,6 +178,8 @@ export function createDisplay(math: MathJsInstance, parse: (text: string) => Mat
   }
 
   function show(value: unknown, unit: ShownUnit | null, settings: DisplaySettings): string {
+    // Section 5, Shown result: a text shows plain, without math.js's quotes.
+    if (typeof value === 'string' && unit === null) return value
     if (unit === 'percent') {
       const hundredfold = math.multiply(value as never, 100) as unknown
       const shown = isUnit(hundredfold) ? inSystem(hundredfold, settings) : format(hundredfold, settings.digits)

@@ -11,7 +11,8 @@ import { evaluateSheet, type SheetLine } from './evaluate.ts'
  * shows, whatever prefix the sheet picks. It grows each milestone: M2 checks
  * lines 1-13, 16 and 17; M3 adds lines 14-28, the solves; M4 adds line 29, the
  * range table's rows as `Hs(Q_s)` and `Hp(Q_s)`, and the 5" column; then
- * line 30, the table itself, and line 31, the plot.
+ * line 30, the table itself, and line 31, the plot. M4d adds lines 32a-36, the
+ * NPSH check: a pass/fail line, `OK` or `NOT OK`, in both columns.
  */
 
 /** The sheet's lines by their number in the doc (`c`, `1`, ..., `24a`), in order. */
@@ -21,7 +22,10 @@ const SHEET = [...doc.matchAll(/^\| (c|\d+[a-z]?) \| `(.+?)` \|/gm)].map(([, id,
 }))
 
 /** Lines the CI test runs at this milestone, in reading order: every line up to the ranges (M4). */
-const M3_LINES = SHEET.map((line) => line.id).filter((id) => !['29', '30', '31'].includes(id))
+const M3_LINES = SHEET.map((line) => line.id).slice(0, SHEET.findIndex((line) => line.id === '29'))
+
+/** Every line but the table and the plot, which take a run of their own. */
+const VALUE_LINES = SHEET.map((line) => line.id).filter((id) => !['30', '31'].includes(id))
 
 /** The 4" column of the doc's Expected results, for the lines M3 runs. */
 const EXPECTED_4IN: Record<string, { value: number; unit: string }> = {
@@ -150,7 +154,7 @@ describe('the pump sheet (acceptance, M3: lines 1-28)', () => {
 })
 
 describe('the pump sheet (acceptance, M4: the range and the 5" column)', () => {
-  const ids = SHEET.map((line) => line.id).filter((id) => !['30', '31'].includes(id))
+  const ids = VALUE_LINES
   const extra = ['H_s = Hs(Q_s)', 'H_p = Hp(Q_s)']
 
   it('reads line 29 as a 30-point range', () => {
@@ -192,7 +196,7 @@ describe('the pump sheet (acceptance, M4: the range and the 5" column)', () => {
 
 /** `Hs` and `Hp` at each row's flow, one call per point, as the sheet shows them. */
 function pointValues(diameter: string): { hs: string[]; hp: string[] } {
-  const ids = SHEET.map((line) => line.id).filter((id) => !['30', '31'].includes(id))
+  const ids = VALUE_LINES
   const calls = (fn: string) => RANGE_TABLE.map((row) => `${fn}(${row.q} L/s)`)
   const lines = run(ids, { diameter, extra: [...calls('Hs'), ...calls('Hp')] })
   const text = (call: string) => {
@@ -257,6 +261,34 @@ describe('the pump sheet (acceptance, M4: line 31, the plot)', () => {
     for (const [id, line] of run(ids)) {
       expect(line.result.kind, `line ${id}`).not.toBe('error')
       expect(line.warnings, `line ${id}`).toEqual(id === '6' ? ['K shadows the unit K'] : [])
+    }
+  })
+})
+
+describe('the pump sheet (acceptance, M4d: the NPSH check, line 36)', () => {
+  it.each([
+    ['4"', '102.3 mm', { h_s: 0.8495, a: 4.262, r: 3.094 }, 'OK', 'green'],
+    ['5"', '128.2 mm', { h_s: 0.5393, a: 4.573, r: 5.56 }, 'NOT OK', 'red'],
+  ] as const)('gives the reference verdict at %s, in its colour', (_, diameter, expected, verdict, colour) => {
+    const lines = run(VALUE_LINES, { diameter })
+    const metres = (id: string) => {
+      const result = lines.get(id)?.result
+      if (result?.kind !== 'value') throw new Error(`line ${id} shows no value`)
+      return inUnit(result.text, 'm')
+    }
+    expect([metres('33'), metres('34'), metres('35')]).toEqual([expected.h_s, expected.a, expected.r])
+    const check = lines.get('36')!
+    // Section 5: a text shows plain, with no unit slot.
+    expect(check.result).toEqual({ kind: 'value', text: verdict })
+    expect(check.unitSlot).toBeNull()
+    expect(check.typeset.kind === 'math' && check.typeset.format.textColor).toBe(colour)
+    expect(check.warnings).toEqual([])
+  })
+
+  it('leaves the new inputs empty, as plain inputs', () => {
+    const lines = run(VALUE_LINES)
+    for (const id of ['32a', '32b', '32c', '32d']) {
+      expect(lines.get(id)?.result, `line ${id}`).toEqual({ kind: 'empty' })
     }
   })
 })

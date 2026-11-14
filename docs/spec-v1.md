@@ -380,6 +380,8 @@ v = Q / A @bold @text-red if v > 3 m/s @text-orange if v > 2 m/s # check
   true. `<` and `>` on text are not supported.
 - **`true` and `false`** are values like any other. Arithmetic on them is math.js's
   (`ok + 0` is 1).
+- A text typed as is (`status = "OK"`) is a plain input: its result cell stays empty, as
+  `D = 102.3 mm`'s does, and the Variables tab shows it.
 - So a check reads, and colours, as text:
 
   ```
@@ -1757,7 +1759,8 @@ length: `H_s = Hs(Q_s)` is 30 values, from 30 Colebrook solves.
 **A list result shows one row high,** as a summary: `30 values, 12.04 … 33.18 m` (count,
 first … last, unit). Hovering it shows the first and last few values with their index.
 From M4d a list of texts (a verdict per point) counts each distinct text instead, most
-frequent first: `3 OK, 1 NOT OK`. The hover and `table()` still show each point.
+frequent first, ties in the order first seen: `3 OK, 1 NOT OK`. Failed points come last,
+`2 OK, 1 NOT OK, 1 failed`. The hover and `table()` still show each point.
 
 **A failed point fails only itself:**
 
@@ -2994,7 +2997,16 @@ Changes line if it changes behaviour.
   held by the network-blocked run. A white box near Obsidian's left sidebar after Split right, never
   reproduced outside Obsidian, was gone in Matheus's retest with the guard; the rows matched the web.
 - The `equal` / `unequal` text signatures inside the hardened math.js instance, and `if()` with `rawArgs` under
-  the custom `toTex`.
+  the custom `toTex`. **Passed (#140), in the app's engine with `import` disabled after them:** the
+  signatures merge into math.js's own (`math.import` merges typed functions of one name), and
+  `"Approved" == "Approved"` is true, `"Approved" == "approved"` false, `"10" == 10` the app's error;
+  `2 == 2`, `1 m == 100 cm`, `true == true` and `[1, 2] == [1, 3]` (`[true, false]`) are unchanged
+  (`evaluate.test.ts`, "leaves every other comparison as math.js's own"). `if()` with `rawArgs` runs only the
+  branch taken, also per point on a list line and inside a function body, and typesets with the custom
+  `toTex` as `\mathrm{if}(…)`, with no error, until #141 draws the brace. **Found:** `? :` keeps math.js's
+  truthiness (`0`, `""` and `1 m` as conditions) unless its node changes; the engine replaces
+  `ConditionalNode`'s `_compile` on its own instance, which math.js's custom-node guide documents, and a test
+  of `0 ? 2 : 3` pins it.
 - With presses from `.sheet-sidebar` skipped in `listenToCanvas` and the panel-wide prevention on `document` in
   bubble: every Format, Rules, Symbols and Constants press keeps the line open with its caret, and Radix's tabs
   still switch. Firefox and Safari, a classic scrollbar press and pen input were not probed (#117).
@@ -3527,3 +3539,22 @@ Changes line if it changes behaviour.
     file loads after the view mounts). The panel now opens once the sheet has started and all its math has
     been evaluated: in a vault, once the file is loaded; on the web, once a recovery offer is answered.
   - Not asked: the Problems badge reads "1 error" or "2 errors" to a screen reader.
+- 2026-11-14, [sections 3](#3-sheet-lines-every-form), [10](#ranges-and-lists),
+  [13](#13-messages), [16](#16-milestones-and-finish-line) and [17](#17-verify-first) (#140, found
+  while building, for Matheus to confirm on the PR):
+  - **The pump sheet's pass/fail line** is an NPSH check at the operating point, lines 32a to 36 of
+    [`pump-sizing.md`](acceptance/pump-sizing.md): an open lower tank, water's vapour pressure at
+    20 °C, a 5 m suction lift, 10 m of the pipe and an entry and an elbow on the suction side, and a
+    datasheet NPSH required of 3.5 m at the rated flow, growing as the flow squared. It reads `OK` at
+    4" and `NOT OK` at 5", about 1 m from the limit either way, so CI runs both branches: the bigger
+    pipe moves the pump out on its curve, where it needs more NPSH. The line carries the green and red
+    rules of section 3's example. No other expected value changes.
+  - **A text list's failed points** come last in its summary, `1 failed` (section 10 said nothing).
+  - **A text typed as is is a plain input,** its result cell empty (section 3 said nothing).
+  - **A `;` line fails every name it assigns,** so `x1 = 5; y1 = x1 * 2` gives "has an error above"
+    for both below it; the check is read before the line forms, so a range or solve can't hide one.
+  - **The unit against a bare number** writes the unit's value as a result does, `can't compare
+    3 m / s with 0: give the 0 a unit`, in the sheet's system and Digits. A unit's ratio that cancels
+    (`(2 m) / (1 m) > 1`) is a number to math.js and still compares.
+  - **`<` with text and a number** is `can't compare text with a number`; `text can only be compared
+    with == or !=` is for two texts.

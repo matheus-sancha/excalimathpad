@@ -130,6 +130,7 @@ export function listSummary(
   showLike: (value: unknown, like: string) => string,
 ): string {
   const ok = list.points.filter((point) => point.ok)
+  if (ok.length > 0 && ok.every((point) => typeof point.value === 'string')) return textSummary(list, ok.length)
   const count = ok.length === list.length ? `${list.length} values` : `${ok.length} of ${list.length} values`
   if (ok.length === 0) return count
   const last = show(ok[ok.length - 1].value)
@@ -139,4 +140,20 @@ export function listSummary(
   const firstNumber = leadingNumber(first)
   const sameUnit = firstNumber !== null && firstNumber.rest.trim() === lastUnit
   return `${count}, ${sameUnit ? firstNumber.number : first} … ${last}`
+}
+
+/**
+ * A list of texts' summary (section 10, M4d): each distinct text counted,
+ * most frequent first, ties in the order first seen: `3 OK, 1 NOT OK`.
+ * Failed points come last, as `1 failed`.
+ */
+function textSummary(list: SheetList, ok: number): string {
+  const counts = new Map<string, number>()
+  for (const point of list.points) {
+    if (point.ok) counts.set(point.value as string, (counts.get(point.value as string) ?? 0) + 1)
+  }
+  // `sort` is stable, so equal counts keep the order first seen.
+  const parts = [...counts].sort((a, b) => b[1] - a[1]).map(([text, n]) => `${n} ${text}`)
+  const failed = list.length - ok
+  return [...parts, ...(failed > 0 ? [`${failed} failed`] : [])].join(', ')
 }

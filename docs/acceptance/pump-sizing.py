@@ -16,6 +16,12 @@ g_n = 9.80665        # m/s^2
 Q_d = 15e-3          # m^3/s (15 L/s)
 eta = 0.70
 H_0, H_r, Q_r = 25.0, 20.0, 20e-3    # pump: shutoff head, rated head at rated flow
+p_atm = 101.325e3    # Pa, the lower tank is open to the air
+p_v = 2.339e3        # Pa, vapour pressure of water at 20 C
+z_s = -5.0           # m, the pump sits 5 m above the lower tank's surface
+L_s = 10.0           # m of suction pipe, part of L
+K_s = 0.5 + 0.9      # suction entry and one elbow, part of K
+NPSH_r0 = 3.5        # m, NPSH required at the rated flow, growing as the flow squared
 
 
 def bisect(fn, a, b, tol=1e-15):
@@ -48,6 +54,9 @@ def sheet(D):
     H_d = Hs(Q_d)
     Q_op = bisect(lambda Q: Hp(Q) - Hs(Q), 1e-3, 30e-3)
     H_op = Hp(Q_op)
+    h_s = (colebrook(Re(Q_op), eps / D) * L_s / D + K_s) * v(Q_op) ** 2 / (2 * g_n)
+    NPSH_a = (p_atm - p_v) / (rho * g_n) + z_s - h_s
+    NPSH_r = NPSH_r0 * (Q_op / Q_r) ** 2
     lines = [
         ("K", K, 1, ""),
         ("A", A, 1e-4, "cm^2"),
@@ -63,17 +72,23 @@ def sheet(D):
         ("Q_op", Q_op, 1e-3, "L/s"),
         ("H_op", H_op, 1, "m"),
         ("P_op", rho * g_n * Q_op * H_op / eta, 1e3, "kW"),
+        ("h_s", h_s, 1, "m"),
+        ("NPSH_a", NPSH_a, 1, "m"),
+        ("NPSH_r", NPSH_r, 1, "m"),
     ]
+    verdict = "OK" if NPSH_a >= NPSH_r else "NOT OK"
+
     table = [(q, Hs(q / 1000), Hp(q / 1000)) for q in range(1, 31)]
-    return lines, table
+    return lines, table, verdict
 
 
 for D_mm in (102.3, 128.2):
-    lines, table = sheet(D_mm / 1000)
+    lines, table, verdict = sheet(D_mm / 1000)
     print(f"\n## D = {D_mm} mm\n")
     print("| Line | Expected |\n|---|---|")
     for name, val, scale, unit in lines:
         print(f"| `{name}` | {val / scale:.4g} {unit} |")
+    print(f"| `NPSH` | {verdict} |")
     print("\n| Qs [L/s] | Hs [m] | Hp [m] |\n|---|---|---|")
     for q, hs, hp in table:
         print(f"| {q} | {hs:.4g} | {hp:.4g} |")

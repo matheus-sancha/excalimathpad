@@ -8,13 +8,16 @@
   `src/math/plotLine.ts`; the index built (#104), read after the parse in
   `src/math/indexes.ts`; the solved value's `for` range built (#105), read in
   `src/math/solveLine.ts`; rules built (#109), read in `src/math/lineForm.ts` and run after
-  the line in `src/math/evaluate.ts`
+  the line in `src/math/evaluate.ts`; the one-statement check built (#140), read in
+  `src/math/lineForm.ts`; `if()` and text comparisons built (#140), given at setup in
+  `src/math/conditionals.ts`
 - **Amended**: 2026-11-11 (#63): the format clause, read after the comment.
   2026-11-13 (M4c; #92, #94): rules in the format clause, a solved value's
   `for` range, and the index. The index (#104), the `for` range (#105) and the rules
   (#109) are built.
-  2026-11-14 (M4d, not built; #119, #123, #132): a comment line's format clause, joined
-  words, `if()` and the one-statement check.
+  2026-11-14 (M4d; #119, #123, #132): a comment line's format clause, joined
+  words, `if()` and the one-statement check. `if()` and the one-statement check are built
+  (#140); the comment line's format and joined words are not.
 - **Date**: 2026-11-03
 
 ## Context
@@ -52,7 +55,8 @@ Amended on 2026-11-13 for M4c, decided by Matheus (#92, #94):
   from 1. Lists are the app's own (see the engineering rules), so math.js's matrix index never
   sees them.
 
-Amended on 2026-11-14 for M4d, decided by Matheus (#119, #123, #132). Not built:
+Amended on 2026-11-14 for M4d, decided by Matheus (#119, #123, #132). Step 6 and `if()` built
+(#140); the rest not built:
 
 - **Step 1 stays first, and a comment line can carry a format.** A line whose code is only a
   format clause, with comment text after the `#`, is a formatted comment line:
@@ -65,7 +69,10 @@ Amended on 2026-11-14 for M4d, decided by Matheus (#119, #123, #132). Not built:
   stays one statement. A `;` inside brackets is math.js's matrix row.
 - **`if(cond, a, b)`** is an app function given at setup, lazy (`rawArgs`), so it is not a line
   form and needs no step; `if` becomes a reserved name. Text `==` / `!=` are `equal` /
-  `unequal` signatures added at setup, before `import` is disabled.
+  `unequal` signatures added at setup, before `import` is disabled. As built (#140): the
+  one-statement check reads the code before step 4, so no line form hides a `;`; `? :`
+  takes its condition as `if()` does, true or false only, through its node's `_compile`
+  on the app's instance, so the line's parse is math.js's own.
 
 What the app writes into a line (a display unit, plot clauses, a format) is text in that same line, in
 front of any `#`. So split, join, copy, paste, undo and save carry it, and one line stays one

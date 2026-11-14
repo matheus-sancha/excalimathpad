@@ -135,7 +135,7 @@ describe('evaluateSheet', () => {
     })
 
     it('keeps a # inside a string out of the note', () => {
-      expect(block('s = concat("a # b", "c") # note')).toEqual([value('"a # bc"')])
+      expect(block('s = concat("a # b", "c") # note')).toEqual([value('a # bc')])
     })
   })
 
@@ -273,7 +273,7 @@ describe('evaluateSheet', () => {
       const check = '2 knot\ntypeOf(0.1)\npi'
       const expected = [
         error('Undefined symbol knot'),
-        value('"number"'),
+        value('number'),
         value('3.142'),
       ]
 
@@ -1643,7 +1643,228 @@ describe('rules: conditional formats (docs/spec-v1.md section 3, A rule; #109)',
   })
 
   it('reports a warning once per rule, not once per point', () => {
-    const [, line] = lines('Q_s = 1 .. 4\nv = Q_s * 1 @text-red if v > 3 kg')
+    const [, line] = lines('Q_s = 1 .. 4\nv = Q_s * 1 m/s @text-red if v > 3 kg')
     expect(line.warnings).toEqual(['if v > 3 kg: Units do not match'])
+  })
+})
+
+describe('conditionals and text (docs/spec-v1.md section 3, Conditionals and text; #140)', () => {
+  const lines = (source: string, settings?: Parameters<typeof evaluateSheet>[1]) =>
+    evaluateSheet([{ id: 'b', source }], settings).get('b')!
+  const SIGMA = 'sigma = 120 MPa\nsigma_allow = 150 MPa'
+
+  describe('if(cond, a, b)', () => {
+    it('chooses a value by a condition, and a check reads as text', () => {
+      expect(block(`${SIGMA}\ncheck = if(sigma <= sigma_allow, "Approved", "Rejected")`)[2]).toEqual(value('Approved'))
+      expect(block(`${SIGMA}\nif(sigma > sigma_allow, 1 m, 2 m)`)[2]).toEqual(value('2 m'))
+    })
+
+    it('runs only the branch taken, as ? : does', () => {
+      expect(block('if(false, undefinedName, 7)')).toEqual([value('7')])
+      expect(block('false ? undefinedName : 7')).toEqual([value('7')])
+      expect(block('if(true, 1 m + 1 s, 1)')).toEqual([error('Units do not match')])
+      expect(block('fact(n) = if(n <= 1, 1, n * fact(n - 1))\nfact(5)')[1]).toEqual(value('120'))
+    })
+
+    it('writes several branches by nesting, either form inside the other', () => {
+      const band = 'band = if(sigma < 100 MPa, "low", sigma < 140 MPa ? "mid" : "high")'
+      for (const [sigma, expected] of [['80', 'low'], ['120', 'mid'], ['150', 'high']]) {
+        expect(block(`sigma = ${sigma} MPa\n${band}`)[1], `${sigma} MPa`).toEqual(value(expected))
+      }
+    })
+
+    it('allows branches of different kinds, with no check', () => {
+      expect(block(`${SIGMA}\nok = sigma <= sigma_allow\nif(ok, sigma, "too high")`)[3]).toEqual(value('120 MPa'))
+      expect(block(`${SIGMA}\nok = sigma > sigma_allow\nif(ok, sigma, "too high")`)[3]).toEqual(value('too high'))
+    })
+
+    it('needs three arguments', () => {
+      const message = error('if needs 3 arguments: if(cond, a, b)')
+      expect(block('if(true, 1)\nif(true, 1, 2, 3)\nif()')).toEqual([message, message, message])
+    })
+
+    it('takes only true or false as the condition, for ? : too', () => {
+      const message = error('if: the condition must be true or false')
+      expect(block('if(1, 2, 3)\nif("yes", 2, 3)\nif(1 m, 2, 3)')).toEqual([message, message, message])
+      // math.js would read `0`, `""` and `1 m` as true or false.
+      expect(block('0 ? 2 : 3\n"" ? 2 : 3\n1 m ? 2 : 3')).toEqual([message, message, message])
+      expect(block('2 > 1 ? 2 : 3\nnot (2 > 1) ? 2 : 3')).toEqual([value('2'), value('3')])
+    })
+
+    it('takes one value as the condition, not a matrix', () => {
+      const message = error('if: the condition must be one value; use a list line instead')
+      expect(block('if([true, false], 1, 2)\n[true] ? 1 : 2')).toEqual([message, message])
+    })
+
+    it('runs once per point on a list line, and in a function body', () => {
+      const [, state] = lines('Q = 1 .. 4\nstate = if(Q < 3, "low", "high")')
+      expect(state.result).toEqual({ kind: 'list', text: '2 low, 2 high', failed: null })
+      expect(state.listPreview).toBe('1: low\n2: low\n3: high\n4: high')
+      expect(block(`${SIGMA}\nverdict(s) = if(s <= sigma_allow, "Approved", "Rejected")\nverdict(200 MPa)`)[3]).toEqual(
+        value('Rejected'),
+      )
+    })
+
+    it('is reserved: assigning to if, or defining it, is the line’s error', () => {
+      const message = error('if is a function: choose another name')
+      expect(block('if = 3\nif(x) = x')).toEqual([message, message])
+    })
+
+    it('never clashes with a rule’s if: the clause starts at the first @', () => {
+      const [line] = lines('x = if(true, 4, 2) @bold if x > 3 @text-red if if(x > 3, true, false)')
+      expect(line.result).toEqual(value('4'))
+      expect(line.typeset.kind === 'math' && line.typeset.format).toMatchObject({ bold: true, textColor: 'red' })
+      expect(line.warnings).toEqual([])
+    })
+
+    it('typesets with no error while the brace waits for #141', () => {
+      const [, , line] = lines(`${SIGMA}\ncheck = if(sigma <= sigma_allow, "Approved", "Rejected")`)
+      expect(line.typeset.kind).toBe('math')
+      expect(line.typeset.kind === 'math' && line.typeset.expression).toContain('\\mathrm{if}')
+    })
+  })
+
+  describe('text', () => {
+    it('compares two texts exactly with == and !=, case included', () => {
+      expect(block('"Approved" == "Approved"\n"Approved" == "approved"\n"Approved" != "approved"')).toEqual([
+        value('true'),
+        value('false'),
+        value('true'),
+      ])
+    })
+
+    // Section 17, verify first: the signatures hold in the hardened instance,
+    // and numbers, units and matrices still compare as math.js's own.
+    it('leaves every other comparison as math.js’s own', () => {
+      expect(block('2 == 2\n1 m == 100 cm\n2 != 3\n1 m < 2 m\n[1, 2] == [1, 3]\ntrue == true')).toEqual([
+        value('true'),
+        value('true'),
+        value('true'),
+        value('true'),
+        value('[true, false]'),
+        value('true'),
+      ])
+    })
+
+    it('makes text against a number or a unit an error, never a conversion', () => {
+      const message = error("can't compare text with a number")
+      // math.js reads `"10" == 10` as true.
+      expect(block('"10" == 10\n10 != "10"\n"5 m" == 5 m\n"a" < 3')).toEqual([message, message, message, message])
+    })
+
+    it('supports only == and != on text', () => {
+      const message = error('text can only be compared with == or !=')
+      expect(block('"a" < "b"\n"a" >= "b"')).toEqual([message, message])
+    })
+
+    it('shows plain, without quotes, in the result, the Variables tab and a table', () => {
+      const [input, line] = lines('status = "NOT OK"\nshown = status')
+      // A text typed as is is a plain input: its result cell stays empty.
+      expect(input.result).toEqual(empty)
+      expect(input.variables).toEqual([{ name: 'status', kind: 'value', text: 'NOT OK' }])
+      expect(line.result).toEqual(value('NOT OK'))
+      const [, , table] = lines('Q = 1 .. 2\nstate = Q > 1 ? "OK" : "NOT OK"\ntable(Q, state)')
+      expect(table.table?.rows.map((row) => row[1])).toEqual([
+        { ok: true, text: 'NOT OK' },
+        { ok: true, text: 'OK' },
+      ])
+      expect(table.table?.columns[1].unit).toBe('')
+    })
+
+    it('has no unit slot, and in <unit> on a text is the line’s error; its value still reaches below', () => {
+      const [text, inUnit, below, inPercent] = lines('s = "OK"\nt = s in kPa\nt == "OK"\ns in %')
+      expect(text.unitSlot).toBeNull()
+      expect(inUnit.result).toEqual(error('text has no unit: take off "in kPa"'))
+      expect(below.result).toEqual(value('true'))
+      expect(inPercent.result).toEqual(error('text has no unit: take off "in %"'))
+    })
+
+    it('counts each text in a list’s summary, most frequent first', () => {
+      const source = 'Q = 1 .. 4\nverdict = Q < 4 ? "OK" : "NOT OK"\nfirst = Q > 3 ? "OK" : "NOT OK"'
+      const [, verdict, first] = lines(source)
+      expect(verdict.result).toEqual({ kind: 'list', text: '3 OK, 1 NOT OK', failed: null })
+      // Ties keep the order first seen.
+      expect(lines('Q = 1 .. 2\nQ > 1 ? "OK" : "NOT OK"')[1].result).toMatchObject({ text: '1 NOT OK, 1 OK' })
+      expect(first.result).toMatchObject({ text: '3 NOT OK, 1 OK' })
+      expect(verdict.variables).toEqual([{ name: 'verdict', kind: 'list', text: '3 OK, 1 NOT OK' }])
+    })
+
+    it('counts a list’s failed points last', () => {
+      const [, line] = lines('Q = 1 .. 4\nverdict = Q < 3 ? "OK" : (Q == 3 ? "NOT OK" : missing)')
+      expect(line.result).toMatchObject({ kind: 'list', text: '2 OK, 1 NOT OK, 1 failed' })
+      expect(line.result).toMatchObject({ failed: '1 of 4 points failed. At Q = 4: Undefined symbol missing' })
+    })
+
+    it('colours a check by its text with a rule', () => {
+      const RULES = '@text-green if result == "Approved" @text-red if result != "Approved"'
+      for (const [sigma, colour] of [['120', 'green'], ['180', 'red']] as const) {
+        const [, , line] = lines(`sigma = ${sigma} MPa\nsigma_allow = 150 MPa\ncheck = if(sigma <= sigma_allow, "Approved", "Rejected") ${RULES}`)
+        expect(line.typeset.kind === 'math' && line.typeset.format.textColor, `${sigma} MPa`).toBe(colour)
+        expect(line.warnings).toEqual([])
+      }
+    })
+  })
+
+  describe('true and false', () => {
+    it('are values like any other, and arithmetic on them is math.js’s', () => {
+      expect(block(`${SIGMA}\nok = sigma <= sigma_allow\nok + 0\nnot ok\nok and sigma > 100 MPa`).slice(2)).toEqual([
+        value('true'),
+        value('1'),
+        value('false'),
+        value('true'),
+      ])
+    })
+
+    it('have no unit slot', () => {
+      expect(lines('ok = 2 > 1')[0].unitSlot).toBeNull()
+    })
+  })
+
+  describe('a unit against a bare number', () => {
+    it('says which number needs a unit, either way round, in the sheet’s form', () => {
+      expect(block('v = 3 m/s\nv > 0\n0 < v\nv == 0')).toEqual([
+        empty,
+        error("can't compare 3 m / s with 0: give the 0 a unit"),
+        error("can't compare 3 m / s with 0: give the 0 a unit"),
+        error("can't compare 3 m / s with 0: give the 0 a unit"),
+      ])
+      const settings = { units: { system: 'si-prefixed' as const, custom: {} }, digits: 2 }
+      expect(lines('v = 3.14159 m/s\nv > 1.25', settings)[1].result).toEqual(
+        error("can't compare 3.1 m / s with 1.3: give the 1.3 a unit"),
+      )
+    })
+
+    it('is a rule’s warning, and a function’s error on its calling line', () => {
+      expect(lines('v = 3 m/s @text-red if v > 1')[0].warnings).toEqual([
+        "if v > 1: can't compare 3 m / s with 1: give the 1 a unit",
+      ])
+      expect(block('fast(x) = x > 1\nfast(2 m)')[1]).toEqual(error("in fast(2 m): can't compare 2 m with 1: give the 1 a unit"))
+    })
+
+    it('still compares a ratio that cancels to a number', () => {
+      expect(block('(2 m) / (1 m) > 1')).toEqual([value('true')])
+    })
+  })
+
+  describe('one statement per line (section 3; ADR 0005, step 6)', () => {
+    const message = 'one statement per line: split the line at the ;'
+
+    it('makes a top-level ; the line’s error, and every name it assigns fails', () => {
+      expect(block('x1 = 5; y1 = x1 * 2\ny1\nx1')).toEqual([
+        error(message),
+        error('y1 has an error above'),
+        error('x1 has an error above'),
+      ])
+      expect(block('z = 1;\n1; 2')).toEqual([error(message), error(message)])
+      expect(lines('x1 = 5; y1 = x1 * 2')[0].typeset).toEqual({ kind: 'unparsed', source: 'x1 = 5; y1 = x1 * 2' })
+    })
+
+    it('reads the ; before any line form', () => {
+      expect(block('Q = 1 .. 3; R = 2\nf(x) = x; g(x) = x')).toEqual([error(message), error(message)])
+    })
+
+    it('leaves a ; inside brackets, a string or a note alone', () => {
+      expect(block('[1, 2; 3, 4]\n"x;y"\nx = 2 # a; b')).toEqual([value('[[1, 2], [3, 4]]'), value('x;y'), empty])
+    })
   })
 })

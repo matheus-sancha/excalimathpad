@@ -174,6 +174,32 @@ export function splitDisplayUnit(code: string): { expression: string; displayUni
 }
 
 /**
+ * Whether the code holds a `;` at its top level, outside brackets and strings
+ * (section 3: one statement per line; ADR 0005, step 6). A `;` inside brackets
+ * is a matrix row, `[1, 2; 3, 4]`.
+ */
+export function hasTopLevelSemicolon(code: string): boolean {
+  let depth = 0
+  let quote: string | null = null
+  for (let i = 0; i < code.length; i++) {
+    const char = code[i]
+    if (quote) {
+      if (char === '\\') i++
+      else if (char === quote) quote = null
+    } else if (char === '"' || (char === "'" && !endsValue(code, i))) {
+      quote = char
+    } else if ('([{'.includes(char)) {
+      depth++
+    } else if (')]}'.includes(char)) {
+      depth--
+    } else if (char === ';' && depth <= 0) {
+      return true
+    }
+  }
+  return false
+}
+
+/**
  * The line with its plain format replaced by `format`'s, for the format bar.
  * The code and the note stay exactly as typed; the clause goes after the code
  * and before the `#`: the plain words in a fixed order, `@bold @underline
