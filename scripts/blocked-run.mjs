@@ -2,7 +2,8 @@
 // built `dist-plugin/main.js` loads in headless Chromium against the fake
 // `obsidian` (plugin/test/obsidian.ts), with every non-local request blocked
 // and logged, and opens the pump sheet: math, a table, a plot, an image and
-// CJK text. It fails on any attempted request, any page error, and any
+// CJK text, and reads the ☰ stamp (the version). It fails on any attempted
+// request, any page error, a stamp that isn't the manifest's version, and any
 // <style> or <link> the bundle adds at run time.
 //
 // Run: `node scripts/blocked-run.mjs` (`npm run test:blocked`), after
@@ -173,6 +174,15 @@ try {
   else if (row.display !== 'grid' || row.background !== 'rgba(0, 0, 0, 0)' || row.shadow !== 'none' || row.height === '30px') {
     failures.push(`Obsidian's global CSS reached the view: a panel row is ${JSON.stringify(row)}`)
   }
+  // The plugin's stamp (section 12, Hosted build): the ☰ menu's last line is
+  // the version, the number Obsidian's plugin list shows, not a commit.
+  await tab.click('[data-testid="main-menu-trigger"]')
+  const stamp = await tab
+    .waitForSelector('[data-testid="build-stamp"]', { timeout: 10_000 })
+    .then((element) => element.textContent())
+    .catch(() => null)
+  if (stamp?.trim() !== manifest.version) failures.push(`the ☰ stamp reads ${JSON.stringify(stamp)}, not the version ${manifest.version}`)
+  await tab.keyboard.press('Escape')
   // Let late work (fonts, the plot's chunk, image decoding) try anything it would.
   await tab.waitForTimeout(1500)
   if (screenshot) await tab.screenshot({ path: screenshot })
