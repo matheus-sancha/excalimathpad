@@ -42,10 +42,12 @@ their terms move in here as each M4d issue makes them true.
   On the web it takes `files` and `recovery` (required; tests pass fakes) and
   mounts the session with `FileChrome`. With `vault` (a `VaultHome`: the
   view's container and the sheet as the view read it) it mounts no file
-  chrome, no file keys or drops and no ☰ file items, loads the sheet through
-  `createVaultSheet` (`src/file/vaultSheet.ts`, no writes until #136), binds
-  the gestures' keys and the flash's click to the view's container, and turns
-  Excalidraw's embeds off. `panelMemory` is where the panel's open state lives
+  chrome, no file keys and no ☰ file items, loads the sheet through
+  `createVaultSheet` (`src/file/vaultSheet.ts`) and hands it to the view
+  (`vault.connect`), which writes it back; it ignores a dropped sheet file
+  (`ignoreSceneDrops`), routes Excalidraw's image tool to the vault's picker
+  (`vault.pickImage`), binds the gestures' keys and the flash's click to the
+  view's container, and turns Excalidraw's embeds off. `panelMemory` is where the panel's open state lives
   (a port: `storagePanelMemory` on the web, `data.json` in the plugin, this
   page only if unset). App imports none of the browser ports at run time, so
   the plugin's bundle holds none. `initialElements` gives tests a sheet.
@@ -77,15 +79,23 @@ their terms move in here as each M4d issue makes them true.
   through `MathOverlay` and `useSheetGestures`). `isCanvasElement` tells
   Excalidraw's canvas by node name, so it holds in a pop-out window. `sceneFile.ts` is
   the Excalidraw half of the sheet file: `serializeScene`, `loadScene` (no undo
-  step, clears history) and `saveKey`, the key dirty is measured by.
+  step, clears history; `keepView` keeps scroll and zoom, for a vault's
+  outside change), `saveKey`, the key dirty is measured by, and `emptyScene`,
+  a New sheet's scene.
   `SheetCanvas`'s `embeds={false}` passes Excalidraw `validateEmbeddable={false}`,
   so no embed loads an iframe (the plugin's no-network rule).
   `SheetCanvas` also turns off Excalidraw's own open, save and export and draws
   the ☰ menu with the app's file items and, as its last line, the build stamp
   (`__BUILD_STAMP__`, plain text); its handle carries `root`, the box it
   shares with the overlay. `fileRoutes.ts` takes the file keys and scene-file
-  drops from Excalidraw, and measures the space beside the ☰ button
-  (`useBesideMenu`). `layers.ts` records where overlay
+  drops from Excalidraw (in a vault, `ignoreSceneDrops` only stops the drops),
+  and measures the space beside the ☰ button (`useBesideMenu`). `imageTool.ts`
+  takes over Excalidraw's image tool in a vault (`takeOverImageTool`: the
+  `toolbar-image` press and the key 9, stopped in capture, so the operating
+  system's picker never opens) and copies a picked image in with the public
+  API (`insertImage`: a `files` entry named by the bytes' SHA-1 and an image
+  element sized as Excalidraw sizes a click-placed one, one undo step;
+  Excalidraw's own 4 MB cap). `layers.ts` records where overlay
   content sits among Excalidraw's DOM layers, and the dark theme's filter.
   `addMath.ts` is Add math: a public custom tool (`startPlacing`,
   `cancelPlacing`, `isPlacing`) and `watchPlacing`, which turns the placing
@@ -330,7 +340,12 @@ their terms move in here as each M4d issue makes them true.
   ports (scene, file access, recovery store, dialogs, line), so it knows no
   Excalidraw, React or DOM. `fileAccess.ts` wraps the File System Access API,
   with a download and file-input fallback. `recovery.ts` keeps the one copy in
-  IndexedDB. `FileChrome.tsx` shows the name and title, asks the two questions
+  IndexedDB. `vaultSheet.ts` is the vault's counterpart (M4d): the same
+  clean-key rule and `keepClean` over the scene and line ports, but it never
+  writes itself; the view asks it what is `unwritten()` (an open line
+  committed first), tells it what was `written`, asks if it is `busy()`, and
+  `reload`s it after an outside change. The line relay's `isOpen` is how it
+  knows a line is open. `FileChrome.tsx` shows the name and title, asks the two questions
   and asks before leaving while dirty; it answers the keys and drops that
   `canvas/fileRoutes.ts` takes. Opening picks the file before it asks about
   unsaved changes: Chromium allows one picker per gesture. Depends on: canvas
@@ -343,13 +358,32 @@ their terms move in here as each M4d issue makes them true.
   "Excalimathpad needs iOS 16.4 or later."), then `readSheet`; a newer or
   unreadable file shows section 13's message in the view and nothing mounts;
   otherwise it mounts `<App vault=…>` on `contentEl` with React's `createRoot`
-  and unmounts on close. Until autosave (#136) `save` does nothing and
-  `getViewData` returns the text as read, so viewing never writes. `styles.css`
+  and unmounts on close. **Autosave** (section 7, A sheet in a vault): the
+  vault sheet calls `onUnwritten` when its `saveKey` (plus the settings)
+  leaves the key the file holds, and the view calls `requestSave`; `save` is
+  the view's own and writes only `unwritten()` (an open line committed
+  first), so viewing never writes; close, quit (`workspace.on('quit')`) and
+  Obsidian's Save current file write at once; a failed write is a Notice and
+  stays unwritten. **Outside changes:** the view hears `vault.on('modify')`
+  for its file (and `setViewData(data, false)`), ignores its own text
+  (`known`), reloads an idle tab in place (`VaultSheet.reload`: no undo step,
+  scroll and zoom kept), and for a busy one (`busy()`: unwritten work or a
+  line open) writes the tab's version beside the sheet with `vault.create`
+  under `names.ts`'s `conflictBase` and `freeSheetPath` (never over a file),
+  then reloads; no save runs meanwhile (`reconciling`). `main.ts` adds **New
+  sheet** (the command, the ribbon icon, a folder's `file-menu`), placed by
+  `fileManager.getNewFileParent` and named `Untitled`, `Untitled 1`…
+  `ImagePicker.ts` is the **vault image picker**, a `FuzzySuggestModal` over
+  the vault's image files that reads only the one picked (`readBinary`).
+  `styles.css`
   is the view's own CSS (no padding, a full-height box); `src/index.css`, the
   web's `html` and `body` rules, never ships. `plugin/test/obsidian.ts` is a
   hand-written **fake `obsidian`** (Plugin, the view classes, WorkspaceLeaf,
-  Vault, Scope, Platform, Notice, Obsidian's DOM helpers) that records
-  registrations, writes and notices; Vitest aliases `obsidian` to it, and the
+  Workspace, Vault, FileManager, TFile, TFolder, Menu, FuzzySuggestModal,
+  Scope, Platform, Notice, Obsidian's DOM helpers) that records
+  registrations, writes, creates, binary reads, notices and modals, and acts
+  as the world outside the view (`changeOutside`, `rename`, `failNext`,
+  `fileMenu`, `quit`, a pick in a modal); Vitest aliases `obsidian` to it, and the
   blocked run bundles the same file for the browser.
   `plugin/test/pump-sizing.excalimathpad` is the pump sheet with an image and
   CJK text. Depends on: App, file (`readSheet`, the messages), panel memory.

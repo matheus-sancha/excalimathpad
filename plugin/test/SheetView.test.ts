@@ -57,7 +57,7 @@ describe('the plugin (docs/spec-v1.md section 12a)', () => {
     expect(document.title).toBe('Obsidian')
   })
 
-  it('never writes the file while viewing it, or when its tab closes (until autosave, #136)', async () => {
+  it('never writes the file while viewing it, or when its tab closes', async () => {
     const { vault, leaf } = await openPump()
     await waitFor(() => expect(mathElements()).toHaveLength(1), { timeout: 10_000 })
     await act(() => (leaf.view as unknown as SheetView).save())
@@ -91,7 +91,7 @@ describe('the lookbehind check (section 12a; iOS below 16.4)', () => {
   it('shows the message and neither opens nor writes the sheet', async () => {
     const vault = await vaultWith({ [PUMP]: pumpSheet() })
     const memory = { rememberedOpen: () => null, rememberOpen: () => {} }
-    vault.app.views.set(VIEW_TYPE, (leaf) => new SheetView(leaf as never, memory, () => false) as never)
+    vault.app.views.set(VIEW_TYPE, (leaf) => new SheetView(leaf as never, memory, { lookbehind: () => false }) as never)
     const leaf = await act(() => vault.open(PUMP))
     open.push(leaf)
     expect(leaf.view?.containerEl).toHaveTextContent(NO_LOOKBEHIND)

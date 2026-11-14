@@ -77,6 +77,24 @@ export function useFileRoutes(handlers: FileRouteHandlers) {
   }, [handlers])
 }
 
+/**
+ * In a vault (M4d, docs/spec-v1.md section 7, A sheet in a vault) a sheet file
+ * dropped on the canvas is ignored: the tab's file is the sheet, and Excalidraw
+ * would replace the scene with the dropped one. Dropped images stay
+ * Excalidraw's. Heard on the view's own container in capture, before
+ * Excalidraw's root inside it. Returns the way to stop.
+ */
+export function ignoreSceneDrops(container: HTMLElement): () => void {
+  const onDrop = (event: DragEvent) => {
+    const file = event.dataTransfer?.files[0]
+    if (!file || !isSceneFileName(file.name)) return
+    event.preventDefault()
+    event.stopPropagation()
+  }
+  container.addEventListener('drop', onDrop, true)
+  return () => container.removeEventListener('drop', onDrop, true)
+}
+
 /** Where something can sit to the right of the ☰ button, in stage coordinates. */
 export interface BesideMenuBox {
   left: number
