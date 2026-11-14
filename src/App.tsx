@@ -12,7 +12,6 @@ import { jumpToAnchor, SIDEBAR_DOCKS_ABOVE } from './canvas/selection.ts'
 import { MathOverlay, type EvaluatedElement, type FlashLine } from './overlay/MathOverlay.tsx'
 import { rememberedOpen, rememberOpen } from './panel/panelMemory.ts'
 import { ConstantsTab, ProblemsTab, VariablesTab } from './panel/SheetPanel.tsx'
-import { FormatTabPrototype, PrototypeSwitcher } from './panel/FormatTab.prototype.tsx'
 import { SettingsTab } from './panel/SettingsTab.tsx'
 import { DEFAULT_SETTINGS } from './file/sheetFormat.ts'
 import { problemCount, type PanelTarget } from './panel/sheetPanel.ts'
@@ -132,8 +131,6 @@ export default function App({ files, recovery, initialElements }: AppProps = {})
             problemsTab: <ProblemsTab sheet={sheet ?? []} onJump={jump} />,
             settings: file && <SettingsTab settings={settings} onChange={file.session.setSettings} />,
             constants: <ConstantsTab settings={settings} />,
-            // PROTOTYPE (#121): only with ?variant= in the URL.
-            format: PROTO ? <FormatTabPrototype /> : undefined,
             // Remembered per browser; a floating panel closes by itself, so
             // only a wide window's choice counts.
             onChange: (open) => {
@@ -159,13 +156,9 @@ export default function App({ files, recovery, initialElements }: AppProps = {})
               flash={flash}
             />
             <FileChrome session={file.session} dialogs={file.dialogs} canvasRoot={canvas.root} />
-            {PROTO && <PrototypeSwitcher />}
           </>
         )
       }
     />
   )
 }
-
-// PROTOTYPE (#121): the Format tab variants show only with ?variant= in the URL, in dev.
-const PROTO = import.meta.env.DEV && new URLSearchParams(window.location.search).has('variant')
