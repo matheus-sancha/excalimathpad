@@ -607,6 +607,9 @@ From M4d.
             ⎩ “high”,  otherwise
   ```
 
+  A conditional in an earlier branch keeps its own brace, inside its row. A brace that is an
+  operator's operand, `if(ok, 1, 2) + 3`, sits in brackets, so the operator doesn't run into its
+  last row; a fraction's bar and a root's sign set it apart already, so there it has none.
 - **A text literal in an equation** is upright, in quotes: `“Approved”`, not math.js's
   monospace.
 - **`true` and `false`** are upright words, in an equation and in a result.
@@ -3007,6 +3010,14 @@ Changes line if it changes behaviour.
   truthiness (`0`, `""` and `1 m` as conditions) unless its node changes; the engine replaces
   `ConditionalNode`'s `_compile` on its own instance, which math.js's custom-node guide documents, and a test
   of `0 ? 2 : 3` pins it.
+- The brace in KaTeX at the sheet's size, and a three-branch nest flattening to three rows. **Passed (#141):**
+  `band = if(sigma < 100 MPa, "low", sigma < 140 MPa ? "mid" : "high")` is one `cases` of three rows, which
+  KaTeX renders at `strict: 'error'` (`typeset.test.ts`). In headless Chromium, the built plugin drew it as one
+  brace of stacked glyphs (`⎧⎨⎩`) beside the line's name, the result cell reading `mid`, at the sheet's size;
+  the quotes are KaTeX_Main's, upright. In the dark theme the brace, the quotes and `true` took the text colour
+  as the rest of the math did, and with print media emulated the element drew as in the light theme.
+  **Found:** math.js's own `? :` TeX nests a brace in the last branch, and sets a text as `\mathtt{"…"}` and
+  `true` as four italic letters; the handler replaces all three.
 - With presses from `.sheet-sidebar` skipped in `listenToCanvas` and the panel-wide prevention on `document` in
   bubble: every Format, Rules, Symbols and Constants press keeps the line open with its caret, and Radix's tabs
   still switch. Firefox and Safari, a classic scrollbar press and pen input were not probed (#117).
@@ -3558,3 +3569,9 @@ Changes line if it changes behaviour.
     (`(2 m) / (1 m) > 1`) is a number to math.js and still compares.
   - **`<` with text and a number** is `can't compare text with a number`; `text can only be compared
     with == or !=` is for two texts.
+- 2026-11-14, [sections 4](#conditionals-and-text-typeset) and [17](#17-verify-first) (#141, found while
+  building, for Matheus to confirm on the PR):
+  - **A conditional in an earlier branch keeps its own brace,** inside its row: only the last branch
+    flattens (section 4 said nothing of the others).
+  - **A brace that is an operand sits in brackets,** `(⎧ … ⎩) + 3`, as without them `+ 3` reads as part of
+    the "otherwise" row. Not in a fraction or under a root, whose bar or sign already sets it apart.
