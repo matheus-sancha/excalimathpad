@@ -1551,9 +1551,10 @@ From M4d, in the plugin. The web app's chrome above is unchanged.
 - **No file name** beside ☰ and no `document.title`: Obsidian's tab header names the sheet.
 - **The welcome screen** keeps the name and the hint, without Open…. On touch the hint reads
   "Tap More tools, then Add math, then tap the sheet".
-- **Theme:** a tab opens in Obsidian's light or dark mode (`body.theme-dark`, kept current by
-  `css-change`). Dark mode in ☰ flips that tab only, until it closes or Obsidian's mode
-  changes. Nothing is stored. Canvas background is saved in the file, as on the web.
+- **Theme:** Excalimathpad's own light or dark mode, whatever Obsidian's. Dark mode in ☰
+  (Alt+Shift+D) switches it, and the choice is remembered in the plugin's `data.json`: every
+  sheet tab opened after it opens in that mode, after a restart too. Light until one is chosen.
+  Canvas background is saved in the file, as on the web.
 - **Keys** act only while the tab has focus. Obsidian's core keys always pass through, even
   from the canvas or a line: Ctrl/Cmd+P, O, N, W, `,`, Shift+F, S (Obsidian's save), and
   Ctrl+Tab / Ctrl+Shift+Tab. Ctrl+Shift+E stays swallowed. Everything else the sheet uses
@@ -1986,7 +1987,7 @@ touch in [section 4](#touch). Research: [`docs/research/obsidian-plugin.md`](res
   excalidraw.com's Firebase config (the `AIza…` key) are removed or stripped; Xiaolai is `local:`;
   there is no telemetry and no account. A link on an element opens the browser when clicked.
 - **Storage only in the vault:** sheets in their files; the plugin's memory (the panel's open or
-  closed state) in `data.json` through `loadData`/`saveData`. No IndexedDB, `localStorage` or
+  closed state, and light or dark) in `data.json` through `loadData`/`saveData`. No IndexedDB, `localStorage` or
   `App#saveLocalStorage`.
 - **Reach:** it reads only the sheet open in the view and one image the user picks from a vault
   image picker (image files listed by name; the picked image is copied into the sheet, as
@@ -3413,7 +3414,7 @@ Changes line if it changes behaviour.
   run fails on any `<style>` or `<link>` added at run time. The allowlist also holds Excalidraw's Help links
   and its embed patterns, and the plugin turns embeds off (`validateEmbeddable={false}`) so none loads.
 - 2026-11-14, [sections 7](#a-sheet-in-a-vault), [12a](#data-protection) and [13](#13-messages) (#136, found
-  while building, for Matheus to confirm on the PR):
+  while building, confirmed by Matheus: "all fine"):
   - **The vault image picker** takes over Excalidraw's image tool: Excalidraw 0.18 opens the operating
     system's file picker from inside `setActiveTool`, so the tool's button and its key 9 are stopped before
     Excalidraw hears them. The picker lists the vault's PNG, JPEG, GIF, WebP, BMP, AVIF and SVG files by
@@ -3428,3 +3429,7 @@ Changes line if it changes behaviour.
     still hold.
   - **New sheet** uses the ribbon icon `calculator`, and a create that fails shows
     `Couldn't create Untitled.excalimathpad: <reason>.` and opens no tab.
+- 2026-11-14, [sections 8](#inside-an-obsidian-tab) and [12a](#data-protection) (after #136's hand check,
+  agreed by Matheus; reopens #129's theme): a sheet's tab keeps "excalimathpad own light or dark setting",
+  not Obsidian's mode, and the choice is "remembered" in `data.json`, so every sheet opens in the last mode
+  chosen. Built in #137. Not asked: a tab already open keeps its mode when another tab switches.
