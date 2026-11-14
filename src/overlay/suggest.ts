@@ -133,28 +133,47 @@ const FORMAT_WORDS: readonly Suggestion[] = [
   ...FORMAT_COLORS.map((color) => ({ name: color, kind: 'keyword' as const, detail: 'highlight', insert: color })),
 ]
 
+/**
+ * The words a comment line's clause offers (section 4, Suggestions, M4d), in
+ * the order the Format tab writes them: no rules, so no `if` after them.
+ */
+const COMMENT_WORDS: readonly Suggestion[] = [
+  { name: 'bold', kind: 'keyword', detail: 'bold comment', insert: 'bold' },
+  { name: 'upright', kind: 'keyword', detail: 'not italic', insert: 'upright' },
+  { name: 'underline', kind: 'keyword', detail: 'underlined comment', insert: 'underline' },
+  { name: 'S', kind: 'keyword', detail: 'size S, 13 px', insert: 'S' },
+  { name: 'L', kind: 'keyword', detail: 'size L, 20 px', insert: 'L' },
+  { name: 'XL', kind: 'keyword', detail: 'size XL, 26 px', insert: 'XL' },
+  ...FORMAT_WORDS.filter((word) => word.name !== 'bold' && word.name !== 'underline'),
+]
+
 const IF: Suggestion = { name: 'if', kind: 'keyword', detail: 'a rule: the format applies while true', insert: 'if ' }
 
 /**
  * Suggestions in a format clause (section 4, Suggestions, M4c): after `@`, the
- * format words; after a whole format word and a space, `if`. Undefined when
- * the caret isn't in a clause, so the ordinary list takes over; null when it
- * is, with nothing to offer.
+ * format words; after a whole format word and a space, `if`. A clause at the
+ * start of the line, with no code before it, is a comment line's (M4d): it
+ * offers the comment words, and never `if`. Undefined when the caret isn't in
+ * a clause, so the ordinary list takes over; null when it is, with nothing to
+ * offer.
  */
 function formatSuggest(text: string, caret: number, limit: number): Suggested | null | undefined {
   if (/[\w-]/.test(text[caret] ?? '')) return undefined
   const before = text.slice(0, caret)
   const lead = (index: number) => before.slice(0, index)
   const outside = (index: number) => !lead(index).includes('#') && (lead(index).match(/"/g)?.length ?? 0) % 2 === 0
+  // No code before the first `@`: a math line needs code there, so this is a comment's clause.
+  const comment = /^\s*@/.test(before)
   const word = /@([A-Za-z][\w-]*)?$/.exec(before)
   if (word && outside(word.index)) {
     const typed = word[1] ?? ''
-    const items = FORMAT_WORDS.filter((item) => item.name.startsWith(typed) && item.name !== typed)
+    const items = (comment ? COMMENT_WORDS : FORMAT_WORDS).filter((item) => item.name.startsWith(typed) && item.name !== typed)
     return items.length === 0 ? null : { from: caret - typed.length, to: caret, items: items.slice(0, limit) }
   }
   const after = /@([A-Za-z][\w-]*)\s+(i?)$/.exec(before)
-  if (after && outside(after.index) && readFormatWord(after[1]) !== null) {
-    return { from: caret - after[2].length, to: caret, items: [IF] }
+  if (after && outside(after.index)) {
+    if (comment) return null
+    if (readFormatWord(after[1]) !== null) return { from: caret - after[2].length, to: caret, items: [IF] }
   }
   return undefined
 }

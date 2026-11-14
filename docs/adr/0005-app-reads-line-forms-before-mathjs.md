@@ -10,14 +10,15 @@
   `src/math/solveLine.ts`; rules built (#109), read in `src/math/lineForm.ts` and run after
   the line in `src/math/evaluate.ts`; the one-statement check built (#140), read in
   `src/math/lineForm.ts`; `if()` and text comparisons built (#140), given at setup in
-  `src/math/conditionals.ts`
+  `src/math/conditionals.ts`; the comment line's format built (#142), read in
+  `src/math/lineForm.ts`
 - **Amended**: 2026-11-11 (#63): the format clause, read after the comment.
   2026-11-13 (M4c; #92, #94): rules in the format clause, a solved value's
   `for` range, and the index. The index (#104), the `for` range (#105) and the rules
   (#109) are built.
   2026-11-14 (M4d; #119, #123, #132): a comment line's format clause, joined
   words, `if()` and the one-statement check. `if()` and the one-statement check are built
-  (#140); the comment line's format and joined words are not.
+  (#140), and the comment line's format (#142); joined words are not.
 - **Date**: 2026-11-03
 
 ## Context
@@ -56,13 +57,15 @@ Amended on 2026-11-13 for M4c, decided by Matheus (#92, #94):
   sees them.
 
 Amended on 2026-11-14 for M4d, decided by Matheus (#119, #123, #132). Step 6 and `if()` built
-(#140); the rest not built:
+(#140), and step 1's comment format (#142); joined words not built:
 
 - **Step 1 stays first, and a comment line can carry a format.** A line whose code is only a
   format clause, with comment text after the `#`, is a formatted comment line:
   `@bold @L # Pumps`. Nothing after a `#` is ever read, so `# call me @home` stays plain. The
   comment-only words (`@upright`, `@S`, `@L`, `@XL`) are the line's error on a math line, and
-  a rule on a comment line is its error.
+  a rule on a comment line is its error. As built (#142): code that is only a clause is a
+  comment's format, or a blank line when no text follows the `#`; the clause's first problem
+  is the line's error, which defines nothing, so no line below fails.
 - **Step 2 reads joined words:** `@text-red+red+bold` is one word, and one rule when an `if`
   follows. Rules typed as separate words stay valid and are never rewritten.
 - **6. One statement:** a `;` at the top level of what is left is the line's error, so a line

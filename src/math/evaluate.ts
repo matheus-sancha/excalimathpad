@@ -21,7 +21,16 @@ import {
   type UnitSlot,
 } from './display.ts'
 import { createCalls, isSheetFunction, messageOf, SheetError } from './functions.ts'
-import { applyFormatWord, hasTopLevelSemicolon, NO_FORMAT, readLine, type FormatRule, type FormatWord, type LineFormat } from './lineForm.ts'
+import {
+  applyFormatWord,
+  hasTopLevelSemicolon,
+  NO_FORMAT,
+  readLine,
+  type CommentFormat,
+  type FormatRule,
+  type FormatWord,
+  type LineFormat,
+} from './lineForm.ts'
 import { DEFAULT_DIGITS, leadingNumber, tableColumn } from './numbers.ts'
 import { createSolver, LayeredScope, type CompiledSolve, type SolveDetails, type SolveParts, type SolveText } from './solve.ts'
 import { readSolve } from './solveLine.ts'
@@ -285,12 +294,13 @@ export type LineResult =
 
 /**
  * A line as the grid shows it (docs/spec-v1.md section 4), with its cells' TeX.
- * A blank line or a bare `#` is a spacer row; a comment line is one text cell;
- * a line that doesn't parse shows its raw source, its `#` part included.
+ * A blank line or a bare `#` is a spacer row; a comment line is one text cell,
+ * in its format (M4d); a line that doesn't parse shows its raw source, its `#`
+ * part included.
  */
 export type TypesetLine =
   | { kind: 'blank' }
-  | { kind: 'comment'; text: string }
+  | { kind: 'comment'; text: string; format: CommentFormat }
   | {
       kind: 'math'
       name: string | null
@@ -407,8 +417,11 @@ export interface SheetBlock {
 
 /** A line of the sheet, parsed once before anything is evaluated. */
 type ParsedLine =
-  /** A blank line or a comment line: never evaluated, so its result is empty. */
-  | { kind: 'blank'; comment: string | null }
+  /**
+   * A blank line or a comment line: never evaluated, so its result is empty,
+   * unless its clause has a problem, which is its error (section 3, M4d).
+   */
+  | { kind: 'blank'; comment: { text: string; format: CommentFormat } | null; formatError: string | null }
   /** `defines` is a best guess from the raw text: the line did not parse. */
   | { kind: 'syntax-error'; message: string; defines: readonly string[]; source: string }
   | {
@@ -420,7 +433,7 @@ type ParsedLine =
       note: string | null
       format: LineFormat
       rules: readonly FormatRule[]
-      unknownFormat: string | null
+      formatError: string | null
       /** The line's trailing `in <unit>`, read outside the sheet's scope, or null. */
       display: DisplayUnit | null
       /** That unit as typed. */
@@ -437,7 +450,7 @@ type ParsedLine =
       note: string | null
       format: LineFormat
       rules: readonly FormatRule[]
-      unknownFormat: string | null
+      formatError: string | null
       display: DisplayUnit | null
       displayText: string | null
       source: string
@@ -454,7 +467,7 @@ type ParsedLine =
       note: string | null
       format: LineFormat
       rules: readonly FormatRule[]
-      unknownFormat: string | null
+      formatError: string | null
       display: DisplayUnit | null
       displayText: string | null
     }
@@ -470,7 +483,7 @@ type ParsedLine =
       note: string | null
       format: LineFormat
       rules: readonly FormatRule[]
-      unknownFormat: string | null
+      formatError: string | null
       display: DisplayUnit | null
       displayText: string | null
     }
@@ -485,7 +498,7 @@ type ParsedLine =
       note: string | null
       format: LineFormat
       rules: readonly FormatRule[]
-      unknownFormat: string | null
+      formatError: string | null
       display: DisplayUnit | null
       displayText: string | null
     }
@@ -789,7 +802,8 @@ export function evaluateSheet(
 
   function evaluateLine(line: ParsedLine): LineResult {
     const here = position++
-    if (line.kind === 'blank') return { kind: 'empty' }
+    // A comment line's clause problem (section 3, M4d): it defines nothing, so nothing below fails.
+    if (line.kind === 'blank') return line.formatError === null ? { kind: 'empty' } : { kind: 'error', message: line.formatError }
     const fail = (message: string): LineResult => {
       for (const name of line.defines) {
         failed.add(name)
@@ -817,14 +831,14 @@ export function evaluateSheet(
         if (unknown?.kind === 'unknown') throw new SheetError(`Unknown plot setting ${unknown.text}`)
         const built = runPlot(line)
         plot = built.view
-        if (line.unknownFormat !== null) return { kind: 'error', message: `Unknown format ${line.unknownFormat}` }
+        if (line.formatError !== null) return { kind: 'error', message: line.formatError }
         return built.failed === null ? { kind: 'empty' } : { kind: 'error', message: built.failed }
       }
       if (line.kind === 'table') {
         if (line.display !== null) throw new SheetError('a table takes its units on its arguments: table(Q_s in L/s)')
         const built = runTable(line)
         table = built.view
-        if (line.unknownFormat !== null) return { kind: 'error', message: `Unknown format ${line.unknownFormat}` }
+        if (line.formatError !== null) return { kind: 'error', message: line.formatError }
         // Points that failed in a column the table worked out itself are its line's error;
         // a list named from above already shows its own.
         return built.failed === null ? { kind: 'empty' } : { kind: 'error', message: built.failed }
@@ -836,8 +850,8 @@ export function evaluateSheet(
       line.defines.forEach((name) => failed.delete(name))
       // Reported after the line ran, so its value still reaches the lines
       // below, as for an unknown display unit (section 3).
-      if (line.unknownFormat !== null) {
-        return { kind: 'error', message: `Unknown format ${line.unknownFormat}` }
+      if (line.formatError !== null) {
+        return { kind: 'error', message: line.formatError }
       }
       if (line.display?.kind === 'unknown') {
         return { kind: 'error', message: `Unknown unit ${line.display.name}` }
@@ -1392,7 +1406,7 @@ function resolveRules(plain: LineFormat, rules: readonly FormatRule[], truth: re
 function typesetLine(line: ParsedLine, names: Names): TypesetLine {
   switch (line.kind) {
     case 'blank':
-      return line.comment === null ? { kind: 'blank' } : { kind: 'comment', text: line.comment }
+      return line.comment === null ? { kind: 'blank' } : { kind: 'comment', ...line.comment }
     case 'syntax-error':
       return { kind: 'unparsed', source: line.source }
     case 'plot':
@@ -1551,8 +1565,10 @@ export function splitLines(source: string): string[] {
  */
 function parseLine(text: string): ParsedLine {
   const form = readLine(text)
-  if (form.kind === 'blank') return { kind: 'blank', comment: null }
-  if (form.kind === 'comment') return { kind: 'blank', comment: form.text }
+  if (form.kind === 'blank') return { kind: 'blank', comment: null, formatError: null }
+  if (form.kind === 'comment') {
+    return { kind: 'blank', comment: { text: form.text, format: form.format }, formatError: form.formatError }
+  }
   // A trailing `in <unit>` comes off only when its target is a pure unit
   // expression; otherwise the conversion stays math.js's own (ADR 0005).
   // Step 6, one statement: math.js would run `x1 = 5; y1 = x1 * 2` as a block,
@@ -1589,7 +1605,7 @@ function parseLine(text: string): ParsedLine {
         note: form.note,
         format: form.format,
         rules: form.rules,
-        unknownFormat: form.unknownFormat,
+        formatError: form.formatError,
         display: target,
         displayText: target === null ? null : form.displayUnit,
       }
@@ -1614,7 +1630,7 @@ function parseLine(text: string): ParsedLine {
         note: form.note,
         format: form.format,
         rules: form.rules,
-        unknownFormat: form.unknownFormat,
+        formatError: form.formatError,
         display: target,
         displayText: target === null ? null : form.displayUnit,
       }
@@ -1635,7 +1651,7 @@ function parseLine(text: string): ParsedLine {
         note: form.note,
         format: form.format,
         rules: form.rules,
-        unknownFormat: form.unknownFormat,
+        formatError: form.formatError,
         display: target,
         displayText: target === null ? null : form.displayUnit,
         source: line,
@@ -1676,7 +1692,7 @@ function parseLine(text: string): ParsedLine {
         note: form.note,
         format: form.format,
         rules: form.rules,
-        unknownFormat: form.unknownFormat,
+        formatError: form.formatError,
         display: target,
         displayText: target === null ? null : form.displayUnit,
       }
@@ -1699,7 +1715,7 @@ function parseLine(text: string): ParsedLine {
       note: form.note,
       format: form.format,
       rules: form.rules,
-      unknownFormat: form.unknownFormat,
+      formatError: form.formatError,
       display: target,
       displayText: target === null ? null : form.displayUnit,
     }

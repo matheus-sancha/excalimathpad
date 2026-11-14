@@ -4,7 +4,12 @@
  *
  * - A **blank** line is empty, only spaces, or a bare `#`: a spacer row.
  * - A **comment line** starts with `#`: one text cell spans the row, and it is
- *   never evaluated.
+ *   never evaluated. From M4d a line whose code is only a format clause, with
+ *   comment text after the `#`, is a **formatted comment line**,
+ *   `@bold @L @text-blue # Pumps`: the clause is the comment's format. The
+ *   comment split stays first, so nothing after a `#` is read: `# call me
+ *   @home` stays plain. A clause with no comment text after it formats
+ *   nothing, and the line stays blank.
  * - Any other line is **code**, with an optional **note**: the text after the
  *   first `#` outside a string. Only the code goes to math.js, so a note never
  *   changes a result.
@@ -22,14 +27,25 @@
  */
 export type LineForm =
   | { kind: 'blank' }
-  | { kind: 'comment'; text: string }
+  | {
+      kind: 'comment'
+      text: string
+      /** The clause before the `#` (section 3, A comment line's format, M4d). */
+      format: CommentFormat
+      /** The clause's first problem, in section 13's words: an error on the line. */
+      formatError: string | null
+    }
   | {
       kind: 'code'
       code: string
       note: string | null
       format: LineFormat
-      /** A clause word that isn't a format, with its `@`: an error on the line. */
-      unknownFormat: string | null
+      /**
+       * The clause's first problem, in section 13's words: a word that isn't a
+       * format (`Unknown format @bolt`) or a comment word (`@L is for comment
+       * lines`). An error on the line, reported after it ran.
+       */
+      formatError: string | null
       /** The clause's rules, in the order typed (section 3, A rule). */
       rules: readonly FormatRule[]
       /** The target of a trailing top-level `in` or `to`, as typed, or null. */
@@ -58,6 +74,29 @@ export interface LineFormat {
 
 export const NO_FORMAT: LineFormat = { bold: false, underline: false, color: null, textColor: null }
 
+/** A comment line's sizes (section 3, M4d): S, L and XL are words; M, 15 px, is the default. */
+export const COMMENT_SIZES = ['S', 'M', 'L', 'XL'] as const
+export type CommentSize = (typeof COMMENT_SIZES)[number]
+
+/**
+ * A comment line's format (section 3, A comment line's format, M4d): a line's
+ * format, and italic taken off (`@upright`) and a size. There is no alignment,
+ * and a comment line takes no rules.
+ */
+export interface CommentFormat extends LineFormat {
+  /** Not italic: a comment is italic without `@upright`. */
+  upright: boolean
+  size: CommentSize
+}
+
+export const NO_COMMENT_FORMAT: CommentFormat = { ...NO_FORMAT, upright: false, size: 'M' }
+
+/** The words only a comment line takes; on a math line each is the line's error. */
+const COMMENT_ONLY_WORDS: readonly string[] = ['upright', 'S', 'L', 'XL']
+
+/** A word a comment line's clause takes: a line's format word, `@upright` or a size. */
+export type CommentWord = FormatWord | { kind: 'upright' } | { kind: 'size'; size: Exclude<CommentSize, 'M'> }
+
 /** One format word, as it sets a format: null for a word that isn't one. */
 export type FormatWord =
   | { kind: 'bold' }
@@ -84,6 +123,20 @@ export function readFormatWord(word: string): FormatWord | null {
   return null
 }
 
+/** What a word sets on a comment line, or null when a comment line doesn't take it. */
+export function readCommentWord(word: string): CommentWord | null {
+  if (word === 'upright') return { kind: 'upright' }
+  if (word === 'S' || word === 'L' || word === 'XL') return { kind: 'size', size: word }
+  return readFormatWord(word)
+}
+
+/** A comment's format with `word` applied: a size or a colour named twice keeps the last. */
+export function applyCommentWord(format: CommentFormat, word: CommentWord): CommentFormat {
+  if (word.kind === 'upright') return { ...format, upright: true }
+  if (word.kind === 'size') return { ...format, size: word.size }
+  return { ...format, ...applyFormatWord(format, word) }
+}
+
 /** A format with `word` applied: a colour named twice keeps the last. */
 export function applyFormatWord(format: LineFormat, word: FormatWord): LineFormat {
   switch (word.kind) {
@@ -103,15 +156,18 @@ export function readLine(line: string): LineForm {
   const code = at === -1 ? line : line.slice(0, at)
   const after = at === -1 ? null : line.slice(at + 1).trim()
   if (code.trim() === '') {
-    return after ? { kind: 'comment', text: after } : { kind: 'blank' }
+    return after ? { kind: 'comment', text: after, format: NO_COMMENT_FORMAT, formatError: null } : { kind: 'blank' }
   }
   const { rest, segments } = splitClause(code)
+  // Code that is only a clause: a formatted comment line, or a blank line
+  // when no comment text follows (section 3, A comment line's format).
+  if (rest === '') return after ? { kind: 'comment', text: after, ...readCommentClause(segments) } : { kind: 'blank' }
   let format = NO_FORMAT
-  let unknownFormat: string | null = null
+  let formatError: string | null = null
   const rules: FormatRule[] = []
   for (const segment of segments) {
     const read = readSegment(segment)
-    if (read === null) unknownFormat ??= segment.split(/\s+/)[0]
+    if (read === null) formatError ??= clauseError(segment)
     else if (read.condition === null) format = applyFormatWord(format, read.word)
     else rules.push({ word: read.word, condition: read.condition, text: segment })
   }
@@ -120,22 +176,55 @@ export function readLine(line: string): LineForm {
     code: rest,
     note: after || null,
     format,
-    unknownFormat,
+    formatError,
     rules,
     ...splitDisplayUnit(rest),
   }
 }
 
+/**
+ * A comment line's clause: its words, applied in order, and its first problem.
+ * A word followed by `if` is a rule, which needs a math line; the comment
+ * still takes the clause's other words.
+ */
+function readCommentClause(segments: readonly string[]): { format: CommentFormat; formatError: string | null } {
+  let format = NO_COMMENT_FORMAT
+  let formatError: string | null = null
+  for (const segment of segments) {
+    const parts = segmentParts(segment)
+    const word = parts && readCommentWord(parts.name)
+    if (!parts || !word) formatError ??= clauseError(segment)
+    else if (parts.rest === '') format = applyCommentWord(format, word)
+    else formatError ??= isRule(parts.rest) ? 'rules need a math line' : clauseError(segment)
+  }
+  return { format, formatError }
+}
+
+/** Why a segment of a math line's clause isn't a format, in section 13's words. */
+function clauseError(segment: string): string {
+  const name = segmentParts(segment)?.name
+  if (name !== undefined && COMMENT_ONLY_WORDS.includes(name)) return `@${name} is for comment lines`
+  return `Unknown format ${segment.split(/\s+/)[0]}`
+}
+
+/** A segment's word, without its `@`, and what follows it, trimmed; null for a bare `@`. */
+function segmentParts(segment: string): { name: string; rest: string } | null {
+  const match = /^@([A-Za-z][\w-]*)(.*)$/s.exec(segment)
+  return match ? { name: match[1], rest: match[2].trim() } : null
+}
+
+/** Whether what follows a word makes it a rule: `if`, as a whole word. */
+function isRule(rest: string): boolean {
+  return /^if(?![\w.])/.test(rest)
+}
+
 /** One clause segment, `@word` or `@word if <condition>`; null when the word isn't a format. */
 function readSegment(segment: string): { word: FormatWord; condition: string | null } | null {
-  const match = /^@([A-Za-z][\w-]*)(.*)$/s.exec(segment)
-  if (!match) return null
-  const word = readFormatWord(match[1])
-  if (word === null) return null
-  const rest = match[2].trim()
-  if (rest === '') return { word, condition: null }
-  const rule = /^if(?![\w.])(.*)$/s.exec(rest)
-  return rule ? { word, condition: rule[1].trim() } : null
+  const parts = segmentParts(segment)
+  const word = parts && readFormatWord(parts.name)
+  if (!parts || !word) return null
+  if (parts.rest === '') return { word, condition: null }
+  return isRule(parts.rest) ? { word, condition: parts.rest.slice(2).trim() } : null
 }
 
 /**
@@ -205,13 +294,14 @@ export function hasTopLevelSemicolon(code: string): boolean {
  * and before the `#`: the plain words in a fixed order, `@bold @underline
  * @text-<name> @<highlight>`, then every rule exactly as it was typed (section
  * 3, Rules for what the app writes). Unknown words are dropped. A line with no
- * code takes no format and comes back unchanged.
+ * code, a formatted comment line among them, takes no format here and comes
+ * back unchanged.
  */
 export function writeFormat(line: string, format: LineFormat): string {
   const at = commentStart(line)
   const code = at === -1 ? line : line.slice(0, at)
-  if (code.trim() === '') return line
   const { rest, segments } = splitClause(code)
+  if (rest.trim() === '') return line
   const rules = segments.filter((segment) => readSegment(segment)?.condition != null)
   const words = [
     format.bold ? '@bold' : null,
@@ -237,6 +327,8 @@ export function writeDisplayUnit(line: string, unit: string | null): string {
   const tail = at === -1 ? '' : line.slice(at)
   const start = clauseStart(head)
   const code = (start === -1 ? head : head.slice(0, start)).trimEnd()
+  // Only a clause: a formatted comment line, or a blank one, has no value.
+  if (code.trim() === '') return line
   const clause = start === -1 ? '' : ` ${head.slice(start).trim()}`
   const { expression } = splitDisplayUnit(code)
   const written = unit ? `${expression} in ${unit.trim()}` : expression

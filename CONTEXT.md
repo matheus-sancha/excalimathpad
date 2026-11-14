@@ -171,7 +171,14 @@ come, and their terms move in here as each M4d issue makes them true.
   composes the plain words back for the bar in a fixed order and keeps every
   rule. A math line carries its `LineFormat` (bold, underline, highlight, text
   colour); an unknown clause word is the line's error, reported after the line
-  ran. After a line runs, `runRules` (in `evaluate.ts`) tests its rules in a
+  ran. A clause's first problem is the form's `formatError`, in section 13's
+  words (`Unknown format @blod`, and a comment word on a math line, `@L is for
+  comment lines`). Code that is only a clause is a **formatted comment line**
+  (M4d, #142): the clause is the comment's `CommentFormat` (a line's words,
+  `@upright` and a size, `@S`, `@L` or `@XL`; M is the size without one), a
+  rule there is its error (`rules need a math line`), and with no text after
+  the `#` the line is blank. A comment line's error is its result; it defines
+  nothing, so nothing below fails. After a line runs, `runRules` (in `evaluate.ts`) tests its rules in a
   `LayeredScope` over the scope with `result` bound, so a condition never
   reaches the next line; the first true rule wins per property over the plain
   format (`resolveRules`), and the typeset format is the result. A condition
@@ -344,12 +351,20 @@ come, and their terms move in here as each M4d issue makes them true.
   typed (spec section 4): `wordAt`, `suggest` and `accept` over the sheet's
   names above the line (`sheetNames`), the constants, a fixed list of functions
   and the units; `MathOverlay` builds the sources for the open line and
-  `LineField` draws the list and takes its keys (Tab, ↓ ↑, Enter, Esc);
+  `LineField` draws the list and takes its keys (Tab, ↓ ↑, Enter, Esc); after
+  `@` it holds the format words, and on a clause at the start of a line, a
+  comment's, the comment words and never `if` (M4d);
   `UnitField` (the field and list, one of the overlay's
   controls that take pointer events) hands back a unit, and `MathOverlay`
   writes it with `writeDisplayUnit` as one line commit. The engine gives each
   line its `unitSlot` (kind, chosen unit, value in the system and in each
   unit of the kind).
+  A **comment line's row** (spec section 4, Typeset grid, M4d) carries its
+  format as classes, a math line's (`is-bold`, `is-underline`, the band, the
+  text colour) and `is-upright` and `is-size-S|L|XL`; `MathOverlay.css` sets
+  the size, a line height 1.6 times it, and the width the comment asks for,
+  scaled by its size (`--math-comment-request`). Its gutter shows only for its
+  clause's error, so a comment row is laid out as before.
   A **warning at rest** (spec section 4, Problems, M4d): an element's `⚠`
   marks show only while one of its lines or its title is open (`edit` in
   that element; being selected is not), or on its line while a jump flashes
@@ -503,8 +518,9 @@ and everything downstream recalculates. Engine: math.js, client-side.
   (assignment is plain `=`), anchored at a scene position, plus one
   **result** per line: a value with unit (`20 V`), an error (message), or
   empty. It shows as a grid of **typeset rows**. A line starting with `#` is
-  a **comment line**; the text after the first `#` on a line with code is its
-  **note**; neither reaches math.js.
+  a **comment line**, and so is one whose code is only a format clause, the
+  comment's format (`@bold @L # Pumps`, M4d); the text after the first `#` on
+  a line with code is its **note**; neither reaches math.js.
 - **Content size** — the grid's laid-out size in scene units. The anchor's
   size is a copy of it, written with no undo step.
 - **Anchor** — the Excalidraw rectangle that carries a math element's
@@ -676,11 +692,14 @@ and everything downstream recalculates. Engine: math.js, client-side.
   runs its letter shortcuts on a key from any input that isn't text, number
   or password, so a `type="search"` filter in the Sheet panel lost the
   keyboard to its colour picker on `s` (#99, `App.test.tsx`).
-- **A comment's cell is `width: 320px; max-width: max-content; min-width:
-  100%`** (`MathOverlay.css`). The percentage fills the row and counts as
-  nothing when the grid sizes its columns, so a comment wraps at the width the
-  math sets and asks for at most 320 px itself (#98). jsdom lays nothing out:
-  check a change here in Chromium.
+- **A comment's cell is `width: var(--math-comment-request, 320px);
+  max-width: max-content; min-width: 100%`** (`MathOverlay.css`). The
+  percentage fills the row and counts as nothing when the grid sizes its
+  columns, so a comment wraps at the width the math sets and asks for at most
+  320 px itself (#98), scaled by its size (277, 427 or 555 px at S, L or XL,
+  M4d). The size sets the request through the variable, not `width`, so the
+  chosen width's `width: 0` and the floor's measuring still win over it. jsdom
+  lays nothing out: check a change here in Chromium.
 - **`customData` holds no nested objects.** Excalidraw compares it one level
   deep when it records a step, so an object inside it differs from the
   snapshot's clone and every later write of the anchor gains an empty undo

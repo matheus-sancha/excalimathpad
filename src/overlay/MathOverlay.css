@@ -221,7 +221,8 @@
 .math-element__comment {
   grid-column: 2 / -1;
   box-sizing: border-box;
-  width: 320px;
+  /* 320px at M; a sized comment's request scales with its size (M4d). */
+  width: var(--math-comment-request, 320px);
   max-width: max-content;
   min-width: 100%;
   white-space: pre-wrap;
@@ -235,6 +236,27 @@
   width: 0;
   max-width: none;
 }
+
+/* A comment line's format (section 4, Typeset grid, M4d): bold, italic off,
+   underline, a text colour and a size; the band is the row's, as on a math
+   line. A comment has no KaTeX, so its underline is a plain decoration, under
+   every wrapped row. Its line height keeps 1.6 times its size, and the width
+   it asks for scales with the size (section 4, Size): about 277 px at S, 427
+   at L and 555 at XL, so a heading wraps at about as many characters as an
+   ordinary comment. A chosen width still replaces the request. */
+.math-element__row.is-bold .math-element__comment { font-weight: bold; }
+.math-element__row.is-upright .math-element__comment { font-style: normal; }
+.math-element__row.is-underline .math-element__comment {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.math-element__row.is-text-color .math-element__comment { color: var(--math-line); }
+.math-element__row.is-size-S { --math-comment-request: calc(320px * 13 / 15); }
+.math-element__row.is-size-L { --math-comment-request: calc(320px * 20 / 15); }
+.math-element__row.is-size-XL { --math-comment-request: calc(320px * 26 / 15); }
+.math-element__row.is-size-S .math-element__comment { font-size: 13px; line-height: 1.6; }
+.math-element__row.is-size-L .math-element__comment { font-size: 20px; line-height: 1.6; }
+.math-element__row.is-size-XL .math-element__comment { font-size: 26px; line-height: 1.6; }
 
 /* `floorOf` (useAnchorSizes.ts) measures the floor by laying the body out at
    no width for a moment; important, to win over the chosen width's inline

@@ -32,6 +32,7 @@ import {
   NO_FORMAT,
   readLine,
   writeFormat,
+  type CommentFormat,
   type LineFormat,
 } from '../math/lineForm.ts'
 import { leadingNumber } from '../math/numbers.ts'
@@ -202,9 +203,15 @@ export function MathElementView({
                 <li
                   // A new key restarts the flash's animation on a second jump.
                   key={flashing ? `${i}:${flash.key}` : i}
-                  className={`math-element__row is-${open ? 'editing' : line.typeset.kind}${formatClasses(
-                    open ? formatOf(edit.text) : line.typeset.kind === 'math' ? line.typeset.format : NO_FORMAT,
-                  )}${flashing ? ' is-flash' : ''}`}
+                  className={`math-element__row is-${open ? 'editing' : line.typeset.kind}${
+                    open
+                      ? formatClasses(formatOf(edit.text))
+                      : line.typeset.kind === 'math'
+                        ? formatClasses(line.typeset.format)
+                        : line.typeset.kind === 'comment'
+                          ? commentClasses(line.typeset.format)
+                          : ''
+                  }${flashing ? ' is-flash' : ''}`}
                   data-line={i}
                   aria-label={text}
                 >
@@ -368,10 +375,14 @@ function TitleBar({ format, onChange }: { format: TitleFormat; onChange: (format
   )
 }
 
-/** The format the open line's typed text asks for; a line with no code has none. */
+/**
+ * The format the open line's typed text asks for, live: a math line's, or a
+ * comment line's bold, underline, band and text colour (the field keeps one
+ * size and slant); a blank line has none.
+ */
 function formatOf(text: string): LineFormat {
   const form = readLine(text)
-  return form.kind === 'code' ? form.format : NO_FORMAT
+  return form.kind === 'blank' ? NO_FORMAT : form.format
 }
 
 /** A row's format as classes: the stylesheet draws bold, underline, the band and the text colour. */
@@ -379,6 +390,15 @@ function formatClasses({ bold, underline, color, textColor }: LineFormat): strin
   return `${bold ? ' is-bold' : ''}${underline ? ' is-underline' : ''}${color ? ` is-${color}` : ''}${
     textColor ? ` is-text-color is-text-${textColor}` : ''
   }`
+}
+
+/**
+ * A comment row's format as classes (section 4, Typeset grid, M4d): a line's,
+ * and `@upright` and a size other than M. The stylesheet sets the size, the
+ * line height at 1.6 times it and the width a comment asks for, scaled by it.
+ */
+function commentClasses(format: CommentFormat): string {
+  return `${formatClasses(format)}${format.upright ? ' is-upright' : ''}${format.size === 'M' ? '' : ` is-size-${format.size}`}`
 }
 
 /** A row whose ⚠ is hidden: its gutter keeps its column, with no mark and no hover. */
@@ -417,7 +437,14 @@ function TypesetRow({
     case 'blank':
       return <ResultCell result={result} />
     case 'comment':
-      return <span className="math-element__comment">{typeset.text}</span>
+      // A comment has no result: its gutter shows only for its clause's error
+      // (M4d), so a comment row is laid out as it always was.
+      return (
+        <>
+          {result.kind === 'error' && <Gutter result={result} warnings={NO_WARNINGS} />}
+          <span className="math-element__comment">{typeset.text}</span>
+        </>
+      )
     case 'unparsed':
       return (
         <>
