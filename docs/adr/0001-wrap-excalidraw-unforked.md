@@ -6,10 +6,13 @@
   decided, chrome in Excalidraw's public slots, contract-tested internals allowed).
   Amended items name the milestone that builds them; until then
   [`CONTEXT.md`](../../CONTEXT.md) says what the code does.
-  2026-11-14 (M4d, not built; #128, #129): the same unforked package runs inside the
+  2026-11-14 (M4d; #128, #129, built in #137): the same unforked package runs inside the
   Obsidian plugin's view (ADR 0006), where Web Embed, Mermaid to Excalidraw, Browse
   libraries, Copy to clipboard as SVG and the command palette are hidden, each with a
-  contract test.
+  contract test. In an Obsidian pop-out window Excalidraw's own `window` and `document`
+  listeners and its dialogs are the main window's; the pop-out bridge
+  (`src/canvas/popoutBridge.ts`) carries the pop-out's events and dialogs across rather
+  than patch the package, contract-tested by the pop-out run in CI.
 
 ## Context
 

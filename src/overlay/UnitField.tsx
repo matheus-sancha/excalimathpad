@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { SheetLine } from '../math/evaluate.ts'
+import { vaultKeyRoute } from '../canvas/vaultKeys.ts'
 
 /**
  * The unit slot's field (docs/spec-v1.md section 5, Unit slot): a text field
@@ -82,8 +83,9 @@ export function UnitField({
             event.preventDefault()
             onCancel()
           }
-          // The canvas's own keys stay away while typing here.
-          event.stopPropagation()
+          // The canvas's own keys stay away while typing here; Obsidian's core
+          // keys still reach Obsidian (docs/spec-v1.md section 8).
+          if (vaultKeyRoute(event.nativeEvent) !== 'pass') event.stopPropagation()
         }}
         onBlur={onCancel}
       />

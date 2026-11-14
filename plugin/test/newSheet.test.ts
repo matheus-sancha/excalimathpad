@@ -27,7 +27,8 @@ const lastLeaf = (): WorkspaceLeaf => vault.app.workspace.leaves.at(-1)!
 describe('the command, the ribbon and the folder menu', () => {
   it('registers the command New sheet, with no default hotkey, and a ribbon icon', async () => {
     vault = await vaultWith({})
-    expect(vault.recorded.commands).toEqual([expect.objectContaining({ id: 'new-sheet', name: 'New sheet' })])
+    // The tab's own commands are tab.test.ts's.
+    expect(vault.recorded.commands[0]).toEqual(expect.objectContaining({ id: 'new-sheet', name: 'New sheet' }))
     expect(command()).not.toHaveProperty('hotkeys')
     expect(vault.recorded.ribbon.map(({ icon, title }) => ({ icon, title }))).toEqual([
       { icon: NEW_SHEET_ICON, title: 'New sheet' },

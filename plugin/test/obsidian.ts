@@ -33,6 +33,21 @@ declare global {
     removeClass(...classes: string[]): void
     createEl<K extends keyof HTMLElementTagNameMap>(tag: K, info?: DomElementInfo | string): HTMLElementTagNameMap[K]
     createDiv(info?: DomElementInfo | string): HTMLDivElement
+    onWindowMigrated(listener: (win: Window) => unknown): () => void
+  }
+}
+
+/** Each element's window-migration listeners: \`migrateWindow\` calls them, as Obsidian does on a move. */
+const migrations = new WeakMap<HTMLElement, Set<(win: Window) => unknown>>()
+
+/**
+ * Moves \`element\` into \`win\`'s body, as Obsidian does when a tab goes to a
+ * pop-out window, and tells it and every element under it that listens.
+ */
+export function migrateWindow(element: HTMLElement, win: Window) {
+  win.document.body.appendChild(element)
+  for (const node of [element, ...element.querySelectorAll<HTMLElement>('*')]) {
+    migrations.get(node)?.forEach((listener) => listener(win))
   }
 }
 
@@ -70,6 +85,12 @@ export function installDomHelpers(win: Window & typeof globalThis = window) {
     },
     createDiv(this: HTMLElement, info?: DomElementInfo | string) {
       return this.createEl('div', info)
+    },
+    onWindowMigrated(this: HTMLElement, listener: (win: Window) => unknown) {
+      const listeners = migrations.get(this) ?? new Set()
+      migrations.set(this, listeners)
+      listeners.add(listener)
+      return () => listeners.delete(listener)
     },
   })
 }
@@ -456,6 +477,14 @@ export class Workspace extends Events {
     const view = this.activeLeaf?.view
     return view instanceof FileView ? view.file : null
   }
+  getActiveViewOfType<T extends View>(type: abstract new (...args: never[]) => T): T | null {
+    const view = this.activeLeaf?.view
+    return view instanceof type ? view : null
+  }
+  /** Makes `leaf` the active one, as a click into its tab does. */
+  setActiveLeaf(leaf: WorkspaceLeaf) {
+    this.activeLeaf = leaf
+  }
   /** The explorer's menu for `file`, as a right-click opens it. */
   fileMenu(file: TAbstractFile) {
     const menu = new Menu()
@@ -646,6 +675,22 @@ export interface Command {
   id: string
   name: string
   callback?: () => unknown
+  checkCallback?: (checking: boolean) => boolean | void
+  hotkeys?: unknown[]
+}
+
+/** Whether the command palette offers `command` now, as Obsidian asks before listing it. */
+export function isOffered(command: Command): boolean {
+  if (command.checkCallback) return command.checkCallback(true) === true
+  return !!command.callback
+}
+
+/** Runs `command` as a pick in the command palette does; false if it isn't offered. */
+export function runCommand(command: Command): boolean {
+  if (!isOffered(command)) return false
+  if (command.checkCallback) command.checkCallback(false)
+  else command.callback?.()
+  return true
 }
 
 export class Plugin extends Component {

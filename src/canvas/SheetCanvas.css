@@ -156,3 +156,15 @@
   line-height: inherit;
   letter-spacing: inherit;
 }
+
+/* In an Obsidian tab, Excalidraw's items the plugin hides (docs/spec-v1.md
+   section 8, Inside an Obsidian tab): Web Embed and Mermaid to Excalidraw (one
+   test id), More tools' Generate heading over them, Browse libraries and Copy
+   to clipboard as SVG. The selectors are `VAULT_HIDDEN` in vaultItems.ts;
+   `vaultItems.excalidraw.test.tsx` checks both against the installed package. */
+.sheet-canvas--vault .App-toolbar__extra-tools-dropdown [data-testid="toolbar-embeddable"],
+.sheet-canvas--vault .App-toolbar__extra-tools-dropdown .dropdown-menu-container > div:not([class]),
+.sheet-canvas--vault .library-menu-browse-button,
+.sheet-canvas--vault .context-menu [data-testid="copyAsSvg"] {
+  display: none;
+}

@@ -1551,23 +1551,33 @@ From M4d, in the plugin. The web app's chrome above is unchanged.
 - **No file name** beside ☰ and no `document.title`: Obsidian's tab header names the sheet.
 - **The welcome screen** keeps the name and the hint, without Open…. On touch the hint reads
   "Tap More tools, then Add math, then tap the sheet".
-- **Theme:** a tab opens in Obsidian's light or dark mode (`body.theme-dark`, kept current by
-  `css-change`). Dark mode in ☰ flips that tab only, until it closes or Obsidian's mode
-  changes. Nothing is stored. Canvas background is saved in the file, as on the web.
+- **Theme:** Excalimathpad's own light or dark mode, whatever Obsidian's. Dark mode in ☰
+  (Alt+Shift+D) switches it, and the choice is remembered in the plugin's `data.json`: every
+  sheet tab opened after it opens in that mode, after a restart too. Light until one is chosen.
+  Canvas background is saved in the file, as on the web.
 - **Keys** act only while the tab has focus. Obsidian's core keys always pass through, even
   from the canvas or a line: Ctrl/Cmd+P, O, N, W, `,`, Shift+F, S (Obsidian's save), and
-  Ctrl+Tab / Ctrl+Shift+Tab. Ctrl+Shift+E stays swallowed. Everything else the sheet uses
+  Ctrl+Tab / Ctrl+Shift+Tab. A core key Obsidian acted on stops at the view, so the sheet
+  doesn't act on it too (Excalidraw would answer Ctrl+P with a toast); one Obsidian left alone
+  goes on to the sheet. Ctrl+Shift+E stays swallowed. Everything else the sheet uses
   stays the sheet's: M, Enter, Esc, ↑ ↓, Tab in suggestions, Ctrl+B/U/I, Ctrl+Z/Y,
   Excalidraw's letters, Ctrl+C/V/D/A/F, `?` and Alt+Shift+D.
 - **The Sheet panel** is Excalidraw's sidebar inside the tab, docking when the **tab** is
   wider than 1229 px and floating when narrower, so a split pane floats it. Each tab has its
   own panel. Its open or closed memory is kept in the plugin's `data.json`.
-- **Hidden in the plugin:** Web Embed and Mermaid to Excalidraw in More tools; Browse
-  libraries (the library keeps the session's items); Copy to clipboard as SVG (Copy as PNG
-  stays); Excalidraw's command palette, whose keys (Ctrl+/, Ctrl+Shift+P) are swallowed.
+- **Hidden in the plugin:** Web Embed and Mermaid to Excalidraw in More tools, with the
+  Generate heading over them, and Excalidraw's AI items; Browse libraries (the library keeps
+  the session's items); Copy to clipboard as SVG (Copy as PNG stays); Excalidraw's command
+  palette, whose keys (Ctrl+/, Ctrl+Shift+P) are swallowed.
 - **Obsidian's entries:** the commands **New sheet** (always), **Add math**, **Toggle Math
   settings** and **Open Math guide** (only while a sheet tab is active), with no default
-  hotkeys; the ribbon icon (New sheet); no settings tab.
+  hotkeys; the ribbon icon (New sheet); no settings tab. Add math and Toggle Math settings do
+  what their More tools items do, in the active tab. Open Math guide arrives with the guide.
+- **Side by side and in a pop-out window** each sheet tab keeps its own keys, panel and
+  dialogs. In a pop-out (desktop) the tab works as in the main window: drag, place, draw,
+  Help and the other dialogs, copy and paste. Excalidraw listens on the main window there, so
+  the **pop-out bridge** carries the pop-out's events and dialogs across
+  ([section 14](#14-engineering-constraints)).
 - Excalidraw's Help and `?` stay. Its outbound links open the browser only when clicked.
 - Reset the canvas keeps Excalidraw's confirm, is one undo step and autosaves.
 
@@ -1986,7 +1996,7 @@ touch in [section 4](#touch). Research: [`docs/research/obsidian-plugin.md`](res
   excalidraw.com's Firebase config (the `AIza…` key) are removed or stripped; Xiaolai is `local:`;
   there is no telemetry and no account. A link on an element opens the browser when clicked.
 - **Storage only in the vault:** sheets in their files; the plugin's memory (the panel's open or
-  closed state) in `data.json` through `loadData`/`saveData`. No IndexedDB, `localStorage` or
+  closed state, and light or dark) in `data.json` through `loadData`/`saveData`. No IndexedDB, `localStorage` or
   `App#saveLocalStorage`.
 - **Reach:** it reads only the sheet open in the view and one image the user picks from a vault
   image picker (image files listed by name; the picked image is copied into the sheet, as
@@ -2412,7 +2422,21 @@ Engineer's design gate. Tested on Excalidraw 0.18.1, math.js 15.2 and Chromium.
   focus query.
 - **In the plugin (M4d)** the keys and pointer listeners registered on `document` and `window` today
   (`canvasEvents.ts`, `FileChrome`, `useFileRoutes`) are bound to the view's own container and document
-  instead, and `useFileRoutes` isn't installed. The core-key pass-through list is a tested constant.
+  instead, and `useFileRoutes` isn't installed. The core-key pass-through list is a tested constant
+  (`src/canvas/vaultKeys.ts`), heard on the view's container in the capture phase: a core key Obsidian's
+  keymap marked `defaultPrevented` stops there, the swallowed ones always do. Built in #137.
+- **The pop-out bridge (M4d, #137).** In an Obsidian pop-out window the plugin's code runs in the main
+  window, so the unforked Excalidraw's `window` and `document` listeners (its drags, its outside clicks,
+  copy, cut and paste, `keyup`) and its dialogs (`document.body`) are the main window's: without help a drag
+  there never ends, a placing click places nothing, `?` opens Help in the main window and paste does nothing.
+  `src/canvas/popoutBridge.ts` copies the pop-out's pointer, touch, `keyup` and clipboard events onto the
+  main document, only a sheet's (a press anywhere, for outside clicks); never `keydown`, which would reach
+  Obsidian's main-window keymap. A move and a release go from the main body, since Excalidraw's drag reads on
+  only for an `HTMLElement` of the code's own window; a press keeps its target. While a clipboard event runs,
+  the main document's `activeElement` and `elementFromPoint` and `navigator.clipboard` are the pop-out's. A
+  dialog box Excalidraw adds to the main body moves into the pop-out whose sheet had the last press or key,
+  and the body's `removeChild` finds it there. Each sheet view notes that on its own container, so no listener
+  goes on a global. It follows a tab Obsidian moves (`onWindowMigrated`).
 
 Evidence: [`excalidraw-gestures.md`](research/excalidraw-gestures.md).
 
@@ -2436,7 +2460,9 @@ Evidence: [`excalidraw-gestures.md`](research/excalidraw-gestures.md).
 | `data-prevent-outside-click` keeps a floating sidebar open | A press in the line field leaves the floating panel open (control: without it, it closes) | M4d |
 | A focused `<select>` gets Excalidraw's shortcuts | Delete on a focused Settings `<select>` leaves the selected element (control: unpatched, it deletes it) | M4d |
 | Two taps become a `dblclick` | A double tap (Playwright `hasTouch`) on a selected element's line opens it | M4d |
-| Hidden items in the plugin | Web Embed, Mermaid, Browse libraries and Copy as SVG aren't in their menus, and Ctrl+/ and Ctrl+Shift+P open no palette | M4d |
+| Hidden items in the plugin | Web Embed, Mermaid, Browse libraries and Copy as SVG aren't in their menus, and Ctrl+/ and Ctrl+Shift+P open no palette | #137, `vaultItems.excalidraw.test.tsx` (the selectors pick exactly those items, and `SheetCanvas.css` hides them; jsdom applies no CSS) |
+| Excalidraw answers Ctrl+P and Ctrl+Shift+E | Confined, Ctrl+P that Obsidian took shows no toast and Ctrl+Shift+E opens no export (controls: unconfined, both do) | #137, `vaultItems.excalidraw.test.tsx` |
+| Excalidraw listens on the code's window in a pop-out | In a pop-out tab, and one moved there, a drag moves, M and a click place, `?` opens Help there and Esc removes it, a paste adds text and a copy writes the element (control: the main window's tab) | #137, `scripts/popout-run.mjs` (`npm run test:popout`, in CI) |
 
 **File:** serialize with `serializeAsJSON(…, "local")`, then add the block. Excalidraw's own Ctrl+S and Ctrl+O
 must be taken over, because its save drops the block. `UIOptions.canvasActions` turns off `loadScene`,
@@ -2897,6 +2923,24 @@ Changes line if it changes behaviour.
   `window` for resize, blur, focus, message and unload, whatever `handleKeyboardGlobally` is (React adds
   `selectionchange`). In a pop-out window those are the main window's, so a drag or a paste there is the risk
   #137 has to check by hand.
+- Two sheet tabs side by side and a pop-out window, each keeping its own keys, panel and dialogs (#137).
+  **Side by side, passed against the fake `obsidian` in jsdom** (`plugin/test/tab.test.ts`): M places math
+  only in the focused tab, Add math and Toggle Math settings act on the active tab only, Dark mode in one tab
+  leaves the other's mode, and Ctrl+P that Obsidian's keymap takes never reaches an open line.
+  **Pop-out: failed, then passed with the bridge**, in headless Chromium against the built plugin, with the
+  view's DOM in a second, same-origin window as Obsidian makes a pop-out (`scripts/popout-run.mjs`). Before
+  the bridge the main window's tab (the control) dragged, placed math, opened Help and pasted; the pop-out's
+  tab typeset, but a drag moved nothing, M and a click placed nothing, `?` opened Help in the main window and
+  a paste did nothing. **Found on the way:** Excalidraw's drag handler reads on only when the event's target
+  is an `HTMLElement` of the code's own window, its copy, cut and paste read the global
+  `document.activeElement`, its paste tests `document.elementFromPoint` with `instanceof HTMLCanvasElement`,
+  and its copy writes with the global `navigator.clipboard.writeText`. With the bridge
+  ([section 14](#14-engineering-constraints)) every check passes in the pop-out, and in a tab opened in the
+  main window and then moved there; the run is in CI (`npm run test:popout`). **Not run in Obsidian:** the
+  real Electron pop-out (focus between windows, a dialog opened from ☰ there, the eye dropper) and Obsidian's
+  keymap phase (whether it marks a key it took `defaultPrevented`, which the pass-through relies on) are
+  Matheus's hand check in a test vault: Ctrl+P from a focused line opens Obsidian's palette, and M adds math
+  only in the focused sheet tab, side by side and in a pop-out.
 - The bundle under 5,000,000 bytes after the trims, and the network-blocked run making no request with a plot,
   an image and CJK text. **Passed (#135):** `main.js` is 3,434,970 bytes and `styles.css` 642,640 bytes, with 21
   of Excalidraw's fonts inlined and Xiaolai's 209 paths `local:`. In headless Chromium with every non-local
@@ -3413,7 +3457,7 @@ Changes line if it changes behaviour.
   run fails on any `<style>` or `<link>` added at run time. The allowlist also holds Excalidraw's Help links
   and its embed patterns, and the plugin turns embeds off (`validateEmbeddable={false}`) so none loads.
 - 2026-11-14, [sections 7](#a-sheet-in-a-vault), [12a](#data-protection) and [13](#13-messages) (#136, found
-  while building, for Matheus to confirm on the PR):
+  while building, confirmed by Matheus: "all fine"):
   - **The vault image picker** takes over Excalidraw's image tool: Excalidraw 0.18 opens the operating
     system's file picker from inside `setActiveTool`, so the tool's button and its key 9 are stopped before
     Excalidraw hears them. The picker lists the vault's PNG, JPEG, GIF, WebP, BMP, AVIF and SVG files by
@@ -3428,3 +3472,18 @@ Changes line if it changes behaviour.
     still hold.
   - **New sheet** uses the ribbon icon `calculator`, and a create that fails shows
     `Couldn't create Untitled.excalimathpad: <reason>.` and opens no tab.
+- 2026-11-14, [sections 8](#inside-an-obsidian-tab) and [12a](#data-protection) (after #136's hand check,
+  agreed by Matheus; reopens #129's theme): a sheet's tab keeps "excalimathpad own light or dark setting",
+  not Obsidian's mode, and the choice is "remembered" in `data.json`, so every sheet opens in the last mode
+  chosen. Built in #137. Not asked: a tab already open keeps its mode when another tab switches.
+- 2026-11-14, [sections 8](#inside-an-obsidian-tab), [14](#14-engineering-constraints) and
+  [17](#17-verify-first) (#137, for Matheus to confirm on the PR):
+  - **The pop-out bridge**, Matheus's choice after the pop-out probe failed ("Build an event bridge"): a sheet
+    tab in a pop-out window works as in the main window. The alternatives were to refuse pop-outs with a
+    message, or to leave them broken and say so.
+  - **A core key passes through by Obsidian's own mark:** it stops at the view only when Obsidian's keymap has
+    acted on it (`defaultPrevented`), else it goes on to the sheet, so Obsidian's keys never break whichever
+    phase its keymap listens in.
+  - **Also hidden:** More tools' Generate heading, left empty once Web Embed and Mermaid go, and Excalidraw's
+    AI items (`aiEnabled={false}`).
+  - **Open Math guide** is registered with the guide (#148), and **Print…** with M5.
