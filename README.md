@@ -75,6 +75,7 @@ It wraps the official `@excalidraw/excalidraw` component, never a fork ([ADR 000
 - **Sheet panel.** Four tabs: **Variables**, **Problems**, **Settings** and **Constants**. Clicking a row jumps to its line.
 - **Your own files.** Sheets save as `.excalimathpad` files, which are Excalidraw JSON plus one extra block ([ADR 0004](docs/adr/0004-sheet-file-is-excalidraw-json-plus-a-block.md)). Plain `.excalidraw` drawings open too.
 - **Recovery copy.** Unsaved work is kept in IndexedDB and offered back on the next launch.
+- **In an Obsidian vault** (the plugin, not yet released). A sheet saves itself as Obsidian's notes do, and **New sheet** is a command, a ribbon icon and a folder menu item. If sync or another tab changes a sheet you are editing, your version is kept beside it as a conflict copy. Obsidian Sync carries `.excalimathpad` files only with **Sync all other types** turned on.
 - **Excalidraw's own undo.** Undo covers math: one step per committed line, alongside Excalidraw's own steps.
 - **Build stamp.** The last line of the ☰ menu shows which build is running.
 

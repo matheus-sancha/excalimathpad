@@ -2225,6 +2225,9 @@ The wording of every user-facing message. `<…>` is filled in. Numbers follow
 |---|---|---|
 | An outside change met unwritten work (notice) | `pump-sizing changed elsewhere. Your version was saved beside it as pump-sizing (conflict 2026-11-14 1532).` | M4d |
 | A write that fails (notice) | `Couldn't save pump-sizing.excalimathpad: <reason>. Your work is still open.` | M4d |
+| New sheet's file can't be created (notice) | `Couldn't create Untitled.excalimathpad: <reason>.` | M4d |
+| The vault image picker's field | `Pick an image from the vault to place on the sheet` | M4d |
+| A picked image over 4 MB (Excalidraw's own toast) | `File is too big. Maximum allowed size is 4MB.` | M4d |
 | A newer or unreadable file | The two file messages above, in the view; it never writes the file | M4d |
 | No regex lookbehind (iOS below 16.4) | `Excalimathpad needs iOS 16.4 or later.` | M4d |
 | Welcome hint, on touch | `Tap More tools, then Add math, then tap the sheet` | M4d |
@@ -2923,6 +2926,19 @@ Changes line if it changes behaviour.
   **Found:** `ui/sentence-case` reads Obsidian's API calls and DOM properties, not JSX text, so it can't see the
   app's labels. The rename was by hand: only "Math Settings" (the More tools item's label and tooltip) broke
   sentence case.
+- `requestSave` after a line commit and at once on close; a theme change or scroll never writing. **Not run in
+  Obsidian (#136):** as for #135, the build session couldn't download and run Obsidian, so the real view is
+  Matheus's hand check (the issue's test-vault steps: type a line, wait, close Obsidian, reopen; open and scroll
+  a sheet and see its modified time unchanged). Against the fake `obsidian` in jsdom, with the real Excalidraw
+  (`plugin/test/vault.test.ts`): a line commit requests a save and the fake's 2 s debounce writes it; closing
+  the tab, Obsidian's quit and Save current file write at once, an open line committed first (Save current file
+  keeps it open); opening, a wheel scroll, a ctrl+wheel zoom, Excalidraw's own Dark mode key (Alt+Shift+D), a
+  line opened and left unchanged, and closing request no save and write nothing. Each of three of these was
+  shown to fail with the rule broken (a `save` that always writes, a reload that scrolls, no drop guard).
+  **Found:** Obsidian documents neither how a `TextFileView` reacts to its file changing on disk nor whether
+  its `modify` event can come before `vault.modify` resolves, so the view hears `vault.on('modify')` itself,
+  also takes `setViewData(data, false)` as an outside change, and records the text it writes before the write.
+  Both routes, and a real sync, are for the hand check.
 - The `equal` / `unequal` text signatures inside the hardened math.js instance, and `if()` with `rawArgs` under
   the custom `toTex`.
 - With presses from `.sheet-sidebar` skipped in `listenToCanvas` and the panel-wide prevention on `document` in
@@ -3386,3 +3402,19 @@ Changes line if it changes behaviour.
   bundle audit lets through those library sites only, each known by a word near it, and the network-blocked
   run fails on any `<style>` or `<link>` added at run time. The allowlist also holds Excalidraw's Help links
   and its embed patterns, and the plugin turns embeds off (`validateEmbeddable={false}`) so none loads.
+- 2026-11-14, [sections 7](#a-sheet-in-a-vault), [12a](#data-protection) and [13](#13-messages) (#136, found
+  while building, for Matheus to confirm on the PR):
+  - **The vault image picker** takes over Excalidraw's image tool: Excalidraw 0.18 opens the operating
+    system's file picker from inside `setActiveTool`, so the tool's button and its key 9 are stopped before
+    Excalidraw hears them. The picker lists the vault's PNG, JPEG, GIF, WebP, BMP, AVIF and SVG files by
+    path. The picked image goes at the centre of the view, sized as Excalidraw's own tool sizes a click-placed
+    image, and is selected, as one undo step. An image over Excalidraw's own 4 MB cap is refused with
+    Excalidraw's words; Excalidraw would first try to shrink it, and the plugin doesn't. Dropped and pasted
+    images stay Excalidraw's.
+  - **A busy tab with nothing to keep** (a line open but unchanged) reloads with no copy and no notice.
+  - **A conflict copy whose name is taken** gets ` 1`, ` 2`… after the parenthesis, as New sheet numbers its
+    names. If the copy can't be written, the tab keeps its work and shows the failed-write notice naming the
+    copy; its next save then writes over the outside version, which Obsidian's File recovery and sync history
+    still hold.
+  - **New sheet** uses the ribbon icon `calculator`, and a create that fails shows
+    `Couldn't create Untitled.excalimathpad: <reason>.` and opens no tab.

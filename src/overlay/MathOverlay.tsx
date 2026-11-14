@@ -77,6 +77,8 @@ export interface LineEditControl {
   commitLine(): void
   /** Writes the typed line and closes the edit. */
   leaveLine(): void
+  /** Whether a line or the title is open for typing (an outside change in a vault asks). */
+  isOpen(): boolean
 }
 
 export interface MathOverlayProps {
@@ -303,6 +305,7 @@ export function MathOverlay({
       else writeAnchorSource(api, current.anchorId, withTypedLine(anchor.source, current))
     },
     leaveLine: () => moveEdit({ kind: 'leave' }),
+    isOpen: () => editRef.current !== null,
   }))
 
   useSheetGestures({

@@ -5,6 +5,7 @@ import type { ExcalidrawElement } from '@excalidraw/excalidraw/element/types'
 import type { ExcalidrawImperativeAPI, UIOptions } from '@excalidraw/excalidraw/types'
 import '@excalidraw/excalidraw/index.css'
 import { isPlacing, startPlacing } from './addMath.ts'
+import { insertImage, measureIn, takeOverImageTool, type PickedImage } from './imageTool.ts'
 import { markMathSelection } from './mathSelection.ts'
 import { closeMoreTools, markMoreTools, useMoreToolsSlot } from './moreTools.ts'
 import './SheetCanvas.css'
@@ -74,6 +75,19 @@ export interface SheetCanvasProps {
    * request (docs/spec-v1.md section 12a, Data protection).
    */
   embeds?: boolean
+  /**
+   * Set in a vault: Excalidraw's image tool opens the vault's own picker
+   * instead of the operating system's (docs/spec-v1.md section 12a, Reach).
+   */
+  imageTool?: ImageToolSlot
+}
+
+/** The vault's image picker, and where the tool's key is heard. */
+export interface ImageToolSlot {
+  /** The view's own container. */
+  keys: HTMLElement
+  /** Lists the vault's images and reads the one picked; null when nothing is. */
+  pick: () => Promise<PickedImage | null>
 }
 
 /**
@@ -97,7 +111,14 @@ const INITIAL_APP_STATE = { currentItemFontFamily: FONT_FAMILY.Nunito }
  * The `src/canvas/` modules are the only ones that import
  * `@excalidraw/excalidraw` at runtime (ADR 0001).
  */
-export function SheetCanvas({ onReady, initialElements, fileMenu, sheetPanel, embeds = true }: SheetCanvasProps) {
+export function SheetCanvas({
+  onReady,
+  initialElements,
+  fileMenu,
+  sheetPanel,
+  embeds = true,
+  imageTool,
+}: SheetCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   // The tab Math settings opens: the one last shown.
   const lastTab = useRef<SheetPanelTab>('variables')
@@ -139,6 +160,14 @@ export function SheetCanvas({ onReady, initialElements, fileMenu, sheetPanel, em
     mark()
     return api.onChange(mark)
   }, [api, root, problems])
+
+  // In a vault the image tool picks from the vault, and the picked image is copied in.
+  useEffect(() => {
+    if (!api || !root || !imageTool) return
+    return takeOverImageTool(root, imageTool.keys, () => {
+      void imageTool.pick().then((image) => image && insertImage(api, image, measureIn(root.ownerDocument)))
+    })
+  }, [api, root, imageTool])
 
   // The reduced panel and the hint, while only math is selected.
   useEffect(() => {

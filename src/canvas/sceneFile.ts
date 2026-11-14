@@ -29,7 +29,8 @@ export type SceneFileApi = Pick<
 export function sceneFileFor(api: SceneFileApi) {
   return {
     serialize: () => serializeScene(api),
-    load: (scene: Record<string, unknown>) => loadScene(api, scene),
+    load: (scene: Record<string, unknown>, options?: { keepView?: boolean }) =>
+      loadScene(api, scene, options),
     saveKey: () => saveKey(api),
     onChange: (listener: () => void) => api.onChange(listener),
     ready: () => sceneReady(api),
@@ -80,11 +81,26 @@ export function saveKey(api: SceneFileApi): string {
 }
 
 /**
+ * Excalidraw's own JSON for a sheet with nothing on it, as a New sheet in a
+ * vault starts (docs/spec-v1.md section 7, A sheet in a vault). The block is
+ * added by `writeSheet`.
+ */
+export function emptyScene(): string {
+  return serializeAsJSON([], {}, {}, 'local')
+}
+
+/**
  * Replaces the scene with a file's. It isn't an undo step, and it clears the
  * undo history, so Ctrl+Z never reaches back into the previous sheet. Settings
- * that aren't saved (theme, zoom) stay as they are.
+ * that aren't saved (theme, zoom) stay as they are. It scrolls to the content,
+ * unless `keepView`: a sheet reloaded after an outside change keeps scroll and
+ * zoom where they were.
  */
-export function loadScene(api: SceneFileApi, scene: Record<string, unknown>) {
+export function loadScene(
+  api: SceneFileApi,
+  scene: Record<string, unknown>,
+  { keepView = false }: { keepView?: boolean } = {},
+) {
   const restored = restore(scene, api.getAppState(), null, {
     repairBindings: true,
   })
@@ -101,7 +117,7 @@ export function loadScene(api: SceneFileApi, scene: Record<string, unknown>) {
   const files = Object.values(restored.files)
   if (files.length > 0) api.addFiles(files)
   clearHistory(api)
-  if (restored.elements.length > 0) {
+  if (!keepView && restored.elements.length > 0) {
     api.scrollToContent(undefined, { fitToViewport: false, animate: false })
   }
 }

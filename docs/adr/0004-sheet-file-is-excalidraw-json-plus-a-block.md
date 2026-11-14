@@ -2,7 +2,7 @@
 
 - **Status**: accepted, built in M1 (#42)
 - **Date**: 2026-11-03
-- **Amended**: 2026-11-14 (M4d, not built; #124): in a vault, the file follows Obsidian's
+- **Amended**: 2026-11-14 (M4d, #124; built in #136): in a vault, the file follows Obsidian's
   autosave; the web app keeps explicit save.
 
 ## Context
@@ -43,7 +43,8 @@ Engineering rules (Engineer's):
 - A migration is a pure function from format *n* to *n + 1*, one per step.
 - Results are never saved: they are derived on every run (ADR 0003).
 
-Amended on 2026-11-14 for M4d, decided by Matheus (#124). Not built:
+Amended on 2026-11-14 for M4d, decided by Matheus (#124). Built in #136 (`src/file/vaultSheet.ts`,
+`plugin/SheetView.ts`):
 
 - **In a vault, the file follows Obsidian's autosave; the web app keeps explicit save.** The
   plugin's view writes the same file, in the same format, through `TextFileView.requestSave()`

@@ -20,8 +20,11 @@ import {
 export interface SceneFile {
   /** Excalidraw's own JSON for the scene, without the block. */
   serialize(): string
-  /** Replaces the scene, as no undo step, and clears undo. */
-  load(scene: SheetData): void
+  /**
+   * Replaces the scene, as no undo step, and clears undo. It scrolls to the
+   * content unless `keepView` (an outside change in a vault keeps scroll and zoom).
+   */
+  load(scene: SheetData, options?: { keepView?: boolean }): void
   /** Equal keys mean nothing to save (see `saveKey`). */
   saveKey(): string
   onChange(listener: () => void): () => void
@@ -367,7 +370,10 @@ export function isSheetName(name: string | null): boolean {
  * Hands the session's line port to whatever control the overlay mounts. It is
  * a ref object, so it goes straight into `MathOverlay`'s `control`.
  */
-export function createLineRelay(): LineControl & { current: LineControl | null } {
+export function createLineRelay(): LineControl & {
+  isOpen(): boolean
+  current: (LineControl & { isOpen(): boolean }) | null
+} {
   return {
     current: null,
     commitLine() {
@@ -375,6 +381,9 @@ export function createLineRelay(): LineControl & { current: LineControl | null }
     },
     leaveLine() {
       this.current?.leaveLine()
+    },
+    isOpen() {
+      return this.current?.isOpen() ?? false
     },
   }
 }

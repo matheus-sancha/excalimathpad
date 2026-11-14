@@ -20,7 +20,9 @@ import type { FileAccess } from './file/fileAccess.ts'
 import { FileChrome } from './file/FileChrome.tsx'
 import type { RecoveryStore } from './file/recovery.ts'
 import { createLineRelay, createSheetSession } from './file/sheetSession.ts'
-import { createVaultSheet, type VaultSheetData } from './file/vaultSheet.ts'
+import { createVaultSheet, type VaultSheet, type VaultSheetData } from './file/vaultSheet.ts'
+import { ignoreSceneDrops } from './canvas/fileRoutes.ts'
+import type { PickedImage } from './canvas/imageTool.ts'
 
 /**
  * A sheet in a vault (M4d, docs/spec-v1.md section 12a): what the plugin's view
@@ -36,6 +38,15 @@ export interface VaultHome {
   container: HTMLElement
   /** The file as the view read it; the view shows a refusal itself. */
   sheet: VaultSheetData
+  /**
+   * Hands the view the sheet it writes back, once the canvas is up, and null
+   * as the app goes (docs/spec-v1.md section 7, A sheet in a vault).
+   */
+  connect: (sheet: VaultSheet | null) => void
+  /** The sheet now differs from its file: the view asks Obsidian to save. */
+  onUnwritten: () => void
+  /** The vault's image picker, for Excalidraw's image tool (section 12a, Reach). */
+  pickImage: () => Promise<PickedImage | null>
 }
 
 export interface AppProps {
@@ -67,6 +78,8 @@ interface SheetFile {
     start: () => Promise<void>
   }
   web: { session: ReturnType<typeof createSheetSession>; dialogs: ReturnType<typeof createDialogHost> } | null
+  /** In a vault: the same sheet, as the view writes it back. */
+  vault: VaultSheet | null
 }
 
 /**
@@ -82,7 +95,15 @@ export default function App({ files, recovery, panelMemory, vault, initialElemen
 
   const file = useMemo((): SheetFile | null => {
     if (!canvas) return null
-    if (vault) return { sheet: createVaultSheet(sceneFileFor(canvas.api), vault.sheet), web: null }
+    if (vault) {
+      const sheet = createVaultSheet({
+        scene: sceneFileFor(canvas.api),
+        line,
+        sheet: vault.sheet,
+        onUnwritten: vault.onUnwritten,
+      })
+      return { sheet, web: null, vault: sheet }
+    }
     if (!files || !recovery) throw new Error('App needs files and recovery, or a vault')
     const dialogs = createDialogHost((message) =>
       canvas.api.setToast({ message, closable: true, duration: 6000 }),
@@ -94,13 +115,32 @@ export default function App({ files, recovery, panelMemory, vault, initialElemen
       dialogs,
       line,
     })
-    return { sheet: session, web: { session, dialogs } }
+    return { sheet: session, web: { session, dialogs }, vault: null }
   }, [canvas, files, recovery, vault, line])
 
-  // In a vault the sheet loads once Excalidraw is ready; the web's file chrome starts its own.
+  // In a vault the sheet loads once Excalidraw is ready and the view writes it
+  // back; the web's file chrome starts its own.
+  const vaultSheet = file?.vault ?? null
   useEffect(() => {
-    if (file && !file.web) void file.sheet.start()
-  }, [file])
+    if (!vault || !vaultSheet) return
+    const detach = vaultSheet.attach()
+    vault.connect(vaultSheet)
+    void vaultSheet.start()
+    return () => {
+      detach()
+      vault.connect(null)
+    }
+  }, [vault, vaultSheet])
+
+  // In a vault the tab's file is the sheet: a dropped sheet file is ignored.
+  const vaultContainer = vault?.container
+  useEffect(() => {
+    if (vaultContainer) return ignoreSceneDrops(vaultContainer)
+  }, [vaultContainer])
+  const imageTool = useMemo(
+    () => vault && { keys: vault.container, pick: vault.pickImage },
+    [vault],
+  )
 
   // The sheet's settings: the file's, changed from the Settings tab.
   const settings = useSyncExternalStore(
@@ -175,6 +215,7 @@ export default function App({ files, recovery, panelMemory, vault, initialElemen
           initialElements={initialElements}
           onReady={setCanvas}
           embeds={!vault}
+          imageTool={imageTool ?? undefined}
           fileMenu={fileMenu ?? undefined}
           sheetPanel={{
             problems,

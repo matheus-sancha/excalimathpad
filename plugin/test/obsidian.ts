@@ -4,13 +4,18 @@
  * describe it. Vitest aliases `obsidian` here (`vite.config.ts`), and
  * `scripts/blocked-run.mjs` bundles it for the browser, where the built
  * `main.js` gets it from `require('obsidian')`. So the jsdom tests and the
- * network-blocked run drive the plugin through the same fake.
+ * network-blocked run drive the plugin through the same fake. It uses no Node
+ * API, for that reason.
  *
  * It records what a test asks about: the views and extensions registered, every
- * vault write, every notice, every `registerDomEvent`.
+ * vault write and create, every notice, every `registerDomEvent`, the commands,
+ * the ribbon and the modals opened. And it lets a test act as the world
+ * outside the view: a change from sync or git (`Vault.changeOutside`), a
+ * rename, a write that fails, the folder menu, a pick in a modal.
  */
 
 type Callback = () => unknown
+type Handler = (...args: never[]) => unknown
 
 // ---------------------------------------------------------------------------
 // The DOM helpers Obsidian adds to every element.
@@ -70,22 +75,37 @@ export function installDomHelpers(win: Window & typeof globalThis = window) {
 }
 installDomHelpers()
 
+/** Obsidian's own: slashes, no leading or trailing one, `/` for the root. */
+export function normalizePath(path: string): string {
+  const cleaned = path.replace(/\\/g, '/').replace(/\/+/g, '/').replace(/^\/|\/$/g, '')
+  return cleaned === '' ? '/' : cleaned
+}
+
 // ---------------------------------------------------------------------------
 // Components and events.
 
+export interface EventRef {
+  events: Events
+  name: string
+  callback: Handler
+}
+
 export class Events {
-  private handlers = new Map<string, Set<(...args: unknown[]) => unknown>>()
-  on(name: string, callback: (...args: unknown[]) => unknown) {
+  private handlers = new Map<string, Set<Handler>>()
+  on(name: string, callback: Handler): EventRef {
     const set = this.handlers.get(name) ?? new Set()
     set.add(callback)
     this.handlers.set(name, set)
-    return { name, callback }
+    return { events: this, name, callback }
   }
-  off(name: string, callback: (...args: unknown[]) => unknown) {
+  off(name: string, callback: Handler) {
     this.handlers.get(name)?.delete(callback)
   }
+  offref(ref: EventRef) {
+    this.off(ref.name, ref.callback)
+  }
   trigger(name: string, ...args: unknown[]) {
-    this.handlers.get(name)?.forEach((callback) => callback(...args))
+    this.handlers.get(name)?.forEach((callback) => (callback as (...a: unknown[]) => unknown)(...args))
   }
 }
 
@@ -123,7 +143,10 @@ export class Component {
     target.addEventListener(type, callback, options)
     this.register(() => target.removeEventListener(type, callback, options))
   }
-  registerEvent(_ref: unknown) {}
+  /** Removed when the component unloads, as Obsidian does. */
+  registerEvent(ref: EventRef) {
+    this.register(() => ref.events.offref(ref))
+  }
 }
 
 export class Scope {
@@ -160,12 +183,19 @@ export class Notice {
 // ---------------------------------------------------------------------------
 // Files.
 
-export class TAbstractFile {
+export abstract class TAbstractFile {
   path: string
-  name: string
   constructor(path: string) {
-    this.path = path
-    this.name = path.split('/').pop() ?? path
+    this.path = normalizePath(path)
+  }
+  get name() {
+    return this.path === '/' ? '' : (this.path.split('/').pop() ?? this.path)
+  }
+  /** The folder holding it; the root's is null. */
+  get parent(): TFolder | null {
+    if (this.path === '/') return null
+    const at = this.path.lastIndexOf('/')
+    return new TFolder(at < 0 ? '/' : this.path.slice(0, at))
   }
 }
 
@@ -179,16 +209,57 @@ export class TFile extends TAbstractFile {
   }
 }
 
+export class TFolder extends TAbstractFile {
+  isRoot() {
+    return this.path === '/'
+  }
+}
+
 export class Vault extends Events {
   readonly files = new Map<string, string>()
-  /** Every write, in order. */
+  readonly binaries = new Map<string, ArrayBuffer>()
+  readonly folders = new Set<string>(['/'])
+  /** Every write by the plugin (`modify`), in order. */
   readonly writes: { path: string; data: string }[] = []
-  add(path: string, text: string) {
-    this.files.set(path, text)
-    return new TFile(path)
+  /** Every file the plugin created (`create`), in order. */
+  readonly creates: { path: string; data: string }[] = []
+  /** Every read of a binary file (`readBinary`). */
+  readonly binaryReads: string[] = []
+  /** Set by a test: the next `modify` or `create` fails with it. */
+  failNext: Error | null = null
+  private readonly app: App
+  constructor(app: App) {
+    super()
+    this.app = app
   }
-  getAbstractFileByPath(path: string) {
-    return this.files.has(path) ? new TFile(path) : null
+
+  /** A file already in the vault, as the test sets it up. */
+  add(path: string, content: string | ArrayBuffer) {
+    const at = normalizePath(path)
+    if (typeof content === 'string') this.files.set(at, content)
+    else this.binaries.set(at, content)
+    this.addFolders(at)
+    return new TFile(at)
+  }
+  addFolder(path: string) {
+    this.addFolders(`${normalizePath(path)}/x`)
+    return new TFolder(path)
+  }
+  private addFolders(filePath: string) {
+    const parts = filePath.split('/').slice(0, -1)
+    for (let i = 1; i <= parts.length; i++) this.folders.add(parts.slice(0, i).join('/'))
+  }
+
+  getAbstractFileByPath(path: string): TAbstractFile | null {
+    const at = normalizePath(path)
+    if (this.files.has(at) || this.binaries.has(at)) return new TFile(at)
+    return this.folders.has(at) ? new TFolder(at) : null
+  }
+  getRoot() {
+    return new TFolder('/')
+  }
+  getFiles(): TFile[] {
+    return [...this.files.keys(), ...this.binaries.keys()].sort().map((path) => new TFile(path))
   }
   read(file: TFile) {
     const text = this.files.get(file.path)
@@ -197,10 +268,35 @@ export class Vault extends Events {
   cachedRead(file: TFile) {
     return this.read(file)
   }
-  modify(file: TFile, data: string) {
+  readBinary(file: TFile) {
+    this.binaryReads.push(file.path)
+    const bytes = this.binaries.get(file.path)
+    return bytes === undefined ? Promise.reject(new Error(`No file ${file.path}`)) : Promise.resolve(bytes)
+  }
+  private failure() {
+    const error = this.failNext
+    this.failNext = null
+    return error
+  }
+  /** Writes the file, then tells every listener, as Obsidian's `modify` event does. */
+  async modify(file: TFile, data: string) {
+    const error = this.failure()
+    if (error) throw error
+    if (!this.files.has(file.path)) throw new Error(`No file ${file.path}`)
     this.writes.push({ path: file.path, data })
     this.files.set(file.path, data)
-    return Promise.resolve()
+    this.trigger('modify', new TFile(file.path))
+  }
+  /** Refuses a path that exists, as Obsidian does: "File already exists". */
+  async create(path: string, data: string) {
+    const at = normalizePath(path)
+    const error = this.failure()
+    if (error) throw error
+    if (this.getAbstractFileByPath(at)) throw new Error('File already exists.')
+    this.creates.push({ path: at, data })
+    const file = this.add(at, data)
+    this.trigger('create', file)
+    return file
   }
   process(file: TFile, fn: (data: string) => string) {
     return this.read(file).then(async (text) => {
@@ -208,6 +304,125 @@ export class Vault extends Events {
       await this.modify(file, data)
       return data
     })
+  }
+
+  /** A change from outside the plugin (sync, git, another app): not one of its writes. */
+  changeOutside(path: string, data: string) {
+    const at = normalizePath(path)
+    this.files.set(at, data)
+    this.trigger('modify', new TFile(at))
+  }
+  /** A rename or move from Obsidian's explorer: each tab on the file follows it. */
+  async rename(file: TFile, newPath: string) {
+    const from = file.path
+    const to = normalizePath(newPath)
+    const text = this.files.get(from)
+    if (text === undefined) throw new Error(`No file ${from}`)
+    this.files.delete(from)
+    this.add(to, text)
+    for (const leaf of this.app.workspace.leaves) {
+      const view = leaf.view
+      if (view instanceof FileView && view.file?.path === from) {
+        view.file.path = to
+        await view.onRename(view.file)
+      }
+    }
+    this.trigger('rename', new TFile(to), from)
+  }
+}
+
+/** Obsidian's file manager: where a new note goes ("Default location for new notes"). */
+export class FileManager {
+  /** The setting, as a folder path: the root (`/`) unless a test sets it. */
+  newFileFolder = '/'
+  getNewFileParent(_sourcePath: string, _newFilePath?: string) {
+    return new TFolder(this.newFileFolder)
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Menus and modals.
+
+export class MenuItem {
+  title = ''
+  icon = ''
+  private click: (() => unknown) | null = null
+  setTitle(title: string) {
+    this.title = title
+    return this
+  }
+  setIcon(icon: string) {
+    this.icon = icon
+    return this
+  }
+  onClick(callback: () => unknown) {
+    this.click = callback
+    return this
+  }
+  /** A click on the item, as the user makes it. */
+  press() {
+    return this.click?.()
+  }
+}
+
+export class Menu {
+  readonly items: MenuItem[] = []
+  addItem(build: (item: MenuItem) => unknown) {
+    const item = new MenuItem()
+    build(item)
+    this.items.push(item)
+    return this
+  }
+  addSeparator() {
+    return this
+  }
+}
+
+/** Every modal opened, last last. */
+export const modals: Modal[] = []
+
+export class Modal {
+  readonly app: App
+  readonly containerEl: HTMLElement
+  readonly contentEl: HTMLElement
+  isOpen = false
+  constructor(app: App) {
+    this.app = app
+    this.containerEl = window.document.createElement('div')
+    this.contentEl = this.containerEl.createDiv({ cls: 'modal-content' })
+  }
+  open() {
+    this.isOpen = true
+    modals.push(this)
+    this.onOpen()
+  }
+  close() {
+    if (!this.isOpen) return
+    this.isOpen = false
+    this.onClose()
+  }
+  onOpen() {}
+  onClose() {}
+}
+
+export abstract class FuzzySuggestModal<T> extends Modal {
+  placeholder = ''
+  setPlaceholder(placeholder: string) {
+    this.placeholder = placeholder
+  }
+  abstract getItems(): T[]
+  abstract getItemText(item: T): string
+  abstract onChooseItem(item: T, evt: MouseEvent | KeyboardEvent): void
+  /** What the list shows, as text. */
+  shown() {
+    return this.getItems().map((item) => this.getItemText(item))
+  }
+  /** Picks the item whose text is `text`. Obsidian closes the modal first, then calls `onChooseItem`. */
+  choose(text: string) {
+    const item = this.getItems().find((candidate) => this.getItemText(candidate) === text)
+    if (item === undefined) throw new Error(`No item ${text}`)
+    this.close()
+    this.onChooseItem(item, new MouseEvent('click'))
   }
 }
 
@@ -219,6 +434,9 @@ type ViewCreator = (leaf: WorkspaceLeaf) => View
 export class Workspace extends Events {
   readonly leaves: WorkspaceLeaf[] = []
   readonly containerEl: HTMLElement
+  /** What each `getLeaf` was asked for: `'tab'`, `true`, or nothing. */
+  readonly leafRequests: unknown[] = []
+  activeLeaf: WorkspaceLeaf | null = null
   private readonly app: App
   constructor(app: App) {
     super()
@@ -227,20 +445,39 @@ export class Workspace extends Events {
     this.containerEl.className = 'workspace'
     window.document.body.appendChild(this.containerEl)
   }
-  getLeaf() {
+  getLeaf(newLeaf?: unknown) {
+    this.leafRequests.push(newLeaf)
     const leaf = new WorkspaceLeaf(this.app)
     this.leaves.push(leaf)
     this.containerEl.appendChild(leaf.containerEl)
     return leaf
   }
+  getActiveFile() {
+    const view = this.activeLeaf?.view
+    return view instanceof FileView ? view.file : null
+  }
+  /** The explorer's menu for `file`, as a right-click opens it. */
+  fileMenu(file: TAbstractFile) {
+    const menu = new Menu()
+    this.trigger('file-menu', menu, file, 'file-explorer-context-menu')
+    return menu
+  }
+  /** Obsidian quitting: every task added runs before it closes. */
+  async quit() {
+    const tasks: (() => Promise<unknown>)[] = []
+    this.trigger('quit', { add: (task: () => Promise<unknown>) => tasks.push(task) })
+    for (const task of tasks) await task()
+  }
 }
 
 export class App {
-  readonly vault = new Vault()
+  readonly vault: Vault
   readonly workspace: Workspace
+  readonly fileManager = new FileManager()
   readonly views = new Map<string, ViewCreator>()
   readonly extensions = new Map<string, string>()
   constructor() {
+    this.vault = new Vault(this)
     this.workspace = new Workspace(this)
   }
 }
@@ -263,11 +500,12 @@ export class WorkspaceLeaf extends Events {
     await this.detachView()
     const view = create(this)
     this.view = view
+    this.app.workspace.activeLeaf = this
     this.containerEl.appendChild(view.containerEl)
     view.containerEl.dataset.type = view.getViewType()
     view.load()
     await view.onOpen()
-    if (view instanceof FileView) await view.loadFile(file)
+    if (view instanceof FileView) await view.loadFile(new TFile(file.path))
   }
   async detachView() {
     const view = this.view
@@ -281,6 +519,9 @@ export class WorkspaceLeaf extends Events {
   async detach() {
     await this.detachView()
     this.containerEl.remove()
+    const leaves = this.app.workspace.leaves
+    leaves.splice(leaves.indexOf(this), 1)
+    if (this.app.workspace.activeLeaf === this) this.app.workspace.activeLeaf = null
   }
 }
 
@@ -348,12 +589,17 @@ export abstract class EditableFileView extends FileView {}
 /**
  * Obsidian's documented behaviour: load reads the file and hands its text to
  * `setViewData(data, true)`; unload saves, then clears; `save` writes
- * `getViewData()` to the file; `requestSave` saves after 2 s.
+ * `getViewData()` to the file; `requestSave` saves after 2 s. How the real one
+ * reacts to its file changing on disk isn't documented, so the fake does
+ * nothing there: the plugin's view listens to `modify` itself.
  */
 export abstract class TextFileView extends EditableFileView {
   data = ''
+  /** How many times a save was requested: the fake's record, not Obsidian's. */
+  saveRequests = 0
   private saveTimer: ReturnType<typeof setTimeout> | null = null
   requestSave = () => {
+    this.saveRequests++
     if (this.saveTimer !== null) clearTimeout(this.saveTimer)
     this.saveTimer = setTimeout(() => {
       this.saveTimer = null
@@ -369,6 +615,8 @@ export abstract class TextFileView extends EditableFileView {
     this.setViewData(data, true)
   }
   async onUnloadFile(_file: TFile) {
+    if (this.saveTimer !== null) clearTimeout(this.saveTimer)
+    this.saveTimer = null
     await this.save()
     this.clear()
   }
@@ -394,12 +642,19 @@ export interface PluginManifest {
   isDesktopOnly?: boolean
 }
 
+export interface Command {
+  id: string
+  name: string
+  callback?: () => unknown
+}
+
 export class Plugin extends Component {
   readonly app: App
   readonly manifest: PluginManifest
   /** `data.json`, as `saveData` last wrote it. */
   dataJson: unknown = null
-  readonly commands: { id: string; name: string }[] = []
+  readonly commands: Command[] = []
+  readonly ribbon: { icon: string; title: string; click: (evt: MouseEvent) => unknown }[] = []
   constructor(app: App, manifest: PluginManifest) {
     super()
     this.app = app
@@ -418,11 +673,12 @@ export class Plugin extends Component {
   registerExtensions(extensions: string[], type: string) {
     extensions.forEach((extension) => this.app.extensions.set(extension, type))
   }
-  addCommand(command: { id: string; name: string }) {
+  addCommand(command: Command) {
     this.commands.push(command)
     return command
   }
-  addRibbonIcon() {
+  addRibbonIcon(icon: string, title: string, click: (evt: MouseEvent) => unknown) {
+    this.ribbon.push({ icon, title, click })
     return window.document.createElement('div')
   }
 }
