@@ -1,0 +1,62 @@
+/* PROTOTYPE — throwaway, delete with FormatTab.prototype.tsx (ticket #121). */
+.proto-format { gap: 10px; }
+.proto-placeholder {
+  margin-top: 6px; padding: 10px; border: 1px dashed #ced4da; border-radius: 6px;
+  color: #868e96; font-size: 12px; text-align: center;
+}
+.proto-dots.is-only-text .math-format-bar__dot-row:last-child,
+.proto-dots.is-only-highlight .math-format-bar__dot-row:first-child { display: none; }
+.proto-dots .math-format-bar__dot-label { display: none; }
+
+/* A: labelled rows */
+.proto-a__head { display: flex; flex-direction: column; gap: 2px; padding: 4px 4px 8px; border-bottom: 1px solid #e9ecef; }
+.proto-a__kind { font-weight: 600; font-size: 14px; }
+.proto-a__where { color: #868e96; font-size: 12px; }
+.proto-a__row { display: grid; grid-template-columns: 76px 1fr; align-items: center; padding: 2px 4px; }
+.proto-a__label { color: #495057; font-size: 12px; }
+.proto-a__controls { display: flex; align-items: center; gap: 6px; }
+.proto-a__controls .proto-btn { width: 30px; height: 30px; font-size: 14px; }
+.proto-a__controls .proto-btn.is-size { width: 36px; }
+.proto-a__controls .math-format-bar__dots .math-format-bar__button.is-color { width: 22px; height: 22px; }
+.proto-a__controls .math-format-bar__dot-row { gap: 6px; }
+
+/* B: the bar as is */
+.proto-b__caption { color: #868e96; font-size: 12px; padding: 2px 4px; }
+.math-format-bar.proto-b__bar { position: static; transform: none; align-self: flex-start; box-shadow: none; }
+
+/* C: preview + sections */
+.proto-c__preview { padding: 10px; border: 1px solid #e9ecef; border-radius: 8px; background: #f8f9fa; }
+.proto-c__where { color: #868e96; font-size: 11px; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.04em; }
+.proto-sample { padding: 4px 6px; border-radius: 4px; font-family: 'KaTeX_Main', 'Times New Roman', serif; }
+.proto-sample.is-comment { font-family: system-ui, 'Segoe UI', sans-serif; color: #868e96; }
+.proto-sample.is-title { font-family: system-ui, 'Segoe UI', sans-serif; border-bottom: 1px solid #ced4da; border-radius: 0; }
+.proto-sample[data-text='black'] { color: #1e1e1e; }
+.proto-sample[data-text='blue'] { color: #1971c2; }
+.proto-sample[data-text='red'] { color: #e03131; }
+.proto-sample[data-text='green'] { color: #2f9e44; }
+.proto-sample[data-text='orange'] { color: #e8590c; }
+.proto-sample[data-text='gray'] { color: #868e96; }
+.proto-sample.is-hl-yellow { background: #fff3bf; }
+.proto-sample.is-hl-green { background: #d3f9d8; }
+.proto-sample.is-hl-blue { background: #d0ebff; }
+.proto-sample.is-hl-red { background: #ffe3e3; }
+.proto-sample.is-hl-gray { background: #f1f3f5; }
+.proto-c__section h3 { margin: 4px 4px 6px; font-size: 11px; font-weight: 600; color: #868e96; text-transform: uppercase; letter-spacing: 0.06em; }
+.proto-c__big { display: flex; gap: 6px; padding: 0 4px 6px; }
+.proto-c__big .proto-btn { width: 40px; height: 36px; font-size: 16px; border-color: #dee2e6; }
+.proto-c__big .proto-btn.is-size { width: 48px; }
+.proto-c__gap { width: 10px; }
+.proto-c__colour { display: grid; grid-template-columns: 76px 1fr; align-items: center; padding: 3px 4px; font-size: 12px; color: #495057; }
+.proto-c__colour .math-format-bar__dots .math-format-bar__button.is-color { width: 24px; height: 24px; }
+.proto-c__colour .math-format-bar__dot-row { gap: 8px; }
+
+/* The prototype's own switcher, clearly not part of the design. */
+.proto-switcher {
+  position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); z-index: 10000;
+  display: flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 999px;
+  background: #212529; color: #fff; font: 12px system-ui, sans-serif; box-shadow: 0 4px 16px rgb(0 0 0 / 30%);
+}
+.proto-switcher button { border: 0; border-radius: 999px; padding: 3px 9px; background: #343a40; color: #fff; cursor: pointer; font: inherit; }
+.proto-switcher button[aria-pressed='true'] { background: #f59f00; color: #212529; }
+.proto-switcher__label { min-width: 170px; text-align: center; font-weight: 600; }
+.proto-switcher__sep { width: 1px; height: 16px; background: #495057; margin: 0 4px; }
