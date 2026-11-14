@@ -127,9 +127,12 @@ export function problemRows(sheet: readonly PanelElement[]): ProblemRow[] {
   })
 }
 
-/** The Sheet button's badge: how many errors and warnings the sheet has. */
-export function problemCount(sheet: readonly PanelElement[]): number {
-  return problemRows(sheet).length
+/**
+ * The Problems badge: how many errors the sheet has (section 8, M4d). Warnings
+ * alone show no badge; the Problems tab still lists them.
+ */
+export function errorCount(sheet: readonly PanelElement[]): number {
+  return problemRows(sheet).filter((row) => row.severity === 'error').length
 }
 
 /** A line's error: its message, or a list's failed points (section 10). */

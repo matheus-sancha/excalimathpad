@@ -3521,3 +3521,9 @@ Changes line if it changes behaviour.
   - Not asked: the checklist's phone or tablet step says to skip it while `manifest.json` has
     `isDesktopOnly: true`, since Obsidian there doesn't load the plugin. `isDesktopOnly` stays `true` until
     Touch (#147).
+- 2026-11-14, [section 8](#sheet-panel) (#139, found while building, for Matheus to confirm on the PR):
+  - **The launch tab waits for the opened sheet.** It was chosen from the sheet's first evaluation, which
+    runs before the scene loads, so a sheet with errors opened on Variables (always, in a vault, where the
+    file loads after the view mounts). The panel now opens once the sheet has started and all its math has
+    been evaluated: in a vault, once the file is loaded; on the web, once a recovery offer is answered.
+  - Not asked: the Problems badge reads "1 error" or "2 errors" to a screen reader.

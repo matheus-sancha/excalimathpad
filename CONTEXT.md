@@ -54,7 +54,10 @@ come, and their terms move in here as each M4d issue makes them true.
 
 - **App** (`src/App.tsx`) — composition root. Decides what fills each shell
   slot and wires the sheet file to the canvas and the line edit, and the
-  sheet's evaluation to the Sheet panel (opened at launch on a wide window). The untitled
+  sheet's evaluation to the Sheet panel (opened at launch on a wide window,
+  on Problems only for an error: once the sheet's `start` has resolved and an
+  evaluation covers every math anchor in the scene, since the first runs
+  before the scene loads). The untitled
   sheet starts empty, on the welcome screen. It runs in one of two **homes**.
   On the web it takes `files` and `recovery` (required; tests pass fakes) and
   mounts the session with `FileChrome`. With `vault` (a `VaultHome`: the
@@ -321,6 +324,12 @@ come, and their terms move in here as each M4d issue makes them true.
   writes it with `writeDisplayUnit` as one line commit. The engine gives each
   line its `unitSlot` (kind, chosen unit, value in the system and in each
   unit of the kind).
+  A **warning at rest** (spec section 4, Problems, M4d): an element's `⚠`
+  marks show only while one of its lines or its title is open (`edit` in
+  that element; being selected is not), or on its line while a jump flashes
+  it (`flash`). Otherwise `TypesetRow` hands the gutter no warnings: the cell
+  keeps its fixed 10 px column, empty and with no `data-tip`, so rows don't
+  shift when an edit opens. An error's `●` always shows.
   A **problem's message on hover** (spec section 4, Problems): the gutter mark
   and an error's result cell carry it as `data-tip`, never a `title` (the
   overlay takes no pointer events, so a title never shows). The gestures find
@@ -441,9 +450,10 @@ come, and their terms move in here as each M4d issue makes them true.
 
 - **panel** (`src/panel/`) — the Sheet panel's tabs (spec section 8), drawn
   inside Excalidraw's sidebar, which `SheetCanvas` frames (`SheetPanelSlot`:
-  the badge count, the tabs' content, `onChange`). `sheetPanel.ts` (pure)
+  the badge's `errors`, the tabs' content, `onChange`). `sheetPanel.ts` (pure)
   turns the evaluated sheet (`EvaluatedElement`s, which `MathOverlay` hands
-  out through `onEvaluated`) into Variables groups and Problems rows;
+  out through `onEvaluated`) into Variables groups and Problems rows (every
+  error and warning), and `errorCount`, the Problems badge (errors only, M4d);
   `SheetPanel.tsx` renders them, and a click asks App to jump.
   `panelMemory.ts` is the `PanelMemory` port for the open/closed state
   (`localStorage` on the web, given by `src/main.tsx`). `SettingsTab.tsx`
@@ -537,7 +547,8 @@ and everything downstream recalculates. Engine: math.js, client-side.
 - A variable named like a math.js unit or built-in (`V`, `m`, `s`, `i`, ...)
   shadows the unit below its definition and falls back to the unit above it
   or after it fails (ADR 0003). Both are **warnings** (`warnings.ts`, spec
-  section 5): an amber `⚠` in the gutter, its message on hover. So is a
+  section 5): an amber `⚠` in the gutter, its message on hover, shown only
+  while its element is being edited or the line flashes (M4d). So is a
   function body name not defined above. A warning never changes a result.
 - Known limit: a size write doesn't move a bound arrow's end (Excalidraw's
   binding update isn't public); it follows when the element next moves (#44).

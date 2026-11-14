@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { evaluateSheet } from '../math/evaluate.ts'
-import { elementLabel, problemCount, problemRows, variableGroups, type PanelElement } from './sheetPanel.ts'
+import { elementLabel, errorCount, problemRows, variableGroups, type PanelElement } from './sheetPanel.ts'
 
 /** Elements in reading order, evaluated as one sheet, as the overlay hands them over. */
 function sheetOf(...elements: { source: string; title?: string }[]): PanelElement[] {
@@ -90,7 +90,14 @@ describe('Problems (docs/spec-v1.md section 8)', () => {
       ['error', 'Units do not match', 'Pipe flow, line 2 · x', 1],
       ['error', 'Unexpected end of expression (char 4)', 'Element 2, line 2', 1],
     ])
-    expect(problemCount(sheet)).toBe(3)
+  })
+
+  it('counts errors only for the badge: the list keeps every warning (M4d)', () => {
+    const sheet = sheetOf({ source: 'K = 5.4\nx = 1 m + 1 s' }, { source: 'K = 1 m + 1 s' })
+
+    expect(problemRows(sheet)).toHaveLength(4)
+    expect(errorCount(sheet)).toBe(2)
+    expect(errorCount(sheetOf({ source: 'K = 5.4\nm = 2 * 3' }))).toBe(0)
   })
 
   it('keeps a line’s error before its warnings', () => {
@@ -101,6 +108,8 @@ describe('Problems (docs/spec-v1.md section 8)', () => {
   })
 
   it('is empty for a clean sheet', () => {
-    expect(problemCount(sheetOf({ source: '# all good\nx = 2' }))).toBe(0)
+    const sheet = sheetOf({ source: '# all good\nx = 2' })
+    expect(problemRows(sheet)).toEqual([])
+    expect(errorCount(sheet)).toBe(0)
   })
 })

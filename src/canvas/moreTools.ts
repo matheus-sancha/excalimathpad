@@ -48,8 +48,9 @@ export function closeMoreTools(root: HTMLElement): void {
 /**
  * Marks More tools' button from outside the dropdown, since the app's items
  * are out of sight while it is closed: `data-math-placing` while Add math is
- * placing, and `data-math-problems` with the count in `--math-problems` while
- * the sheet has problems. `SheetCanvas.css` draws both.
+ * placing, and `data-math-problems` with the Problems badge's count (errors
+ * only, from M4d) in `--math-problems` while it is above zero. `SheetCanvas.css`
+ * draws both.
  */
 export function markMoreTools(root: HTMLElement, marks: { placing: boolean; problems: number }): void {
   root.toggleAttribute('data-math-placing', marks.placing)

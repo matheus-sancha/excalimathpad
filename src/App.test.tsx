@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, onTestFinished } from 'vitest'
 import App from './App.tsx'
 import { WELCOME_HINT } from './canvas/SheetCanvas.tsx'
 import { fakeFileAccess, fakeRecovery } from './test/files.ts'
@@ -263,22 +263,69 @@ describe('App', () => {
       await openMoreTools()
       return screen.getByRole('button', { name: /^Math settings/ })
     }
+    const warningSheet = () =>
+      createMathAnchorElements([{ id: 'm1', x: 100, y: 100, width: 300, height: 48, source: 'K = 5.4\ny = 2' }])
     const problemSheet = () =>
       createMathAnchorElements([
         { id: 'm1', x: 100, y: 100, width: 300, height: 72, source: 'K = 5.4\nx = 1 m + 1 s', title: 'Pipe flow' },
       ])
 
-    it('the item and the More tools button carry a red badge counting errors and warnings', async () => {
+    it('the item and the More tools button carry a red badge counting errors only (M4d)', async () => {
+      // One warning (K) and one error.
       renderApp({ initialElements: problemSheet() })
       await ready()
 
       // With More tools closed, its button shows the count.
       await waitFor(() => expect(document.querySelector('[data-math-problems]')).not.toBeNull())
       const root = document.querySelector<HTMLElement>('[data-math-problems]')!
-      expect(root.style.getPropertyValue('--math-problems')).toBe('"2"')
+      expect(root.style.getPropertyValue('--math-problems')).toBe('"1"')
 
-      expect(await sheetButton()).toHaveTextContent('Math settings2')
-      expect(screen.getByLabelText('2 problems')).toBeInTheDocument()
+      expect(await sheetButton()).toHaveTextContent('Math settings1')
+      expect(screen.getByLabelText('1 error')).toBeInTheDocument()
+    })
+
+    it('shows no badge for a sheet with warnings alone, and its Problems tab still lists them (M4d)', async () => {
+      renderApp({ initialElements: warningSheet() })
+      await ready()
+      await screen.findAllByRole('list', { name: 'Lines' })
+
+      expect(await sheetButton()).toHaveTextContent(/^Math settings$/)
+      expect(document.querySelector('[data-math-problems]')).toBeNull()
+
+      fireEvent.click(await sheetButton())
+      fireEvent.mouseDown(await screen.findByRole('tab', { name: 'Problems' }))
+      expect(await screen.findByText('K shadows the unit K')).toBeInTheDocument()
+    })
+
+    describe('at launch on a wide window', () => {
+      /** The canvas's box is 1440 px wide: the panel docks, so it opens at launch. */
+      const wideWindow = () => {
+        const client = Object.getOwnPropertyDescriptor(Element.prototype, 'clientWidth')!
+        Object.defineProperty(Element.prototype, 'clientWidth', { configurable: true, get: () => 1440 })
+        onTestFinished(() => {
+          Object.defineProperty(Element.prototype, 'clientWidth', client)
+        })
+      }
+      const selectedTab = async () => {
+        await waitFor(() => expect(document.querySelector('.sheet-sidebar')).not.toBeNull())
+        return screen.getByRole('tab', { selected: true })
+      }
+
+      it('opens the panel on Problems for an error', async () => {
+        wideWindow()
+        renderApp({ initialElements: problemSheet() })
+        await ready()
+
+        expect(await selectedTab()).toHaveTextContent('Problems')
+      })
+
+      it('opens it on Variables for a sheet with warnings alone (M4d)', async () => {
+        wideWindow()
+        renderApp({ initialElements: warningSheet() })
+        await ready()
+
+        expect(await selectedTab()).toHaveTextContent('Variables')
+      })
     })
 
     it('keeps the item clear of Excalidraw’s square-button style, which hid its label, and still a sidebar trigger (#102)', async () => {
@@ -289,7 +336,7 @@ describe('App', () => {
       // Excalidraw's `.excalidraw .sidebar-trigger` sets `line-height: 0` and a fixed button look;
       // on the item it collapsed the label to no height (seen in Chromium).
       expect(item.matches('.excalidraw .sidebar-trigger')).toBe(false)
-      expect(item.querySelector('.dropdown-menu-item__text')).toHaveTextContent('Math settings2')
+      expect(item.querySelector('.dropdown-menu-item__text')).toHaveTextContent('Math settings1')
       // A floating panel's outside click finds it through `closest`, so it doesn't close and reopen.
       expect(item.querySelector('.dropdown-menu-item__text')!.closest('.sidebar-trigger')).not.toBeNull()
     })
@@ -404,6 +451,29 @@ describe('App', () => {
       await waitFor(() =>
         expect(document.querySelector('[data-anchor-id="m1"] [data-line="1"]')).not.toHaveClass('is-flash'),
       )
+    })
+
+    it('a jump from a ⚠ row shows that line’s ⚠ while it flashes, then hides it; nothing opens (M4d)', async () => {
+      renderApp({ initialElements: problemSheet() })
+      await ready()
+      await screen.findAllByRole('list', { name: 'Lines' })
+      const gutter = () => document.querySelector('[data-anchor-id="m1"] [data-line="0"] .math-element__gutter')!
+      // At rest the warning's ⚠ is hidden; the error's ● shows.
+      expect(gutter()).toHaveTextContent('')
+      expect(document.querySelector('[data-anchor-id="m1"] [data-line="1"] .math-element__gutter')).toHaveTextContent('●')
+
+      fireEvent.click(await sheetButton())
+      fireEvent.mouseDown(await screen.findByRole('tab', { name: 'Problems' }))
+      fireEvent.click(await screen.findByText('K shadows the unit K', { selector: '.sheet-panel__message' }))
+
+      await waitFor(() => expect(document.querySelector('[data-anchor-id="m1"] [data-line="0"]')).toHaveClass('is-flash'))
+      expect(gutter()).toHaveTextContent('⚠')
+      expect(gutter()).toHaveAttribute('data-tip', 'K shadows the unit K')
+      expect(lineField()).toBeNull()
+
+      fireEvent.pointerDown(window)
+      await waitFor(() => expect(gutter()).toHaveTextContent(''))
+      expect(gutter()).not.toHaveAttribute('data-tip')
     })
 
     it('Settings: the unit system and Digits re-show every result, mark the sheet dirty, and undo never reaches them', async () => {

@@ -7,6 +7,7 @@ import {
   type SheetCanvasHandle,
   type SheetPanelTab,
 } from './canvas/SheetCanvas.tsx'
+import { isMathAnchor } from './canvas/mathAnchor.ts'
 import { sceneFileFor } from './canvas/sceneFile.ts'
 import { jumpToAnchor, SIDEBAR_DOCKS_ABOVE } from './canvas/selection.ts'
 import { MathOverlay, type EvaluatedElement, type FlashLine } from './overlay/MathOverlay.tsx'
@@ -14,7 +15,7 @@ import { sessionPanelMemory, type PanelMemory } from './panel/panelMemory.ts'
 import { ConstantsTab, ProblemsTab, VariablesTab } from './panel/SheetPanel.tsx'
 import { SettingsTab } from './panel/SettingsTab.tsx'
 import { DEFAULT_SETTINGS, type SheetSettings } from './file/sheetFormat.ts'
-import { problemCount, type PanelTarget } from './panel/sheetPanel.ts'
+import { errorCount, type PanelTarget } from './panel/sheetPanel.ts'
 import { createDialogHost } from './file/dialogs.ts'
 import type { FileAccess } from './file/fileAccess.ts'
 import { FileChrome } from './file/FileChrome.tsx'
@@ -197,19 +198,34 @@ export default function App({ files, recovery, panelMemory, vault, initialElemen
   // The sheet as last evaluated, for the Sheet panel; null until the first run.
   const [sheet, setSheet] = useState<readonly EvaluatedElement[] | null>(null)
   const [flash, setFlash] = useState<FlashLine | null>(null)
-  const problems = sheet ? problemCount(sheet) : 0
+  const errors = sheet ? errorCount(sheet) : 0
   const wide = () => (canvas?.root.clientWidth ?? 0) > SIDEBAR_DOCKS_ABOVE
 
+  // The opened sheet: its start has loaded it (the vault's file, or on the web
+  // the recovery copy once answered). `start` is the sheet's own, run once.
+  const [opened, setOpened] = useState(false)
+  useEffect(() => {
+    if (!file) return
+    let live = true
+    void file.sheet.start().then(() => live && setOpened(true))
+    return () => {
+      live = false
+    }
+  }, [file])
+
   // At launch, on a wide window, the panel opens unless it was last closed:
-  // on Problems if the sheet has any, else on Variables.
+  // on Problems if the opened sheet has an error, else on Variables (M4d:
+  // warnings alone don't open Problems). It waits for the opened sheet and for
+  // an evaluation of all its math, since the first runs before the scene loads.
   const launched = useRef(false)
   useEffect(() => {
-    if (!canvas || !sheet || launched.current) return
+    if (!canvas || !sheet || !opened || launched.current) return
+    if (sheet.length !== canvas.api.getSceneElements().filter(isMathAnchor).length) return
     launched.current = true
     if (memory.rememberedOpen() === false || canvas.root.clientWidth <= SIDEBAR_DOCKS_ABOVE) return
-    const tab: SheetPanelTab = problemCount(sheet) > 0 ? 'problems' : 'variables'
+    const tab: SheetPanelTab = errorCount(sheet) > 0 ? 'problems' : 'variables'
     canvas.api.toggleSidebar({ name: SHEET_PANEL, tab, force: true })
-  }, [canvas, sheet, memory])
+  }, [canvas, sheet, opened, memory])
 
   const jump = useCallback(
     (target: PanelTarget) => {
@@ -266,7 +282,7 @@ export default function App({ files, recovery, panelMemory, vault, initialElemen
           imageTool={imageTool ?? undefined}
           fileMenu={fileMenu ?? undefined}
           sheetPanel={{
-            problems,
+            errors,
             variables: <VariablesTab sheet={sheet ?? []} onJump={jump} />,
             problemsTab: <ProblemsTab sheet={sheet ?? []} onJump={jump} />,
             settings: file && <SettingsTab settings={settings} onChange={file.sheet.setSettings} />,
