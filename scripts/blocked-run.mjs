@@ -10,6 +10,11 @@
 // and `--probe-style` add a <style>, to show the run fails on each (the
 // deliberate failing cases). `--screenshot
 // <file>` saves what the run saw.
+//
+// The page also carries a stand-in for Obsidian's global rules for buttons,
+// inputs and selects (plugin/test/obsidian-globals.css), on a dark-theme body:
+// the run fails if a Sheet panel row takes any of them (the view's guard in
+// plugin/styles.css). `--probe-guard` drops the guard, to show it fails.
 
 import { build } from 'esbuild'
 import { createServer } from 'node:http'
@@ -23,6 +28,7 @@ const dist = join(root, 'dist-plugin')
 const args = process.argv.slice(2)
 const probe = args.includes('--probe-request')
 const probeStyle = args.includes('--probe-style')
+const probeGuard = args.includes('--probe-guard')
 const screenshotAt = args.indexOf('--screenshot')
 const screenshot = screenshotAt >= 0 ? args[screenshotAt + 1] : null
 const SHEET = 'Calcs/pump-sizing.excalimathpad'
@@ -40,10 +46,11 @@ const fake = await build({
 
 const page = `<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
+<link rel="stylesheet" href="/obsidian-globals.css">
 <link rel="stylesheet" href="/styles.css">
 <style>html,body{margin:0;height:100%}.workspace,.workspace-leaf,.workspace-leaf-content{height:100%}
 .view-content{height:100%;padding:16px;box-sizing:border-box}</style>
-</head><body>
+</head><body class="theme-dark">
 <script src="/fake-obsidian.js"></script>
 <script>
   // Everything the bundle adds to the document from here on.
@@ -82,6 +89,8 @@ const server = createServer(async (request, response) => {
     let body
     if (path === '/') body = page
     else if (path === '/fake-obsidian.js') body = fake.outputFiles[0].text
+    else if (path === '/obsidian-globals.css') body = await readFile(join(root, 'plugin/test/obsidian-globals.css'))
+    else if (path === '/styles.css' && probeGuard) body = (await readFile(join(dist, path), 'utf8')).replace(/all: revert-layer;/, '')
     else if (['/main.js', '/styles.css', '/manifest.json'].includes(path)) body = await readFile(join(dist, path))
     else throw new Error('not found')
     response.writeHead(200, { 'content-type': types[path.slice(path.lastIndexOf('.'))] ?? 'text/html' })
@@ -152,6 +161,18 @@ try {
     tables: document.querySelectorAll('.math-element__table, [class*="table"]').length,
     added: window.__added,
   }))
+  // Obsidian's global control rules stay out of the view: a Sheet panel row is
+  // the app's transparent grid, not Obsidian's 30 px dark button.
+  const row = await tab.evaluate(() => {
+    const element = document.querySelector('.sheet-panel__row')
+    if (!element) return null
+    const style = getComputedStyle(element)
+    return { display: style.display, background: style.backgroundColor, shadow: style.boxShadow, height: style.height }
+  })
+  if (!row) failures.push("the Sheet panel's Variables rows didn't show")
+  else if (row.display !== 'grid' || row.background !== 'rgba(0, 0, 0, 0)' || row.shadow !== 'none' || row.height === '30px') {
+    failures.push(`Obsidian's global CSS reached the view: a panel row is ${JSON.stringify(row)}`)
+  }
   // Let late work (fonts, the plot's chunk, image decoding) try anything it would.
   await tab.waitForTimeout(1500)
   if (screenshot) await tab.screenshot({ path: screenshot })

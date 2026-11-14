@@ -1,17 +1,39 @@
 /* The plugin's view (docs/spec-v1.md section 12a): the app fills its tab.
    Every ancestor of the canvas needs a definite height (CONTEXT.md,
-   Load-bearing); the web's html and body rules (src/index.css) never ship. */
+   Load-bearing); the web's html and body rules (src/index.css) never ship.
+
+   The build puts the app's and Excalidraw's CSS in the `excalimathpad`
+   cascade layer (esbuild.plugin.mjs) and appends this file after it. */
+
+/* Obsidian's own padding on a view, overridden on the view's box. */
 .workspace-leaf-content[data-type='excalimathpad-sheet'] > .view-content.excalimathpad-view {
   padding: 0;
   overflow: hidden;
 }
 
-.excalimathpad-view__app {
-  position: relative;
-  height: 100%;
+/* The guard: Obsidian styles every button, input, select and textarea in the
+   window (its background, shadow, height, padding, font), and so would a
+   community theme. Inside the view, every property of every element goes back
+   to the app's layer, so the app looks as it does on the web. `revert-layer`
+   in this unlayered rule skips all unlayered rules, Obsidian's included, and
+   the `:not(#…)` gives it an id's weight, more than any of theirs. SVG keeps
+   its presentation attributes (Excalidraw's icons, KaTeX). Inline styles and
+   `!important` rules aren't reached by it. */
+.excalimathpad-view :not(#excalimathpad-guard, svg, svg *),
+.excalimathpad-view :not(#excalimathpad-guard, svg, svg *)::before,
+.excalimathpad-view :not(#excalimathpad-guard, svg, svg *)::after,
+.excalimathpad-view :not(#excalimathpad-guard)::placeholder {
+  all: revert-layer;
 }
 
-.excalimathpad-view__message {
-  padding: var(--size-4-4, 16px);
-  color: var(--text-normal);
+@layer excalimathpad {
+  .excalimathpad-view__app {
+    position: relative;
+    height: 100%;
+  }
+
+  .excalimathpad-view__message {
+    padding: var(--size-4-4, 16px);
+    color: var(--text-normal);
+  }
 }
