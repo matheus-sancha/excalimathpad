@@ -3575,3 +3575,16 @@ Changes line if it changes behaviour.
     flattens (section 4 said nothing of the others).
   - **A brace that is an operand sits in brackets,** `(⎧ … ⎩) + 3`, as without them `+ 3` reads as part of
     the "otherwise" row. Not in a fraction or under a root, whose bar or sign already sets it apart.
+- 2026-11-14, [sections 3](#3-sheet-lines-every-form), [4](#typeset-grid) and [13](#13-messages) (#142,
+  found while building, for Matheus to confirm on the PR):
+  - **A comment line's clause error** shows as a math line's does in the gutter, a red `●` with the
+    message on hover, and is listed in Problems and counted on its badge. The comment still shows, in the
+    clause's other words: `@bold @text-red if x > 3 # Pumps` is bold. A comment has no result cell, so the
+    message shows only there (section 4 said nothing).
+  - **Any clause with no comment text is a blank line,** an unknown word or a rule in it too: `@blod` and
+    `@bold if x > 1` are spacer rows with no error, as `@bold` is (section 3 named only a clause of
+    format words).
+  - **`@M` is not a word,** and the words are read as written: `@M` and `@l` are `Unknown format`. M is
+    a comment's size without a word, as the table says.
+  - **Suggestions read a clause at the start of a line as a comment's,** before its `#` is typed: a math
+    line needs code before its `@`. There the list holds the comment words and never `if`.

@@ -1,6 +1,7 @@
 import katex from 'katex'
 import { describe, expect, it } from 'vitest'
 import { evaluateSheet, typesetResult, type TypesetLine } from './evaluate.ts'
+import { NO_COMMENT_FORMAT } from './lineForm.ts'
 import { nameTex, textTex } from './typeset.ts'
 
 /** Each line of one block, typeset in a sheet of that block. */
@@ -122,7 +123,7 @@ describe('typeset lines', () => {
     expect(typeset('\n#\n# Water at 20 C\nx = (1 + # oops')).toEqual([
       { kind: 'blank' },
       { kind: 'blank' },
-      { kind: 'comment', text: 'Water at 20 C' },
+      { kind: 'comment', text: 'Water at 20 C', format: NO_COMMENT_FORMAT },
       { kind: 'unparsed', source: 'x = (1 + # oops' },
     ])
   })

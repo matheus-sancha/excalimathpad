@@ -107,6 +107,15 @@ describe('Problems (docs/spec-v1.md section 8)', () => {
     ])
   })
 
+  it('lists a comment line’s clause error, and counts it for the badge (M4d)', () => {
+    const sheet = sheetOf({ source: '@bold @L # Pumps\n@bold if x > 1 # Pipes', title: 'Pipe flow' })
+
+    expect(problemRows(sheet).map(({ severity, message, where }) => [severity, message, where])).toEqual([
+      ['error', 'rules need a math line', 'Pipe flow, line 2'],
+    ])
+    expect(errorCount(sheet)).toBe(1)
+  })
+
   it('is empty for a clean sheet', () => {
     const sheet = sheetOf({ source: '# all good\nx = 2' })
     expect(problemRows(sheet)).toEqual([])

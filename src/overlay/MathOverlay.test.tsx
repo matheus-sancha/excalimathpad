@@ -305,6 +305,36 @@ describe('MathOverlay', () => {
       expect(cellOf(1, 'result')).toBeNull()
     })
 
+    // Section 4, Typeset grid: a comment line takes its format (M4d).
+    it('draws a formatted comment line in its format, with no gutter or result cell', () => {
+      renderOverlay([anchorWith('@bold @L @upright @text-blue @yellow # Pumps and pipes\nx = 1')])
+
+      const row = rowOf('m1', 1)
+      expect(row).toHaveClass('is-comment', 'is-bold', 'is-size-L', 'is-upright', 'is-text-color', 'is-text-blue', 'is-yellow')
+      expect(row).not.toHaveClass('is-underline')
+      expect(cellOf(1, 'comment')).toHaveTextContent(/^Pumps and pipes$/)
+      expect(cellOf(1, 'gutter')).toBeNull()
+      expect(cellOf(1, 'result')).toBeNull()
+    })
+
+    it('draws a comment saved before M4d as before, its @ words as text', () => {
+      renderOverlay([anchorWith('# call me @home\n@bold #')])
+
+      expect(rowOf('m1', 1).className).toBe('math-element__row is-comment')
+      expect(cellOf(1, 'comment')).toHaveTextContent(/^call me @home$/)
+      // A clause with no comment text formats nothing: a spacer row.
+      expect(rowOf('m1', 2).className).toBe('math-element__row is-blank')
+    })
+
+    it('marks a comment line’s clause error in the gutter, the comment still shown', () => {
+      renderOverlay([anchorWith('@bold if x > 1 # Pumps')])
+
+      expect(cellOf(1, 'gutter')).toHaveTextContent('●')
+      expect(cellOf(1, 'gutter')).toHaveAttribute('data-tip', 'rules need a math line')
+      expect(cellOf(1, 'comment')).toHaveTextContent('Pumps')
+      expect(cellOf(1, 'result')).toBeNull()
+    })
+
     it('keeps a blank line and a bare # as spacer rows', () => {
       renderOverlay([anchorWith('a = 1\n\n#\nb = 2')])
 

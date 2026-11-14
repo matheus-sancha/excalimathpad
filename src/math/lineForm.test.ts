@@ -2,11 +2,13 @@ import { describe, expect, it } from 'vitest'
 import {
   codeLength,
   hasTopLevelSemicolon,
+  NO_COMMENT_FORMAT,
   NO_FORMAT,
   readLine,
   splitDisplayUnit,
   writeDisplayUnit,
   writeFormat,
+  type CommentFormat,
   type LineFormat,
 } from './lineForm.ts'
 
@@ -24,8 +26,10 @@ describe('readLine (docs/spec-v1.md section 3, step 1: the comment)', () => {
     expect(readLine('# Water at 20 C, 4" Sch 40 steel')).toEqual({
       kind: 'comment',
       text: 'Water at 20 C, 4" Sch 40 steel',
+      format: NO_COMMENT_FORMAT,
+      formatError: null,
     })
-    expect(readLine('   #indented')).toEqual({ kind: 'comment', text: 'indented' })
+    expect(readLine('   #indented')).toEqual({ kind: 'comment', text: 'indented', format: NO_COMMENT_FORMAT, formatError: null })
   })
 
   it('splits a note off code at the first #', () => {
@@ -64,7 +68,7 @@ describe('the format clause (docs/spec-v1.md section 3: after everything, before
   const format = (props: Partial<LineFormat>): LineFormat => ({ ...NO_FORMAT, ...props })
 
   it('has no format without a clause', () => {
-    expect(formatOf('U = I * R')).toMatchObject({ format: NO_FORMAT, unknownFormat: null })
+    expect(formatOf('U = I * R')).toMatchObject({ format: NO_FORMAT, formatError: null })
   })
 
   it('takes the @ words off the code, so math.js never sees them', () => {
@@ -73,7 +77,7 @@ describe('the format clause (docs/spec-v1.md section 3: after everything, before
       code: 'U = I * R',
       note: null,
       format: { bold: true, underline: false, color: 'yellow', textColor: null },
-      unknownFormat: null,
+      formatError: null,
       rules: [],
       displayUnit: null,
       expression: 'U = I * R',
@@ -100,20 +104,25 @@ describe('the format clause (docs/spec-v1.md section 3: after everything, before
     expect(formatOf('x = 1 @bolt @bold @pink')).toMatchObject({
       code: 'x = 1',
       format: format({ bold: true }),
-      unknownFormat: '@bolt',
+      formatError: 'Unknown format @bolt',
     })
-    expect(formatOf('x = 1 @')).toMatchObject({ code: 'x = 1', unknownFormat: '@' })
+    expect(formatOf('x = 1 @')).toMatchObject({ code: 'x = 1', formatError: 'Unknown format @' })
   })
 
   it('leaves an @ alone inside a string, inside a note, and in the middle of the code', () => {
     expect(formatOf('s = "a @bold"')).toMatchObject({ code: 's = "a @bold"', format: NO_FORMAT })
     expect(formatOf('x = 1 # see @bold')).toMatchObject({ code: 'x = 1', note: 'see @bold', format: NO_FORMAT })
     // In the middle of the code, the clause starts there: it is the line's format error (M4c).
-    expect(formatOf('x = 1 @bold + 2')).toMatchObject({ code: 'x = 1', format: NO_FORMAT, unknownFormat: '@bold' })
+    expect(formatOf('x = 1 @bold + 2')).toMatchObject({ code: 'x = 1', format: NO_FORMAT, formatError: 'Unknown format @bold' })
   })
 
   it('gives a comment line and a blank line no format', () => {
-    expect(readLine('# heading @bold')).toEqual({ kind: 'comment', text: 'heading @bold' })
+    expect(readLine('# heading @bold')).toEqual({
+      kind: 'comment',
+      text: 'heading @bold',
+      format: NO_COMMENT_FORMAT,
+      formatError: null,
+    })
     expect(readLine('   ')).toEqual({ kind: 'blank' })
   })
 })
@@ -128,15 +137,15 @@ describe('text colours and rules (docs/spec-v1.md section 3, M4c)', () => {
     expect(formatOf('U = I * R in V @bold @text-red @yellow # check')).toMatchObject({
       code: 'U = I * R in V',
       format: { bold: true, underline: false, color: 'yellow', textColor: 'red' },
-      unknownFormat: null,
+      formatError: null,
     })
     expect(formatOf('x = 1 @red')).toMatchObject({ format: { color: 'red', textColor: null } })
     expect(formatOf('x = 1 @text-red @text-blue')).toMatchObject({ format: { textColor: 'blue' } })
   })
 
   it('makes a word that isn’t a format the line’s error', () => {
-    expect(formatOf('x = 1 @text-purple')).toMatchObject({ unknownFormat: '@text-purple' })
-    expect(formatOf('x = 1 @purple')).toMatchObject({ unknownFormat: '@purple' })
+    expect(formatOf('x = 1 @text-purple')).toMatchObject({ formatError: 'Unknown format @text-purple' })
+    expect(formatOf('x = 1 @purple')).toMatchObject({ formatError: 'Unknown format @purple' })
   })
 
   it('reads each word’s own rule, to the next @, beside the plain formats', () => {
@@ -146,8 +155,82 @@ describe('text colours and rules (docs/spec-v1.md section 3, M4c)', () => {
       { word: { kind: 'text', color: 'red' }, condition: 'v > 3 m/s', text: '@text-red if v > 3 m/s' },
       { word: { kind: 'text', color: 'orange' }, condition: 'v > 2 m/s', text: '@text-orange if v > 2 m/s' },
     ])
-    expect(formatOf('x = 1 @blod if x > 0')).toMatchObject({ unknownFormat: '@blod' })
+    expect(formatOf('x = 1 @blod if x > 0')).toMatchObject({ formatError: 'Unknown format @blod' })
     expect(formatOf('s = "a@b" @red if s == "a@b"')).toMatchObject({ code: 's = "a@b"' })
+  })
+})
+
+describe('a comment line’s format (docs/spec-v1.md section 3, A comment line’s format, M4d)', () => {
+  const comment = (format: Partial<CommentFormat>, text: string, formatError: string | null = null) => ({
+    kind: 'comment',
+    text,
+    format: { ...NO_COMMENT_FORMAT, ...format },
+    formatError,
+  })
+
+  it('reads a clause before the # as the comment’s format', () => {
+    expect(readLine('@bold @L @text-blue # Pumps and pipes')).toEqual(
+      comment({ bold: true, size: 'L', textColor: 'blue' }, 'Pumps and pipes'),
+    )
+    expect(readLine('  @bold @upright @underline @XL @text-red @yellow   #   Heading  ')).toEqual(
+      comment({ bold: true, upright: true, underline: true, size: 'XL', textColor: 'red', color: 'yellow' }, 'Heading'),
+    )
+    expect(readLine('@S # small print')).toEqual(comment({ size: 'S' }, 'small print'))
+  })
+
+  it('keeps the last of two sizes and of two colours', () => {
+    expect(readLine('@S @XL @red @gray @text-red @text-green # x')).toEqual(
+      comment({ size: 'XL', color: 'gray', textColor: 'green' }, 'x'),
+    )
+  })
+
+  it('reads nothing after the #, so every comment saved before M4d reads as before', () => {
+    expect(readLine('# call me @home')).toEqual(comment({}, 'call me @home'))
+    expect(readLine('#@bold @L Pumps')).toEqual(comment({}, '@bold @L Pumps'))
+    expect(readLine('@bold # see @L and # more')).toEqual(comment({ bold: true }, 'see @L and # more'))
+  })
+
+  it.each([['@bold'], ['@bold #'], ['  @L @text-red  #   '], ['@blod'], ['@bold if x > 1']])(
+    'reads a clause with no comment text after it, %j, as a blank line',
+    (line) => {
+      expect(readLine(line)).toEqual({ kind: 'blank' })
+    },
+  )
+
+  it('makes a rule the line’s error, and keeps the clause’s other words', () => {
+    expect(readLine('@bold @text-red if x > 3 # Pumps')).toEqual(comment({ bold: true }, 'Pumps', 'rules need a math line'))
+    expect(readLine('@L if ok # Pumps')).toEqual(comment({}, 'Pumps', 'rules need a math line'))
+  })
+
+  it('makes a word a comment line doesn’t take the line’s error, the first one named', () => {
+    expect(readLine('@blod @L # x')).toEqual(comment({ size: 'L' }, 'x', 'Unknown format @blod'))
+    expect(readLine('@M # x')).toEqual(comment({}, 'x', 'Unknown format @M'))
+    expect(readLine('@l # x')).toEqual(comment({}, 'x', 'Unknown format @l'))
+    expect(readLine('@bold 2 # x')).toEqual(comment({}, 'x', 'Unknown format @bold'))
+    expect(readLine('@ # x')).toEqual(comment({}, 'x', 'Unknown format @'))
+  })
+
+  it('makes a comment word on a math line its error, by name', () => {
+    const errorOf = (line: string) => {
+      const form = readLine(line)
+      return form.kind === 'code' ? form.formatError : form
+    }
+    expect(errorOf('x = 1 @L')).toBe('@L is for comment lines')
+    expect(errorOf('x = 1 @bold @upright # n')).toBe('@upright is for comment lines')
+    expect(errorOf('x = 1 @S')).toBe('@S is for comment lines')
+    expect(errorOf('x = 1 @XL if x > 0')).toBe('@XL is for comment lines')
+    expect(readLine('x = 1 @bold @L')).toMatchObject({ code: 'x = 1', format: { bold: true } })
+  })
+
+  it('leaves a note’s @ words alone', () => {
+    expect(readLine('x = 1 # see @L')).toMatchObject({ kind: 'code', note: 'see @L', formatError: null })
+  })
+
+  it('is left as typed by the format bar and the unit slot', () => {
+    expect(writeFormat('@bold @L # Pumps', { ...NO_FORMAT, underline: true })).toBe('@bold @L # Pumps')
+    expect(writeFormat('@bold', { ...NO_FORMAT, underline: true })).toBe('@bold')
+    expect(writeDisplayUnit('@bold @L # Pumps', 'm')).toBe('@bold @L # Pumps')
+    expect(codeLength('@bold @L # Pumps')).toBe(0)
   })
 })
 
@@ -194,7 +277,7 @@ describe('writeFormat (what the format bar writes)', () => {
   it('reads back what it wrote', () => {
     const format: LineFormat = { bold: true, underline: true, color: 'gray', textColor: 'red' }
     const form = readLine(writeFormat('  Q = 2 L/s # flow', format))
-    expect(form).toMatchObject({ code: '  Q = 2 L/s', note: 'flow', format, unknownFormat: null })
+    expect(form).toMatchObject({ code: '  Q = 2 L/s', note: 'flow', format, formatError: null })
   })
 
   it('says where the code ends, for the caret', () => {

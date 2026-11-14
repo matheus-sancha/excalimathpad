@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { evaluateSheet, type LineResult, type SheetLine, type TableView } from './evaluate.ts'
+import { NO_COMMENT_FORMAT } from './lineForm.ts'
 
 /** Evaluates blocks (in reading order) as one sheet; results per block, in order. */
 function sheet(...sources: string[]): LineResult[][] {
@@ -132,6 +133,40 @@ describe('evaluateSheet', () => {
 
     it('reads a comment line as empty, defining nothing', () => {
       expect(block('# x = 5\nx')).toEqual([empty, error('Undefined symbol x')])
+    })
+
+    // Section 3, A comment line's format (M4d).
+    it('reads a formatted comment line as empty, defining nothing, in its format', () => {
+      const lines = evaluateSheet([{ id: 'b', source: '@bold @L @text-blue # Pumps and pipes\nx = 2\nx + 1' }]).get('b')!
+      expect(lines.map((line) => line.result)).toEqual([empty, empty, value('3')])
+      expect(lines[0].typeset).toEqual({
+        kind: 'comment',
+        text: 'Pumps and pipes',
+        format: { ...NO_COMMENT_FORMAT, bold: true, size: 'L', textColor: 'blue' },
+      })
+      expect(lines[0].variables).toEqual([])
+    })
+
+    it('reads a clause with no comment text as a blank line', () => {
+      const [line] = evaluateSheet([{ id: 'b', source: '@bold #' }]).get('b')!
+      expect(line.result).toEqual(empty)
+      expect(line.typeset).toEqual({ kind: 'blank' })
+    })
+
+    it('makes a comment line’s rule or unknown word its error, and nothing below fails', () => {
+      expect(block('x = 2\n@bold if x > 1 # Pumps\n@blod # Pipes\nx * 2')).toEqual([
+        empty,
+        error('rules need a math line'),
+        error('Unknown format @blod'),
+        value('4'),
+      ])
+      const lines = evaluateSheet([{ id: 'b', source: '@bold if x > 1 @L # Pumps' }]).get('b')!
+      expect(lines[0].typeset).toMatchObject({ kind: 'comment', text: 'Pumps', format: { size: 'L', bold: false } })
+    })
+
+    it('makes a comment word on a math line its error after the line ran', () => {
+      expect(block('x = 2 @L\nx * 2')).toEqual([error('@L is for comment lines'), value('4')])
+      expect(block('3 m @upright')).toEqual([error('@upright is for comment lines')])
     })
 
     it('keeps a # inside a string out of the note', () => {

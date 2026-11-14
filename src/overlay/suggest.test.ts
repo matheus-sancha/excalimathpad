@@ -162,6 +162,26 @@ describe('suggestions in a format clause (docs/spec-v1.md section 4, Suggestions
     expect(names('v = 1 @blod ')).toBeNull()
   })
 
+  it('offers the comment words on a comment line’s clause, and no if (M4d)', () => {
+    const words = ['bold', 'upright', 'underline', 'S', 'L', 'XL', 'text-black', 'text-blue']
+    expect(names('@')).toEqual(words)
+    expect(names('  @')).toEqual(words)
+    expect(names('@bold @L @')).toEqual(words)
+    expect(names('@u')).toEqual(['upright', 'underline'])
+    expect(names('@X')).toEqual(['XL'])
+    expect(names('@L')).toBeNull()
+    expect(names('@bold ')).toBeNull()
+    expect(names('@bold i')).toBeNull()
+    // A math line keeps its own words: no comment words, and if after a word.
+    expect(names('v = 1 @u')).toEqual(['underline'])
+    expect(names('v = 1 @L')).toBeNull()
+  })
+
+  it('offers nothing in a comment line’s text', () => {
+    expect(names('@bold # Pumps @')).toBeNull()
+    expect(names('@bold # Pu')).toBeNull()
+  })
+
   it('offers nothing in a note or a string', () => {
     expect(names('v = 1 # @')).toBeNull()
     expect(names('s = "@')).toBeNull()
