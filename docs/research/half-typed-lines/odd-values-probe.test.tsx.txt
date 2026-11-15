@@ -1,0 +1,80 @@
+// The odd-values probe of docs/research/half-typed-lines.md (wayfinder ticket #173): odd value types
+// through every consumer. To run it, copy it to src/types.fuzz.test.tsx (same hook as the typing harness).
+import { cleanup, render } from '@testing-library/react'
+import { writeFileSync } from 'node:fs'
+import { expect, it } from 'vitest'
+import { evaluateSheet } from './math/evaluate.ts'
+import { LineSample } from './overlay/MathElementView.tsx'
+import { drawChart, loadPlot } from './overlay/plotDrawing.ts'
+import { FormatTab } from './panel/FormatTab.tsx'
+import { problemRows, variableGroups } from './panel/sheetPanel.ts'
+
+const VALUES = [
+  '2', '2 m', 'i', '2 i', '2 i m', 'sqrt(-4)', 'sqrt(-4 m^2)', '[1, 2, 3]', '[1, 2] m', '[[1, 2], [3, 4]]', '[]', '"text"', 'true',
+  '1/0', '-1/0', '0/0', '1e400', '1e-400', '1e308 m', 'null', 'undefined', 'NaN', 'Infinity', 'pi', 'e', '50%', '3 degC', '3 degF',
+  '0 .. 5', '0 .. 5 step 1', '0 m .. 5 m step 1 m', '0 .. 0', '5 .. 0', '0 .. 5 step 0', '0 .. 5 step -1', '0 .. 1e9', '0 .. 5 step i',
+  'i .. 5', '0 .. 2 pi step pi / 90', '0 m .. 1 mm step 1 m', '0 .. 5 step 1e-9', '"a" .. "b"', '[1,2] .. [3,4]', '0 .. 5 m',
+  '1:5', 'x', 'sin', 'f', '2 m + 3 s', 'bignumber(2)', 'fraction(1, 3)', 'complex(1, 2) m', '1 m / 0', 'unit("5 cm")', '{a: 1}', '2 kg m / s^2', '-0', '1 mol', '2 USD',
+]
+// `v` is the value above, `w` a list (0 .. 4), `u` a unit quantity.
+const USES = [
+  'v', 'v in mm', 'v in %', 'v to mm', 'v * i', 'v i', 'v * w', 'w * v', 'v * u', 'v + w', 'v ^ w', 'w ^ v', 'sqrt(v)', 'sqrt(w - v)', 'log(w - 2) * v', 'cos(w) v', 'v[1]', 'v[0]', 'v[99]', 'w[v]',
+  'if(v > 1, "a", "b")', 'if(w > v, v, w)', 'v == v', 'v > w', 'min(v)', 'max(v, w)', 'sum(v)', 'abs(v)', 'round(v)', 'number(v)', 'string(v)', 'format(v)',
+  'g(a) = v * a', 'g(a) = a + v', 'h(a) = a\nh(v)', 'h(a) = a\nh(w) * v', 'h(a) = sqrt(a)\nh(w - v)',
+  'table(v)', 'table(w, v)', 'table(w, w * v)', 'table(v, w)', 'table(w in mm, v in mm)', 'table(v, v) @bold if v > 1',
+  'plot(v)', 'plot(w, v)', 'plot(w, w * v)', 'plot(v, w)', 'plot(w, w), mark v', 'plot(w, w), x v .. 5', 'plot(w, w), y 0 .. v', 'plot(w, w * v), log y', 'plot(w, w - v), log x, log y', 'plot(w, w), title v', 'plot(w, w), size v', 'plot(w * v, w * v in mm)',
+  'solve v = a', 'solve a^2 = v', 'solve a^2 = v, guess a = v', 'solve a = 1, guess a = v', 'solve a^2 = 4 for a in v', 'solve a * v = w',
+  'v @bold', 'v @text-red if result > 1', 'v @bold if result == "text"', 'v @bold if v', 'v @bold if result > w', 'v @bold if', 'v @text-green if result == v @bold', 'v # note', 'v "note"',
+  'k = v', 'k = v in mm', 'k = v\nk in mm', 'k = v\nk * w in mm', 'k = v\ntable(w, k)', 'k = v\nplot(w, k w)', 'v = 2', 'v .. 5', '0 .. v', '0 .. 5 step v', 'v .. v step v', 'k = 0 .. v\nk in mm', 'k = 0 .. 5 step v\ntable(k)', 'k = v .. 5\nplot(k, k)',
+]
+const findings: { stage: string; message: string; source: string; stack: string }[] = []
+let states = 0
+const actions = new Proxy({}, { get: () => () => {} }) as never
+const TITLE = { bold: true, italic: false, underline: false, align: 'left', size: 'M', color: 'black', highlight: null } as never
+
+it('sends odd values through every consumer', { timeout: 3_600_000 }, async () => {
+  const Plot = await loadPlot()
+  const origError = console.error
+  console.error = () => {}
+  for (const value of VALUES) {
+    for (const use of USES) {
+      const body = use.replace(/\bv\b/g, `(${value})`)
+      const bodyBare = use.replace(/\bv\b/g, value)
+      const named = (t: string) => (/^[\w(), ]+=|\n|^(table|plot|solve)\b|@|#|"note"/.test(t) ? [] : [`k = ${t}`, `k = ${t}\nk`, `k = ${t}\ntable(w, k)`, `k = ${t}\nplot(w, k)`, `k = ${t} in mm`, `k(a) = ${t}\nk(w)`, `k(a) = ${t}\nq = k(w)`])
+      for (const text of new Set([body, bodyBare, ...named(body), ...named(bodyBare)])) {
+        const source = `w = 0 .. 4\nu = 3 mm\nf(a) = a^2\n${text}`
+        states++
+        cleanup()
+        writeFileSync(process.env.FUZZ_OUT + '.last', text)
+        const t0 = performance.now()
+        const caught: unknown[] = []
+        ;(globalThis as never as { __fuzzCaught: (e: unknown) => void }).__fuzzCaught = (e) => caught.push(e)
+        const record = (stage: string, error: unknown) => {
+          const e = error instanceof Error ? error : new Error(String(error))
+          findings.push({ stage, message: e.message.slice(0, 300), source: text, stack: (e.stack ?? '').split('\n').slice(1, 8).join('\n') })
+        }
+        let lines
+        try {
+          lines = evaluateSheet([{ id: 'a', source }]).get('a')!
+        } catch (error) {
+          record('engine: evaluateSheet threw', error)
+          continue
+        }
+        if (performance.now() - t0 > 300) findings.push({ stage: 'slow: engine over 300 ms', message: `${Math.round(performance.now() - t0)} ms`, source: text, stack: '' })
+        caught.forEach((e) => record('engine: caught by the per-line guard', e))
+        const element = { anchorId: 'a', title: null, lines, titleFormat: TITLE }
+        const texts = source.split('\n')
+        try { variableGroups([element]); problemRows([element]) } catch (error) { record('view: panel rows', error) }
+        lines.slice(3).forEach((line, j) => {
+          const i = j + 3
+          try { render(<LineSample text={texts[i]} line={line} />).unmount() } catch (error) { record('view: LineSample render', error) }
+          try { render(<FormatTab sheet={[element]} target={{ anchorId: 'a', lineIndex: i, text: texts[i] }} selected={null} actions={actions} />).unmount() } catch (error) { record('view: FormatTab render', error) }
+          if (line.plot) try { drawChart(Plot, line.plot) } catch (error) { record('view: drawChart', error) }
+        })
+      }
+    }
+  }
+  console.error = origError
+  writeFileSync(process.env.FUZZ_OUT!, JSON.stringify({ states, findings }, null, 1))
+  expect(states).toBeGreaterThan(0)
+})

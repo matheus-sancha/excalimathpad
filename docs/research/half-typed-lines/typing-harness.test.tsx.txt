@@ -1,0 +1,168 @@
+// The typing harness of docs/research/half-typed-lines.md (wayfinder ticket #173). To run it, copy it to
+// src/typing.fuzz.test.tsx. To also count throws the per-line guard catches, add this line inside the
+// guard's catch in src/math/evaluate.ts: ;(globalThis as { __fuzzCaught?: (e: unknown) => void }).__fuzzCaught?.(error)
+// FUZZ_MODE: A types at the end, B with the lines below present, D deletes one character,
+// T adds a stray token after a prefix, M inserts one anywhere. FUZZ_VIEW=0 skips the view.
+import { cleanup, render } from '@testing-library/react'
+import { createHash } from 'node:crypto'
+import { writeFileSync } from 'node:fs'
+import { expect, it } from 'vitest'
+import guide from '../docs/math-guide.md?raw'
+import pump from '../docs/acceptance/pump-sizing.md?raw'
+import { evaluateSheet, listConstants, type SheetLine } from './math/evaluate.ts'
+import { readLine } from './math/lineForm.ts'
+import { readPlot } from './math/plotLine.ts'
+import { LineSample } from './overlay/MathElementView.tsx'
+import { drawChart, loadPlot } from './overlay/plotDrawing.ts'
+import { constantSuggestions, FUNCTION_SUGGESTIONS, sheetNames, suggest, unitSuggestions } from './overlay/suggest.ts'
+import { FormatTab } from './panel/FormatTab.tsx'
+import { problemRows, variableGroups } from './panel/sheetPanel.ts'
+
+const MODE = process.env.FUZZ_MODE ?? 'A' // A: typing at the end; B: lines below present
+const VIEW = process.env.FUZZ_VIEW !== '0'
+const TOKENS = (process.env.FUZZ_TOKENS ?? ' i|i|[|]|"|..|%| @|#| in |,|(|)|=|;|^|/| mm|.|:|!|-| to | if | step |@bold if ').split('|')
+const OUT = process.env.FUZZ_OUT ?? '/tmp/fuzz.json'
+
+const TRUE_POSITION = `# True position, RFS (ASME Y14.5)
+dx = 0.08 mm
+dy = -0.05 mm
+T_p = 0.25 mm
+TP = 2 sqrt(dx^2 + dy^2) in mm
+check = if(TP <= T_p, "Pass", "Fail") @text-green if result == "Pass" @text-red if result == "Fail"
+used = TP / T_p * 100
+margin = T_p - TP in mm
+# Graph: tolerance zone and the measured point
+r_t = T_p / 2 in mm
+theta = 0 .. 2 pi step pi / 90
+zone_x = r_t cos(theta) in mm
+zone(a) = r_t sin(a)
+measured(a) = dy + 0 mm * a
+plot(zone_x in mm, zone(theta) in mm, measured(theta) in mm), mark dx, x -2.3 r_t .. 2.3 r_t, y -1.2 r_t .. 1.2 r_t, size L, title "True position"`
+
+function guideSheets(): { name: string; lines: string[] }[] {
+  const L = guide.split('\n')
+  const starts = L.flatMap((line, i) => (/^## \d+\. /.test(line) ? [i] : []))
+  return starts.flatMap((start, n) => {
+    const lines = L.slice(start + 1, starts[n + 1] ?? L.length)
+    const found: string[] = []
+    for (let i = 0; i < lines.length; i++) {
+      if (/^\| Write \| Shows \| Note \|$/.test(lines[i])) {
+        for (i += 2; i < lines.length && lines[i].startsWith('|'); i++) {
+          const write = lines[i].trim().replace(/^\||\|$/g, '').split(/(?<!\\)\|/)[0].trim().replaceAll('\\|', '|')
+          const m = /^`([^`]+)`$/.exec(write)
+          if (m) found.push(m[1])
+        }
+      } else if (lines[i] === '```sheet') {
+        for (i++; lines[i] !== '```'; i++) {
+          const arrow = lines[i].lastIndexOf('→')
+          found.push(arrow < 0 ? lines[i].trimEnd() : lines[i].slice(0, arrow).trimEnd())
+        }
+      }
+    }
+    return found.length ? [{ name: `guide: ${L[start].replace(/^## /, '')}`, lines: found }] : []
+  })
+}
+
+const SHEETS = [
+  { name: 'true position', lines: TRUE_POSITION.split('\n') },
+  ...guideSheets(),
+  { name: 'pump sheet', lines: [...pump.matchAll(/^\| (c|\d+[a-z]?) \| `(.+?)` \|/gm)].map(([, , s]) => s.replaceAll('\\|', '|')) },
+].filter((s) => !process.env.FUZZ_ONLY || s.name.includes(process.env.FUZZ_ONLY))
+
+interface Finding { stage: string; message: string; stack: string; sheet: string; line: number; typed: string; above: string[] }
+const findings: Finding[] = []
+const slow: { ms: number; sheet: string; typed: string; stage: string }[] = []
+const consoleErrors = new Map<string, string>()
+let states = 0
+
+const UNITS = unitSuggestions()
+const CONSTANTS = constantSuggestions(listConstants())
+const noop = () => {}
+const actions = new Proxy({}, { get: () => noop }) as never
+const TITLE = { bold: true, italic: false, underline: false, align: 'left', size: 'M', color: 'black', highlight: null } as never
+
+const save = (done = false) => writeFileSync(OUT, JSON.stringify({ mode: MODE, done, states, findings, slow, consoleErrors: [...consoleErrors] }, null, 1))
+
+it('types every sheet one character at a time', { timeout: 3_600_000 }, async () => {
+  const Plot = await loadPlot()
+  const seenView = new Set<string>()
+  const origError = console.error
+  let where = ''
+  console.error = (...args: unknown[]) => {
+    const text = args.map(String).join(' ').slice(0, 300)
+    if (!consoleErrors.has(text)) consoleErrors.set(text, where)
+  }
+  for (const sheet of SHEETS) {
+    for (let k = 0; k < sheet.lines.length; k++) {
+      const above = sheet.lines.slice(0, k)
+      const below = MODE === 'B' || MODE === 'D' || MODE === 'M' ? sheet.lines.slice(k + 1) : []
+      const full = sheet.lines[k]
+      const variants: string[] = []
+      if (MODE === 'A' || MODE === 'B') for (let p = 1; p <= full.length; p++) variants.push(full.slice(0, p))
+      if (MODE === 'D') for (let p = 0; p < full.length; p++) variants.push(full.slice(0, p) + full.slice(p + 1))
+      if (MODE === 'T') {
+        const STEP = Number(process.env.FUZZ_STEP ?? 1)
+        for (let p = 1; p <= full.length; p += STEP) for (const t of TOKENS) variants.push(full.slice(0, p) + t)
+      }
+      if (MODE === 'M') for (let p = 0; p <= full.length; p++) for (const t of TOKENS) variants.push(full.slice(0, p) + t + full.slice(p))
+      for (const typed of variants) {
+        states++
+        if (states % 200 === 0) cleanup()
+        if (states % 5000 === 0) save()
+        where = `${sheet.name} | ${typed}`
+        const record = (stage: string, error: unknown) => {
+          const e = error instanceof Error ? error : new Error(String(error))
+          findings.push({ stage, message: e.message.slice(0, 400), stack: (e.stack ?? '').split('\n').slice(1, 7).join('\n'), sheet: sheet.name, line: k, typed, above })
+        }
+        const timed = <T,>(stage: string, run: () => T): T | undefined => {
+          const t = performance.now()
+          try {
+            return run()
+          } catch (error) {
+            record(stage, error)
+            return undefined
+          } finally {
+            const ms = performance.now() - t
+            if (ms > 150) slow.push({ ms: Math.round(ms), sheet: sheet.name, typed, stage })
+          }
+        }
+        const caught: unknown[] = []
+        ;(globalThis as never as { __fuzzCaught: (e: unknown) => void }).__fuzzCaught = (e) => caught.push(e)
+        const source = [...above, typed, ...below].join('\n')
+        const lines = timed('engine: evaluateSheet threw', () => evaluateSheet([{ id: 'a', source }]).get('a')!)
+        caught.forEach((e) => record('engine: caught by the per-line guard', e))
+        if (!lines || !VIEW) continue
+        // Pure view helpers, at every keystroke.
+        timed('view: readLine', () => readLine(typed))
+        timed('view: readPlot', () => { const f = readLine(typed); return f.kind === 'code' ? readPlot(f.code) : null })
+        timed('view: suggest', () => {
+          const names = sheetNames([{ id: 'a', lines }], { anchorId: 'a', lineIndex: k })
+          for (let c = 0; c <= typed.length; c += Math.max(1, typed.length)) suggest(typed, c, { sheet: names, constants: CONSTANTS, functions: FUNCTION_SUGGESTIONS, units: UNITS })
+          return suggest(typed, typed.length, { sheet: names, constants: CONSTANTS, functions: FUNCTION_SUGGESTIONS, units: UNITS })
+        })
+        const element = { anchorId: 'a', title: null, lines, titleFormat: TITLE }
+        timed('view: variableGroups', () => variableGroups([element]))
+        timed('view: problemRows', () => problemRows([element]))
+        // Rendering: each line whose evaluation this keystroke changed.
+        const texts = [...above, typed, ...below]
+        lines.forEach((line: SheetLine, i: number) => {
+          const key = createHash('sha1').update(`${texts[i]}\u0000${JSON.stringify(line)}`).digest('base64')
+          if (seenView.has(key) && i !== k) return
+          const first = !seenView.has(key)
+          seenView.add(key)
+          if (first) {
+            timed(`view: LineSample render${i === k ? '' : ' (a line below)'}`, () => render(<LineSample text={texts[i]} line={line} />).unmount())
+            if (line.plot) timed('view: drawChart', () => drawChart(Plot, line.plot!))
+          }
+          if (i === k && first) {
+            timed('view: FormatTab render', () =>
+              render(<FormatTab sheet={[element]} target={{ anchorId: 'a', lineIndex: k, text: typed }} selected={null} actions={actions} />).unmount())
+          }
+        })
+      }
+    }
+  }
+  console.error = origError
+  save(true)
+  expect(states).toBeGreaterThan(0)
+})

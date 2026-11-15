@@ -1,0 +1,164 @@
+// The browser run of docs/research/half-typed-lines.md (wayfinder ticket #173), made from scripts/touch-run.mjs.
+// To run it: copy to scripts/, npm run build:plugin, then SHEETS=<json of {name, lines}[]> OUT=<json> node scripts/<name>.mjs
+
+// The touch run (docs/spec-v1.md section 4, Touch; section 8, On a phone;
+// section 12a, Releases; section 14, Two taps reach the app first): the built
+// `dist-plugin/main.js` in headless Chromium against the fake `obsidian`, with
+// touch (Playwright's `hasTouch`) at a phone and a tablet viewport. Each runs
+// twice: as Android, and as iOS, where Excalidraw cancels every `touchstart`
+// on its canvas, so the browser sends no click (`navigator.platform` is what
+// Excalidraw reads). On the phone the plugin's `Platform.isPhone` is set, so
+// the Sheet panel is the bottom sheet.
+//
+// It covers what the device checklist can't leave to chance: a double tap
+// opens a line (and a drawing on top keeps Excalidraw's own), the Format tab's
+// Done, ↑ ↓ and Edit, the canvas hint by tap and by click, a tap's tips and the slots and ⚙ a touch selection
+// shows, the quick keys and their undo, the panel's open and restore, and the
+// suggestions opening above the field; on the tablet, a mouse keeps hover. It
+// runs in Chromium, so it covers neither WebKit nor a real on-screen keyboard:
+// those are the device checklist's (CONTRIBUTING.md). It fails on any check
+// that doesn't hold, and on any page error.
+//
+// Run: `node scripts/touch-run.mjs` (`npm run test:touch`), after
+// `npm run build:plugin`.
+
+import { build } from 'esbuild'
+import { createServer } from 'node:http'
+import { readFile } from 'node:fs/promises'
+import { createRequire } from 'node:module'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+const root = join(dirname(fileURLToPath(import.meta.url)), '..')
+const dist = join(root, 'dist-plugin')
+const FILE = 'Calcs/touch.excalimathpad'
+
+const fake = await build({
+  absWorkingDir: root,
+  entryPoints: ['plugin/test/obsidian.ts'],
+  bundle: true,
+  format: 'iife',
+  globalName: 'FakeObsidian',
+  write: false,
+  target: ['es2022'],
+})
+
+const page = `<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="/styles.css">
+<style>html,body{margin:0;height:100%}.workspace,.workspace-leaf,.workspace-leaf-content,.view-content{height:100%}</style>
+</head><body>
+<script src="/fake-obsidian.js"></script>
+<script>
+  var module = { exports: {} }, exports = module.exports
+  window.require = (name) => {
+    if (name === 'obsidian') return FakeObsidian
+    throw new Error('main.js required ' + name)
+  }
+</script>
+<script src="/main.js"></script>
+<script>
+  window.__start = async (sheet, manifest, phone) => {
+    FakeObsidian.Platform.isPhone = phone
+    FakeObsidian.Platform.isTablet = !phone
+    FakeObsidian.Platform.isMobile = true
+    const app = new FakeObsidian.App()
+    app.vault.add(${JSON.stringify(FILE)}, sheet)
+    const plugin = new module.exports.default(app, manifest)
+    await plugin.onload()
+    const leaf = app.workspace.getLeaf()
+    await leaf.openFile(new FakeObsidian.TFile(${JSON.stringify(FILE)}))
+    window.__leaf = leaf
+  }
+  // Whether Excalidraw's text editor has opened since the last reset: in
+  // Chromium's touch, as Android, it closes again by itself (the browser's
+  // \`dblclick\` follows Excalidraw's double tap), the app or not.
+  window.__editorSeen = false
+  new MutationObserver(() => {
+    if (document.querySelector('textarea.excalidraw-wysiwyg')) window.__editorSeen = true
+  }).observe(document, { childList: true, subtree: true })
+  // The scene's text elements, from the view's file as the app holds it.
+  window.__texts = () => JSON.parse(window.__leaf.view.getViewData()).elements.filter((e) => !e.isDeleted && e.type === 'text').length
+</script>
+</body></html>`
+
+const math = (id, x, y, source) => ({
+  id, type: 'rectangle', x, y, width: 160, height: 60, customData: { kind: 'math', source },
+})
+const sheet = JSON.stringify({
+  type: 'excalidraw', version: 2,
+  elements: [math('calc', 40, 120, 'start = 1')],
+  appState: {}, files: {}, excalimathpad: { format: 1 },
+})
+
+const types = { '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json' }
+const server = createServer(async (request, response) => {
+  const path = new URL(request.url, 'http://127.0.0.1').pathname
+  try {
+    let body
+    if (path === '/') body = page
+    else if (path === '/fake-obsidian.js') body = fake.outputFiles[0].text
+    else if (['/main.js', '/styles.css', '/manifest.json'].includes(path)) body = await readFile(join(dist, path))
+    else throw new Error('not found')
+    response.writeHead(200, { 'content-type': types[path.slice(path.lastIndexOf('.'))] ?? 'text/html' })
+    response.end(body)
+  } catch {
+    response.writeHead(404)
+    response.end()
+  }
+})
+await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
+const origin = `http://127.0.0.1:${server.address().port}`
+
+
+import { readFileSync, writeFileSync } from 'node:fs'
+const SHEETS = JSON.parse(readFileSync(process.env.SHEETS, 'utf8'))
+const { chromium } = createRequire(import.meta.url)('playwright')
+const browser = await chromium.launch()
+const manifest = JSON.parse(await readFile(join(dist, 'manifest.json'), 'utf8'))
+const report = []
+for (const { name, lines } of SHEETS) {
+  const context = await browser.newContext({ viewport: { width: 1400, height: 900 } })
+  const tab = await context.newPage()
+  const errors = []
+  let typed = ''
+  tab.on('pageerror', (error) => errors.push({ kind: 'pageerror', message: error.message.slice(0, 300), typed }))
+  tab.on('console', (m) => { if (m.type() === 'error') errors.push({ kind: 'console', message: m.text().slice(0, 300), typed }) })
+  await tab.goto(`${origin}/`)
+  await tab.evaluate(([text, m]) => window.__start(text, m, false), [sheet, manifest])
+  await tab.evaluate(() => { FakeObsidian.Platform.isMobile = false; FakeObsidian.Platform.isTablet = false })
+  await tab.waitForSelector('[data-anchor-id="calc"] .katex', { timeout: 30_000 })
+  const box = await tab.locator('[data-anchor-id="calc"] [data-line="0"]').boundingBox()
+  await tab.mouse.dblclick(box.x + 18, box.y + box.height / 2)
+  await tab.waitForSelector('input.math-element__field', { timeout: 5000 })
+  let dead = null
+  let keys = 0
+  for (const line of lines) {
+    await tab.keyboard.press('End')
+    await tab.keyboard.press('Enter')
+    for (const ch of line) {
+      await tab.keyboard.type(ch)
+      keys++
+      typed = line.slice(0, line.indexOf(ch) + 1)
+      if (keys % 8 === 0) await tab.waitForTimeout(30)
+    }
+    typed = line
+    await tab.waitForTimeout(120)
+    const alive = await tab.locator('[data-anchor-id="calc"]').count()
+    const field = (await tab.locator('input.math-element__field').count()) ? await tab.locator('input.math-element__field').inputValue() : null
+    if (!alive || field !== line) { dead = { line, alive, field }; break }
+  }
+  await tab.waitForTimeout(800)
+  const rows = await tab.locator('[data-anchor-id="calc"] [data-line]').count()
+  const panel = await tab.evaluate(() => document.querySelector('.sheet-sidebar .sheet-tab[data-state="active"]')?.getAttribute('title') ?? null)
+  const charts = await tab.locator('[data-anchor-id="calc"] .math-element__plot-chart svg').count()
+  const sample = await tab.locator('.sheet-format__drawing .math-element__row').count()
+  if (process.env.SHOTS) await tab.screenshot({ path: `${process.env.SHOTS}/${name.replace(/\W+/g, '-')}.png` })
+  report.push({ name, lines: lines.length, keys, rows, panel, charts, sample, dead, errors })
+  console.log(name, 'keys', keys, 'rows', rows, 'panel', panel, 'charts', charts, 'sample', sample, 'dead', JSON.stringify(dead), 'errors', errors.length)
+  await context.close()
+}
+writeFileSync(process.env.OUT, JSON.stringify(report, null, 1))
+await browser.close()
+server.close()
