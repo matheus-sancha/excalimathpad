@@ -118,7 +118,7 @@ Assumed, not measured on Matheus's PC: a 14-inch screen gives a window 1280 to 1
 So in a vault on this laptop the panel is nearly always floating, and at 150 % with both Obsidian
 sidebars open the tab can fall into the mobile layout. An edit opens the panel on Format
 (`App.tsx`, `showAutomatically`) whether it docks or floats; floating, it stays open during the
-edit because the line field carries `data-prevent-outside-click` (spec section 13).
+edit because the line field carries `data-prevent-outside-click` (`docs/spec-v1.md`, the M4d checks table).
 
 ## What the phone's bottom sheet shares
 
