@@ -66,7 +66,7 @@ export interface MathAnchor {
   titleFormat: TitleFormat
 }
 
-/** A title's format (section 4, Title format): set only from the title's bar. */
+/** A title's format (section 4, Title format): set only from the Format tab and the title field's keys. */
 export interface TitleFormat {
   bold: boolean
   italic: boolean
@@ -279,7 +279,7 @@ export function writeAnchorTitle(api: SourceWriteApi, anchorId: string, title: s
 }
 
 /**
- * Sets a title's format (section 4, Title format, M4c), from the title's bar:
+ * Sets a title's format (section 4, Title format, M4c), from the Format tab or a format key:
  * one undo step when it changes, under the same rules as a source write.
  * `customData.titleFormat` holds only what differs from no format, and no key
  * at all for none, so a title without a format is stored as it always was.

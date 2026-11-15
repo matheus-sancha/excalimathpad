@@ -349,6 +349,13 @@ export interface SheetLine {
   table: TableView | null
   /** A plot line's chart (section 10), drawn under the line. Null on any other line. */
   plot: PlotView | null
+  /**
+   * Whether each of the line's rules, in the order typed, is true for the
+   * line's own row (section 3, A rule): on a list, at every point; never on a
+   * table, whose own row keeps its plain format. Empty for a line with none.
+   * The Format tab names the rule that sets a property (M4d).
+   */
+  ruleTruth: readonly boolean[]
 }
 
 /** A table as the grid draws it: its columns, then every row, one cell per column. */
@@ -625,6 +632,7 @@ export function evaluateSheet(
           listPreview: result.kind === 'list' ? preview : null,
           table,
           plot,
+          ruleTruth: ruled?.truth ?? [],
         }
       }),
     )
@@ -644,9 +652,9 @@ export function evaluateSheet(
     line: ParsedLine,
     result: LineResult,
     here: number,
-  ): { format: LineFormat; warnings: string[]; counts: string[] } | null {
+  ): { format: LineFormat; warnings: string[]; counts: string[]; truth: boolean[] } | null {
     if (line.kind === 'blank' || line.kind === 'syntax-error' || line.rules.length === 0) return null
-    if (result.kind === 'error') return { format: line.format, warnings: [], counts: [] }
+    if (result.kind === 'error') return { format: line.format, warnings: [], counts: [], truth: line.rules.map(() => false) }
     const warnings: string[] = []
     const warn = (rule: FormatRule, message: string) => {
       const text = `if ${rule.condition}: ${message}`
@@ -726,7 +734,7 @@ export function evaluateSheet(
           return truth.some(Boolean) ? resolveRules(NO_FORMAT, line.rules, truth) : null
         }),
       }
-      return { format: line.format, warnings, counts: [] }
+      return { format: line.format, warnings, counts: [], truth: line.rules.map(() => false) }
     }
 
     const value = lineValue
@@ -744,7 +752,7 @@ export function evaluateSheet(
       const shown = line.rules.flatMap((rule, index) =>
         conditions[index] === null || conditions[index].skipped ? [] : [`${rule.text}: ${counts[index]} of ${length} points`],
       )
-      return { format: resolveRules(line.format, line.rules, truth), warnings, counts: shown }
+      return { format: resolveRules(line.format, line.rules, truth), warnings, counts: shown, truth }
     }
 
     const single = value !== undefined && typeof value !== 'function'
@@ -755,7 +763,7 @@ export function evaluateSheet(
       }
       return decide(index, single ? new Map<string, unknown>([['result', value]]) : new Map<string, unknown>())
     })
-    return { format: resolveRules(line.format, line.rules, truth), warnings, counts: [] }
+    return { format: resolveRules(line.format, line.rules, truth), warnings, counts: [], truth }
   }
 
   /** Read right after the line ran: a failed line has removed its names. */

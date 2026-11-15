@@ -891,7 +891,8 @@ buttons. A row that doesn't apply is left out, not greyed:
 **Writes.** Each press is one undo step, written at once, as the bar's were: a line press is a
 line commit that keeps the line open with its caret in the code
 (`min(selectionStart, codeLength)`) and remounts the field, whose text undo then starts empty;
-a title press is one step. Pressing a pressed button takes that format off.
+on a comment line, which has no code, the caret keeps its place in the comment text, moving
+with the `#` (#144). A title press is one step. Pressing a pressed button takes that format off.
 
 ### Rules list
 
@@ -2393,6 +2394,10 @@ Engineer's design gate. Tested on Excalidraw 0.18.1, math.js 15.2 and Chromium.
     As built (#143): a box with no box of its own (`display: contents`) around the panel's tabs stops each
     key's React propagation, so Excalidraw's `onKeyDown` never hears it and the panel's own handlers still
     run; `listenToCanvas` doesn't hand the gestures a key aimed at the panel either.
+  - As built (#144): the caret after a press is `caretAfterFormat`. Which rules are true for a
+    line's own row is `SheetLine.ruleTruth`; the Format tab's override note names the first true
+    rule per property. The touch hint is passed in (`touch`) and left off until #147 tells touch
+    apart.
   - As built (#7 and #58 follow-up): an overlay hover is found from geometry on the canvas's `pointermove`
     (`slotAt`, `tipAt`), never from the overlay's own events; a `title` attribute there never shows. The
     root's `pointerleave` (not in capture) hides a problem's tip.
@@ -3146,6 +3151,10 @@ Changes line if it changes behaviour.
 
 ## Changes since agreed
 
+- 2026-11-15, [section 4](#format-tab) (#144, found while building, not asked): a Format tab press on a
+  comment line keeps the caret where it was in the comment text, moving with the `#`. A comment line
+  has no code, so `min(selectionStart, codeLength)` would have sent the caret to the start of the line
+  on every press.
 - 2026-11-13, [section 7](#the-file) (#111, found while building, not asked): a title's format is stored
   as a string of words (`"centre L text-red"`), not an object. Excalidraw compares `customData` one
   level deep when it records a step, so an object there added an empty undo step to every later write

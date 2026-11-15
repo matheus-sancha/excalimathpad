@@ -10,6 +10,7 @@ import {
   type SheetPanelTab,
 } from './canvas/SheetCanvas.tsx'
 import { isMathAnchor } from './canvas/mathAnchor.ts'
+import { mathSelection } from './canvas/mathSelection.ts'
 import { sceneFileFor } from './canvas/sceneFile.ts'
 import { jumpToAnchor, scrollClearOf, SIDEBAR_DOCKS_ABOVE } from './canvas/selection.ts'
 import {
@@ -20,7 +21,8 @@ import {
   type LineEditControl,
 } from './overlay/MathOverlay.tsx'
 import { sessionPanelMemory, type PanelMemory } from './panel/panelMemory.ts'
-import { ConstantsTab, FormatTab, ProblemsTab, SymbolsTab, VariablesTab } from './panel/SheetPanel.tsx'
+import { ConstantsTab, ProblemsTab, SymbolsTab, VariablesTab } from './panel/SheetPanel.tsx'
+import { FormatTab, type FormatActions } from './panel/FormatTab.tsx'
 import { SettingsTab } from './panel/SettingsTab.tsx'
 import { DEFAULT_SETTINGS, type SheetSettings } from './file/sheetFormat.ts'
 import { errorCount, type PanelTarget } from './panel/sheetPanel.ts'
@@ -284,8 +286,11 @@ export default function App({ files, recovery, panelMemory, vault, initialElemen
     },
     [canvas],
   )
+  // What is open, for the Format tab (section 4, Format tab, M4d).
+  const [editTarget, setEditTarget] = useState<EditTarget | null>(null)
   const onEdit = useCallback(
     (target: EditTarget | null) => {
+      setEditTarget(target)
       if (!canvas) return
       if (target && !beforeEdit.current) {
         beforeEdit.current = canvas.sheetPanel()
@@ -307,6 +312,36 @@ export default function App({ files, recovery, panelMemory, vault, initialElemen
       }
     },
     [canvas, showAutomatically],
+  )
+
+  // The one math element selected, alone: the Format tab's Edit opens it, as Enter does.
+  const [selectedMath, setSelectedMath] = useState<string | null>(null)
+  useEffect(() => {
+    if (!canvas) return
+    const read = () => {
+      const { selectedElementIds } = canvas.api.getAppState()
+      setSelectedMath(mathSelection(canvas.api) === 'one' ? Object.keys(selectedElementIds).find((id) => selectedElementIds[id]) ?? null : null)
+    }
+    read()
+    return canvas.api.onChange(read)
+  }, [canvas])
+
+  // The Format tab's presses act on the open line or title (section 4, Format tab).
+  const formatActions = useMemo(
+    (): FormatActions => ({
+      setFormat: (format) => line.current?.setFormat(format),
+      setCommentFormat: (format) => line.current?.setCommentFormat(format),
+      setTitleFormat: (format) => line.current?.setTitleFormat(format),
+      moveTo: (target) => line.current?.moveTo(target),
+      move: (direction) => line.current?.move(direction),
+      // As Esc: the line leaves, and the keyboard goes back to the canvas.
+      done: () => {
+        line.current?.leaveLine()
+        canvas?.focusCanvas()
+      },
+      edit: (anchorId) => line.current?.openLast(anchorId),
+    }),
+    [line, canvas],
   )
 
   const jump = useCallback(
@@ -365,7 +400,15 @@ export default function App({ files, recovery, panelMemory, vault, initialElemen
           fileMenu={fileMenu ?? undefined}
           sheetPanel={{
             errors,
-            format: <FormatTab />,
+            format: (
+              <FormatTab
+                sheet={sheet ?? []}
+                target={editTarget}
+                selected={selectedMath}
+                resultColor={settings.resultColor}
+                actions={formatActions}
+              />
+            ),
             symbols: <SymbolsTab />,
             variables: <VariablesTab sheet={sheet ?? []} onJump={jump} />,
             problemsTab: <ProblemsTab sheet={sheet ?? []} onJump={jump} />,

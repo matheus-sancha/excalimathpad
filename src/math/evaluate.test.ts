@@ -1620,6 +1620,15 @@ describe('rules: conditional formats (docs/spec-v1.md section 3, A rule; #109)',
     expect(formatOf(line)).toEqual({ bold: true, underline: true, color: 'red', textColor: null })
   })
 
+  it('says which rules are true for the line’s own row, for the Format tab (M4d)', () => {
+    expect(lines('v = 4 @bold if v > 3 @yellow if v > 5 @red if v > 1')[0].ruleTruth).toEqual([true, false, true])
+    expect(lines('v = 4 @bold')[0].ruleTruth).toEqual([])
+    // On a list, only where every point is true; never on a table's own row; none on an error.
+    expect(lines('x = 1 .. 3 @red if x > 0 @bold if x > 2')[0].ruleTruth).toEqual([true, false])
+    expect(lines('x = 1 .. 3\ntable(x) @yellow if x > 2')[1].ruleTruth).toEqual([false])
+    expect(lines('v = q @red if v > 1')[0].ruleTruth).toEqual([false])
+  })
+
   it('reads any name above, the line’s own name and result; a limit follows its variable', () => {
     expect(formatOf(lines('a = 10\nsigma = 12 @text-red if sigma > a')[1])?.textColor).toBe('red')
     expect(formatOf(lines('a = 20\nsigma = 12 @text-red if sigma > a')[1])?.textColor).toBeNull()

@@ -195,3 +195,175 @@
   font-size: 11px;
   user-select: all;
 }
+
+/* The Format tab's bordered boxes sit inside the panel, clear of the window's
+   edge: the other tabs' borderless rows can run to it. */
+.sheet-panel.sheet-format {
+  padding: 4px 12px 12px 8px;
+}
+
+.sheet-format__hint .sheet-format__nav-button {
+  flex: none;
+}
+
+/* The Format tab (section 4, Format tab, M4d). The sample is the sheet's own
+   drawing in a light box: the overlay's colour variables are set here, since
+   the panel sits outside the overlay, and in the dark theme it takes the
+   canvas's filter, as math on the sheet does (`DARK_THEME_FILTER`). */
+.sheet-format__sample {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.sheet-format__caption {
+  margin: 0 4px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-gray-50, #868e96);
+}
+
+.sheet-format__drawing {
+  --math-text: #1e1e1e;
+  --math-error: #e03131;
+  --math-warning: #e8590c;
+  --math-quiet: #868e96;
+  --math-rule: #dee2e6;
+  min-height: 48px;
+  overflow-x: auto;
+  border: 1px solid #dee2e6;
+  border-radius: 8px;
+  background: #f8f9fa;
+  pointer-events: none;
+}
+
+.excalidraw.theme--dark .sheet-format__drawing {
+  filter: invert(93%) hue-rotate(180deg);
+}
+
+/* The sheet's body, laid out in the box rather than placed on the canvas. */
+.sheet-format__drawing .math-element__body.is-sample {
+  position: static;
+}
+
+/* The link that moves the edit, then Done, ↑ and ↓. */
+.sheet-format__nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.sheet-format__nav-keys {
+  display: flex;
+  gap: 4px;
+}
+
+.sheet-format__link {
+  padding: 4px;
+  border: 0;
+  background: none;
+  color: var(--color-primary, #1971c2);
+  font: inherit;
+  cursor: pointer;
+}
+
+.sheet-format__link:hover {
+  text-decoration: underline;
+}
+
+.sheet-format__nav-button,
+.sheet-format__button {
+  box-sizing: border-box;
+  min-width: 36px;
+  height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--default-border-color, #dee2e6);
+  border-radius: 8px;
+  background: var(--island-bg-color, #fff);
+  color: inherit;
+  font: inherit;
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.sheet-format__hint {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sheet-format__override {
+  margin: 0 4px;
+  color: var(--color-gray-50, #868e96);
+  font-style: italic;
+}
+
+/* One labelled row per property, of large buttons. */
+.sheet-format__row {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+}
+
+.sheet-format__row-label {
+  margin-left: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-gray-50, #868e96);
+}
+
+.sheet-format__buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.sheet-format__button.is-bold { font-weight: bold; }
+.sheet-format__button.is-italic { font-style: italic; font-family: Georgia, serif; }
+.sheet-format__button.is-underline { text-decoration: underline; }
+.sheet-format__button.is-size { padding: 0 6px; font-size: 13px; }
+
+.sheet-format__swatch {
+  box-sizing: border-box;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid var(--default-border-color, #dee2e6);
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.sheet-format__swatch.is-text-black { background: #1e1e1e; }
+.sheet-format__swatch.is-text-blue { background: #1971c2; }
+.sheet-format__swatch.is-text-red { background: #e03131; }
+.sheet-format__swatch.is-text-green { background: #2f9e44; }
+.sheet-format__swatch.is-text-orange { background: #e8590c; }
+.sheet-format__swatch.is-text-gray { background: #868e96; }
+.sheet-format__swatch.is-yellow { background: #ffe066; }
+.sheet-format__swatch.is-green { background: #8ce99a; }
+.sheet-format__swatch.is-blue { background: #74c0fc; }
+.sheet-format__swatch.is-red { background: #ffa8a8; }
+.sheet-format__swatch.is-gray { background: #ced4da; }
+.sheet-format__swatch.is-none {
+  background: linear-gradient(to top right, transparent 46%, #e03131 46% 54%, transparent 54%);
+}
+
+.sheet-format__button:hover,
+.sheet-format__nav-button:hover,
+.sheet-format__swatch:hover {
+  border-color: var(--color-gray-50, #868e96);
+}
+
+.sheet-format__button[aria-pressed='true'],
+.sheet-format__swatch[aria-pressed='true'] {
+  border-color: #1971c2;
+  box-shadow: 0 0 0 2px #1971c2;
+}
+
+.sheet-format__button[aria-pressed='true'] {
+  background: var(--color-primary-light, #e7f5ff);
+}

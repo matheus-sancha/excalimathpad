@@ -1,4 +1,4 @@
-import { createRef } from 'react'
+import { createRef, useRef, useState, useSyncExternalStore } from 'react'
 import { act, cleanup, createEvent, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import type { ExcalidrawElement } from '@excalidraw/excalidraw/element/types'
@@ -8,8 +8,19 @@ import { createMathAnchorElements, NO_TITLE_FORMAT } from '../canvas/mathAnchor.
 import { linePoint } from '../test/gestures.ts'
 import { fireResizeObservers, layOutBodies } from '../test/layout.ts'
 import { linesOf, resultsOf as sheetResults } from '../test/sheetView.ts'
-import { NO_FORMAT } from '../math/lineForm.ts'
-import { MathOverlay, type EditTarget, type FlashLine, type LineEditControl, type MathOverlayProps, type SceneApi } from './MathOverlay.tsx'
+import { mathSelection } from '../canvas/mathSelection.ts'
+import { NO_COMMENT_FORMAT, NO_FORMAT } from '../math/lineForm.ts'
+import { FormatTab, type FormatActions } from '../panel/FormatTab.tsx'
+import { FORMAT_HINTS } from '../panel/formatTab.ts'
+import {
+  MathOverlay,
+  type EditTarget,
+  type EvaluatedElement,
+  type FlashLine,
+  type LineEditControl,
+  type MathOverlayProps,
+  type SceneApi,
+} from './MathOverlay.tsx'
 
 /**
  * A fake of the slice of Excalidraw's API the overlay uses: a mutable scene,
@@ -128,23 +139,75 @@ const elementOf = (id: string) =>
 let canvasRoot: HTMLElement
 let current: ReturnType<typeof fakeScene>
 
-function renderOverlay(elements: ExcalidrawElement[], extra: Partial<MathOverlayProps> = {}) {
+/**
+ * The overlay with the Sheet panel's Format tab beside it, wired as App wires
+ * them (section 4, Format tab, M4d): the tab hears what is open and the sheet
+ * as evaluated, and its presses reach the line edit through the control.
+ */
+function WithFormatTab({ props }: { props: MathOverlayProps }) {
+  const control = useRef<LineEditControl>(null)
+  const [target, setTarget] = useState<EditTarget | null>(null)
+  const [sheet, setSheet] = useState<readonly EvaluatedElement[]>([])
+  const { api } = props
+  const selected = useSyncExternalStore(
+    (listener) => api.onChange(listener),
+    () => {
+      const { selectedElementIds } = api.getAppState()
+      return mathSelection(api) === 'one' ? (Object.keys(selectedElementIds)[0] ?? null) : null
+    },
+  )
+  const actions: FormatActions = {
+    setFormat: (format) => control.current?.setFormat(format),
+    setCommentFormat: (format) => control.current?.setCommentFormat(format),
+    setTitleFormat: (format) => control.current?.setTitleFormat(format),
+    moveTo: (to) => control.current?.moveTo(to),
+    move: (direction) => control.current?.move(direction),
+    done: () => {
+      control.current?.leaveLine()
+      props.focusCanvas()
+    },
+    edit: (anchorId) => control.current?.openLast(anchorId),
+  }
+  return (
+    <>
+      <MathOverlay
+        {...props}
+        control={control}
+        onEdit={(next) => {
+          setTarget(next)
+          props.onEdit?.(next)
+        }}
+        onEvaluated={setSheet}
+      />
+      <aside aria-label="Format tab">
+        <FormatTab sheet={sheet} target={target} selected={selected} actions={actions} />
+      </aside>
+    </>
+  )
+}
+
+function renderOverlay(
+  elements: ExcalidrawElement[],
+  extra: Partial<MathOverlayProps> = {},
+  { formatTab = false }: { formatTab?: boolean } = {},
+) {
   const scene = fakeScene(elements)
   current = scene
   canvasRoot = document.body.appendChild(document.createElement('div'))
   onTestFinished(() => canvasRoot.remove())
   const forwardWheel = vi.fn()
   const focusCanvas = vi.fn()
-  const overlay = (flash: FlashLine | null) => (
-    <MathOverlay
-      api={scene.api}
-      canvasRoot={canvasRoot}
-      forwardWheel={forwardWheel}
-      focusCanvas={focusCanvas}
-      flash={flash}
-      {...extra}
-    />
-  )
+  const overlay = (flash: FlashLine | null) => {
+    const props: MathOverlayProps = {
+      api: scene.api,
+      canvasRoot,
+      forwardWheel,
+      focusCanvas,
+      flash,
+      ...extra,
+    }
+    return formatTab ? <WithFormatTab props={props} /> : <MathOverlay {...props} />
+  }
   const view = render(overlay(null))
   /** A jump from the Sheet panel flashes a line, as App passes it; null clears it. */
   const setFlash = (flash: FlashLine | null) => view.rerender(overlay(flash))
@@ -1378,16 +1441,6 @@ describe('Add math and empty removal (docs/spec-v1.md sections 4 and 8)', () => 
 })
 
 describe('line format (docs/spec-v1.md section 4: bold, underline, highlight)', () => {
-  const bar = () => screen.queryByRole('toolbar', { name: 'Line format' })
-  const barButton = (name: RegExp) => screen.getByRole('button', { name })
-  /** A press as the browser sends it: the mousedown the bar must not lose focus on, then the click. */
-  const press = (button: HTMLElement) => {
-    const down = createEvent.mouseDown(button)
-    fireEvent(button, down)
-    fireEvent.click(button)
-    return down
-  }
-
   it('draws a typeset row with its format, and hides the clause', () => {
     renderOverlay([anchorWith('x = 2 m * 3 @bold @underline @yellow # tripled\ny = 1')])
 
@@ -1397,76 +1450,6 @@ describe('line format (docs/spec-v1.md section 4: bold, underline, highlight)', 
     expect(rowOf('m1', 2)).not.toHaveClass('is-bold', 'is-underline', 'is-yellow')
   })
 
-  it('shows the bar only beside the open line, with the line’s format pressed', () => {
-    renderOverlay([anchorWith('x = 2 @bold @green\ny = 1')])
-    expect(bar()).toBeNull()
-
-    openLine(1)
-
-    expect(rowOf('m1', 1)).toContainElement(bar())
-    expect(barButton(/^Bold/)).toHaveAttribute('aria-pressed', 'true')
-    expect(barButton(/^Underline/)).toHaveAttribute('aria-pressed', 'false')
-    expect(barButton(/Highlight green/)).toHaveAttribute('aria-pressed', 'true')
-    expect(barButton(/Highlight red/)).toHaveAttribute('aria-pressed', 'false')
-  })
-
-  it('offers no format on a comment line or an empty line: the bar has Title alone', () => {
-    renderOverlay([anchorWith('# inputs\n')])
-
-    for (const n of [1, 2]) {
-      openLine(n)
-      expect(within(bar()!).getAllByRole('button')).toHaveLength(1)
-      expect(within(bar()!).getByRole('button', { name: /^Title/ })).toBeInTheDocument()
-    }
-  })
-
-  it('a press writes the clause as one line commit, and the line stays open on it', () => {
-    const { scene } = renderOverlay([anchorWith('x = 2 # two')])
-    openLine(1)
-
-    const down = press(barButton(/^Bold/))
-
-    // The press never takes the keyboard from the field: a blur would leave the line.
-    expect(down.defaultPrevented).toBe(true)
-    expect(scene.sourceOf('m1')).toBe('x = 2 @bold # two')
-    expect(scene.sourceWrites()).toBe(1)
-    const field = openField()!
-    expect(field.value).toBe('x = 2 @bold # two')
-    expect(field).toHaveFocus()
-    expect(rowOf('m1', 1)).toHaveClass('is-bold')
-  })
-
-  it('keeps the caret where it was in the code', () => {
-    renderOverlay([anchorWith('x = 2 # two')])
-    const field = openLine(1)
-    field.setSelectionRange(3, 3)
-
-    press(barButton(/Highlight blue/))
-
-    expect(openField()!.selectionStart).toBe(3)
-  })
-
-  it('writes what is typed with the format, not the scene’s line', () => {
-    const { scene } = renderOverlay([anchorWith('x = 2')])
-    type(openLine(1), 'x = 5')
-
-    press(barButton(/^Underline/))
-
-    expect(scene.sourceOf('m1')).toBe('x = 5 @underline')
-  })
-
-  it('pressing a pressed button takes the format off, and No highlight clears the colour', () => {
-    const { scene } = renderOverlay([anchorWith('x = 2 @bold @red')])
-    openLine(1)
-
-    press(barButton(/^Bold/))
-    expect(scene.sourceOf('m1')).toBe('x = 2 @red')
-
-    press(barButton(/No highlight/))
-    expect(scene.sourceOf('m1')).toBe('x = 2')
-    expect(rowOf('m1', 1)).not.toHaveClass('is-red')
-  })
-
   it('draws a line’s text colour on its row, beside a highlight (M4c, #107)', () => {
     renderOverlay([anchorWith('x = 2 m * 3 @text-red @yellow # tripled\ny = 1\nz = q @text-red')])
 
@@ -1474,32 +1457,6 @@ describe('line format (docs/spec-v1.md section 4: bold, underline, highlight)', 
     expect(rowOf('m1', 2)).not.toHaveClass('is-text-color')
     // An error keeps its own colour: the stylesheet leaves `.is-error` alone.
     expect(rowOf('m1', 3).querySelector('.math-element__result')).toHaveClass('is-error')
-  })
-
-  it('a text-colour dot writes @text-<name> before the note, the highlight after it; the pressed dot takes it off', () => {
-    const { scene } = renderOverlay([anchorWith('x = 2 @yellow # two')])
-    openLine(1)
-
-    expect(barButton(/No text colour/)).toHaveAttribute('aria-pressed', 'true')
-    press(barButton(/Text red/))
-    expect(scene.sourceOf('m1')).toBe('x = 2 @text-red @yellow # two')
-    expect(scene.sourceWrites()).toBe(1)
-    expect(barButton(/Text red/)).toHaveAttribute('aria-pressed', 'true')
-    expect(openField()).toHaveFocus()
-
-    press(barButton(/Text red/))
-    expect(scene.sourceOf('m1')).toBe('x = 2 @yellow # two')
-    press(barButton(/Text blue/))
-    press(barButton(/No text colour/))
-    expect(scene.sourceOf('m1')).toBe('x = 2 @yellow # two')
-  })
-
-  it('leaves every rule as typed when the bar writes', () => {
-    const { scene } = renderOverlay([anchorWith('v = 4 @text-red if v > 3')])
-    openLine(1)
-
-    press(barButton(/^Bold/))
-    expect(scene.sourceOf('m1')).toBe('v = 4 @bold @text-red if v > 3')
   })
 
   it('draws a rule’s format as a plain one would, its warning in the gutter, and a table row it made true (#109)', () => {
@@ -1518,7 +1475,15 @@ describe('line format (docs/spec-v1.md section 4: bold, underline, highlight)', 
     expect(rowOf('m1', 2).querySelector('[data-tip]')?.getAttribute('data-tip')).toContain('if w > 3 kg: Units do not match')
   })
 
-  it('Ctrl+B and Ctrl+U toggle bold and underline from the field', () => {
+  it('draws no bar beside the open line: formatting is the Format tab’s (M4d)', () => {
+    renderOverlay([anchorWith('x = 2 @bold')])
+    openLine(1)
+
+    expect(screen.queryByRole('toolbar')).toBeNull()
+    expect(screen.queryAllByRole('button')).toEqual([])
+  })
+
+  it('Ctrl+B and Ctrl+U toggle bold and underline from the field; Ctrl+I does nothing on a math line', () => {
     const { scene } = renderOverlay([anchorWith('x = 2')])
     openLine(1)
 
@@ -1530,15 +1495,326 @@ describe('line format (docs/spec-v1.md section 4: bold, underline, highlight)', 
 
     fireEvent.keyDown(openField()!, { key: 'B', ctrlKey: true })
     expect(scene.sourceOf('m1')).toBe('x = 2 @underline')
+
+    const writes = scene.sourceWrites()
+    fireEvent.keyDown(openField()!, { key: 'i', ctrlKey: true })
+    expect(scene.sourceWrites()).toBe(writes)
+    expect(scene.sourceOf('m1')).toBe('x = 2 @underline')
+  })
+
+  it('on a comment line, Ctrl+B and Ctrl+U toggle bold and underline, and Ctrl+I writes or removes @upright, caret kept', () => {
+    const { scene } = renderOverlay([anchorWith('# Pumps')])
+    const field = openLine(1)
+    field.setSelectionRange(4, 4)
+
+    fireEvent.keyDown(field, { key: 'i', ctrlKey: true })
+    expect(scene.sourceOf('m1')).toBe('@upright # Pumps')
+    // Still after `Pu`, in the comment text.
+    expect(openField()!.selectionStart).toBe(13)
+
+    fireEvent.keyDown(openField()!, { key: 'b', ctrlKey: true })
+    fireEvent.keyDown(openField()!, { key: 'u', ctrlKey: true })
+    expect(scene.sourceOf('m1')).toBe('@bold @upright @underline # Pumps')
+    fireEvent.keyDown(openField()!, { key: 'i', ctrlKey: true })
+    expect(scene.sourceOf('m1')).toBe('@bold @underline # Pumps')
+    expect(openField()).toHaveFocus()
+  })
+
+  it('a blank line takes no format key', () => {
+    const { scene } = renderOverlay([anchorWith('x = 1\n')])
+    openLine(2)
+
+    fireEvent.keyDown(openField()!, { key: 'b', ctrlKey: true })
+
+    expect(scene.sourceWrites()).toBe(0)
+  })
+})
+
+// Section 4, Format tab (M4d): the only place to format a line or a title.
+describe('the Format tab (docs/spec-v1.md section 4, Format tab, M4d)', () => {
+  const tab = () => screen.getByRole('complementary', { name: 'Format tab' })
+  const tabButton = (name: string | RegExp) => within(tab()).getByRole('button', { name })
+  const rowNames = () => within(tab()).queryAllByRole('group').map((group) => group.getAttribute('aria-label'))
+  const caption = () => within(tab()).queryByText(/ — /)
+  const sample = () => within(tab()).queryByRole('region', { name: 'Sample' })
+  /** A press as the browser sends it: the mousedown that must not take focus, then the click. */
+  const press = (button: HTMLElement) => {
+    const down = createEvent.mouseDown(button)
+    fireEvent(button, down)
+    fireEvent.click(button)
+    return down
+  }
+  const withTab = (source: string, extra: Partial<MathOverlayProps> = {}) =>
+    renderOverlay([anchorWith(source)], extra, { formatTab: true })
+  const titledWithTab = (title: string, source = 'x = 2') =>
+    renderOverlay([createMathAnchorElements([{ id: 'm1', ...box, source, title }])[0]], {}, { formatTab: true })
+  const titleField = () => screen.queryByRole<HTMLInputElement>('textbox', { name: 'Title' })
+  const titleFormatOf = (scene: ReturnType<typeof fakeScene>) => scene.elementOf('m1').customData?.titleFormat
+
+  it('with nothing open, shows the hint, and Edit only while one math element is selected', () => {
+    const { scene } = withTab('x = 2\ny = 3')
+
+    expect(tab()).toHaveTextContent(FORMAT_HINTS.nothingOpen)
+    expect(within(tab()).queryByRole('button', { name: /^Edit/ })).toBeNull()
+
+    scene.select('m1')
+    scene.updateElements([scene.elementOf('m1')])
+    const edit = tabButton(/^Edit/)
+    expect(press(edit).defaultPrevented).toBe(true)
+
+    // As Enter does: the element's last line opens.
+    expect(openField()).toHaveValue('y = 3')
+    expect(openField()).toHaveFocus()
+  })
+
+  it('names what is open in its caption, as the Variables tab names it', () => {
+    titledWithTab('Pipe flow', 'Q = 2 L/s\n# inputs\n')
+    openLine(1)
+    expect(caption()).toHaveTextContent('Math line — Pipe flow, line 1')
+    openLine(2)
+    expect(caption()).toHaveTextContent('Comment line — Pipe flow, line 2')
+    fireEvent.keyDown(openField()!, { key: 'ArrowUp' })
+    fireEvent.keyDown(openField()!, { key: 'ArrowUp' })
+    expect(caption()).toHaveTextContent('Title — Pipe flow')
+    cleanup()
+
+    withTab('x = 2')
+    openLine(1)
+    expect(caption()).toHaveTextContent('Math line — Element 1, line 1')
+  })
+
+  it('draws the open line in its sample as the sheet draws it: typeset, with its result, note and rules, live', () => {
+    withTab('v = 2 m/s * 2 @bold @text-red if v > 3 m/s # speed')
+    const field = openLine(1)
+    const row = () => sample()!.querySelector('.math-element__row')!
+
+    expect(row()).toHaveClass('is-bold', 'is-text-red')
+    expect(row().querySelector('.math-element__result')).toHaveAttribute('data-text', '4 m / s')
+    expect(row().querySelector('.math-element__note')).toHaveTextContent('speed')
+    expect(row().textContent).not.toContain('@')
+
+    type(field, 'v = 1 m/s * 2 @bold @text-red if v > 3 m/s # speed')
+    expect(row()).not.toHaveClass('is-text-red')
+    expect(row().querySelector('.math-element__result')).toHaveAttribute('data-text', '2 m / s')
+  })
+
+  it('says when a true rule sets a property over the buttons, which still show the plain format', () => {
+    withTab('v = 4 m/s @text-blue @text-red if v > 3 m/s @text-orange if v > 1 m/s @yellow if v > 5 m/s')
+    const field = openLine(1)
+
+    expect(within(tab()).getAllByText(/^A rule sets/).map((note) => note.textContent)).toEqual([
+      'A rule sets the text colour while v > 3 m/s.',
+    ])
+    expect(tabButton('Text blue')).toHaveAttribute('aria-pressed', 'true')
+
+    type(field, 'v = 1 m/s @text-blue @text-red if v > 3 m/s')
+    expect(within(tab()).queryByText(/^A rule sets/)).toBeNull()
+  })
+
+  it('shows a math line’s rows, Style, Text and Highlight, with its format pressed', () => {
+    withTab('x = 2 @bold @green\ny = 1')
+    openLine(1)
+
+    expect(rowNames()).toEqual(['Style', 'Text', 'Highlight'])
+    expect(within(within(tab()).getByRole('group', { name: 'Style' })).getAllByRole('button').map((b) => b.title)).toEqual([
+      'Bold (Ctrl+B)',
+      'Underline (Ctrl+U)',
+    ])
+    expect(tabButton('Bold (Ctrl+B)')).toHaveAttribute('aria-pressed', 'true')
+    expect(tabButton('Underline (Ctrl+U)')).toHaveAttribute('aria-pressed', 'false')
+    expect(tabButton('Highlight green')).toHaveAttribute('aria-pressed', 'true')
+    expect(tabButton('Highlight red')).toHaveAttribute('aria-pressed', 'false')
+    expect(tabButton('No text colour')).toHaveAttribute('aria-pressed', 'true')
+    expect(within(within(tab()).getByRole('group', { name: 'Text' })).getAllByRole('button')).toHaveLength(7)
+    expect(within(within(tab()).getByRole('group', { name: 'Highlight' })).getAllByRole('button')).toHaveLength(6)
+  })
+
+  it('a press writes the clause as one line commit, and the line stays open on it, focused', () => {
+    const { scene } = withTab('x = 2 # two')
+    openLine(1)
+
+    const down = press(tabButton('Bold (Ctrl+B)'))
+
+    // The press never takes the keyboard from the field: a blur would leave the line.
+    expect(down.defaultPrevented).toBe(true)
+    expect(tabButton('Bold (Ctrl+B)')).toHaveAttribute('tabindex', '-1')
+    expect(scene.sourceOf('m1')).toBe('x = 2 @bold # two')
+    expect(scene.sourceWrites()).toBe(1)
+    const field = openField()!
+    expect(field.value).toBe('x = 2 @bold # two')
+    expect(field).toHaveFocus()
+    expect(rowOf('m1', 1)).toHaveClass('is-bold')
+    expect(tabButton('Bold (Ctrl+B)')).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  it('keeps the caret where it was in the code', () => {
+    withTab('x = 2 # two')
+    const field = openLine(1)
+    field.setSelectionRange(3, 3)
+
+    press(tabButton('Highlight blue'))
+
+    expect(openField()!.selectionStart).toBe(3)
+  })
+
+  it('writes what is typed with the format, not the scene’s line', () => {
+    const { scene } = withTab('x = 2')
+    type(openLine(1), 'x = 5')
+
+    press(tabButton('Underline (Ctrl+U)'))
+
+    expect(scene.sourceOf('m1')).toBe('x = 5 @underline')
+  })
+
+  it('pressing a pressed button takes the format off, and No highlight clears the colour', () => {
+    const { scene } = withTab('x = 2 @bold @red')
+    openLine(1)
+
+    press(tabButton('Bold (Ctrl+B)'))
+    expect(scene.sourceOf('m1')).toBe('x = 2 @red')
+
+    press(tabButton('No highlight'))
+    expect(scene.sourceOf('m1')).toBe('x = 2')
+    expect(rowOf('m1', 1)).not.toHaveClass('is-red')
+  })
+
+  it('a text colour writes @text-<name> before the highlight and the note; the pressed one takes it off', () => {
+    const { scene } = withTab('x = 2 @yellow # two')
+    openLine(1)
+
+    press(tabButton('Text red'))
+    expect(scene.sourceOf('m1')).toBe('x = 2 @text-red @yellow # two')
+    expect(scene.sourceWrites()).toBe(1)
+    expect(tabButton('Text red')).toHaveAttribute('aria-pressed', 'true')
+    expect(openField()).toHaveFocus()
+
+    press(tabButton('Text red'))
+    expect(scene.sourceOf('m1')).toBe('x = 2 @yellow # two')
+    press(tabButton('Text blue'))
+    press(tabButton('No text colour'))
+    expect(scene.sourceOf('m1')).toBe('x = 2 @yellow # two')
+  })
+
+  it('leaves every rule as typed when it writes', () => {
+    const { scene } = withTab('v = 4 @text-red if v > 3')
+    openLine(1)
+
+    press(tabButton('Bold (Ctrl+B)'))
+    expect(scene.sourceOf('m1')).toBe('v = 4 @bold @text-red if v > 3')
   })
 
   it('follows a clause typed by hand, live', () => {
-    renderOverlay([anchorWith('x = 2')])
+    withTab('x = 2')
 
     type(openLine(1), 'x = 2 @gray')
 
     expect(rowOf('m1', 1)).toHaveClass('is-gray')
-    expect(barButton(/Highlight gray/)).toHaveAttribute('aria-pressed', 'true')
+    expect(tabButton('Highlight gray')).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  it('a comment line has Style (B, I pressed, U), Size, Text and Highlight; Italic off writes @upright', () => {
+    const { scene } = withTab('# Pumps')
+    const field = openLine(1)
+    field.setSelectionRange(7, 7)
+
+    expect(rowNames()).toEqual(['Style', 'Size', 'Text', 'Highlight'])
+    expect(tabButton('Italic (Ctrl+I)')).toHaveAttribute('aria-pressed', 'true')
+    expect(tabButton('Size M')).toHaveAttribute('aria-pressed', 'true')
+
+    press(tabButton('Italic (Ctrl+I)'))
+    expect(scene.sourceOf('m1')).toBe('@upright # Pumps')
+    expect(tabButton('Italic (Ctrl+I)')).toHaveAttribute('aria-pressed', 'false')
+    press(tabButton('Size XL'))
+    press(tabButton('Highlight blue'))
+    press(tabButton('Text green'))
+    press(tabButton('Bold (Ctrl+B)'))
+    expect(scene.sourceOf('m1')).toBe('@bold @upright @XL @text-green @blue # Pumps')
+    expect(scene.sourceWrites()).toBe(5)
+    // The caret stays at the end of the comment text, and the line is open on it.
+    expect(openField()).toHaveFocus()
+    expect(openField()!.selectionStart).toBe(openField()!.value.length)
+    expect(sample()!.querySelector('.math-element__row')).toHaveClass('is-bold', 'is-upright', 'is-size-XL', 'is-blue')
+
+    // The pressed size takes it off, back to M.
+    press(tabButton('Size XL'))
+    expect(scene.sourceOf('m1')).toBe('@bold @upright @text-green @blue # Pumps')
+  })
+
+  it('a blank line, or a clause with no comment text, shows the sample and takes no format', () => {
+    withTab('x = 1\n\n@bold')
+    for (const n of [2, 3]) {
+      openLine(n)
+      expect(sample()).not.toBeNull()
+      expect(tab()).toHaveTextContent(FORMAT_HINTS.noFormat)
+      expect(rowNames()).toEqual([])
+    }
+  })
+
+  it('the link moves the edit: Add title ↑, Edit title ↑ from any line, First line ↓ on the title', () => {
+    const { scene } = withTab('x = 2\ny = 3')
+    openLine(2)
+    expect(press(tabButton('Add title ↑')).defaultPrevented).toBe(true)
+    expect(titleField()).toHaveFocus()
+    type(titleField()!, 'Inputs')
+
+    press(tabButton('First line ↓'))
+    expect(scene.elementOf('m1').customData?.title).toBe('Inputs')
+    expect(openField()).toHaveValue('x = 2')
+    expect(openField()).toHaveFocus()
+
+    fireEvent.keyDown(openField()!, { key: 'ArrowDown' })
+    press(tabButton('Edit title ↑'))
+    expect(titleField()).toHaveValue('Inputs')
+  })
+
+  it('↑ and ↓ move the edit as the keys do, from the first line to the title and back; Done leaves as Esc', () => {
+    const { scene, focusCanvas } = withTab('x = 2\ny = 3')
+    openLine(2)
+
+    press(tabButton('Up (↑)'))
+    expect(openField()).toHaveValue('x = 2')
+    press(tabButton('Up (↑)'))
+    expect(titleField()).toHaveFocus()
+    press(tabButton('Down (↓)'))
+    press(tabButton('Down (↓)'))
+    expect(openField()).toHaveValue('y = 3')
+    type(openField()!, 'y = 4')
+
+    press(tabButton('Done (Esc)'))
+    expect(openField()).toBeNull()
+    expect(scene.sourceOf('m1')).toBe('x = 2\ny = 4')
+    expect(focusCanvas).toHaveBeenCalled()
+    expect(tab()).toHaveTextContent(FORMAT_HINTS.nothingOpen)
+  })
+
+  it('the title has Style (B pressed by default), Size, Align, Text and Highlight; each press is one write beside it', () => {
+    const { scene } = titledWithTab('Pump @ 50 Hz #2')
+    fireEvent.keyDown(openLine(1), { key: 'ArrowUp' })
+
+    expect(rowNames()).toEqual(['Style', 'Size', 'Align', 'Text', 'Highlight'])
+    // Bold is on without a format; pressing it stores "not bold".
+    expect(tabButton('Bold (Ctrl+B)')).toHaveAttribute('aria-pressed', 'true')
+    press(tabButton('Bold (Ctrl+B)'))
+    expect(titleFormatOf(scene)).toBe('regular')
+    press(tabButton('Size XL'))
+    press(tabButton('Centre'))
+    press(tabButton('Text red'))
+    press(tabButton('Highlight yellow'))
+    expect(titleFormatOf(scene)).toBe('regular centre XL text-red yellow')
+    expect(titleField()).toHaveFocus()
+    expect(sample()!.querySelector('.math-element__title')).toHaveClass('is-regular', 'is-size-XL', 'is-align-centre', 'is-text-red', 'is-yellow')
+    expect(sample()).toHaveTextContent('Pump @ 50 Hz #2')
+
+    // The pressed alignment takes it off, back to the left; no text colour is black.
+    press(tabButton('Centre'))
+    press(tabButton('No text colour'))
+    expect(titleFormatOf(scene)).toBe('regular XL yellow')
+
+    // Ctrl+I from the field; the text stays exactly as typed.
+    fireEvent.keyDown(titleField()!, { key: 'i', ctrlKey: true })
+    expect(titleFormatOf(scene)).toBe('regular italic XL yellow')
+    fireEvent.keyDown(titleField()!, { key: 'Escape' })
+    expect(scene.elementOf('m1').customData?.title).toBe('Pump @ 50 Hz #2')
   })
 })
 
@@ -1595,9 +1871,7 @@ describe('a warning at rest (docs/spec-v1.md section 4, Problems, M4d)', () => {
 
   it('shows the element’s ⚠ while its title is open', () => {
     renderOverlay([createMathAnchorElements([{ id: 'm1', ...box, source: WARNED, title: 'Pipe flow' }])[0]])
-    openLine(1)
-
-    fireEvent.click(screen.getByRole('button', { name: /^Title/ }))
+    fireEvent.keyDown(openLine(1), { key: 'ArrowUp' })
 
     expect(screen.getByRole('textbox', { name: 'Title' })).toHaveFocus()
     expect(openField()).toBeNull()
@@ -1691,52 +1965,6 @@ describe('title (docs/spec-v1.md section 4: an optional header on the element)',
     expect(titleOf(scene)).toBeUndefined()
   })
 
-  it('the bar’s Title button opens the title too, from any line', () => {
-    renderOverlay([titled('Pipe flow', 'x = 2\ny = 3')])
-    openLine(2)
-
-    fireEvent.click(screen.getByRole('button', { name: /^Title/ }))
-
-    expect(titleField()).toHaveFocus()
-    expect(titleField()!.value).toBe('Pipe flow')
-  })
-
-  it('has no bar while the title is open', () => {
-    renderOverlay([titled('Pipe flow')])
-    openLine(1)
-    fireEvent.click(screen.getByRole('button', { name: /^Title/ }))
-
-    expect(screen.queryByRole('toolbar', { name: 'Line format' })).toBeNull()
-  })
-
-  it('opens the title’s own bar, whose presses write its format beside it and keep it open (M4c, #111)', () => {
-    const { scene } = renderOverlay([titled('Pump @ 50 Hz #2')])
-    openLine(1)
-    fireEvent.click(screen.getByRole('button', { name: /^Title/ }))
-    const formatOf = () => scene.elementOf('m1').customData?.titleFormat
-    const bar = () => screen.getByRole('toolbar', { name: 'Title format' })
-
-    // Bold is on without a format.
-    expect(within(bar()).getByRole('button', { name: /^Bold/ })).toHaveAttribute('aria-pressed', 'true')
-    fireEvent.click(within(bar()).getByRole('button', { name: /^Bold/ }))
-    expect(formatOf()).toBe('regular')
-    fireEvent.click(within(bar()).getByRole('button', { name: 'Size XL' }))
-    fireEvent.click(within(bar()).getByRole('button', { name: 'Centre' }))
-    fireEvent.click(within(bar()).getByRole('button', { name: 'Text red' }))
-    fireEvent.click(within(bar()).getByRole('button', { name: 'Highlight yellow' }))
-    expect(formatOf()).toBe('regular centre XL text-red yellow')
-    expect(titleField()).toHaveFocus()
-    expect(header()).toHaveClass('is-regular', 'is-size-XL', 'is-align-centre', 'is-text-red', 'is-yellow')
-
-    // Ctrl+I from the field; the text stays exactly as typed.
-    fireEvent.keyDown(titleField()!, { key: 'i', ctrlKey: true })
-    expect(formatOf()).toBe('regular italic centre XL text-red yellow')
-    fireEvent.keyDown(titleField()!, { key: 'Escape' })
-    expect(titleOf(scene)).toBe('Pump @ 50 Hz #2')
-    expect(header()).toHaveTextContent('Pump @ 50 Hz #2')
-    expect(screen.queryByRole('toolbar', { name: 'Title format' })).toBeNull()
-  })
-
   it('looks as before with no format, and emptying the title removes its format', () => {
     const { scene } = renderOverlay([
       createMathAnchorElements([{ id: 'm1', ...box, source: 'x = 2', title: 'Inputs' }]).map((element) => ({
@@ -1746,8 +1974,7 @@ describe('title (docs/spec-v1.md section 4: an optional header on the element)',
     ])
     expect(header()).toHaveClass('is-bold', 'is-size-L', 'is-align-left', 'is-text-black')
 
-    openLine(1)
-    fireEvent.click(screen.getByRole('button', { name: /^Title/ }))
+    fireEvent.keyDown(openLine(1), { key: 'ArrowUp' })
     type(titleField()!, '')
     fireEvent.keyDown(titleField()!, { key: 'Escape' })
 
@@ -1784,8 +2011,7 @@ describe('title (docs/spec-v1.md section 4: an optional header on the element)',
 
   it('an empty title removes the header and the stored title', () => {
     const { scene } = renderOverlay([titled('Pipe flow')])
-    openLine(1)
-    fireEvent.click(screen.getByRole('button', { name: /^Title/ }))
+    fireEvent.keyDown(openLine(1), { key: 'ArrowUp' })
 
     type(titleField()!, '   ')
     fireEvent.keyDown(titleField()!, { key: 'Escape' })
@@ -1797,8 +2023,7 @@ describe('title (docs/spec-v1.md section 4: an optional header on the element)',
 
   it('a title left unchanged writes nothing', () => {
     const { scene } = renderOverlay([titled('Pipe flow')])
-    openLine(1)
-    fireEvent.click(screen.getByRole('button', { name: /^Title/ }))
+    fireEvent.keyDown(openLine(1), { key: 'ArrowUp' })
     scene.updateScene.mockClear()
 
     fireEvent.keyDown(titleField()!, { key: 'Escape' })
@@ -1899,12 +2124,26 @@ describe('the line edit, as the Sheet panel reaches it', () => {
     expect(resultsOf('m1')).toContain('7')
   })
 
+  it('openLast opens an element’s last line, as Enter does; setCommentFormat formats an open comment line', () => {
+    const { scene, control } = withControl('x = 2\n# Pumps')
+    act(() => control().openLast('m1'))
+    expect(openField()).toHaveValue('# Pumps')
+
+    act(() => control().setCommentFormat({ ...NO_COMMENT_FORMAT, size: 'L' }))
+    expect(scene.sourceOf('m1')).toBe('x = 2\n@L # Pumps')
+    expect(openField()).toHaveValue('@L # Pumps')
+    act(() => control().setFormat({ ...NO_FORMAT, bold: true }))
+    expect(scene.sourceWrites()).toBe(1)
+  })
+
   it('does nothing with nothing open', () => {
     const { scene, control } = withControl('x = 2')
     act(() => {
       control().setFormat({ ...NO_FORMAT, bold: true })
+      control().setCommentFormat({ ...NO_COMMENT_FORMAT, bold: true })
       control().insert('rho')
       control().moveTo('title')
+      control().move('up')
     })
     expect(scene.sourceWrites()).toBe(0)
     expect(openField()).toBeNull()

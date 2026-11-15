@@ -11,7 +11,8 @@ import {
 import './SheetPanel.css'
 
 /**
- * The Sheet panel's Variables and Problems tabs (docs/spec-v1.md section 8).
+ * The Sheet panel's Variables, Problems and Constants tabs (docs/spec-v1.md
+ * section 8); the Format tab is `FormatTab.tsx`.
  * They render inside Excalidraw's sidebar, which `src/canvas/` draws; this
  * module knows no Excalidraw. A click on a row asks to jump to its line.
  */
@@ -19,18 +20,6 @@ import './SheetPanel.css'
 interface TabProps {
   sheet: readonly PanelElement[]
   onJump: (target: PanelTarget) => void
-}
-
-/**
- * The Format tab (section 4, Format tab, M4d), a placeholder until #144 fills
- * it: the bar beside the open line still formats it.
- */
-export function FormatTab() {
-  return (
-    <div className="sheet-panel">
-      <p className="sheet-panel__empty">For now, format the open line or title with the bar beside it.</p>
-    </div>
-  )
 }
 
 /** The Symbols tab (section 4, Symbols tab, M4d), a placeholder until #146 fills it. */
