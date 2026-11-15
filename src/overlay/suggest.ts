@@ -269,3 +269,24 @@ export function unitSuggestions(): Suggestion[] {
   for (const extra of ['mol', 'rad', 'deg', 'hour', 'second', 'kohm', 'mA', 'mV', 'kV', 'degC', 'degF']) read(extra, null)
   return [...atoms].map((name) => ({ name, kind: 'unit', detail: kindOf.get(name) ?? 'unit', insert: name }))
 }
+
+/** Where the open line's field and its list sit on screen, and the strip that is visible. */
+export interface ListRoom {
+  fieldTop: number
+  fieldBottom: number
+  listHeight: number
+  /** The visible strip: the visual viewport, short of a phone's bottom sheet. */
+  visibleTop: number
+  visibleBottom: number
+}
+
+/**
+ * Whether the suggestions open above the field (section 4, While editing a
+ * line, M4d): when below it they would be covered (by the on-screen keyboard or
+ * a phone's bottom sheet) and there is more room above.
+ */
+export function listGoesAbove({ fieldTop, fieldBottom, listHeight, visibleTop, visibleBottom }: ListRoom): boolean {
+  const below = visibleBottom - fieldBottom
+  const above = fieldTop - visibleTop
+  return listHeight > below && above > below
+}

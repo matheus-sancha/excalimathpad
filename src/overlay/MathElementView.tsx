@@ -40,7 +40,8 @@ import { PlotSettings } from './PlotSettings.tsx'
 import { GEAR } from './useSheetGestures.ts'
 import { readPlot, type PlotClause } from '../math/plotLine.ts'
 import { hasText, TITLE_LINE, type LineEdit, type LineMove } from './lineEdit.ts'
-import type { Suggested, Suggestion } from './suggest.ts'
+import { listGoesAbove, type Suggested, type Suggestion } from './suggest.ts'
+import { BOTTOM_SHEET_CLASS } from '../canvas/panelPresses.ts'
 import { sceneToStage, type Viewport } from './viewport.ts'
 
 export interface MathElementViewProps {
@@ -76,6 +77,11 @@ export type Suggest = (text: string, caret: number) => Suggested | null
 export interface UnitSlots {
   /** The hovered row: its slot shows outlined, an empty one included. */
   hovered: number | null
+  /**
+   * Selected by touch (section 4, Touch, M4d): every row shows as the hovered
+   * one does, its slots outlined and its plot's ⚙ shown.
+   */
+  revealed?: boolean
   /** The row whose unit field is open. */
   open: number | null
   /** The table column whose header field is open on that row; null for the result's own. */
@@ -98,6 +104,9 @@ const NO_SLOTS: UnitSlots = {
 }
 
 const SlotsContext = createContext<UnitSlots>(NO_SLOTS)
+
+/** Whether a row shows as hovered: the pointer is on it, or its element is selected by touch. */
+const isHovered = (slots: UnitSlots, index: number) => slots.revealed === true || slots.hovered === index
 
 const SuggestContext = createContext<Suggest | null>(null)
 
@@ -541,7 +550,7 @@ function TableBlock({ table, index }: { table: TableView; index: number }) {
                       <SlotBox
                         index={index}
                         column={c}
-                        hovered={slots.hovered === index}
+                        hovered={isHovered(slots, index)}
                         unitHtml={unit}
                         unitText={column.unit}
                       />
@@ -603,7 +612,7 @@ function PlotCell({ plot, source, index }: { plot: PlotView; source: string; ind
   return (
     <div className="math-element__plot-cell">
       <PlotChart plot={plot} />
-      {(slots.hovered === index || open) && (
+      {(isHovered(slots, index) || open) && (
         <span className={`math-element__gear${open ? ' is-open' : ''}`} data-unit-slot={`${index}:gear`}>
           ⚙
         </span>
@@ -726,7 +735,7 @@ function ResultCell({
         <SummaryContent text={result.text} />
       </span>
     )
-  } else if (slot && slots.hovered === index && !plain) {
+  } else if (slot && isHovered(slots, index) && !plain) {
     // A plain input: an empty slot on hover (section 5, Unit slot).
     content = <SlotBox index={index} hovered unitHtml={null} />
   }
@@ -834,10 +843,10 @@ function ValueContent({ text, slot, index }: { text: string; slot: SheetLine['un
   return (
     <>
       {number === null ? split.number : <Html html={number} />}
-      {(unit !== '' || slots.hovered === index) && (
+      {(unit !== '' || isHovered(slots, index)) && (
         <SlotBox
           index={index}
-          hovered={slots.hovered === index}
+          hovered={isHovered(slots, index)}
           unitHtml={unitHtml}
           unitText={unit}
         />
@@ -990,6 +999,40 @@ function LineField({
   const [list, setList] = useState<{ suggested: Suggested; highlight: number | null } | null>(null)
   // The input a suggestion writes doesn't ask for another list.
   const accepting = useRef(false)
+
+  // Above the field when below it would be covered by the on-screen keyboard
+  // or a phone's bottom sheet (section 4, While editing a line, M4d), measured
+  // as the list opens and again as the keyboard moves.
+  const listRef = useRef<HTMLUListElement>(null)
+  const [listAbove, setListAbove] = useState(false)
+  const listOpen = list !== null
+  useLayoutEffect(() => {
+    const field = fieldRef.current
+    const view = field?.ownerDocument.defaultView
+    if (!listOpen || !field || !view) return
+    const place = () => {
+      const shown = listRef.current
+      if (!shown) return
+      const box = field.getBoundingClientRect()
+      const viewport = view.visualViewport
+      const sheet = field.closest('.app-shell__stage')?.querySelector(`.${BOTTOM_SHEET_CLASS}`)
+      const visibleTop = viewport ? viewport.offsetTop : 0
+      const viewBottom = viewport ? viewport.offsetTop + viewport.height : view.innerHeight
+      const sheetTop = sheet ? sheet.getBoundingClientRect().top : Infinity
+      setListAbove(
+        listGoesAbove({
+          fieldTop: box.top,
+          fieldBottom: box.bottom,
+          listHeight: shown.getBoundingClientRect().height,
+          visibleTop,
+          visibleBottom: Math.min(viewBottom, sheetTop),
+        }),
+      )
+    }
+    place()
+    view.visualViewport?.addEventListener('resize', place)
+    return () => view.visualViewport?.removeEventListener('resize', place)
+  }, [listOpen, fieldRef])
   const refresh = (field: HTMLInputElement) => {
     if (accepting.current || !offers) return setList(null)
     const suggested = offers(field.value, field.selectionStart ?? field.value.length)
@@ -1121,7 +1164,13 @@ function LineField({
         }}
       />
       {list && (
-        <ul className="math-suggest" id={SUGGEST_LIST_ID} role="listbox" aria-label="Suggestions">
+        <ul
+          ref={listRef}
+          className={`math-suggest${listAbove ? ' is-above' : ''}`}
+          id={SUGGEST_LIST_ID}
+          role="listbox"
+          aria-label="Suggestions"
+        >
           {list.suggested.items.map((item, i) => (
             <li
               key={`${item.kind}:${item.name}`}

@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef } from 'react'
 import type { AppState } from '@excalidraw/excalidraw/types'
 import type { ExcalidrawElement } from '@excalidraw/excalidraw/element/types'
 import { cancelPlacing, isPlacing, setCanvasCursor, startPlacing, watchPlacing } from '../canvas/addMath.ts'
-import { isCanvasElement, listenToCanvas } from '../canvas/canvasEvents.ts'
+import { isCanvasElement, listenToCanvas, type PointAt } from '../canvas/canvasEvents.ts'
 import { isMathAnchor, type MathAnchor } from '../canvas/mathAnchor.ts'
 import { deselectAll } from '../canvas/selection.ts'
 import { splitLines } from '../math/evaluate.ts'
@@ -47,6 +47,8 @@ export interface SheetGestures {
   tipAt?: (clientX: number, clientY: number) => TipTarget | null
   /** The message under the pointer, or null: shows it after a rest, hides it at once. */
   hoverTip?: (target: TipTarget | null) => void
+  /** A tap's message (section 4, Touch): shown at once, until the next press. */
+  showTip?: (target: TipTarget) => void
 }
 
 /** A line's unit slot. */
@@ -84,7 +86,7 @@ export function useSheetGestures(gestures: SheetGestures) {
     const g = () => latest.current
     const anchorById = (id: string) => g().anchors().find((anchor) => anchor.id === id)
 
-    const toScene = (event: MouseEvent): Point => {
+    const toScene = (event: Pick<PointAt, 'clientX' | 'clientY'>): Point => {
       const { offsetLeft, offsetTop, scrollX, scrollY, zoom } = api.getAppState()
       return stageToScene(
         { x: event.clientX - offsetLeft, y: event.clientY - offsetTop },
@@ -98,7 +100,7 @@ export function useSheetGestures(gestures: SheetGestures) {
         ? TITLE_LINE
         : lineAt(anchor, point, g().rowsOf(anchor.id))
 
-    const facts = (event: Event) => ({ targetOwnsEvent: isTypingTarget(event.target) })
+    const facts = (event: { target: EventTarget | null }) => ({ targetOwnsEvent: isTypingTarget(event.target) })
 
     // A press on the edited element, kept until its click.
     let press: Press | null = null
@@ -112,6 +114,12 @@ export function useSheetGestures(gestures: SheetGestures) {
     const stopListening = listenToCanvas(
       canvasRoot,
       {
+        // A press anywhere, the Sheet panel included, closes a tip: a tap's
+        // tip stays until the next tap (section 4, Touch).
+        anyPress() {
+          g().hoverTip?.(null)
+        },
+
         // Leaving comes before Excalidraw sees the press, so a drag starts on the
         // committed scene: the line is one undo step and the move is its own.
         pointerDown(event) {
@@ -120,8 +128,13 @@ export function useSheetGestures(gestures: SheetGestures) {
           // mark. Its message goes, as a native tooltip's does.
           g().hoverTip?.(null)
           const slot = g().slotAt?.(event.clientX, event.clientY) ?? null
-          const slotAnchor = slot && anchorById(slot.anchorId)
-          slotPress = slotAnchor
+          // On touch a slot shows only while its element is selected (section 4,
+          // Touch): a tap on an unselected one selects the element, as a tap does.
+          const slotAnchor =
+            slot && (event.pointerType !== 'touch' || api.getAppState().selectedElementIds[slot.anchorId])
+              ? anchorById(slot.anchorId)
+              : undefined
+          slotPress = slot && slotAnchor
             ? { anchorId: slotAnchor.id, lineIndex: slot.line, x: slotAnchor.x, y: slotAnchor.y }
             : null
           const edit = g().edit()
@@ -158,16 +171,27 @@ export function useSheetGestures(gestures: SheetGestures) {
           }
           const pressed = press
           press = null
-          if (!pressed) return
-          const elements = api.getSceneElements()
-          const target = clickTarget(
-            canvasState(api.getAppState(), elements),
-            g().anchors(),
-            toScene(event),
-            pressed,
-            facts(event),
-          )
-          if (target) g().openLine(target.id, pressed.lineIndex)
+          if (pressed) {
+            const elements = api.getSceneElements()
+            const target = clickTarget(
+              canvasState(api.getAppState(), elements),
+              g().anchors(),
+              toScene(event),
+              pressed,
+              facts(event),
+            )
+            if (target) {
+              g().openLine(target.id, pressed.lineIndex)
+              return
+            }
+          }
+          // A tap shows the message hover would (section 4, Touch): on the canvas,
+          // while Excalidraw isn't busy and Add math isn't placing.
+          if ((event as PointerEvent).pointerType !== 'touch' || !isCanvasElement(event.target)) return
+          const state = canvasState(api.getAppState(), api.getSceneElements())
+          if (state.busy || state.placing) return
+          const tip = g().tipAt?.(event.clientX, event.clientY)
+          if (tip) g().showTip?.(tip)
         },
 
         pointerMove(event) {

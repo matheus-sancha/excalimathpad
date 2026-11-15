@@ -24,7 +24,9 @@ export const TIP_DELAY_MS = 500
  * mark under the pointer (or null). A message shows once the pointer has rested
  * on its mark for the delay, and hides as soon as it leaves. While one shows,
  * moving straight onto another mark shows that one at once, as native tooltips
- * do. Screen only: held here, never in the scene, the file or print.
+ * do. Screen only: held here, never in the scene, the file or print. On touch
+ * (section 4, Touch) a tap's tip shows at once (`showNow`) and stays until the
+ * next press.
  */
 export function useHoverTip(delay = TIP_DELAY_MS) {
   const [tip, setTip] = useState<TipTarget | null>(null)
@@ -68,9 +70,18 @@ export function useHoverTip(delay = TIP_DELAY_MS) {
     [delay, show],
   )
 
+  /** A tap's tip (section 4, Touch): shown at once, with no rest. */
+  const showNow = useCallback(
+    (target: TipTarget) => {
+      stopWaiting()
+      show(target)
+    },
+    [show],
+  )
+
   useEffect(() => stopWaiting, [])
 
-  return { tip, hover }
+  return { tip, hover, showNow }
 }
 
 /** Space between the mark and its tip, in screen pixels. */

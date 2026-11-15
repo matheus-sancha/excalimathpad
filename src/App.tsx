@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 import type { ExcalidrawElement } from '@excalidraw/excalidraw/element/types'
 import { AppShell } from './shell/AppShell.tsx'
 import {
-  SHEET_PANEL,
   SHEET_SIDEBAR_CLASS,
   SheetCanvas,
   type SheetCanvasHandle,
@@ -12,7 +11,7 @@ import {
 import { isMathAnchor } from './canvas/mathAnchor.ts'
 import { mathSelection } from './canvas/mathSelection.ts'
 import { sceneFileFor } from './canvas/sceneFile.ts'
-import { jumpToAnchor, scrollClearOf, SIDEBAR_DOCKS_ABOVE } from './canvas/selection.ts'
+import { jumpToAnchor, scrollClearAbove, scrollClearOf, SIDEBAR_DOCKS_ABOVE } from './canvas/selection.ts'
 import {
   MathOverlay,
   type EditTarget,
@@ -25,6 +24,7 @@ import { ConstantsTab, ProblemsTab, VariablesTab } from './panel/SheetPanel.tsx'
 import { SymbolsTab } from './panel/SymbolsTab.tsx'
 import type { SymbolInsert } from './math/symbols.ts'
 import { FormatTab, type FormatActions } from './panel/FormatTab.tsx'
+import { QuickKeys } from './panel/QuickKeys.tsx'
 import { SettingsTab } from './panel/SettingsTab.tsx'
 import { DEFAULT_SETTINGS, type SheetSettings } from './file/sheetFormat.ts'
 import { errorCount, type PanelTarget } from './panel/sheetPanel.ts'
@@ -82,6 +82,11 @@ export interface VaultHome {
    * pop-out, or back); returns the function that stops.
    */
   onWindowMigrated: (listener: () => void) => () => void
+  /**
+   * The view is on a phone (`Platform.isPhone`): the Sheet panel is a bottom
+   * sheet (docs/spec-v1.md section 8, On a phone, M4d).
+   */
+  phone?: boolean
 }
 
 export interface AppProps {
@@ -244,7 +249,7 @@ export default function App({ files, recovery, panelMemory, vault, initialElemen
     launched.current = true
     if (memory.rememberedOpen() === false || canvas.root.clientWidth <= SIDEBAR_DOCKS_ABOVE) return
     const tab: SheetPanelTab = errorCount(sheet) > 0 ? 'problems' : 'variables'
-    canvas.api.toggleSidebar({ name: SHEET_PANEL, tab, force: true })
+    canvas.showSheetPanel({ open: true, tab })
   }, [canvas, sheet, opened, memory])
 
   // An edit opens the panel on Format, and its end puts the panel back as it
@@ -259,11 +264,15 @@ export default function App({ files, recovery, panelMemory, vault, initialElemen
   // leaves the panel as it is: the user is working in it. Any key, or a press
   // anywhere else, ends that.
   const pressedInPanel = useRef(false)
+  // The last press was a touch (section 4, Touch, M4d): told by the pointer,
+  // not the device, so a mouse or a hovering pen on a tablet keeps hover.
+  const [touch, setTouch] = useState(false)
   useEffect(() => {
     if (!canvasRoot) return
     const scope: EventTarget = vaultContainer ?? canvasRoot.ownerDocument
     const onPress = (event: Event) => {
       pressedInPanel.current = isInSheetPanel(event.target)
+      setTouch((event as PointerEvent).pointerType === 'touch')
     }
     const onKey = () => {
       pressedInPanel.current = false
@@ -297,8 +306,11 @@ export default function App({ files, recovery, panelMemory, vault, initialElemen
       if (target && !beforeEdit.current) {
         beforeEdit.current = canvas.sheetPanel()
         showAutomatically({ open: true, tab: 'format' })
-        // On a small window the panel floats: the open line moves clear of it.
-        if (!wideRoot(canvas.root)) {
+        // On a phone the open line moves into the space above the bottom sheet
+        // and the keyboard; on a small window the panel floats, and the line
+        // moves clear of it.
+        if (vault?.phone) clearOfBottomSheet(canvas)
+        else if (!wideRoot(canvas.root)) {
           const view = canvas.root.ownerDocument.defaultView
           view?.requestAnimationFrame(() => {
             const panel = canvas.root.querySelector(`.${SHEET_SIDEBAR_CLASS}`)?.getBoundingClientRect()
@@ -313,8 +325,25 @@ export default function App({ files, recovery, panelMemory, vault, initialElemen
         showAutomatically({ open: before.open && canvas.sheetPanel().open, tab: before.tab })
       }
     },
-    [canvas, showAutomatically],
+    [canvas, showAutomatically, vault?.phone],
   )
+
+  // On a phone the keyboard and the sheet settle after the edit opens: the
+  // line is moved clear again each time the sheet's room changes.
+  const phone = vault?.phone ?? false
+  const editing = editTarget !== null
+  useEffect(() => {
+    if (!phone || !editing || !canvas) return
+    const view = canvas.root.ownerDocument.defaultView
+    const viewport = view?.visualViewport
+    const clear = () => clearOfBottomSheet(canvas)
+    viewport?.addEventListener('resize', clear)
+    view?.addEventListener('resize', clear)
+    return () => {
+      viewport?.removeEventListener('resize', clear)
+      view?.removeEventListener('resize', clear)
+    }
+  }, [phone, editing, canvas])
 
   // The one math element selected, alone: the Format tab's Edit opens it, as Enter does.
   const [selectedMath, setSelectedMath] = useState<string | null>(null)
@@ -359,9 +388,9 @@ export default function App({ files, recovery, panelMemory, vault, initialElemen
       if (!canvas) return
       jumpToAnchor(canvas.api, target.anchorId)
       setFlash({ ...target, key: Date.now() })
-      // Floating over a small window, the panel gets out of the way.
+      // Floating over a small window, or a sheet on a phone, the panel gets out of the way.
       if (canvas.root.clientWidth <= SIDEBAR_DOCKS_ABOVE) {
-        canvas.api.toggleSidebar({ name: SHEET_PANEL, force: false })
+        canvas.showSheetPanel({ open: false, tab: canvas.sheetPanel().tab })
       }
       canvas.focusCanvas()
     },
@@ -406,6 +435,7 @@ export default function App({ files, recovery, panelMemory, vault, initialElemen
           embeds={!vault}
           vault={!!vault}
           theme={vault?.theme}
+          phone={phone}
           imageTool={imageTool ?? undefined}
           fileMenu={fileMenu ?? undefined}
           sheetPanel={{
@@ -416,9 +446,13 @@ export default function App({ files, recovery, panelMemory, vault, initialElemen
                 target={editTarget}
                 selected={selectedMath}
                 resultColor={settings.resultColor}
+                touch={touch}
                 actions={formatActions}
               />
             ),
+            // On touch, while a line or the title is open (section 4, Touch).
+            quickKeys: touch && editing ? <QuickKeys onInsert={insert} /> : undefined,
+            compact: editing,
             symbols: <SymbolsTab canInsert={canInsert} onInsert={insert} />,
             variables: <VariablesTab sheet={sheet ?? []} onJump={jump} />,
             problemsTab: <ProblemsTab sheet={sheet ?? []} onJump={jump} />,
@@ -453,6 +487,7 @@ export default function App({ files, recovery, panelMemory, vault, initialElemen
               onEdit={onEdit}
               settings={settings}
               resultColor={settings.resultColor}
+              touch={touch}
               flash={flash}
             />
             {web && <FileChrome session={web.session} dialogs={web.dialogs} canvasRoot={canvas.root} />}
@@ -461,6 +496,21 @@ export default function App({ files, recovery, panelMemory, vault, initialElemen
       }
     />
   )
+}
+
+/**
+ * Moves the open line into the space left above the bottom sheet and the
+ * keyboard (section 8, On a phone), once the sheet has laid out.
+ */
+function clearOfBottomSheet(canvas: SheetCanvasHandle) {
+  const view = canvas.root.ownerDocument.defaultView
+  view?.requestAnimationFrame(() => {
+    const field = canvas.root.closest('.app-shell__stage')?.querySelector('.math-element__field')?.getBoundingClientRect()
+    const sheet = canvas.root.querySelector(`.${SHEET_SIDEBAR_CLASS}`)?.getBoundingClientRect()
+    const top = canvas.root.getBoundingClientRect().top
+    if (!field || !sheet || sheet.height === 0) return
+    scrollClearAbove(canvas.api, { top: field.top - top, bottom: field.bottom - top }, sheet.top - top)
+  })
 }
 
 /** A window wide enough for the panel to dock beside the canvas (section 8). */

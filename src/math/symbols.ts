@@ -44,6 +44,11 @@ export interface SymbolInsert {
   text: string
   /** What goes in after it: a closing bracket, a quote, the `:` of `? :`. */
   close?: string
+  /**
+   * A `wrap` that, with nothing selected, types only `text`: the quick keys'
+   * `(`, since `)` is a key of its own (section 4, Touch, M4d).
+   */
+  alone?: boolean
 }
 
 export interface SymbolEntry {

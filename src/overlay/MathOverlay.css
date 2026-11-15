@@ -758,3 +758,11 @@
     display: none;
   }
 }
+
+/* Section 4, While editing a line (M4d): above the field when below it the
+   on-screen keyboard or a phone's bottom sheet would cover the list. */
+.math-suggest.is-above {
+  top: auto;
+  bottom: 100%;
+  margin: 0 0 3px;
+}
