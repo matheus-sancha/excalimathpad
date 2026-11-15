@@ -182,8 +182,11 @@ come, and their terms move in here as each M4d issue makes them true.
   (`@bold @text-red @yellow`, from the first `@` outside a string) before math.js
   sees it (ADR 0005), so a note or a format never reaches math.js. A word with
   `if <condition>` is a rule (`FormatRule`, kept as typed); `writeFormat`
-  composes the plain words back for the bar in a fixed order and keeps every
-  rule. A math line carries its `LineFormat` (bold, underline, highlight, text
+  composes the plain words back for the Format tab in a fixed order and keeps
+  every rule, and `writeCommentFormat` a comment line's (`@bold @upright
+  @underline @<size> @text-<name> @<highlight>`, M4d, #144); `caretAfterFormat`
+  says where a press leaves the caret (in the code; in a comment's text, with
+  its `#`). A math line carries its `LineFormat` (bold, underline, highlight, text
   colour); an unknown clause word is the line's error, reported after the line
   ran. A clause's first problem is the form's `formatError`, in section 13's
   words (`Unknown format @blod`, and a comment word on a math line, `@L is for
@@ -195,7 +198,10 @@ come, and their terms move in here as each M4d issue makes them true.
   nothing, so nothing below fails. After a line runs, `runRules` (in `evaluate.ts`) tests its rules in a
   `LayeredScope` over the scope with `result` bound, so a condition never
   reaches the next line; the first true rule wins per property over the plain
-  format (`resolveRules`), and the typeset format is the result. A condition
+  format (`resolveRules`), and the typeset format is the result;
+  `SheetLine.ruleTruth` says which rules were true for the line's own row (on a
+  list, at every point; never on a table), so the Format tab names the rule
+  that sets a property (#144). A condition
   that can't be decided is one warning per rule. On a list it runs per point
   (the summary takes the format only if all are true; the hover counts them);
   on a table, per row (`TableView.rowFormats`). `typeset.ts` is the
@@ -410,12 +416,14 @@ come, and their terms move in here as each M4d issue makes them true.
   line writes. It owns the sheet's evaluation: it sorts anchors with
   `readingOrder.ts` (pure) and runs `evaluateSheet` on every keystroke,
   every source change and every change of order, then hands each
-  `MathElementView` its lines. The overlay takes no pointer events except the open field
-  and its format bar: Excalidraw gets every click and drag. The bar
-  (`FormatBar`, in `MathElementView`; its two rows of dots, text colours over
-  highlights, are `ColourDots`) writes the clause into the open line's
-  text; `MathOverlay` commits it at once and mounts a new field on the
-  rewritten text (`LineEdit.revision`). `useSheetGestures` opens, moves and
+  `MathElementView` its lines. The overlay takes no pointer events except the open field:
+  Excalidraw gets every click and drag. There is no bar beside the open line
+  or title (M4d, #144): the Format tab formats them, and the field's Ctrl+B,
+  Ctrl+U and Ctrl+I (italic on a comment line and the title; nothing on a math
+  line) write the clause into the open line's text; `MathOverlay` commits it
+  at once and mounts a new field on the rewritten text (`LineEdit.revision`).
+  `MathElementView` exports `LineSample` and `TitleSample`, one row or a
+  header drawn as the sheet draws it, for the tab's sample. `useSheetGestures` opens, moves and
   leaves the line edit from the events `listenToCanvas` hands it, starts and
   cancels placing (M, Esc) and opens the first line of a placed element.
   `PlacingGhost` draws the new element's box at the pointer while placing. A
@@ -428,8 +436,9 @@ come, and their terms move in here as each M4d issue makes them true.
   element and line under a point from geometry and the rows' `offsetTop` and
   `offsetHeight` (spec section 4, Gestures, section 14). Its `control` lets the
   sheet file commit the line (Ctrl+S keeps it open) or leave it (Open). From M4d (#143) the Sheet
-  panel acts on it too: `setFormat`, `setTitleFormat`, `moveTo('title' |
-  'first')` and `insert(text)` (at the open field's caret, by
+  panel acts on it too: `setFormat`, `setCommentFormat` (#144),
+  `setTitleFormat`, `moveTo('title' | 'first')`, `move('up' | 'down')` and
+  `openLast(anchorId)` (#144) and `insert(text)` (at the open field's caret, by
   `execCommand('insertText')`, which keeps the field's Ctrl+Z), through the
   line relay (`createLineRelay<LineEditControl>`). `onEdit` reports what is
   open (`EditTarget`: anchor, line or `'title'`, text) on each change, and
@@ -517,8 +526,20 @@ come, and their terms move in here as each M4d issue makes them true.
   turns the evaluated sheet (`EvaluatedElement`s, which `MathOverlay` hands
   out through `onEvaluated`) into Variables groups and Problems rows (every
   error and warning), and `errorCount`, the Problems badge (errors only, M4d);
-  `SheetPanel.tsx` renders them, and a click asks App to jump. Its `FormatTab`
-  and `SymbolsTab` are one-line placeholders until #144 and #146 (M4d).
+  `SheetPanel.tsx` renders them, and a click asks App to jump. Its
+  `SymbolsTab` is a one-line placeholder until #146 (M4d). **The Format tab**
+  (#144): `formatTab.ts` (pure) turns the evaluated sheet (`FormatElement`:
+  the panel's element and its `titleFormat`, which `EvaluatedElement` carries)
+  and what is open (`FormatTarget`, the overlay's `EditTarget`) into a
+  `FormatView`: none, a title, a math line (its plain format and the
+  "A rule sets …" notes), a comment line, or a blank one; with its caption
+  ("Math line — Pipe flow, line 3", shown in capitals) and its link (Edit or
+  Add title ↑, First line ↓). `FormatTab.tsx` renders it: the sample in a
+  light box (the dark theme's filter on it), the link, Done, ↑ and ↓, then a
+  labelled row per property, every control a no-focus button; with nothing
+  open, the hint, and Edit while one math element is selected. Its presses are
+  `FormatActions`, which App maps onto the line relay; App holds what is open
+  (from `onEdit`) and the one selected math element (`mathSelection`).
   `panelMemory.ts` is the `PanelMemory` port for the open/closed state
   (`localStorage` on the web, given by `src/main.tsx`). `SettingsTab.tsx`
   edits the unit system, Custom's kind → unit table, Digits and the Result
@@ -558,10 +579,10 @@ and everything downstream recalculates. Engine: math.js, client-side.
   highlight; `MathAnchor.titleFormat`) is kept beside it in
   `customData.titleFormat` as a string of the words that differ from no format
   (`"centre L text-red"`), never read from the text, and set only from the
-  title's bar (`TitleBar` in `MathElementView`, Ctrl+B, Ctrl+I, Ctrl+U), one
+  Format tab (M4d, #144) and the title field's Ctrl+B, Ctrl+I and Ctrl+U, one
   undo step per press (`writeAnchorTitleFormat`). Emptying the title removes it. An
   edit on it is the line edit at `TITLE_LINE` (-1): ↑ on the first line, the
-  bar's Title button, or a double-click on the header (`onHeader`).
+  Format tab's Edit title ↑ (or ↑ there), or a double-click on the header (`onHeader`).
 - **Empty element** — one whose source has no text and that has no title:
   every line is blank or spaces. A comment is text.
 - **Line edit** — the one line shown as raw source: anchor id, line index and
@@ -712,7 +733,7 @@ and everything downstream recalculates. Engine: math.js, client-side.
   includes it, and each row's `offsetTop` already counts it: the line hit
   needs no offset. The gestures read its box from `[data-title]`.
 - **A control that acts on the open line never takes focus** (spec section
-  14, M4d): the format bar's buttons and every Sheet panel control prevent
+  14, M4d): every Sheet panel control, the Format tab's included, prevents
   `mousedown` and are out of the tab order (`tabIndex={-1}`), since a blur
   leaves the line. For the panel, `keepPanelPresses` (`panelPresses.ts`)
   prevents every press that isn't on a field, in the bubble phase above
@@ -721,8 +742,7 @@ and everything downstream recalculates. Engine: math.js, client-side.
   `mousedown` and skips a prevented one, so in capture, or on the sidebar, the
   tabs stopped switching (`panelPresses.excalidraw.test.tsx`, with the
   control). A field in the panel (a filter) takes focus, and so leaves the
-  line. The bar is absolutely placed, so the measured body, and so the
-  anchor, never includes it.
+  line.
 - **A field inside Excalidraw's container is `type="text"`.** Excalidraw
   runs its letter shortcuts on a key from any input that isn't text, number
   or password, so a `type="search"` filter in the Sheet panel lost the

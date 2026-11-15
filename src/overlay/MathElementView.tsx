@@ -24,13 +24,10 @@ import {
   type TypesetLine,
 } from '../math/evaluate.ts'
 import {
-  codeLength,
-  FORMAT_COLORS,
-  TEXT_COLORS,
-  type FormatColor,
-  type TextColor,
+  caretAfterFormat,
   NO_FORMAT,
   readLine,
+  writeCommentFormat,
   writeFormat,
   type CommentFormat,
   type LineFormat,
@@ -56,7 +53,7 @@ export interface MathElementViewProps {
   /** The sheet's line edit, when it is in this element. */
   edit: LineEdit | null
   onType: (text: string) => void
-  /** The app rewrote the open line's text (a format from the bar): one line commit. */
+  /** The app rewrote the open line's text (a format key): one line commit. */
   onRewrite: (text: string, caret: number) => void
   onMove: (move: LineMove) => void
   onEscape: () => void
@@ -68,7 +65,7 @@ export interface MathElementViewProps {
   unitSlots?: UnitSlots
   /** The suggestions for the open line's text and caret (section 4); none on the title. */
   suggest?: Suggest | null
-  /** A press on the title's bar or its keys: the title's new format, one undo step (section 4, M4c). */
+  /** A title format key: the title's new format, one undo step (section 4, Title format). */
   onTitleFormat?: (format: TitleFormat) => void
 }
 
@@ -249,6 +246,43 @@ export function MathElementView({
 }
 
 /**
+ * The open line drawn as the sheet draws it, for the Format tab's sample
+ * (section 4, Format tab, M4d): one typeset row, with its result and note and
+ * its rules applied, live from the evaluation of the typed text. Its ⚠ show,
+ * since its element is being edited. Screen only; it takes no pointer events.
+ */
+export function LineSample({ text, line }: { text: string; line: SheetLine }) {
+  const katexReady = useKatexReady()
+  const { typeset } = line
+  const classes =
+    typeset.kind === 'math'
+      ? formatClasses(typeset.format)
+      : typeset.kind === 'comment'
+        ? commentClasses(typeset.format)
+        : ''
+  return (
+    <div className="math-element__body is-sample">
+      <ol className="math-element__grid" aria-label="Sample">
+        <li className={`math-element__row is-${typeset.kind}${classes}`} aria-label={text}>
+          <TypesetRow text={text} line={line} index={0} katexReady={katexReady} showWarnings />
+        </li>
+      </ol>
+    </div>
+  )
+}
+
+/** The open title drawn in its format, for the Format tab's sample (section 4, Title format). */
+export function TitleSample({ title, format }: { title: string; format: TitleFormat }) {
+  return (
+    <div className="math-element__body is-sample">
+      <div className={`math-element__title${titleClasses(format)}`} aria-label="Sample title">
+        <span className="math-element__title-text">{title}</span>
+      </div>
+    </div>
+  )
+}
+
+/**
  * The element's header (section 4, Typeset grid): its optional title, bold,
  * above the lines, with a rule under it. Plain text on one line, never
  * evaluated. While its edit is open it is a field, as a line is; an element
@@ -271,7 +305,7 @@ function Header({
   onBlur: () => void
 }) {
   const fieldRef = useRef<HTMLInputElement>(null)
-  const toggle = (key: 'b' | 'i' | 'u') =>
+  const toggle = (key: FormatKey) =>
     onFormat(
       key === 'b'
         ? { ...format, bold: !format.bold }
@@ -290,12 +324,11 @@ function Header({
           <span className="math-element__field-text" aria-hidden="true">
             {edit.text}
           </span>
-          <LineField fieldRef={fieldRef} label="Title" edit={edit} onFormat={null} onTitleKey={toggle} {...field} />
+          <LineField fieldRef={fieldRef} label="Title" edit={edit} onFormatKey={toggle} {...field} />
         </span>
       ) : (
         <span className="math-element__title-text">{title}</span>
       )}
-      {edit && <TitleBar format={format} onChange={onFormat} />}
     </div>
   )
 }
@@ -314,65 +347,6 @@ function titleClasses(format: TitleFormat): string {
     .filter(Boolean)
     .map((name) => ` ${name}`)
     .join('')
-}
-
-/**
- * The title's bar (section 4, Title format, M4c): beside the open title,
- * outside the element's box, in place of the line's bar. Bold, italic and
- * underline; left, centre and right; the four sizes; then the two rows of
- * colour dots. Each press is one undo step and keeps the title open; its
- * buttons never take focus.
- */
-function TitleBar({ format, onChange }: { format: TitleFormat; onChange: (format: TitleFormat) => void }) {
-  const button = (label: string, pressed: boolean, next: TitleFormat, className: string, text: string) => (
-    <button
-      key={label}
-      type="button"
-      className={`math-format-bar__button ${className}`}
-      aria-label={label}
-      aria-pressed={pressed}
-      title={label}
-      tabIndex={-1}
-      onMouseDown={(event) => event.preventDefault()}
-      onClick={() => onChange(next)}
-    >
-      {text}
-    </button>
-  )
-  const ALIGNS = [
-    ['left', 'Align left', '⇤'],
-    ['centre', 'Centre', '↔'],
-    ['right', 'Align right', '⇥'],
-  ] as const
-  return (
-    <span className="math-format-bar is-title-bar" role="toolbar" aria-label="Title format">
-      <span className="math-format-bar__column">
-        <span className="math-format-bar__dot-row">
-          {button('Bold (Ctrl+B)', format.bold, { ...format, bold: !format.bold }, 'is-bold', 'B')}
-          {button('Italic (Ctrl+I)', format.italic, { ...format, italic: !format.italic }, 'is-italic', 'I')}
-          {button(
-            'Underline (Ctrl+U)',
-            format.underline,
-            { ...format, underline: !format.underline },
-            'is-underline',
-            'U',
-          )}
-          <span className="math-format-bar__rule" aria-hidden="true" />
-          {ALIGNS.map(([align, label, text]) => button(label, format.align === align, { ...format, align }, 'is-align', text))}
-          <span className="math-format-bar__rule" aria-hidden="true" />
-          {(['S', 'M', 'L', 'XL'] as const).map((size) =>
-            button(`Size ${size}`, format.size === size, { ...format, size }, 'is-size', size),
-          )}
-        </span>
-        <ColourDots
-          text={format.color}
-          highlight={format.highlight}
-          onText={(color) => onChange({ ...format, color: color ?? 'black' })}
-          onHighlight={(highlight) => onChange({ ...format, highlight })}
-        />
-      </span>
-    </span>
-  )
 }
 
 /**
@@ -401,6 +375,9 @@ function commentClasses(format: CommentFormat): string {
   return `${formatClasses(format)}${format.upright ? ' is-upright' : ''}${format.size === 'M' ? '' : ` is-size-${format.size}`}`
 }
 
+/** A format key from the field: Ctrl+B, Ctrl+I or Ctrl+U. */
+type FormatKey = 'b' | 'i' | 'u'
+
 /** A row whose ⚠ is hidden: its gutter keeps its column, with no mark and no hover. */
 const NO_WARNINGS: readonly string[] = []
 
@@ -414,6 +391,7 @@ const EMPTY_LINE: SheetLine = {
   listPreview: null,
   table: null,
   plot: null,
+  ruleTruth: [],
 }
 
 /** A row's cells, by line form (section 3, section 4 Problems). */
@@ -919,15 +897,32 @@ interface EditingRowProps {
 function EditingRow({ edit, result, warnings, isEmpty, onRewrite, ...field }: EditingRowProps) {
   const fieldRef = useRef<HTMLInputElement>(null)
   const form = readLine(edit.text)
-  const format = form.kind === 'code' ? form.format : null
 
-  // Writes the clause into the line's text. The caret stays where it was in
-  // the code; from the clause on, the text moved, so it goes to the code's end.
-  const setFormat = (next: LineFormat) => {
-    const text = writeFormat(edit.text, next)
-    const caret = fieldRef.current?.selectionStart ?? text.length
-    onRewrite(text, Math.min(caret, codeLength(text)))
+  // Ctrl+B, Ctrl+U and, on a comment line, Ctrl+I (section 4, While editing a
+  // line): the clause is written into the line's text as one line commit. The
+  // caret keeps its place (`caretAfterFormat`). A blank line takes no format.
+  const rewrite = (text: string) => {
+    if (text === edit.text) return
+    onRewrite(text, caretAfterFormat(edit.text, text, fieldRef.current?.selectionStart ?? text.length))
   }
+  const onFormatKey =
+    form.kind === 'code'
+      ? (key: FormatKey) => {
+          // Ctrl+I does nothing on a math line.
+          if (key === 'b') rewrite(writeFormat(edit.text, { ...form.format, bold: !form.format.bold }))
+          if (key === 'u') rewrite(writeFormat(edit.text, { ...form.format, underline: !form.format.underline }))
+        }
+      : form.kind === 'comment'
+        ? (key: FormatKey) => {
+            const next =
+              key === 'b'
+                ? { ...form.format, bold: !form.format.bold }
+                : key === 'u'
+                  ? { ...form.format, underline: !form.format.underline }
+                  : { ...form.format, upright: !form.format.upright }
+            rewrite(writeCommentFormat(edit.text, next))
+          }
+        : null
 
   return (
     <>
@@ -940,141 +935,12 @@ function EditingRow({ edit, result, warnings, isEmpty, onRewrite, ...field }: Ed
           key={edit.revision ?? 0}
           fieldRef={fieldRef}
           edit={edit}
-          onFormat={format && ((change) => setFormat({ ...format, ...change(format) }))}
+          onFormatKey={onFormatKey}
           {...field}
         />
       </span>
       <ResultCell result={result} plain />
-      <FormatBar format={format} onChange={setFormat} onTitle={() => field.onMove({ kind: 'title' })} />
     </>
-  )
-}
-
-/**
- * The bar beside the open line (section 4, While editing a line): Title, then
- * Bold, Underline, the five highlight colours and no colour. Title moves the
- * edit to the element's title; each format press is one line commit. A line
- * with no code takes no format, so its bar has Title alone. A press mustn't take the keyboard from the field, or the blur would
- * leave the line, so its buttons never take focus. It is outside the body's
- * layout, so it never counts toward the element's size.
- */
-function FormatBar({
-  format,
-  onChange,
-  onTitle,
-}: {
-  format: LineFormat | null
-  onChange: (format: LineFormat) => void
-  onTitle: () => void
-}) {
-  const button = (label: string, pressed: boolean, next: LineFormat, className: string, text = '') => (
-    <button
-      type="button"
-      className={`math-format-bar__button ${className}`}
-      aria-label={label}
-      aria-pressed={pressed}
-      title={label}
-      tabIndex={-1}
-      onMouseDown={(event) => event.preventDefault()}
-      onClick={() => onChange(next)}
-    >
-      {text}
-    </button>
-  )
-  const titleButton = (
-    <button
-      type="button"
-      className="math-format-bar__button is-title"
-      aria-label="Title (↑ from the first line)"
-      title="Title (↑ from the first line)"
-      tabIndex={-1}
-      onMouseDown={(event) => event.preventDefault()}
-      onClick={onTitle}
-    >
-      T
-    </button>
-  )
-  if (!format) {
-    return (
-      <span className="math-format-bar" role="toolbar" aria-label="Line format">
-        {titleButton}
-      </span>
-    )
-  }
-  return (
-    <span className="math-format-bar" role="toolbar" aria-label="Line format">
-      {titleButton}
-      <span className="math-format-bar__rule" aria-hidden="true" />
-      {button('Bold (Ctrl+B)', format.bold, { ...format, bold: !format.bold }, 'is-bold', 'B')}
-      {button(
-        'Underline (Ctrl+U)',
-        format.underline,
-        { ...format, underline: !format.underline },
-        'is-underline',
-        'U',
-      )}
-      <span className="math-format-bar__rule" aria-hidden="true" />
-      <ColourDots
-        text={format.textColor}
-        highlight={format.color}
-        onText={(textColor) => onChange({ ...format, textColor })}
-        onHighlight={(color) => onChange({ ...format, color })}
-      />
-    </span>
-  )
-}
-
-/**
- * The bar's two rows of dots (section 4, While editing a line, M4c): the six
- * text colours on one, the five highlights on the other, each with its "none".
- * One click each; pressing the pressed dot takes it off. Each button never takes
- * focus, as the rest of the bar.
- */
-export function ColourDots({
-  text,
-  highlight,
-  onText,
-  onHighlight,
-}: {
-  text: TextColor | null
-  highlight: FormatColor | null
-  onText: (color: TextColor | null) => void
-  onHighlight: (color: FormatColor | null) => void
-}) {
-  const dot = (label: string, pressed: boolean, className: string, onClick: () => void) => (
-    <button
-      key={label}
-      type="button"
-      className={`math-format-bar__button is-color ${className}`}
-      aria-label={label}
-      aria-pressed={pressed}
-      title={label}
-      tabIndex={-1}
-      onMouseDown={(event) => event.preventDefault()}
-      onClick={onClick}
-    />
-  )
-  return (
-    <span className="math-format-bar__dots">
-      <span className="math-format-bar__dot-row" role="group" aria-label="Text colour">
-        <span className="math-format-bar__dot-label" aria-hidden="true">
-          A
-        </span>
-        {TEXT_COLORS.map((color) =>
-          dot(`Text ${color}`, text === color, `is-text-${color}`, () => onText(text === color ? null : color)),
-        )}
-        {dot('No text colour', text === null, 'is-none', () => onText(null))}
-      </span>
-      <span className="math-format-bar__dot-row" role="group" aria-label="Highlight">
-        <span className="math-format-bar__dot-label is-highlight" aria-hidden="true" />
-        {FORMAT_COLORS.map((color) =>
-          dot(`Highlight ${color}`, highlight === color, `is-${color}`, () =>
-            onHighlight(highlight === color ? null : color),
-          ),
-        )}
-        {dot('No highlight', highlight === null, 'is-none', () => onHighlight(null))}
-      </span>
-    </span>
   )
 }
 
@@ -1083,10 +949,12 @@ interface LineFieldProps {
   /** What the field is, for assistive tech: a line's source, or the title. */
   label?: string
   edit: LineEdit
-  /** Ctrl+B and Ctrl+U: null on a line with no code, which takes no format. */
-  onFormat: ((change: (format: LineFormat) => Partial<LineFormat>) => void) | null
-  /** On the title: Ctrl+B, Ctrl+I and Ctrl+U (section 4, Title format). */
-  onTitleKey?: (key: 'b' | 'i' | 'u') => void
+  /**
+   * Ctrl+B, Ctrl+I and Ctrl+U (section 4, While editing a line; Title format):
+   * taken from the field on a math line, a comment line and the title; null on
+   * a blank line, which takes no format.
+   */
+  onFormatKey: ((key: FormatKey) => void) | null
   onType: (text: string) => void
   onMove: (move: LineMove) => void
   onEscape: () => void
@@ -1097,7 +965,7 @@ interface LineFieldProps {
  * The line being edited. It takes only what the user types: setting the value
  * from code clears the browser's text undo, so it is uncontrolled. Each line
  * gets its own field, which is why that text undo starts fresh on each line; a
- * format from the bar rewrites the text, so it mounts a new field too. Its
+ * format press or key rewrites the text, so it mounts a new field too. Its
  * Ctrl+Z never reaches the sheet's undo, because Excalidraw only hears keys
  * inside its own container.
  */
@@ -1105,8 +973,7 @@ function LineField({
   fieldRef,
   label = 'Line source',
   edit,
-  onFormat,
-  onTitleKey,
+  onFormatKey,
   onType,
   onMove,
   onEscape,
@@ -1197,14 +1064,9 @@ function LineField({
           setList(null)
       }
     }
-    if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && onTitleKey) {
+    if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && onFormatKey) {
       const key = event.key.toLowerCase()
-      if (key === 'b' || key === 'i' || key === 'u') return take(() => onTitleKey(key))
-    }
-    if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && onFormat) {
-      const key = event.key.toLowerCase()
-      if (key === 'b') return take(() => onFormat(({ bold }) => ({ bold: !bold })))
-      if (key === 'u') return take(() => onFormat(({ underline }) => ({ underline: !underline })))
+      if (key === 'b' || key === 'i' || key === 'u') return take(() => onFormatKey(key))
     }
     switch (event.key) {
       case 'ArrowUp':

@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import {
+  caretAfterFormat,
   codeLength,
   hasTopLevelSemicolon,
   NO_COMMENT_FORMAT,
   NO_FORMAT,
   readLine,
   splitDisplayUnit,
+  writeCommentFormat,
   writeDisplayUnit,
   writeFormat,
   type CommentFormat,
@@ -283,6 +285,43 @@ describe('writeFormat (what the format bar writes)', () => {
   it('says where the code ends, for the caret', () => {
     expect(codeLength('x = 1 @bold # n')).toBe(5)
     expect(codeLength('x = 1')).toBe(5)
+  })
+})
+
+describe('writeCommentFormat (what the Format tab writes on a comment line, M4d)', () => {
+  const all: CommentFormat = { bold: true, upright: true, underline: true, size: 'XL', textColor: 'blue', color: 'yellow' }
+
+  it('writes the words in the fixed order, before the #, the comment as typed', () => {
+    expect(writeCommentFormat('#  Pumps @home', all)).toBe('@bold @upright @underline @XL @text-blue @yellow #  Pumps @home')
+    expect(writeCommentFormat('# Pumps', { ...NO_COMMENT_FORMAT, size: 'L' })).toBe('@L # Pumps')
+  })
+
+  it('replaces the clause there was, and takes it off for no format', () => {
+    expect(writeCommentFormat('@L @bold @red # Pumps', { ...NO_COMMENT_FORMAT, bold: true })).toBe('@bold # Pumps')
+    expect(writeCommentFormat('@bold @L # Pumps', NO_COMMENT_FORMAT)).toBe('# Pumps')
+  })
+
+  it('drops words a comment doesn’t take', () => {
+    expect(writeCommentFormat('@bolt @red if x > 1 # Pumps', NO_COMMENT_FORMAT)).toBe('# Pumps')
+  })
+
+  it('reads back what it wrote', () => {
+    expect(readLine(writeCommentFormat('# Pumps', all))).toEqual({ kind: 'comment', text: 'Pumps', format: all, formatError: null })
+  })
+
+  it('leaves a math line, a blank line and a bare clause alone', () => {
+    for (const line of ['x = 1 # n', '', '#', '@bold']) expect(writeCommentFormat(line, all)).toBe(line)
+  })
+
+  it('keeps the caret in the comment text where it was; in the clause, before the #', () => {
+    // `# Pumps` with the caret after `Pu`, then `@bold # Pumps`: still after `Pu`.
+    expect(caretAfterFormat('# Pumps', '@bold # Pumps', 4)).toBe(10)
+    expect(caretAfterFormat('@bold @L # Pumps', '# Pumps', 13)).toBe(4)
+    expect(caretAfterFormat('@bold @L # Pumps', '@L # Pumps', 2)).toBe(2)
+    expect(caretAfterFormat('@bold @L # Pumps', '# Pumps', 8)).toBe(0)
+    // A math line: where it was in the code, never in the clause.
+    expect(caretAfterFormat('x = 2 # two', 'x = 2 @bold # two', 3)).toBe(3)
+    expect(caretAfterFormat('x = 2 # two', 'x = 2 @bold # two', 9)).toBe(5)
   })
 })
 

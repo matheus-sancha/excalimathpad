@@ -109,7 +109,7 @@ export interface FormatRule {
   word: FormatWord
   /** The condition as typed, trimmed; empty if nothing follows `if`. */
   condition: string
-  /** The rule exactly as typed, `@text-red if v > 3 m/s`, for the bar to keep. */
+  /** The rule exactly as typed, `@text-red if v > 3 m/s`, for the Format tab to keep. */
   text: string
 }
 
@@ -289,7 +289,7 @@ export function hasTopLevelSemicolon(code: string): boolean {
 }
 
 /**
- * The line with its plain format replaced by `format`'s, for the format bar.
+ * The line with its plain format replaced by `format`'s, for the Format tab (M4d).
  * The code and the note stay exactly as typed; the clause goes after the code
  * and before the `#`: the plain words in a fixed order, `@bold @underline
  * @text-<name> @<highlight>`, then every rule exactly as it was typed (section
@@ -312,6 +312,43 @@ export function writeFormat(line: string, format: LineFormat): string {
   ].filter((word) => word !== null)
   const head = [rest, ...words].join(' ')
   return at === -1 ? head : `${head} ${line.slice(at)}`
+}
+
+/**
+ * A comment line with its clause replaced by `format`'s, for the Format tab
+ * (section 3, Rules for what the app writes, M4d): the words in the order
+ * `@bold @upright @underline @<size> @text-<name> @<highlight>`, before the `#`.
+ * The comment text after the `#` stays exactly as typed; words the clause had
+ * that a comment doesn't take are dropped. A line that isn't a comment line
+ * comes back unchanged.
+ */
+export function writeCommentFormat(line: string, format: CommentFormat): string {
+  if (readLine(line).kind !== 'comment') return line
+  const at = commentStart(line)
+  const words = [
+    format.bold ? '@bold' : null,
+    format.upright ? '@upright' : null,
+    format.underline ? '@underline' : null,
+    format.size === 'M' ? null : `@${format.size}`,
+    format.textColor ? `@text-${format.textColor}` : null,
+    format.color ? `@${format.color}` : null,
+  ].filter((word) => word !== null)
+  const comment = line.slice(at)
+  return words.length === 0 ? comment : `${words.join(' ')} ${comment}`
+}
+
+/**
+ * Where the caret goes when a format press rewrites `before` as `after`
+ * (section 6, a press in the Format tab): on a math line, where it was in the
+ * code, `min(caret, codeLength)`, since the clause after it moved. On a comment
+ * line the comment text keeps its place after the `#`, so a caret in it moves
+ * with the `#`; one in the clause goes to its end, before the `#`.
+ */
+export function caretAfterFormat(before: string, after: string, caret: number): number {
+  if (readLine(after).kind !== 'comment') return Math.min(caret, codeLength(after))
+  const was = commentStart(before)
+  const now = commentStart(after)
+  return caret > was ? caret - was + now : Math.min(caret, Math.max(now - 1, 0))
 }
 
 /**

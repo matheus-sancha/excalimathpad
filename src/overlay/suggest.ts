@@ -120,7 +120,7 @@ export function suggest(
   return { from, to: caret, items: ranked.slice(0, limit).map((entry) => entry.item) }
 }
 
-/** The format words a clause offers after `@` (section 3), in the bar's order. */
+/** The format words a clause offers after `@` (section 3), in the Format tab's order. */
 const FORMAT_WORDS: readonly Suggestion[] = [
   { name: 'bold', kind: 'keyword', detail: 'bold row', insert: 'bold' },
   { name: 'underline', kind: 'keyword', detail: 'underlined row', insert: 'underline' },

@@ -13,6 +13,7 @@ import { ABOVE_DRAWING_BELOW_UI_Z_INDEX, DARK_THEME_FILTER } from '../canvas/lay
 import { isPlacing } from '../canvas/addMath.ts'
 import {
   isMathAnchor,
+  NO_TITLE_FORMAT,
   removeAnchor,
   sameAnchor,
   toMathAnchor,
@@ -32,7 +33,15 @@ import {
   type SheetBlock,
   type SheetLine,
 } from '../math/evaluate.ts'
-import { codeLength, writeDisplayUnit, writeFormat, type LineFormat, type TextColor } from '../math/lineForm.ts'
+import {
+  caretAfterFormat,
+  writeCommentFormat,
+  writeDisplayUnit,
+  writeFormat,
+  type CommentFormat,
+  type LineFormat,
+  type TextColor,
+} from '../math/lineForm.ts'
 import { writeArgumentUnit } from '../math/tableLine.ts'
 import { writePlotClauses, type PlotClause } from '../math/plotLine.ts'
 import type { DisplaySettings } from '../math/display.ts'
@@ -47,6 +56,7 @@ import {
 import type { RowBox } from './lineHit.ts'
 import { HoverTip, useHoverTip, type TipTarget } from './HoverTip.tsx'
 import { MathElementView } from './MathElementView.tsx'
+import { TEXT_COLOR_VALUES } from './textColors.ts'
 import { PlacingGhost } from './PlacingGhost.tsx'
 import { readingOrder } from './readingOrder.ts'
 import { constantSuggestions, FUNCTION_SUGGESTIONS, sheetNames, suggest, unitSuggestions } from './suggest.ts'
@@ -86,14 +96,21 @@ export interface LineEditControl {
   /** Whether a line or the title is open for typing (an outside change in a vault asks). */
   isOpen(): boolean
   /**
-   * The open line's plain format, written as the bar writes it: one line
-   * commit, the line kept open on a new field, the caret in the code.
+   * The open math line's plain format, as the Format tab writes it (section 3,
+   * Rules for what the app writes): one line commit, the line kept open on a
+   * new field, the caret in the code.
    */
   setFormat(format: LineFormat): void
+  /** The open comment line's format: the same, the caret kept in the comment text. */
+  setCommentFormat(format: CommentFormat): void
   /** The open title's format: one undo step, the title kept open. */
   setTitleFormat(format: TitleFormat): void
   /** Moves the edit to the element's title, or from the title to its first line. */
   moveTo(target: 'title' | 'first'): void
+  /** Moves the edit as ↑ or ↓ in the field do: from the first line to the title and back. */
+  move(direction: 'up' | 'down'): void
+  /** Opens the element's last line, as Enter on a selected element does (section 4, Gestures). */
+  openLast(anchorId: string): void
   /** Types `text` at the open field's caret, over its selection, as typing does: the field's Ctrl+Z takes it back. */
   insert(text: string): void
 }
@@ -135,20 +152,12 @@ export interface MathOverlayProps {
   resultColor?: TextColor
 }
 
-/** The six text colours' values (section 4, Colours and rules). */
-const TEXT_COLOR_VALUES: Record<TextColor, string> = {
-  black: '#1e1e1e',
-  blue: '#1971c2',
-  red: '#e03131',
-  green: '#2f9e44',
-  orange: '#e8590c',
-  gray: '#868e96',
-}
-
 /** One math element as evaluated: what the Sheet panel lists. */
 export interface EvaluatedElement {
   anchorId: string
   title: string | null
+  /** How the title looks, for the Format tab's sample (section 4, Title format). */
+  titleFormat: TitleFormat
   lines: readonly SheetLine[]
 }
 
@@ -233,18 +242,19 @@ export function MathOverlay({
   const constantNames = useMemo(() => constantSuggestions(listConstants(settings)), [settings])
 
   // The panel's view of the same run: titles name elements, so they count too.
-  const titlesKey = JSON.stringify(anchors.map(({ id, title }) => [id, title]))
+  const titlesKey = JSON.stringify(anchors.map(({ id, title, titleFormat }) => [id, { title, titleFormat }]))
   const onEvaluatedRef = useRef(onEvaluated)
   useEffect(() => {
     onEvaluatedRef.current = onEvaluated
   })
   useEffect(() => {
-    const titles = new Map(JSON.parse(titlesKey) as [string, string][])
+    const titles = new Map(JSON.parse(titlesKey) as [string, { title: string; titleFormat: TitleFormat }][])
     const order = (JSON.parse(sheetKey) as SheetBlock[]).map(({ id }) => id)
     onEvaluatedRef.current?.(
       order.map((anchorId) => ({
         anchorId,
-        title: titles.get(anchorId) || null,
+        title: titles.get(anchorId)?.title || null,
+        titleFormat: titles.get(anchorId)?.titleFormat ?? NO_TITLE_FORMAT,
         lines: lines.get(anchorId) ?? [],
       })),
     )
@@ -337,7 +347,7 @@ export function MathOverlay({
   }
 
   /**
-   * A format from the bar or the panel: the line's new text goes to the scene
+   * A format from the Format tab or a format key: the line's new text goes to the scene
    * as one line commit, and the line stays open on it, on a new field.
    */
   const rewriteLine = (text: string, caret: number) => {
@@ -347,6 +357,13 @@ export function MathOverlay({
     const next = { ...current, text, caret, revision: (current.revision ?? 0) + 1 }
     writeAnchorSource(api, current.anchorId, withTypedLine(live.source, next))
     changeEdit(next)
+  }
+
+  /** A press in the Format tab: the line rewritten as one line commit, the caret kept in place. */
+  const rewriteFormat = (before: string, text: string) => {
+    if (text === before) return
+    const caret = openField(overlayRef.current)?.selectionStart ?? text.length
+    rewriteLine(text, caretAfterFormat(before, text, caret))
   }
 
   const openLine = (anchorId: string, lineIndex: number) => {
@@ -368,11 +385,11 @@ export function MathOverlay({
     isOpen: () => editRef.current !== null,
     setFormat(format) {
       const current = editRef.current
-      if (!current || current.lineIndex === TITLE_LINE) return
-      const text = writeFormat(current.text, format)
-      if (text === current.text) return
-      const caret = openField(overlayRef.current)?.selectionStart ?? text.length
-      rewriteLine(text, Math.min(caret, codeLength(text)))
+      if (current && current.lineIndex !== TITLE_LINE) rewriteFormat(current.text, writeFormat(current.text, format))
+    },
+    setCommentFormat(format) {
+      const current = editRef.current
+      if (current && current.lineIndex !== TITLE_LINE) rewriteFormat(current.text, writeCommentFormat(current.text, format))
     },
     setTitleFormat(format) {
       const current = editRef.current
@@ -384,6 +401,13 @@ export function MathOverlay({
       if (target === 'title') {
         if (current.lineIndex !== TITLE_LINE) moveEdit({ kind: 'title' })
       } else if (current.lineIndex === TITLE_LINE) moveEdit({ kind: 'down' })
+    },
+    move(direction) {
+      if (editRef.current) moveEdit({ kind: direction })
+    },
+    openLast(anchorId) {
+      const anchor = findAnchor(anchorId)
+      if (anchor) openLine(anchorId, splitLines(anchor.source).length - 1)
     },
     insert(text) {
       const field = openField(overlayRef.current)
@@ -476,7 +500,7 @@ export function MathOverlay({
           }}
           onRewrite={rewriteLine}
           onTitleFormat={(format) => {
-            // A press on the title's bar or its keys: one undo step; the title stays open.
+            // A title format key: one undo step; the title stays open.
             writeAnchorTitleFormat(api, anchor.id, format)
           }}
           onMove={moveEdit}

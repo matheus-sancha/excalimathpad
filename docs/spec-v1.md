@@ -2393,6 +2393,11 @@ Engineer's design gate. Tested on Excalidraw 0.18.1, math.js 15.2 and Chromium.
     As built (#143): a box with no box of its own (`display: contents`) around the panel's tabs stops each
     key's React propagation, so Excalidraw's `onKeyDown` never hears it and the panel's own handlers still
     run; `listenToCanvas` doesn't hand the gestures a key aimed at the panel either.
+  - As built (#144): a press on a comment line keeps the caret in the comment text, moving with
+    the `#` (`caretAfterFormat`), since a comment line has no code and `min(selectionStart,
+    codeLength)` would send it to the start. Which rules are true for a line's own row is
+    `SheetLine.ruleTruth`; the Format tab's override note names the first true rule per property.
+    The touch hint is passed in (`touch`) and left off until #147 tells touch apart.
   - As built (#7 and #58 follow-up): an overlay hover is found from geometry on the canvas's `pointermove`
     (`slotAt`, `tipAt`), never from the overlay's own events; a `title` attribute there never shows. The
     root's `pointerleave` (not in capture) hides a problem's tip.

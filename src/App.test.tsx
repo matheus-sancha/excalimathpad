@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, createEvent, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { describe, expect, it, onTestFinished } from 'vitest'
 import App from './App.tsx'
 import { WELCOME_HINT } from './canvas/SheetCanvas.tsx'
@@ -7,6 +7,7 @@ import { clickOnCanvas } from './test/gestures.ts'
 import { createMathAnchorElements } from './canvas/mathAnchor.ts'
 import { sampleSheet } from './test/sheets.ts'
 import { linesOf, resultsOf } from './test/sheetView.ts'
+import { undoControls } from './test/excalidraw.ts'
 
 const renderApp = (props: Parameters<typeof App>[0] = {}) => {
   const files = fakeFileAccess()
@@ -389,6 +390,38 @@ describe('App', () => {
         await waitFor(() => expect(lineField()).toBeNull())
         expect(selected()).toBe('Variables')
         expect(filter).toHaveFocus()
+      })
+
+      it('a Format tab press keeps the line open as one undo step; Done leaves it, and Edit opens it again (#144)', async () => {
+        await start()
+        await editLine()
+        await waitFor(() => expect(selected()).toBe('Format'))
+        const inPanel = (name: string) => within(panel() as HTMLElement).getByRole('button', { name })
+        const press = (button: HTMLElement) => {
+          fireEvent.pointerDown(button)
+          const down = createEvent.mouseDown(button)
+          fireEvent(button, down)
+          fireEvent.click(button)
+          return down
+        }
+        const row = () => document.querySelector('[data-anchor-id="m1"] [data-line="1"]')
+
+        expect(press(inPanel('Bold (Ctrl+B)')).defaultPrevented).toBe(true)
+        await waitFor(() => expect(lineField()).toHaveValue('x = 1 m + 1 s @bold'))
+        expect(lineField()).toHaveFocus()
+
+        press(inPanel('Done (Esc)'))
+        await waitFor(() => expect(lineField()).toBeNull())
+        expect(row()).toHaveClass('is-bold')
+        // The edit ended from the panel, so it stays on Format, with Edit for the selected element.
+        expect(selected()).toBe('Format')
+        press(inPanel('Edit (Enter)'))
+        await waitFor(() => expect(lineField()).toHaveValue('x = 1 m + 1 s @bold'))
+        press(inPanel('Done (Esc)'))
+        await waitFor(() => expect(lineField()).toBeNull())
+
+        undoControls(document.body).undo()
+        await waitFor(() => expect(row()).not.toHaveClass('is-bold'))
       })
 
       it('stays closed when closed during the edit, until the next edit', async () => {
