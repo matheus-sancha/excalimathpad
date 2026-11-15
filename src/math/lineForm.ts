@@ -104,13 +104,34 @@ export type FormatWord =
   | { kind: 'highlight'; color: FormatColor }
   | { kind: 'text'; color: TextColor }
 
-/** A rule (section 3): a format word that applies while its condition is true. */
+/**
+ * A rule (section 3): a format word that applies while its condition is true.
+ * From M4d the word can be joined, `@text-red+red+bold if v > 3 m/s`: one
+ * rule setting each of its words, a property named twice keeping the last.
+ */
 export interface FormatRule {
-  word: FormatWord
+  /** The word's parts, in the order typed: one for a word that isn't joined. */
+  words: readonly FormatWord[]
   /** The condition as typed, trimmed; empty if nothing follows `if`. */
   condition: string
   /** The rule exactly as typed, `@text-red if v > 3 m/s`, for the Format tab to keep. */
   text: string
+  /** Where the rule starts in the line, at its `@`. */
+  start: number
+  /** Where it ends in the line, after its condition: the Rules list puts the caret here. */
+  end: number
+}
+
+/**
+ * A rule as the Rules list writes it (section 4, Rules list, M4d): its words
+ * and condition, and its exact text while the list hasn't changed it. A row
+ * with no text is written as one joined word and one condition.
+ */
+export interface RuleRow {
+  words: readonly FormatWord[]
+  condition: string
+  /** The rule as typed, kept exactly; null once the list changed it. */
+  text: string | null
 }
 
 /** What a format word sets, or null when it isn't a format word. */
@@ -158,19 +179,19 @@ export function readLine(line: string): LineForm {
   if (code.trim() === '') {
     return after ? { kind: 'comment', text: after, format: NO_COMMENT_FORMAT, formatError: null } : { kind: 'blank' }
   }
-  const { rest, segments } = splitClause(code)
+  const { rest, segments, spans } = splitClause(code)
   // Code that is only a clause: a formatted comment line, or a blank line
   // when no comment text follows (section 3, A comment line's format).
   if (rest === '') return after ? { kind: 'comment', text: after, ...readCommentClause(segments) } : { kind: 'blank' }
   let format = NO_FORMAT
   let formatError: string | null = null
   const rules: FormatRule[] = []
-  for (const segment of segments) {
+  segments.forEach((segment, i) => {
     const read = readSegment(segment)
     if (read === null) formatError ??= clauseError(segment)
-    else if (read.condition === null) format = applyFormatWord(format, read.word)
-    else rules.push({ word: read.word, condition: read.condition, text: segment })
-  }
+    else if (read.condition === null) format = read.words.reduce(applyFormatWord, format)
+    else rules.push({ words: read.words, condition: read.condition, text: segment, ...spans[i] })
+  })
   return {
     kind: 'code',
     code: rest,
@@ -192,25 +213,42 @@ function readCommentClause(segments: readonly string[]): { format: CommentFormat
   let formatError: string | null = null
   for (const segment of segments) {
     const parts = segmentParts(segment)
-    const word = parts && readCommentWord(parts.name)
-    if (!parts || !word) formatError ??= clauseError(segment)
-    else if (parts.rest === '') format = applyCommentWord(format, word)
-    else formatError ??= isRule(parts.rest) ? 'rules need a math line' : clauseError(segment)
+    const words = parts && readWords(parts.names, readCommentWord)
+    if (!parts || !words) formatError ??= clauseError(segment, readCommentWord)
+    else if (parts.rest === '') format = words.reduce(applyCommentWord, format)
+    else formatError ??= isRule(parts.rest) ? 'rules need a math line' : clauseError(segment, readCommentWord)
   }
   return { format, formatError }
 }
 
-/** Why a segment of a math line's clause isn't a format, in section 13's words. */
-function clauseError(segment: string): string {
-  const name = segmentParts(segment)?.name
-  if (name !== undefined && COMMENT_ONLY_WORDS.includes(name)) return `@${name} is for comment lines`
+/**
+ * Why a segment of a clause isn't a format, in section 13's words. In a joined
+ * word, the first part that isn't one is named with the word it's in:
+ * `Unknown format @blod in @text-red+blod` (M4d).
+ */
+function clauseError(segment: string, read: (word: string) => unknown = readFormatWord): string {
+  const parts = segmentParts(segment)
+  const bad = parts?.names.find((name) => read(name) === null)
+  if (parts && bad !== undefined) {
+    if (COMMENT_ONLY_WORDS.includes(bad)) return `@${bad} is for comment lines`
+    if (parts.names.length > 1) return `Unknown format @${bad} in @${parts.name}`
+  }
   return `Unknown format ${segment.split(/\s+/)[0]}`
 }
 
-/** A segment's word, without its `@`, and what follows it, trimmed; null for a bare `@`. */
-function segmentParts(segment: string): { name: string; rest: string } | null {
-  const match = /^@([A-Za-z][\w-]*)(.*)$/s.exec(segment)
-  return match ? { name: match[1], rest: match[2].trim() } : null
+/**
+ * A segment's word, without its `@`, its parts when joined by `+` with no
+ * spaces (M4d), and what follows it, trimmed; null for a bare `@`.
+ */
+function segmentParts(segment: string): { name: string; names: string[]; rest: string } | null {
+  const match = /^@([A-Za-z][\w-]*(?:\+[A-Za-z][\w-]*)*)(.*)$/s.exec(segment)
+  return match ? { name: match[1], names: match[1].split('+'), rest: match[2].trim() } : null
+}
+
+/** Every part of a word read, or null when one isn't a word `read` takes. */
+function readWords<W>(names: readonly string[], read: (name: string) => W | null): W[] | null {
+  const words = names.map(read)
+  return words.every((word): word is W => word !== null) ? words : null
 }
 
 /** Whether what follows a word makes it a rule: `if`, as a whole word. */
@@ -218,13 +256,16 @@ function isRule(rest: string): boolean {
   return /^if(?![\w.])/.test(rest)
 }
 
-/** One clause segment, `@word` or `@word if <condition>`; null when the word isn't a format. */
-function readSegment(segment: string): { word: FormatWord; condition: string | null } | null {
+/**
+ * One clause segment, `@word` or `@word if <condition>`, its word joined or
+ * not; null when a part of the word isn't a format.
+ */
+function readSegment(segment: string): { words: FormatWord[]; condition: string | null } | null {
   const parts = segmentParts(segment)
-  const word = parts && readFormatWord(parts.name)
-  if (!parts || !word) return null
-  if (parts.rest === '') return { word, condition: null }
-  return isRule(parts.rest) ? { word, condition: parts.rest.slice(2).trim() } : null
+  const words = parts && readWords(parts.names, readFormatWord)
+  if (!parts || !words) return null
+  if (parts.rest === '') return { words, condition: null }
+  return isRule(parts.rest) ? { words, condition: parts.rest.slice(2).trim() } : null
 }
 
 /**
@@ -299,10 +340,70 @@ export function hasTopLevelSemicolon(code: string): boolean {
  */
 export function writeFormat(line: string, format: LineFormat): string {
   const at = commentStart(line)
+  const { segments } = splitClause(at === -1 ? line : line.slice(0, at))
+  return writeClause(line, format, segments.filter((segment) => readSegment(segment)?.condition != null))
+}
+
+/**
+ * The line with its rules replaced by `rows`, in order, for the Rules list
+ * (section 4, Rules list, M4d): a row the list didn't change keeps its exact
+ * text; one it changed is one joined word and one condition,
+ * `@text-red+red+bold if v > 3 m/s`. The plain words are written as
+ * `writeFormat` writes them. A line with no code comes back unchanged.
+ */
+export function writeRules(line: string, rows: readonly RuleRow[]): string {
+  const form = readLine(line)
+  if (form.kind !== 'code') return line
+  return writeClause(line, form.format, rows.map((row) => row.text ?? ruleText(row.words, row.condition)))
+}
+
+/**
+ * + Add rule (section 4, Rules list): ` @text-red if <name> ` at the end of the
+ * clause, before any note, and the caret after it, so the condition is typed
+ * next. With no name (a table line) it writes ` @text-red if ` alone.
+ */
+export function writeNewRule(line: string, name: string | null): { text: string; caret: number } {
+  const at = commentStart(line)
+  const head = (at === -1 ? line : line.slice(0, at)).trimEnd()
+  const added = `${head} @text-red if ${name === null ? '' : `${name} `}`
+  return { text: at === -1 ? added : `${added} ${line.slice(at)}`, caret: added.length }
+}
+
+/** A rule as one joined word and one condition: its words in the order text, highlight, bold, underline. */
+export function ruleText(words: readonly FormatWord[], condition: string): string {
+  const joined = formatWords(words.reduce(applyFormatWord, NO_FORMAT)).map(wordName).join('+')
+  return `@${joined} if${condition.trim() ? ` ${condition.trim()}` : ''}`
+}
+
+/** A format's words, in the order a rule writes them: text colour, highlight, bold, underline. */
+export function formatWords(format: LineFormat): FormatWord[] {
+  return [
+    format.textColor ? ({ kind: 'text', color: format.textColor } as const) : null,
+    format.color ? ({ kind: 'highlight', color: format.color } as const) : null,
+    format.bold ? ({ kind: 'bold' } as const) : null,
+    format.underline ? ({ kind: 'underline' } as const) : null,
+  ].filter((word) => word !== null)
+}
+
+/** A word as a clause writes it, without its `@`. */
+function wordName(word: FormatWord): string {
+  switch (word.kind) {
+    case 'bold':
+    case 'underline':
+      return word.kind
+    case 'highlight':
+      return word.color
+    case 'text':
+      return `text-${word.color}`
+  }
+}
+
+/** The line's clause rewritten: its plain words in the fixed order, then `rules` as given. */
+function writeClause(line: string, format: LineFormat, rules: readonly string[]): string {
+  const at = commentStart(line)
   const code = at === -1 ? line : line.slice(0, at)
-  const { rest, segments } = splitClause(code)
+  const { rest } = splitClause(code)
   if (rest.trim() === '') return line
-  const rules = segments.filter((segment) => readSegment(segment)?.condition != null)
   const words = [
     format.bold ? '@bold' : null,
     format.underline ? '@underline' : null,
@@ -387,13 +488,22 @@ function isFormatColor(word: string): word is FormatColor {
  * before the clause. The clause starts at the first `@` outside a string, and
  * a segment runs to the next `@` outside a string.
  */
-function splitClause(code: string): { rest: string; segments: string[] } {
+function splitClause(code: string): {
+  rest: string
+  segments: string[]
+  /** Where each segment starts and ends in `code`, trimmed. */
+  spans: { start: number; end: number }[]
+} {
   const start = clauseStart(code)
-  if (start === -1) return { rest: code.trimEnd(), segments: [] }
+  if (start === -1) return { rest: code.trimEnd(), segments: [], spans: [] }
   const clause = code.slice(start)
   const cuts = outsideStrings(clause, '@')
-  const segments = cuts.map((cut, i) => clause.slice(cut, cuts[i + 1] ?? clause.length).trim())
-  return { rest: code.slice(0, start).trimEnd(), segments }
+  const raws = cuts.map((cut, i) => clause.slice(cut, cuts[i + 1] ?? clause.length))
+  return {
+    rest: code.slice(0, start).trimEnd(),
+    segments: raws.map((raw) => raw.trim()),
+    spans: raws.map((raw, i) => ({ start: start + cuts[i], end: start + cuts[i] + raw.trimEnd().length })),
+  }
 }
 
 /** Where the format clause starts: the first `@` outside a string, or -1. */

@@ -340,6 +340,9 @@ export default function App({ files, recovery, panelMemory, vault, initialElemen
         canvas?.focusCanvas()
       },
       edit: (anchorId) => line.current?.openLast(anchorId),
+      setRules: (rows) => line.current?.setRules(rows),
+      caretToRule: (index) => line.current?.caretToRule(index),
+      addRule: (name) => line.current?.addRule(name),
     }),
     [line, canvas],
   )

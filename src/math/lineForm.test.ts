@@ -7,9 +7,12 @@ import {
   NO_FORMAT,
   readLine,
   splitDisplayUnit,
+  ruleText,
   writeCommentFormat,
   writeDisplayUnit,
   writeFormat,
+  writeNewRule,
+  writeRules,
   type CommentFormat,
   type LineFormat,
 } from './lineForm.ts'
@@ -154,11 +157,80 @@ describe('text colours and rules (docs/spec-v1.md section 3, M4c)', () => {
     const form = formatOf('v = Q / A @bold @text-red if v > 3 m/s @text-orange if v > 2 m/s # check')
     expect(form).toMatchObject({ code: 'v = Q / A', note: 'check', format: { bold: true, textColor: null } })
     expect(form.kind === 'code' && form.rules).toEqual([
-      { word: { kind: 'text', color: 'red' }, condition: 'v > 3 m/s', text: '@text-red if v > 3 m/s' },
-      { word: { kind: 'text', color: 'orange' }, condition: 'v > 2 m/s', text: '@text-orange if v > 2 m/s' },
+      { words: [{ kind: 'text', color: 'red' }], condition: 'v > 3 m/s', text: '@text-red if v > 3 m/s', start: 16, end: 38 },
+      { words: [{ kind: 'text', color: 'orange' }], condition: 'v > 2 m/s', text: '@text-orange if v > 2 m/s', start: 39, end: 64 },
     ])
     expect(formatOf('x = 1 @blod if x > 0')).toMatchObject({ formatError: 'Unknown format @blod' })
     expect(formatOf('s = "a@b" @red if s == "a@b"')).toMatchObject({ code: 's = "a@b"' })
+  })
+})
+
+describe('joined words (docs/spec-v1.md section 3, Joined words, M4d)', () => {
+  it('reads words joined by + as one word: plain, or one rule with one if', () => {
+    expect(readLine('x = 1 @bold+underline+text-red+red @text-blue+text-green')).toMatchObject({
+      format: { bold: true, underline: true, color: 'red', textColor: 'green' },
+      formatError: null,
+    })
+    const form = readLine('v = 4 @text-red+red+bold if v > 3 m/s # n')
+    expect(form.kind === 'code' && form.rules).toEqual([
+      {
+        words: [{ kind: 'text', color: 'red' }, { kind: 'highlight', color: 'red' }, { kind: 'bold' }],
+        condition: 'v > 3 m/s',
+        text: '@text-red+red+bold if v > 3 m/s',
+        start: 6,
+        end: 37,
+      },
+    ])
+  })
+
+  it('names a part that isn’t a format, in the word it is in', () => {
+    expect(readLine('x = 1 @text-red+blod')).toMatchObject({ formatError: 'Unknown format @blod in @text-red+blod' })
+    expect(readLine('x = 1 @text-red+blod if x > 0')).toMatchObject({ formatError: 'Unknown format @blod in @text-red+blod', rules: [] })
+    expect(readLine('x = 1 @bold+L')).toMatchObject({ formatError: '@L is for comment lines' })
+    expect(readLine('x = 1 @bold+')).toMatchObject({ formatError: 'Unknown format @bold+' })
+    // Spaces end a word: `@bold + red` isn't joined.
+    expect(readLine('x = 1 @bold + red')).toMatchObject({ formatError: 'Unknown format @bold' })
+  })
+
+  it('reads joined words on a comment line too', () => {
+    expect(readLine('@bold+L+text-blue # Pumps')).toMatchObject({ kind: 'comment', format: { bold: true, size: 'L', textColor: 'blue' } })
+    expect(readLine('@bold+lg # Pumps')).toMatchObject({ formatError: 'Unknown format @lg in @bold+lg' })
+  })
+})
+
+describe('the Rules list’s writers (docs/spec-v1.md section 4, Rules list, M4d)', () => {
+  const LINE = 'v = 4 m/s @bold @text-red if v > 3 m/s @yellow+underline if v>2 m/s # speed'
+  const rulesOf = (line: string) => {
+    const form = readLine(line)
+    return form.kind === 'code' ? form.rules : []
+  }
+
+  it('keeps a row it didn’t change exactly as typed, and writes a changed one as one joined word', () => {
+    const [red, yellow] = rulesOf(LINE)
+    expect(writeRules(LINE, [yellow, red])).toBe('v = 4 m/s @bold @yellow+underline if v>2 m/s @text-red if v > 3 m/s # speed')
+    expect(
+      writeRules(LINE, [{ ...red, words: [...red.words, { kind: 'highlight', color: 'red' }, { kind: 'bold' }], text: null }, yellow]),
+    ).toBe('v = 4 m/s @bold @text-red+red+bold if v > 3 m/s @yellow+underline if v>2 m/s # speed')
+    expect(writeRules(LINE, [yellow])).toBe('v = 4 m/s @bold @yellow+underline if v>2 m/s # speed')
+  })
+
+  it('writes the words in the order text, highlight, bold, underline, the last of a property kept', () => {
+    expect(ruleText([{ kind: 'underline' }, { kind: 'highlight', color: 'red' }, { kind: 'text', color: 'blue' }, { kind: 'text', color: 'red' }], ' v > 3 ')).toBe(
+      '@text-red+red+underline if v > 3',
+    )
+    expect(ruleText([{ kind: 'bold' }], '')).toBe('@bold if')
+  })
+
+  it('+ Add rule writes @text-red if <name> at the end of the clause, before the note, the caret after it', () => {
+    expect(writeNewRule('v = 4 m/s @bold # speed', 'v')).toEqual({ text: 'v = 4 m/s @bold @text-red if v  # speed', caret: 31 })
+    expect(writeNewRule('Q / A', 'result')).toEqual({ text: 'Q / A @text-red if result ', caret: 26 })
+    expect(writeNewRule('table(x)  ', null)).toEqual({ text: 'table(x) @text-red if ', caret: 22 })
+    // What it wrote reads back as the last rule, with nothing yet after the name.
+    expect(rulesOf(writeNewRule('v = 4 # speed', 'v').text).at(-1)).toMatchObject({ condition: 'v', end: 20 })
+  })
+
+  it('leaves a line with no code alone', () => {
+    expect(writeRules('# Pumps', [])).toBe('# Pumps')
   })
 })
 

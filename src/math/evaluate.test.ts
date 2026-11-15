@@ -1620,6 +1620,39 @@ describe('rules: conditional formats (docs/spec-v1.md section 3, A rule; #109)',
     expect(formatOf(line)).toEqual({ bold: true, underline: true, color: 'red', textColor: null })
   })
 
+  it('a joined rule sets each of its properties; the first true rule still wins each (M4d)', () => {
+    const [line] = lines('v = 4 @text-red+red+bold if v > 3 @text-blue+underline if v > 1')
+    expect(formatOf(line)).toEqual({ bold: true, underline: true, color: 'red', textColor: 'red' })
+    expect(formatOf(lines('v = 2 @text-red+red+bold if v > 3 @text-blue+underline if v > 1')[0])).toEqual({
+      bold: false,
+      underline: true,
+      color: null,
+      textColor: 'blue',
+    })
+    // A property named twice in one joined word keeps the last.
+    expect(formatOf(lines('v = 4 @text-red+text-green if v > 3')[0])?.textColor).toBe('green')
+  })
+
+  it('gives each rule its live state for the Rules list (M4d)', () => {
+    expect(lines('v = 4 @red if v > 3 @red if v > 1 @bold if v > 9 @text-red+bold if v > 0')[0].ruleStates).toEqual([
+      { kind: 'true' },
+      { kind: 'overridden' },
+      { kind: 'false' },
+      // It still wins the text colour, so it isn't overridden.
+      { kind: 'true' },
+    ])
+    expect(lines('x = 1 .. 30 @red if x > 18 @bold if y > 2')[0].ruleStates).toEqual([
+      { kind: 'count', count: 12, of: 30, unit: 'points' },
+      { kind: 'warning', message: 'Undefined symbol y' },
+    ])
+    expect(lines('x = 1 .. 10\ntable(x) @yellow if x > 6')[1].ruleStates).toEqual([{ kind: 'count', count: 4, of: 10, unit: 'rows' }])
+    expect(lines('v = 4 m/s @red if v > 3 kg @bold if')[0].ruleStates).toEqual([
+      { kind: 'warning', message: 'Units do not match' },
+      { kind: 'warning', message: 'not true or false' },
+    ])
+    expect(lines('v = q @red if v > 1')[0].ruleStates).toEqual([{ kind: 'false' }])
+  })
+
   it('says which rules are true for the line’s own row, for the Format tab (M4d)', () => {
     expect(lines('v = 4 @bold if v > 3 @yellow if v > 5 @red if v > 1')[0].ruleTruth).toEqual([true, false, true])
     expect(lines('v = 4 @bold')[0].ruleTruth).toEqual([])

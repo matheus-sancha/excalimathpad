@@ -2325,7 +2325,11 @@ Engineer's design gate. Tested on Excalidraw 0.18.1, math.js 15.2 and Chromium.
   a top-level `;` (outside brackets and strings) and makes it the line's error before math.js.
 - **Joined words (M4d):** `readSegment` in `lineForm.ts` reads `+`-joined words, `FormatRule.word` becomes
   a list, and a writer for rules (`{ words, condition }` rows in order) sits next to `writeFormat`. A rule
-  the panel didn't change keeps its exact `text`.
+  the panel didn't change keeps its exact `text`. As built (#145): `FormatRule.words`, `writeRules` over
+  `RuleRow`s (a row keeping its `text`, or written by `ruleText` in the order text, highlight, bold,
+  underline) and `writeNewRule`; each rule carries its `start` and `end` in the line, so the list puts
+  the caret at a condition's end and a press follows the rule the caret was in. Each rule's live state is
+  `SheetLine.ruleStates`. A comment line's clause reads joined words too.
 - **A comment's format (M4d):** the comment split stays first. A line whose code is only a clause, with
   text after the `#`, is read as a formatted comment line; ADR 0005 is amended.
 

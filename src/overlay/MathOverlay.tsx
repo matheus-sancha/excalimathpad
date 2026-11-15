@@ -35,7 +35,13 @@ import {
 } from '../math/evaluate.ts'
 import {
   caretAfterFormat,
+  codeLength,
+  readLine,
   writeCommentFormat,
+  writeNewRule,
+  writeRules,
+  type FormatRule,
+  type RuleRow,
   writeDisplayUnit,
   writeFormat,
   type CommentFormat,
@@ -111,9 +117,23 @@ export interface LineEditControl {
   move(direction: 'up' | 'down'): void
   /** Opens the element's last line, as Enter on a selected element does (section 4, Gestures). */
   openLast(anchorId: string): void
+  /**
+   * The open math line's rules, as the Rules list writes them (section 4,
+   * Rules list, M4d): one line commit, the line kept open. Each row says which
+   * rule it was (`from`), so a caret inside a rule goes back to that rule's
+   * condition; elsewhere it stays in the code.
+   */
+  setRules(rows: readonly RuleEdit[]): void
+  /** Puts the caret at the end of the open line's `index`th rule's condition. */
+  caretToRule(index: number): void
+  /** + Add rule: ` @text-red if <name> ` after the clause, the caret after it; null names nothing (a table line). */
+  addRule(name: string | null): void
   /** Types `text` at the open field's caret, over its selection, as typing does: the field's Ctrl+Z takes it back. */
   insert(text: string): void
 }
+
+/** A row of the Rules list, and the rule it was in the line before the press (null for none). */
+export type RuleEdit = RuleRow & { from: number | null }
 
 /** What is open, for the Sheet panel (section 8): a line or the title, and its typed text. */
 export interface EditTarget {
@@ -359,6 +379,12 @@ export function MathOverlay({
     changeEdit(next)
   }
 
+  /** The rules a line's typed text holds. */
+  const rulesOf = (text: string): readonly FormatRule[] => {
+    const form = readLine(text)
+    return form.kind === 'code' ? form.rules : []
+  }
+
   /** A press in the Format tab: the line rewritten as one line commit, the caret kept in place. */
   const rewriteFormat = (before: string, text: string) => {
     if (text === before) return
@@ -408,6 +434,33 @@ export function MathOverlay({
     openLast(anchorId) {
       const anchor = findAnchor(anchorId)
       if (anchor) openLine(anchorId, splitLines(anchor.source).length - 1)
+    },
+    setRules(rows) {
+      const current = editRef.current
+      if (!current || current.lineIndex === TITLE_LINE) return
+      const before = current.text
+      const text = writeRules(before, rows)
+      if (text === before) return
+      const caret = openField(overlayRef.current)?.selectionStart ?? text.length
+      // A caret inside a rule follows it to its condition's end (section 4, Rules list).
+      const inside = rulesOf(before).findIndex(({ start, end }) => caret >= start && caret <= end)
+      const followed = inside === -1 ? -1 : rows.findIndex(({ from }) => from === inside)
+      const target = followed === -1 ? null : rulesOf(text)[followed]
+      rewriteLine(text, target ? target.end : inside === -1 ? caretAfterFormat(before, text, caret) : codeLength(text))
+    },
+    caretToRule(index) {
+      const current = editRef.current
+      const rule = current && current.lineIndex !== TITLE_LINE ? rulesOf(current.text)[index] : undefined
+      const field = openField(overlayRef.current)
+      if (!rule || !field) return
+      field.focus()
+      field.setSelectionRange(rule.end, rule.end)
+    },
+    addRule(name) {
+      const current = editRef.current
+      if (!current || current.lineIndex === TITLE_LINE || readLine(current.text).kind !== 'code') return
+      const { text, caret } = writeNewRule(current.text, name)
+      rewriteLine(text, caret)
     },
     insert(text) {
       const field = openField(overlayRef.current)
