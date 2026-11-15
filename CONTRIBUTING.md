@@ -9,20 +9,23 @@ Excalimathpad v1 has a written scope ([spec section 1](docs/spec-v1.md#1-what-v1
 - [Getting Started](#getting-started)
 - [Development Workflow](#development-workflow)
 - [Spec, CONTEXT.md and ADRs](#spec-contextmd-and-adrs)
-- [Project Structure](#project-structure)
+- [Architecture](#architecture)
+- [Tech Stack](#tech-stack)
 - [Engineering Rules](#engineering-rules)
 - [Code Style](#code-style)
 - [Testing](#testing)
 - [Commit Messages](#commit-messages)
 - [Pull Requests](#pull-requests)
+- [Build and Deploy](#build-and-deploy)
 - [Releasing](#releasing)
+- [Roadmap](#roadmap)
 - [Reporting Issues](#reporting-issues)
 - [Code of Conduct](#code-of-conduct)
 - [License](#license)
 
 ## Getting Started
 
-You need **Node.js** `^22.22.2 || ^24.15.0 || >=26` and **npm 10+**. CI runs on the lowest supported version, 22.22.2.
+You need **Node.js** `^22.22.2 || ^24.15.0 || >=26` and **npm 10+**. CI runs on the lowest supported version, 22.22.2. The Node floor is set by jsdom, which the tests use; Vite 8 alone would accept less. Both are also declared in `package.json` `engines`.
 
 1. Fork the repository.
 2. Clone your fork:
@@ -82,33 +85,65 @@ The project keeps four documents in step with the code. A pull request that chan
 | [`docs/adr/`](docs/adr/) | **Why**, for choices that are hard to reverse | You make, or amend, a decision of that kind. Add a new numbered ADR or amend the existing one |
 | [`docs/math-guide.md`](docs/math-guide.md) | **How to use it**, for users: every form, key and setting, with examples. Shown in the app from ☰ → Math guide | Something a user types, sees or presses changes: a line form, a unit, a setting, a key or a message. Its examples run in CI, so a change that alters one fails `src/math/math-guide.test.ts` until the guide follows |
 
-Background investigations go in [`docs/research/`](docs/research/).
+Background investigations go in [`docs/research/`](docs/research/): units, solvers, undo, printing, the PWA and the Obsidian plugin. The acceptance sheet and its independent reference calculation are in [`docs/acceptance/`](docs/acceptance/).
 
-## Project Structure
+## Architecture
+
+Excalimathpad is a **non-destructive wrapper**. Excalidraw owns the scene, selection, moving and undo. Each math element is anchored to an ordinary Excalidraw rectangle that stores its source in `customData` ([ADR 0002](docs/adr/0002-math-elements-anchor-to-excalidraw-rectangles.md)). The math is drawn in an overlay above the canvas.
+
+It wraps the official `@excalidraw/excalidraw` component, never a fork ([ADR 0001](docs/adr/0001-wrap-excalidraw-unforked.md)), and evaluates with [math.js](https://mathjs.org) entirely on the client. There is no server. One source builds two homes ([ADR 0006](docs/adr/0006-plugin-bundles-the-app-from-one-source.md)): the web app, as static files that save sheets to your disk, and the Obsidian plugin, which opens sheets from a vault in its own tab.
 
 ```
 src/
-├── App.tsx       Composition root
-├── shell/        Layout slots: canvas, overlay, side panel
-├── canvas/       Everything that knows Excalidraw
-├── math/         The engine: evaluateSheet, units, solve, lists, tables, plots, TeX
-├── overlay/      Typeset grids, the line edit, gestures, unit slot, suggestions
-├── panel/        Sheet panel tabs: Format, Symbols, Variables, Problems, Constants, Settings
-├── file/         The .excalimathpad file, save, open, recovery copy
-├── guide/        The Math guide: docs/math-guide.md as elements, and its dialog
-└── test/         jsdom stubs and helpers (not app code)
-plugin/           The Obsidian plugin: the only code that imports `obsidian`
-└── test/         The fake `obsidian`, the plugin's tests and the pump sheet fixture
-scripts/          The plugin's bundle audit, its browser runs and the version step
+├── main.tsx          The web entry: mounts App
+├── App.tsx           Composition root: wires the file, canvas, overlay and panel
+├── shell/            Full-viewport layout: canvas, overlay and side-panel slots
+├── canvas/           Everything that knows Excalidraw: anchors, Add math, the ☰ menu,
+│                     More tools items, sizes, selection, scene (de)serialisation
+├── math/             The engine: evaluateSheet(blocks) → one result per line.
+│                     The only module that imports math.js. Units, solve, lists,
+│                     tables, plots, typesetting to TeX
+├── overlay/          Typeset grids over the canvas, the line edit, gestures,
+│                     unit slot, suggestions, hover tips, plot drawing
+├── panel/            Sheet panel tabs: Format, Symbols, Variables, Problems,
+│                     Constants, Settings
+├── file/             The .excalimathpad file: save, open, recovery copy, migrations
+├── guide/            The Math guide: docs/math-guide.md as elements, and its dialog
+└── test/             jsdom stubs and helpers for tests against real Excalidraw
+plugin/               The Obsidian plugin: the only code that imports `obsidian`
+└── test/             The fake `obsidian`, the plugin's tests and the pump sheet fixture
+scripts/              The plugin's bundle audit, its browser runs and the version step
 docs/
-├── spec-v1.md    The v1 spec
-├── math-guide.md The Math guide, for users, shown in the app
-├── adr/          Architecture decision records
-├── research/     Investigations behind decisions
-└── acceptance/   The pump-sizing acceptance sheet and its Python reference
+├── spec-v1.md        The v1 spec
+├── math-guide.md     The Math guide, for users, shown in the app
+├── adr/              Architecture decision records
+├── research/         Investigations behind decisions
+└── acceptance/       The pump-sizing acceptance sheet and its Python reference
 ```
 
+### How it works
+
+1. **Anchor.** Placing a math element creates an Excalidraw rectangle tagged `customData.kind = "math"`. Its `customData.source` is the only stored copy of the math.
+2. **Reading order.** On every change, the overlay sorts the anchors top to bottom, then left to right ([ADR 0003](docs/adr/0003-sheet-evaluates-in-reading-order-in-one-scope.md)).
+3. **Evaluation.** `evaluateSheet` runs every line in one fresh scope. It never throws, and a failed line does not stop the lines after it.
+4. **Overlay.** Each element is drawn over its anchor's scene position as a KaTeX grid, and the anchor's size is kept equal to the grid's. These size writes and style restorations add no undo step.
+5. **Line commit.** Leaving an edited line writes the element's whole source once, as one undo step on Excalidraw's own stack.
+6. **File.** The scene is saved as Excalidraw JSON plus an `excalimathpad` block for settings and the format version ([ADR 0004](docs/adr/0004-sheet-file-is-excalidraw-json-plus-a-block.md)). Older files are upgraded on open, and files from a newer version are refused. In a vault, the plugin's view saves through Obsidian in place of the web app's file access and recovery copy.
+
 [`CONTEXT.md`](CONTEXT.md) describes each module's interface and what it depends on.
+
+## Tech Stack
+
+| Concern | Library | Why |
+|---|---|---|
+| Whiteboard | [`@excalidraw/excalidraw`](https://www.npmjs.com/package/@excalidraw/excalidraw) 0.18 | The canvas, tools, selection and undo, wrapped and never forked |
+| Evaluation and units | [math.js](https://mathjs.org) 15 | Safe expression parsing with a full unit system. The app closes every route an expression could use to change the shared instance |
+| Typesetting | [KaTeX](https://katex.org) 0.16 | Fast, synchronous TeX to HTML, loaded lazily |
+| Plots | [Observable Plot](https://observablehq.com/plot/) 0.6 | Declarative SVG charts, loaded only when a sheet has a plot |
+| UI | React 19 | Matches Excalidraw's own stack |
+| Build | Vite 8 + TypeScript 6; esbuild for the plugin | Fast HMR and a static web build with relative URLs; the plugin as one `main.js` and one `styles.css` |
+| Quality | Vitest 5 (jsdom), Testing Library, oxlint, `eslint-plugin-obsidianmd`, Playwright's Chromium | Tests run against the real Excalidraw component; the built plugin runs in a headless browser |
+| Hosting | Cloudflare Pages | Deployed by CI from the exact build that passed |
 
 ## Engineering Rules
 
@@ -167,6 +202,26 @@ A new pull request starts from [the template](.github/pull_request_template.md):
 
 A merge to `main` deploys to <https://excalimathpad.pages.dev>. Pull requests never deploy.
 
+## Build and Deploy
+
+`dist/` is plain static files with relative asset URLs. You can serve it from any static host or sub-path: GitHub Pages, Netlify, an S3 bucket or a local folder server. There is no backend. `dist-plugin/` holds the plugin's three files; the [Release workflow](#releasing) attaches them to a release.
+
+### The hosted build
+
+A push to `main` that passes `npm run check` publishes that run's `dist/` to Cloudflare Pages, through the `deploy` job in [`.github/workflows/ci.yml`](.github/workflows/ci.yml). Pull requests deploy nothing. The job is skipped until the repository has:
+
+- the Actions **variable** `CLOUDFLARE_PAGES_PROJECT`, the name of the Pages project. It must be a direct-upload project, created in Cloudflare first;
+- the Actions **secrets** `CLOUDFLARE_API_TOKEN` (with permission to edit Pages) and `CLOUDFLARE_ACCOUNT_ID`.
+
+To check the two secrets from a terminal:
+
+1. Set them as environment variables.
+2. Run `npx wrangler@4 pages project list`. It should list the project.
+
+`wrangler whoami` fails with a token that can only edit Pages, so it is not a useful check.
+
+The ☰ menu's last line shows the build stamp: the short commit and date (`389dd51 · 2026-11-12`), or `dev` for a build made outside CI.
+
 ## Releasing
 
 The web app and the Obsidian plugin share **one version**, from `package.json` ([spec section 12a](docs/spec-v1.md#releases)). The hosted web app still deploys on every push to `main`; the plugin moves only when the maintainer releases it.
@@ -188,20 +243,38 @@ The web app and the Obsidian plugin share **one version**, from `package.json` (
 - [ ] The device checklist, on an iPhone, an iPad, an Android phone and an Android tablet, before the first release with `isDesktopOnly: false` and before any release that changes touch, panel or overlay code (otherwise say in the notes that it was skipped): open a sheet from the vault; Add math from More tools, then a tap; double-tap a line and the title, and see the keyboard come up; Done, ↑ ↓ and Edit; format, with a rule; Symbols and the quick keys; a tap's tip, and the unit slots and ⚙ a touch selection shows; save, close and reopen; a sync round trip; on a phone, the bottom sheet stays above the keyboard
 - [ ] Write each device's result, with the device and OS versions, in the release notes. If any device failed, don't publish: set `isDesktopOnly: true` in `manifest.json` and release again
 
+## Roadmap
+
+v1 is built in milestones ([spec section 16](docs/spec-v1.md#16-milestones-and-finish-line)). M1 to M4c are built, and M4d is being finished. The web app targets Chrome and Edge on desktop; the plugin targets Obsidian 1.7.2 or later.
+
+- [x] **M0 Spike.** Live recalculation across math elements.
+- [x] **M1 Keepable sheet.** Typeset lines, line-by-line editing, undo, save and open, recovery copy.
+- [x] **M2 Units & panel.** App units, number format, unit systems, display units, warnings, the Sheet panel, the unit slot.
+- [x] **M3 Solve.** Solve for a value, solve functions, nested solves, solve details on hover.
+- [x] **M4 Ranges & plots.** Ranges and lists, tables, plots, plot settings.
+- [x] **M4b Hosted build.** Deployed to Cloudflare Pages on merge, with a build stamp.
+- [x] **M4c Improvements.** Range solve for every root, indexing, text colours, conditional formats, chosen width, title format.
+- [ ] **M4d Plugin & panel.** The Obsidian plugin on desktop, phone and tablet; the Format, Rules and Symbols tabs; checks with `if()` and text; comment-line formats; the Math guide; the community listing.
+- [ ] **M5 Print.** Print the sheet to clean PDF pages.
+- [ ] **M6 Offline PWA.** Install the app, work offline, open a `.excalimathpad` file from the desktop.
+
+**v1 is done** when all three hold:
+
+1. The [pump sheet](docs/acceptance/pump-sizing.md) passes steps 1-4.
+2. The installed PWA opens a `.excalimathpad` file and works offline.
+3. It has been used for one real calculation other than the pump sheet.
+
+What v1 deliberately leaves out is listed in [spec section 1](docs/spec-v1.md#1-what-v1-is-and-what-it-isnt). The roadmap follows the maintainer's own engineering work.
+
 ## Reporting Issues
 
-Use [GitHub Issues](https://github.com/matheus-sancha/excalimathpad/issues) to report bugs or request features. Please include:
+Support is free and best effort, with no response time. Open an issue from one of the two [forms](https://github.com/matheus-sancha/excalimathpad/issues/new/choose); blank issues are off.
 
-- **For bugs:**
-  - the sheet lines that show the problem (or the `.excalimathpad` file);
-  - the steps to reproduce it;
-  - what you expected and what you saw;
-  - your browser and OS;
-  - the build stamp from the last line of the ☰ menu.
-- **For features:**
-  - the calculation you are trying to do;
-  - what is missing;
-  - the approach you propose, if you have one.
+- **[Bug](https://github.com/matheus-sancha/excalimathpad/issues/new?template=bug.yml):** the version from the last line of the ☰ menu, the home (Obsidian or the browser), the device, and the steps, with the sheet lines that show the problem. Attach a `.excalimathpad` file only if it holds nothing confidential.
+- **[Idea](https://github.com/matheus-sancha/excalimathpad/issues/new?template=idea.yml):** the calculation you are trying to do, what is missing, and the approach you propose, if you have one.
+- **A security problem** goes through private vulnerability reporting, never an issue: see [SECURITY.md](SECURITY.md).
+
+The forms live in [`.github/ISSUE_TEMPLATE/`](.github/ISSUE_TEMPLATE/).
 
 ## Code of Conduct
 
