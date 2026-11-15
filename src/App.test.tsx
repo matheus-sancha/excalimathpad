@@ -259,6 +259,46 @@ describe('App', () => {
     })
   })
 
+  // jsdom applies no stylesheet: the mark is pinned here, the text it shows in
+  // the touch run (`scripts/touch-run.mjs`), in Chromium.
+  describe('the hint for one math element (docs/spec-v1.md section 4, Touch)', () => {
+    const onInputs = { clientX: 200, clientY: 130 }
+    /** A press and release as a finger makes them; as on iOS, no click follows. */
+    const tapOnCanvas = (point: { clientX: number; clientY: number }) => {
+      const canvas = document.querySelector('canvas.interactive')!
+      const event = { ...point, button: 0, pointerId: 2, pointerType: 'touch', isPrimary: true }
+      act(() => {
+        fireEvent.pointerDown(canvas, { ...event, buttons: 1 })
+      })
+      act(() => {
+        fireEvent.pointerUp(canvas, event)
+      })
+    }
+    const marked = () => document.querySelector<HTMLElement>('[data-math-selection="one"]')
+
+    it('names the taps after a touch press, and the keys again after a mouse press', async () => {
+      renderApp({ initialElements: sampleSheet() })
+      await ready()
+      await screen.findAllByRole('list', { name: 'Lines' })
+
+      clickOnCanvas(onInputs)
+      await waitFor(() => expect(marked()).not.toBeNull())
+      expect(marked()!.dataset.mathTouch).toBeUndefined()
+
+      tapOnCanvas(onInputs)
+      await waitFor(() => expect(marked()?.dataset.mathTouch).toBe(''))
+      expect(marked()!.style.getPropertyValue('--math-hint-touch')).toBe(
+        JSON.stringify('Double-tap a line, or tap Edit in Math settings'),
+      )
+
+      clickOnCanvas(onInputs)
+      await waitFor(() => expect(marked()?.dataset.mathTouch).toBeUndefined())
+      expect(marked()!.style.getPropertyValue('--math-hint')).toBe(
+        JSON.stringify('Double-click a line or press Enter to edit'),
+      )
+    })
+  })
+
   describe('Math settings (docs/spec-v1.md section 8)', () => {
     const sheetButton = async () => {
       await openMoreTools()

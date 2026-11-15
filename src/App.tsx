@@ -436,6 +436,7 @@ export default function App({ files, recovery, panelMemory, vault, initialElemen
           vault={!!vault}
           theme={vault?.theme}
           phone={phone}
+          touch={touch}
           imageTool={imageTool ?? undefined}
           fileMenu={fileMenu ?? undefined}
           sheetPanel={{

@@ -994,12 +994,15 @@ that hovers keeps hover.
   Symbols tab's rules, one Ctrl+Z step each: `_ ^ ) ,` tight, `= * / ..` spaced, the quotes a
   pair with the caret between. `(` wraps a selection and otherwise types only itself, since
   `)` is its own key.
+- **The canvas hint** for one selected math element reads "Double-tap a line, or tap Edit in
+  Math settings" after a touch press, and the desktop wording again after a mouse or pen press
+  ([Selected math element](#selected-math-element)).
 
 ### Selected math element
 
 | Selection | Panel | Hint |
 |---|---|---|
-| One math element | Opacity, Layers, Actions | "Double-click a line or press Enter to edit" |
+| One math element | Opacity, Layers, Actions | "Double-click a line or press Enter to edit"; after a touch press, "Double-tap a line, or tap Edit in Math settings" |
 | Several math elements | Opacity, Layers, Align, Actions | Excalidraw's own |
 | Math and drawings | Excalidraw's full panel; opacity reaches the math, other styles only the drawings | Excalidraw's own |
 
@@ -2236,7 +2239,7 @@ The wording of every user-facing message. `<…>` is filled in. Numbers follow
 | Opening with unsaved changes | `Save changes to pump-sizing.excalimathpad?` Save, Don't save, Cancel | M1 |
 | A save that fails | `Couldn't save pump-sizing.excalimathpad: <reason>` | M1 |
 | The picker or the file read fails | `Couldn't open the file: <reason>` | M1 |
-| Hint, one math element selected | `Double-click a line or press Enter to edit` | M1 |
+| Hint, one math element selected | `Double-click a line or press Enter to edit` (on touch: `Double-tap a line, or tap Edit in Math settings`, M4d) | M1 |
 | Browser's Print with an empty cache | `Use Print… from the app's menu` | M5 |
 
 **Panel** (M4d)
@@ -2804,6 +2807,8 @@ Changes line if it changes behaviour.
   Opacity, Layers, Actions; two showed Align too; a drawing, and math with a drawing, showed the full panel.
   `.HintViewer` holds one `<span>`; hiding it and showing the app's text in `::after` put the hint in
   Excalidraw's own place. With several elements selected Excalidraw shows no hint, so nothing is replaced.
+  On touch a second rule, under the canvas's `data-math-touch`, shows the touch wording in the same place;
+  the touch run reads the computed `::after` at a phone and a tablet, as Android and as iOS.
 - Restoring style with `NEVER` from `onChange`: paste styles on math alone may leave an empty undo entry.
   **Passed (#46), in jsdom on the real Excalidraw:** it leaves none. Without the restore, paste styles changed
   the anchor and added one undo step; with it, the anchor kept its style and the paste added no step, and undo
@@ -3696,3 +3701,11 @@ Changes line if it changes behaviour.
   - **Obsidian's lint flags the lookbehind test** once `isDesktopOnly` is `false`
     (`obsidianmd/regex-lookbehind`): `hasLookbehind` builds `(?<=a)b` on purpose, so it is a named exception in
     `eslint.config.mjs`. The community scanner may flag it too; that is for the preview scan (section 17).
+- 2026-11-15, [sections 4](#touch), [13](#13-messages) and [17](#17-verify-first) (found while building
+  #147, proposed by the Engineer, for Matheus to confirm on the PR): **on touch the canvas hint names the taps.**
+  With one math element selected, the hint under Excalidraw's toolbar read "Double-click a line or press Enter
+  to edit" on every device. After a touch press it now reads "Double-tap a line, or tap Edit in Math settings":
+  the double tap of [Touch](#touch), and the Format tab's **Edit**, whose panel Math settings opens. It differs
+  from the Format tab's touch hint ("Double-tap a line, or tap Edit") only in naming where Edit is, since the
+  canvas hint shows while the panel may be closed. A mouse or pen press brings back the desktop wording, by the
+  same last-press rule. Section 17's hint check gains the touch rule, read in the touch run.
