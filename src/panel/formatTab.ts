@@ -1,6 +1,6 @@
 import type { TitleFormat } from '../canvas/mathAnchor.ts'
-import type { SheetLine } from '../math/evaluate.ts'
-import { readLine, type CommentFormat, type FormatWord, type LineFormat } from '../math/lineForm.ts'
+import type { RuleState, SheetLine } from '../math/evaluate.ts'
+import { readLine, type CommentFormat, type FormatRule, type FormatWord, type LineFormat } from '../math/lineForm.ts'
 import { elementLabel, type PanelElement } from './sheetPanel.ts'
 
 /**
@@ -43,6 +43,12 @@ export type FormatView =
       format: LineFormat
       /** "A rule sets the text colour while v > 3 m/s.", one per property a true rule wins. */
       overrides: string[]
+      /** The line's rules as typed, for the Rules list (section 4, Rules list). */
+      rules: readonly FormatRule[]
+      /** Each rule's live state; null while the evaluation hasn't caught up with the typed rules. */
+      ruleStates: readonly RuleState[] | null
+      /** What + Add rule names: the name the line defines, `result` with none, null on a table line. */
+      ruleName: string | null
     })
   | (Open & { kind: 'comment'; line: SheetLine | null; format: CommentFormat })
   /** A blank line, or a clause with no comment text: it takes no format. */
@@ -72,6 +78,9 @@ export function formatView(sheet: readonly FormatElement[], target: FormatTarget
         line,
         format: form.format,
         overrides: overrides(form.rules, line?.ruleTruth ?? []),
+        rules: form.rules,
+        ruleStates: line && line.ruleStates.length === form.rules.length ? line.ruleStates : null,
+        ruleName: line?.table ? null : (line?.variables[0]?.name ?? 'result'),
       }
     case 'comment':
       return { kind: 'comment', anchorId, caption: `Comment line — ${where}`, link, text, line, format: form.format }
@@ -92,13 +101,15 @@ const PROPERTIES: Record<FormatWord['kind'], string> = {
  * property, the first true rule that sets it wins, as the sheet draws it.
  * Nothing while the evaluation hasn't caught up with the typed rules.
  */
-function overrides(rules: readonly { word: FormatWord; condition: string }[], truth: readonly boolean[]): string[] {
+function overrides(rules: readonly FormatRule[], truth: readonly boolean[]): string[] {
   if (truth.length !== rules.length) return []
   const decided = new Set<FormatWord['kind']>()
   return rules.flatMap((rule, index) => {
-    if (!truth[index] || decided.has(rule.word.kind)) return []
-    decided.add(rule.word.kind)
-    return [`A rule sets ${PROPERTIES[rule.word.kind]} while ${rule.condition}.`]
+    if (!truth[index]) return []
+    // A joined word sets each of its properties.
+    const won = [...new Set(rule.words.map(({ kind }) => kind))].filter((kind) => !decided.has(kind))
+    won.forEach((kind) => decided.add(kind))
+    return won.map((kind) => `A rule sets ${PROPERTIES[kind]} while ${rule.condition}.`)
   })
 }
 

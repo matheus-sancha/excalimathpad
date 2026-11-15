@@ -392,6 +392,7 @@ const EMPTY_LINE: SheetLine = {
   table: null,
   plot: null,
   ruleTruth: [],
+  ruleStates: [],
 }
 
 /** A row's cells, by line form (section 3, section 4 Problems). */

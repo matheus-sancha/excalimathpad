@@ -18,7 +18,7 @@
   (#109) are built.
   2026-11-14 (M4d; #119, #123, #132): a comment line's format clause, joined
   words, `if()` and the one-statement check. `if()` and the one-statement check are built
-  (#140), and the comment line's format (#142); joined words are not.
+  (#140), the comment line's format (#142) and joined words (#145).
 - **Date**: 2026-11-03
 
 ## Context
@@ -57,7 +57,7 @@ Amended on 2026-11-13 for M4c, decided by Matheus (#92, #94):
   sees them.
 
 Amended on 2026-11-14 for M4d, decided by Matheus (#119, #123, #132). Step 6 and `if()` built
-(#140), and step 1's comment format (#142); joined words not built:
+(#140), step 1's comment format (#142) and step 2's joined words (#145):
 
 - **Step 1 stays first, and a comment line can carry a format.** A line whose code is only a
   format clause, with comment text after the `#`, is a formatted comment line:
@@ -67,7 +67,8 @@ Amended on 2026-11-14 for M4d, decided by Matheus (#119, #123, #132). Step 6 and
   comment's format, or a blank line when no text follows the `#`; the clause's first problem
   is the line's error, which defines nothing, so no line below fails.
 - **Step 2 reads joined words:** `@text-red+red+bold` is one word, and one rule when an `if`
-  follows. Rules typed as separate words stay valid and are never rewritten.
+  follows. Rules typed as separate words stay valid and are never rewritten. As built (#145):
+  a comment line's clause reads joined words too (`@bold+L # Pumps`).
 - **6. One statement:** a `;` at the top level of what is left is the line's error, so a line
   stays one statement. A `;` inside brackets is math.js's matrix row.
 - **`if(cond, a, b)`** is an app function given at setup, lazy (`rawArgs`), so it is not a line

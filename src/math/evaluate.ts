@@ -356,7 +356,20 @@ export interface SheetLine {
    * The Format tab names the rule that sets a property (M4d).
    */
   ruleTruth: readonly boolean[]
+  /** Each rule's live state, in the order typed, for the Rules list (section 4, M4d). */
+  ruleStates: readonly RuleState[]
 }
+
+/**
+ * A rule's live state (section 4, Rules list): true or false on a single
+ * value, overridden when every property it sets is won by a true rule above,
+ * how many points or rows it holds on a list or a table, or the warning that
+ * skipped it.
+ */
+export type RuleState =
+  | { kind: 'true' | 'false' | 'overridden' }
+  | { kind: 'count'; count: number; of: number; unit: 'points' | 'rows' }
+  | { kind: 'warning'; message: string }
 
 /** A table as the grid draws it: its columns, then every row, one cell per column. */
 export interface TableView {
@@ -633,6 +646,7 @@ export function evaluateSheet(
           table,
           plot,
           ruleTruth: ruled?.truth ?? [],
+          ruleStates: ruled?.states ?? [],
         }
       }),
     )
@@ -652,14 +666,26 @@ export function evaluateSheet(
     line: ParsedLine,
     result: LineResult,
     here: number,
-  ): { format: LineFormat; warnings: string[]; counts: string[]; truth: boolean[] } | null {
+  ): { format: LineFormat; warnings: string[]; counts: string[]; truth: boolean[]; states: RuleState[] } | null {
     if (line.kind === 'blank' || line.kind === 'syntax-error' || line.rules.length === 0) return null
-    if (result.kind === 'error') return { format: line.format, warnings: [], counts: [], truth: line.rules.map(() => false) }
+    const none = () => line.rules.map(() => false)
+    if (result.kind === 'error') {
+      return { format: line.format, warnings: [], counts: [], truth: none(), states: none().map(() => ({ kind: 'false' })) }
+    }
     const warnings: string[] = []
+    // The first warning that skipped each rule: its row shows it (section 4, Rules list).
+    const skippedFor: (string | null)[] = line.rules.map(() => null)
     const warn = (rule: FormatRule, message: string) => {
       const text = `if ${rule.condition}: ${message}`
       if (!warnings.includes(text)) warnings.push(text)
+      const index = line.rules.indexOf(rule)
+      skippedFor[index] ??= message
     }
+    const counted = (counts: readonly number[], of: number, unit: 'points' | 'rows') =>
+      counts.map((count, index): RuleState => {
+        const message = skippedFor[index]
+        return message === null ? { kind: 'count', count, of, unit } : { kind: 'warning', message }
+      })
     const conditions = line.rules.map((rule) => {
       try {
         if (rule.condition === '') throw new SheetError('not true or false')
@@ -724,6 +750,7 @@ export function evaluateSheet(
         if (condition?.usesResult) skip(index, 'a table has no result; use its list names')
       })
       const length = view.rows.length
+      const rowCounts = line.rules.map(() => 0)
       table = {
         ...view,
         rowFormats: Array.from({ length }, (_, i) => {
@@ -731,10 +758,13 @@ export function evaluateSheet(
             const own = pointOf(index, i, length)
             return own !== null && decide(index, own)
           })
+          truth.forEach((isTrue, index) => {
+            if (isTrue) rowCounts[index]++
+          })
           return truth.some(Boolean) ? resolveRules(NO_FORMAT, line.rules, truth) : null
         }),
       }
-      return { format: line.format, warnings, counts: [], truth: line.rules.map(() => false) }
+      return { format: line.format, warnings, counts: [], truth: none(), states: counted(rowCounts, length, 'rows') }
     }
 
     const value = lineValue
@@ -752,7 +782,13 @@ export function evaluateSheet(
       const shown = line.rules.flatMap((rule, index) =>
         conditions[index] === null || conditions[index].skipped ? [] : [`${rule.text}: ${counts[index]} of ${length} points`],
       )
-      return { format: resolveRules(line.format, line.rules, truth), warnings, counts: shown, truth }
+      return {
+        format: resolveRules(line.format, line.rules, truth),
+        warnings,
+        counts: shown,
+        truth,
+        states: counted(counts, length, 'points'),
+      }
     }
 
     const single = value !== undefined && typeof value !== 'function'
@@ -763,7 +799,13 @@ export function evaluateSheet(
       }
       return decide(index, single ? new Map<string, unknown>([['result', value]]) : new Map<string, unknown>())
     })
-    return { format: resolveRules(line.format, line.rules, truth), warnings, counts: [], truth }
+    const overridden = overriddenRules(line.rules, truth)
+    const states = truth.map((isTrue, index): RuleState => {
+      const message = skippedFor[index]
+      if (message !== null) return { kind: 'warning', message }
+      return { kind: !isTrue ? 'false' : overridden[index] ? 'overridden' : 'true' }
+    })
+    return { format: resolveRules(line.format, line.rules, truth), warnings, counts: [], truth, states }
   }
 
   /** Read right after the line ran: a failed line has removed its names. */
@@ -1397,18 +1439,35 @@ function isText(value: unknown): boolean {
   return isSheetList(value) && value.points.some((point) => point.ok && typeof point.value === 'string')
 }
 
-/** The plain format with the first true rule applied for each property it sets (section 3, A rule). */
+/** The property a format word sets. */
+const property = (word: FormatWord) => (word.kind === 'highlight' ? 'color' : word.kind === 'text' ? 'textColor' : word.kind)
+
+/**
+ * The plain format with the first true rule applied for each property it sets
+ * (section 3, A rule). A joined word sets each of its properties, the last
+ * part winning where it names one twice.
+ */
 function resolveRules(plain: LineFormat, rules: readonly FormatRule[], truth: readonly boolean[]): LineFormat {
-  const property = (word: FormatWord) => (word.kind === 'highlight' ? 'color' : word.kind === 'text' ? 'textColor' : word.kind)
   const decided = new Set<string>()
   let format = plain
   rules.forEach((rule, index) => {
-    const key = property(rule.word)
-    if (decided.has(key) || !truth[index]) return
-    decided.add(key)
-    format = applyFormatWord(format, rule.word)
+    if (!truth[index]) return
+    const open = rule.words.filter((word) => !decided.has(property(word)))
+    format = open.reduce(applyFormatWord, format)
+    rule.words.forEach((word) => decided.add(property(word)))
   })
   return format
+}
+
+/** Which true rules set nothing of their own: every property they set is won by a true rule above. */
+function overriddenRules(rules: readonly FormatRule[], truth: readonly boolean[]): boolean[] {
+  const decided = new Set<string>()
+  return rules.map((rule, index) => {
+    if (!truth[index]) return false
+    const overridden = rule.words.every((word) => decided.has(property(word)))
+    rule.words.forEach((word) => decided.add(property(word)))
+    return overridden
+  })
 }
 
 function typesetLine(line: ParsedLine, names: Names): TypesetLine {

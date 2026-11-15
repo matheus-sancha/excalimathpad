@@ -167,6 +167,9 @@ function WithFormatTab({ props }: { props: MathOverlayProps }) {
       props.focusCanvas()
     },
     edit: (anchorId) => control.current?.openLast(anchorId),
+    setRules: (rows) => control.current?.setRules(rows),
+    caretToRule: (index) => control.current?.caretToRule(index),
+    addRule: (name) => control.current?.addRule(name),
   }
   return (
     <>
@@ -1815,6 +1818,125 @@ describe('the Format tab (docs/spec-v1.md section 4, Format tab, M4d)', () => {
     expect(titleFormatOf(scene)).toBe('regular italic XL yellow')
     fireEvent.keyDown(titleField()!, { key: 'Escape' })
     expect(scene.elementOf('m1').customData?.title).toBe('Pump @ 50 Hz #2')
+  })
+
+  // Section 4, Rules list (M4d): a math line's rules, under the tab's rows.
+  describe('the Rules list', () => {
+    const RULES = 'v = 4 m/s @text-red if v > 3 m/s @red if v > 1 m/s @bold if v > 9 m/s # speed'
+    const list = () => within(tab()).getByRole('region', { name: 'Rules' })
+    const rows = () => within(list()).queryAllByRole('listitem')
+    const states = () => rows().map((row) => row.querySelector('.sheet-rules__state')?.textContent)
+    const inList = (name: string | RegExp) => within(list()).getByRole('button', { name })
+    const ruleFormat = (n: number) => within(list()).getByRole('group', { name: `Rule ${n} format` })
+
+    it('shows one row per rule in the line’s order, each with its live state; none on a comment line', () => {
+      withTab(`${RULES}\n# Pumps`)
+      openLine(1)
+
+      expect(list()).toHaveTextContent('first true wins, top to bottom')
+      expect(rows().map((row) => row.getAttribute('aria-label'))).toEqual([
+        'Rule 1: @text-red if v > 3 m/s',
+        'Rule 2: @red if v > 1 m/s',
+        'Rule 3: @bold if v > 9 m/s',
+      ])
+      expect(states()).toEqual(['true', 'true', 'false'])
+
+      openLine(2)
+      expect(within(tab()).queryByRole('region', { name: 'Rules' })).toBeNull()
+    })
+
+    it('shows points on a list line, rows on a table line, overridden, and a skipped rule’s warning', () => {
+      withTab('x = 1 .. 30 @red if x > 18\ntable(x) @yellow if x > 26\nv = 4 @red if v > 3 @red if v > 1 @bold if w > 1')
+      openLine(1)
+      expect(states()).toEqual(['12 of 30 points'])
+      openLine(2)
+      expect(states()).toEqual(['4 of 30 rows'])
+      openLine(3)
+      expect(states()).toEqual(['true', 'true, overridden', '⚠ Undefined symbol w'])
+    })
+
+    it('a press on one rule’s format rewrites only that rule, as one joined word, one line commit, the line kept open', () => {
+      const { scene } = withTab(RULES)
+      openLine(1)
+
+      expect(press(inList('Format of rule 2')).defaultPrevented).toBe(true)
+      press(within(ruleFormat(2)).getByRole('button', { name: 'Text blue' }))
+
+      expect(scene.sourceOf('m1')).toBe('v = 4 m/s @text-red if v > 3 m/s @text-blue+red if v > 1 m/s @bold if v > 9 m/s # speed')
+      expect(scene.sourceWrites()).toBe(1)
+      expect(openField()).toHaveFocus()
+      // Its controls stay open on the rewritten line.
+      press(within(ruleFormat(2)).getByRole('button', { name: 'Bold (Ctrl+B)' }))
+      expect(scene.sourceOf('m1')).toBe('v = 4 m/s @text-red if v > 3 m/s @text-blue+red+bold if v > 1 m/s @bold if v > 9 m/s # speed')
+    })
+
+    it('a rule’s last property can’t be taken off: its none is disabled, and the pressed one stays', () => {
+      const { scene } = withTab(RULES)
+      openLine(1)
+
+      press(inList('Format of rule 1'))
+      expect(within(ruleFormat(1)).getByRole('button', { name: 'No text colour' })).toBeDisabled()
+      press(within(ruleFormat(1)).getByRole('button', { name: 'Text red' }))
+      press(inList('Format of rule 3'))
+      expect(within(ruleFormat(3)).getByRole('button', { name: 'Bold (Ctrl+B)' })).toBeDisabled()
+      expect(within(ruleFormat(3)).getByRole('button', { name: 'No highlight' })).toBeEnabled()
+      expect(scene.sourceWrites()).toBe(0)
+    })
+
+    it('↑ ↓ reorder and ✕ removes, keeping every rule as typed', () => {
+      const { scene } = withTab(RULES)
+      openLine(1)
+
+      press(inList('Move rule 3 up'))
+      expect(scene.sourceOf('m1')).toBe('v = 4 m/s @text-red if v > 3 m/s @bold if v > 9 m/s @red if v > 1 m/s # speed')
+      expect(inList('Move rule 1 up')).toBeDisabled()
+      press(inList('Remove rule 1'))
+      expect(scene.sourceOf('m1')).toBe('v = 4 m/s @bold if v > 9 m/s @red if v > 1 m/s # speed')
+      expect(scene.sourceWrites()).toBe(2)
+      expect(openField()).toHaveFocus()
+    })
+
+    it('a click on a condition puts the caret at its end; a press with the caret in a rule puts it back at that rule', () => {
+      withTab(RULES)
+      const field = openLine(1)
+      const endOf = (text: string) => openField()!.value.indexOf(text) + text.length
+
+      press(inList(/^Condition of rule 2/))
+      expect(field.selectionStart).toBe(endOf('@red if v > 1 m/s'))
+      expect(field).toHaveFocus()
+
+      press(inList('Move rule 2 up'))
+      expect(openField()!.selectionStart).toBe(endOf('@red if v > 1 m/s'))
+      expect(openField()!.value.indexOf('@red')).toBeLessThan(openField()!.value.indexOf('@text-red'))
+
+      // A caret in the code stays where it was.
+      openField()!.setSelectionRange(2, 2)
+      press(inList('Remove rule 3'))
+      expect(openField()!.selectionStart).toBe(2)
+    })
+
+    it('+ Add rule writes @text-red if <name> before the note, the caret after it, and opens its controls', () => {
+      const { scene } = withTab('v = 4 m/s # speed\n2 * 3\nx = 1 .. 4\ntable(x)')
+      openLine(1)
+
+      press(inList('+ Add rule'))
+      expect(openField()).toHaveValue('v = 4 m/s @text-red if v  # speed')
+      expect(openField()!.selectionStart).toBe('v = 4 m/s @text-red if v '.length)
+      expect(scene.sourceWrites()).toBe(1)
+      expect(ruleFormat(1)).toBeInTheDocument()
+
+      // The condition is typed in the line; the row follows it live.
+      type(openField()!, 'v = 4 m/s @text-red if v > 3 m/s # speed')
+      expect(states()).toEqual(['true'])
+      expect(sample()!.querySelector('.math-element__row')).toHaveClass('is-text-red')
+
+      openLine(2)
+      press(inList('+ Add rule'))
+      expect(openField()).toHaveValue('2 * 3 @text-red if result ')
+      openLine(4)
+      press(inList('+ Add rule'))
+      expect(openField()).toHaveValue('table(x) @text-red if ')
+    })
   })
 })
 

@@ -181,7 +181,13 @@ come, and their terms move in here as each M4d issue makes them true.
   (raw source). `lineForm.ts` (pure) reads a line's comment and its format clause
   (`@bold @text-red @yellow`, from the first `@` outside a string) before math.js
   sees it (ADR 0005), so a note or a format never reaches math.js. A word with
-  `if <condition>` is a rule (`FormatRule`, kept as typed); `writeFormat`
+  `if <condition>` is a rule (`FormatRule`: its `words`, condition, exact
+  `text` and its `start`/`end` in the line). From M4d (#145) a word can be
+  **joined**, `@text-red+red+bold`: one word, one rule with an `if`; a part
+  that isn't a format is `Unknown format @blod in @text-red+blod`. `writeRules`
+  writes a Rules list's `RuleRow`s (a row with its `text` is kept exactly; one
+  without is `ruleText`, one joined word and one condition) and
+  `writeNewRule` + Add rule's ` @text-red if <name> `; `writeFormat`
   composes the plain words back for the Format tab in a fixed order and keeps
   every rule, and `writeCommentFormat` a comment line's (`@bold @upright
   @underline @<size> @text-<name> @<highlight>`, M4d, #144); `caretAfterFormat`
@@ -201,7 +207,9 @@ come, and their terms move in here as each M4d issue makes them true.
   format (`resolveRules`), and the typeset format is the result;
   `SheetLine.ruleTruth` says which rules were true for the line's own row (on a
   list, at every point; never on a table), so the Format tab names the rule
-  that sets a property (#144). A condition
+  that sets a property (#144), and `SheetLine.ruleStates` is each rule's
+  live state for the Rules list (#145): true, false, overridden, a count of
+  points or rows, or the warning that skipped it. A condition
   that can't be decided is one warning per rule. On a list it runs per point
   (the summary takes the format only if all are true; the hover counts them);
   on a table, per row (`TableView.rowFormats`). `typeset.ts` is the
@@ -438,7 +446,9 @@ come, and their terms move in here as each M4d issue makes them true.
   sheet file commit the line (Ctrl+S keeps it open) or leave it (Open). From M4d (#143) the Sheet
   panel acts on it too: `setFormat`, `setCommentFormat` (#144),
   `setTitleFormat`, `moveTo('title' | 'first')`, `move('up' | 'down')` and
-  `openLast(anchorId)` (#144) and `insert(text)` (at the open field's caret, by
+  `openLast(anchorId)` (#144), `setRules(rows)`, `caretToRule(index)` and
+  `addRule(name)` (#145: a caret inside a rule follows it to its condition's
+  end, by each row's `from`) and `insert(text)` (at the open field's caret, by
   `execCommand('insertText')`, which keeps the field's Ctrl+Z), through the
   line relay (`createLineRelay<LineEditControl>`). `onEdit` reports what is
   open (`EditTarget`: anchor, line or `'title'`, text) on each change, and
@@ -539,7 +549,13 @@ come, and their terms move in here as each M4d issue makes them true.
   labelled row per property, every control a no-focus button; with nothing
   open, the hint, and Edit while one math element is selected. Its presses are
   `FormatActions`, which App maps onto the line relay; App holds what is open
-  (from `onEdit`) and the one selected math element (`mathSelection`).
+  (from `onEdit`) and the one selected math element (`mathSelection`). Its
+  rows are `formatControls.tsx` (`Row`, `Toggle`, `SizeRow`, `TextRow`,
+  `HighlightRow`, `PanelButton`; `locked` keeps a rule's last property).
+  **The Rules list** (#145, `RulesList.tsx`) sits under a math line's rows:
+  one row per rule (a chip in its format that opens its Text, Highlight and
+  Style rows, its condition, which puts the caret at its end, ↑ ↓ ✕ and its
+  live state), and + Add rule, whose new rule's controls open at once.
   `panelMemory.ts` is the `PanelMemory` port for the open/closed state
   (`localStorage` on the web, given by `src/main.tsx`). `SettingsTab.tsx`
   edits the unit system, Custom's kind → unit table, Digits and the Result
