@@ -1,6 +1,7 @@
 import {
   useEffect,
   useImperativeHandle,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -51,6 +52,7 @@ import {
 import { writeArgumentUnit } from '../math/tableLine.ts'
 import { writePlotClauses, type PlotClause } from '../math/plotLine.ts'
 import type { DisplaySettings } from '../math/display.ts'
+import type { SymbolInsert } from '../math/symbols.ts'
 import {
   applyLineMove,
   startLineEdit,
@@ -66,6 +68,7 @@ import { TEXT_COLOR_VALUES } from './textColors.ts'
 import { PlacingGhost } from './PlacingGhost.tsx'
 import { readingOrder } from './readingOrder.ts'
 import { constantSuggestions, FUNCTION_SUGGESTIONS, sheetNames, suggest, unitSuggestions } from './suggest.ts'
+import { isPlainAt, planInsert } from './symbolInsert.ts'
 
 /** The unit names offered while typing: fixed, so made once. */
 const UNIT_NAMES = unitSuggestions()
@@ -128,8 +131,14 @@ export interface LineEditControl {
   caretToRule(index: number): void
   /** + Add rule: ` @text-red if <name> ` after the clause, the caret after it; null names nothing (a table line). */
   addRule(name: string | null): void
-  /** Types `text` at the open field's caret, over its selection, as typing does: the field's Ctrl+Z takes it back. */
-  insert(text: string): void
+  /**
+   * A Symbols or Constants button (section 4, What a click inserts, M4d): types
+   * the insert at the open field's caret, by its mode, as typing does, so the
+   * field's Ctrl+Z takes it back. An open title or comment line takes it as
+   * plain text. With nothing open, `anchorId` (the one math element selected)
+   * opens its last line and inserts at its end; null does nothing.
+   */
+  insert(insert: SymbolInsert, anchorId?: string | null): void
 }
 
 /** A row of the Rules list, and the rule it was in the line before the press (null for none). */
@@ -244,6 +253,8 @@ export function MathOverlay({
     editRef.current = next
     setEdit(next)
   }
+  // An insert that opened a line waits for its field (section 4, With no line open).
+  const pendingInsert = useRef<SymbolInsert | null>(null)
 
   const typedSourceOf = (anchor: MathAnchor) =>
     edit?.anchorId === anchor.id ? withTypedLine(anchor.source, edit) : anchor.source
@@ -398,6 +409,26 @@ export function MathOverlay({
     if (anchor) changeEdit(startLineEdit(anchor.source, anchorId, lineIndex, anchor.title))
   }
 
+  /** Types an insert into the open field, the caret where its plan puts it. */
+  const typeInsert = (insert: SymbolInsert) => {
+    const field = openField(overlayRef.current)
+    const current = editRef.current
+    if (!field || !current) return
+    const value = field.value
+    const start = field.selectionStart ?? value.length
+    const plain = current.lineIndex === TITLE_LINE || isPlainAt(value, start)
+    const planned = planInsert(value, start, field.selectionEnd ?? start, insert, plain)
+    field.focus()
+    field.setSelectionRange(planned.from, planned.to)
+    // `insertText` keeps the field's own Ctrl+Z, as an accepted suggestion does;
+    // where it isn't there, the text is written and the field told.
+    if (!field.ownerDocument.execCommand?.('insertText', false, planned.text)) {
+      field.setRangeText(planned.text, planned.from, planned.to, 'end')
+      field.dispatchEvent(new Event('input', { bubbles: true }))
+    }
+    field.setSelectionRange(planned.caret, planned.caret)
+  }
+
   useImperativeHandle(control, () => ({
     // Saving during an edit writes what's on screen, and the field stays open.
     commitLine() {
@@ -462,18 +493,22 @@ export function MathOverlay({
       const { text, caret } = writeNewRule(current.text, name)
       rewriteLine(text, caret)
     },
-    insert(text) {
-      const field = openField(overlayRef.current)
-      if (!field) return
-      field.focus()
-      // `insertText` keeps the field's own Ctrl+Z, as an accepted suggestion does;
-      // where it isn't there, the text is written and the field told.
-      if (!field.ownerDocument.execCommand?.('insertText', false, text)) {
-        field.setRangeText(text, field.selectionStart ?? field.value.length, field.selectionEnd ?? field.value.length, 'end')
-        field.dispatchEvent(new Event('input', { bubbles: true }))
-      }
+    insert(insert, anchorId = null) {
+      if (editRef.current) return typeInsert(insert)
+      const anchor = anchorId === null ? undefined : findAnchor(anchorId)
+      if (!anchor) return
+      pendingInsert.current = insert
+      openLine(anchor.id, splitLines(anchor.source).length - 1)
     },
   }))
+
+  // After the field opened for an insert has mounted and put its caret at the
+  // end (its own layout effect runs first), the insert is typed into it.
+  useLayoutEffect(() => {
+    const insert = pendingInsert.current
+    pendingInsert.current = null
+    if (insert) typeInsert(insert)
+  })
 
   useSheetGestures({
     api,

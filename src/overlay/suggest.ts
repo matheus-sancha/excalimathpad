@@ -1,6 +1,7 @@
 import type { ConstantRowGroup, SheetLine } from '../math/evaluate.ts'
 import { APP_UNITS } from '../math/appUnits.ts'
 import { FORMAT_COLORS, readFormatWord, TEXT_COLORS } from '../math/lineForm.ts'
+import { SYMBOLS } from '../math/symbols.ts'
 import { KIND_LABELS, KINDS, NAMED_SI_UNITS, SI_PREFIXED, SLOT_UNITS, USCS } from '../math/unitSystems.ts'
 
 /**
@@ -232,50 +233,20 @@ export function constantSuggestions(groups: readonly ConstantRowGroup[]): Sugges
     )
 }
 
-const call = (name: string, detail: string): Suggestion => ({ name, kind: 'function', detail, insert: `${name}(` })
-const keyword = (name: string, detail: string): Suggestion => ({ name, kind: 'keyword', detail, insert: `${name} ` })
-
-/** The functions and line forms a line can use: math.js's everyday ones and the app's own. */
-export const FUNCTION_SUGGESTIONS: readonly Suggestion[] = [
-  keyword('solve', 'x = solve lhs = rhs, for x = 0 .. 10'),
-  keyword('for', 'a solve’s search range: for x = 0 .. 10'),
-  keyword('guess', 'a solve function’s starting value'),
-  keyword('step', 'a range’s step: 1 .. 10 step 0.5'),
-  call('plot', 'plot(x, y1, …)'),
-  call('table', 'table(a, b, …)'),
-  call('if', 'if(cond, a, b)'),
-  call('sqrt', 'square root'),
-  call('cbrt', 'cube root'),
-  call('nthRoot', 'nthRoot(x, n)'),
-  call('abs', 'absolute value'),
-  call('exp', 'e to the power x'),
-  call('log', 'natural logarithm, or log(x, base)'),
-  call('log10', 'base-10 logarithm'),
-  call('log2', 'base-2 logarithm'),
-  call('pow', 'pow(x, y)'),
-  call('sin', 'sine'),
-  call('cos', 'cosine'),
-  call('tan', 'tangent'),
-  call('asin', 'inverse sine'),
-  call('acos', 'inverse cosine'),
-  call('atan', 'inverse tangent'),
-  call('atan2', 'atan2(y, x)'),
-  call('sinh', 'hyperbolic sine'),
-  call('cosh', 'hyperbolic cosine'),
-  call('tanh', 'hyperbolic tangent'),
-  call('min', 'smallest value'),
-  call('max', 'largest value'),
-  call('sum', 'sum of a list'),
-  call('mean', 'mean of a list'),
-  call('count', 'number of values in a list'),
-  call('round', 'round(x) or round(x, digits)'),
-  call('floor', 'round down'),
-  call('ceil', 'round up'),
-  call('sign', 'sign: -1, 0 or 1'),
-  call('mod', 'mod(x, y)'),
-  call('hypot', 'hypot(a, b)'),
-  call('factorial', 'n!'),
-]
+/**
+ * The functions and line forms a line can use, built from the Symbols
+ * catalogue (section 4, Symbols tab, M4d), so the tab and the list can't
+ * drift: every entry spelled as a name, but the Greek letters, which are
+ * already shortest typed. A call inserts `sqrt(`; a keyword its word and a
+ * space (`solve `), or the bare word for `true` and `false`.
+ */
+export const FUNCTION_SUGGESTIONS: readonly Suggestion[] = SYMBOLS.filter(
+  (entry) => entry.group !== 'greek' && /^[A-Za-z]\w*$/.test(entry.spelling),
+).map(({ spelling, hint, insert }) =>
+  insert.mode === 'wrap'
+    ? { name: spelling, kind: 'function', detail: hint, insert: `${spelling}(` }
+    : { name: spelling, kind: 'keyword', detail: hint, insert: insert.mode === 'word' ? spelling : `${spelling} ` },
+)
 
 /**
  * The units as suggestions: every unit name the app's own lists use (the unit

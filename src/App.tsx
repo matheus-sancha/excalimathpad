@@ -21,7 +21,9 @@ import {
   type LineEditControl,
 } from './overlay/MathOverlay.tsx'
 import { sessionPanelMemory, type PanelMemory } from './panel/panelMemory.ts'
-import { ConstantsTab, ProblemsTab, SymbolsTab, VariablesTab } from './panel/SheetPanel.tsx'
+import { ConstantsTab, ProblemsTab, VariablesTab } from './panel/SheetPanel.tsx'
+import { SymbolsTab } from './panel/SymbolsTab.tsx'
+import type { SymbolInsert } from './math/symbols.ts'
 import { FormatTab, type FormatActions } from './panel/FormatTab.tsx'
 import { SettingsTab } from './panel/SettingsTab.tsx'
 import { DEFAULT_SETTINGS, type SheetSettings } from './file/sheetFormat.ts'
@@ -347,6 +349,11 @@ export default function App({ files, recovery, panelMemory, vault, initialElemen
     [line, canvas],
   )
 
+  // A Symbols or Constants button (section 4, Symbols tab): into the open line,
+  // else the one selected element's last line opens and takes it at its end.
+  const canInsert = editTarget !== null || selectedMath !== null
+  const insert = (symbol: SymbolInsert) => line.current?.insert(symbol, editTarget ? null : selectedMath)
+
   const jump = useCallback(
     (target: PanelTarget) => {
       if (!canvas) return
@@ -412,11 +419,11 @@ export default function App({ files, recovery, panelMemory, vault, initialElemen
                 actions={formatActions}
               />
             ),
-            symbols: <SymbolsTab />,
+            symbols: <SymbolsTab canInsert={canInsert} onInsert={insert} />,
             variables: <VariablesTab sheet={sheet ?? []} onJump={jump} />,
             problemsTab: <ProblemsTab sheet={sheet ?? []} onJump={jump} />,
             settings: file && <SettingsTab settings={settings} onChange={file.sheet.setSettings} />,
-            constants: <ConstantsTab settings={settings} />,
+            constants: <ConstantsTab settings={settings} canInsert={canInsert} onInsert={insert} />,
             // Remembered per home; a floating panel closes by itself, so
             // only a wide window's choice counts.
             onChange: (open, tab) => {

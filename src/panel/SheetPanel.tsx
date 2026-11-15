@@ -8,11 +8,12 @@ import {
   type PanelElement,
   type PanelTarget,
 } from './sheetPanel.ts'
+import { InsertButton, OPEN_A_LINE, type InsertProps } from './SymbolsTab.tsx'
 import './SheetPanel.css'
 
 /**
  * The Sheet panel's Variables, Problems and Constants tabs (docs/spec-v1.md
- * section 8); the Format tab is `FormatTab.tsx`.
+ * section 8); the Format tab is `FormatTab.tsx`, the Symbols tab `SymbolsTab.tsx`.
  * They render inside Excalidraw's sidebar, which `src/canvas/` draws; this
  * module knows no Excalidraw. A click on a row asks to jump to its line.
  */
@@ -20,15 +21,6 @@ import './SheetPanel.css'
 interface TabProps {
   sheet: readonly PanelElement[]
   onJump: (target: PanelTarget) => void
-}
-
-/** The Symbols tab (section 4, Symbols tab, M4d), a placeholder until #146 fills it. */
-export function SymbolsTab() {
-  return (
-    <div className="sheet-panel">
-      <p className="sheet-panel__empty">Greek letters, operators and functions to insert at the caret come here.</p>
-    </div>
-  )
 }
 
 /** A filter box, then every name in reading order, grouped by element. */
@@ -120,9 +112,11 @@ export function ProblemsTab({ sheet, onJump }: TabProps) {
  * The built-in constants (docs/spec-v1.md section 8, Constants tab): a filter
  * box, then every constant in its group, each as Mathcad lists one: its
  * symbol, its value in the sheet's system, then what it is and the names a
- * line can read it by. Nothing here is the sheet's, so no row jumps.
+ * line can read it by. Nothing here is the sheet's, so no row jumps: from
+ * M4d a row is a no-focus button that inserts its short name, else its
+ * math.js name, by the Symbols tab's rules (section 4, Symbols tab).
  */
-export function ConstantsTab({ settings }: { settings: DisplaySettings }) {
+export function ConstantsTab({ settings, canInsert, onInsert }: { settings: DisplaySettings } & InsertProps) {
   const [filter, setFilter] = useState('')
   const katexReady = useKatexReady()
   const all = useMemo(() => listConstants(settings), [settings])
@@ -148,6 +142,7 @@ export function ConstantsTab({ settings }: { settings: DisplaySettings }) {
         value={filter}
         onChange={(event) => setFilter(event.target.value)}
       />
+      {!canInsert && <p className="sheet-panel__hint">{OPEN_A_LINE}</p>}
       {groups.length === 0 ? (
         <p className="sheet-panel__empty">No constant matches.</p>
       ) : (
@@ -157,22 +152,27 @@ export function ConstantsTab({ settings }: { settings: DisplaySettings }) {
             <ul className="sheet-panel__list">
               {group.rows.map((row) => {
                 const names = row.short ? `${row.short} or ${row.name}` : row.name
+                const name = row.short ?? row.name
                 const symbol = katexReady ? texToHtml(row.tex) : null
                 const value = katexReady ? texToHtml(row.valueTex) : null
                 return (
-                  <li
-                    key={row.name}
-                    className="sheet-panel__constant"
-                    aria-label={`${row.label}: ${names} = ${row.value}`}
-                  >
-                    <span className="sheet-panel__constant-symbol">
-                      {symbol === null ? (row.short ?? row.name) : <span dangerouslySetInnerHTML={{ __html: symbol }} />}
-                    </span>
-                    <span className="sheet-panel__constant-value">
-                      {value === null ? row.value : <span dangerouslySetInnerHTML={{ __html: value }} />}
-                    </span>
-                    <span className="sheet-panel__constant-label">{row.label}</span>
-                    <code className="sheet-panel__constant-names">{names}</code>
+                  <li key={row.name}>
+                    <InsertButton
+                      className="sheet-panel__constant"
+                      label={`${row.label}: ${names} = ${row.value}`}
+                      hover={`Insert ${name}`}
+                      dimmed={!canInsert}
+                      onPress={() => onInsert({ mode: 'name', text: name })}
+                    >
+                      <span className="sheet-panel__constant-symbol">
+                        {symbol === null ? (row.short ?? row.name) : <span dangerouslySetInnerHTML={{ __html: symbol }} />}
+                      </span>
+                      <span className="sheet-panel__constant-value">
+                        {value === null ? row.value : <span dangerouslySetInnerHTML={{ __html: value }} />}
+                      </span>
+                      <span className="sheet-panel__constant-label">{row.label}</span>
+                      <code className="sheet-panel__constant-names">{names}</code>
+                    </InsertButton>
                   </li>
                 )
               })}

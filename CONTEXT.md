@@ -289,6 +289,17 @@ come, and their terms move in here as each M4d issue makes them true.
   "Undefined symbol" for it until its line has run, which `explain` words;
   the engine's own reads use `holds` and `peek`. `listConstants` gives the
   Constants tab its rows.
+  **The Symbols catalogue** (spec section 4, Symbols tab, M4d; `symbols.ts`,
+  pure data, no math.js): `SYMBOLS`, every button of the Symbols tab in its
+  group (`SYMBOL_GROUPS`: Greek, Operators, Functions, Logic, Sheet forms) and
+  order, each a `SymbolEntry`: its `label` (ρ, √), its `spelling` (`rho`,
+  `sqrt`), its `hint`, its Greek `row`, the `constant` a Greek letter also is
+  (read from `CONSTANT_GROUPS`), a sheet form's runnable `example`, and its
+  `insert`, a `SymbolInsert`: `mode` (`name`, `word`, `prefix`, `spaced`,
+  `tight`, `wrap`), `text` and `close`. `guess` is `hidden`: a typing
+  suggestion, not a button. `filterSymbols` and `symbolHover` are the tab's
+  filter and hovers. It adds no grammar: a test types every entry into a
+  minimal line and runs it.
   A **solve line** (spec section 9) is read as text before math.js sees it
   (`solveLine.ts`, pure): a **solved value** is `<name> = solve <lhs> = <rhs>,
   for <unknown> = <from> .. <to>` and a **solve function** is
@@ -377,8 +388,9 @@ come, and their terms move in here as each M4d issue makes them true.
   field on the canvas's click when the element hasn't moved, and follow hover
   from `pointerMove`; `suggest.ts` (pure) is the suggestions while a line is
   typed (spec section 4): `wordAt`, `suggest` and `accept` over the sheet's
-  names above the line (`sheetNames`), the constants, a fixed list of functions
-  and the units; `MathOverlay` builds the sources for the open line and
+  names above the line (`sheetNames`), the constants, the functions and line
+  forms (`FUNCTION_SUGGESTIONS`, built from the Symbols catalogue's entries
+  spelled as names, Greek left out) and the units; `MathOverlay` builds the sources for the open line and
   `LineField` draws the list and takes its keys (Tab, ↓ ↑, Enter, Esc); after
   `@` it holds the format words, and on a clause at the start of a line, a
   comment's, the comment words and never `if` (M4d);
@@ -448,9 +460,14 @@ come, and their terms move in here as each M4d issue makes them true.
   `setTitleFormat`, `moveTo('title' | 'first')`, `move('up' | 'down')` and
   `openLast(anchorId)` (#144), `setRules(rows)`, `caretToRule(index)` and
   `addRule(name)` (#145: a caret inside a rule follows it to its condition's
-  end, by each row's `from`) and `insert(text)` (at the open field's caret, by
-  `execCommand('insertText')`, which keeps the field's Ctrl+Z), through the
-  line relay (`createLineRelay<LineEditControl>`). `onEdit` reports what is
+  end, by each row's `from`) and `insert(symbol, anchorId)` (#146: a Symbols
+  or Constants button; `symbolInsert.ts`'s pure `planInsert` gives the range,
+  the text and the caret by the insert's mode, typed by
+  `execCommand('insertText')`, which keeps the field's Ctrl+Z, then
+  `setSelectionRange`; a title, a comment line or a note (`isPlainAt`) takes
+  it as plain text; with nothing open, `anchorId` opens that element's last
+  line, and a layout effect types the insert once its field has mounted),
+  through the line relay (`createLineRelay<LineEditControl>`). `onEdit` reports what is
   open (`EditTarget`: anchor, line or `'title'`, text) on each change, and
   null when the edit ends. The line and title fields carry
   `data-prevent-outside-click`, so a press in them keeps a floating panel, and
@@ -536,8 +553,17 @@ come, and their terms move in here as each M4d issue makes them true.
   turns the evaluated sheet (`EvaluatedElement`s, which `MathOverlay` hands
   out through `onEvaluated`) into Variables groups and Problems rows (every
   error and warning), and `errorCount`, the Problems badge (errors only, M4d);
-  `SheetPanel.tsx` renders them, and a click asks App to jump. Its
-  `SymbolsTab` is a one-line placeholder until #146 (M4d). **The Format tab**
+  `SheetPanel.tsx` renders them, and a click asks App to jump. **The Symbols
+  tab** (#146, `SymbolsTab.tsx`): a filter box (`filterSymbols`), then the
+  catalogue's groups, Greek in its three rows, each entry an `InsertButton`
+  showing its label, its hover `symbolHover`, a dot on a letter that is also
+  a constant. An `InsertButton` is a no-focus button that stays hoverable when
+  dimmed (`aria-disabled`, not `disabled`). The Constants tab's rows are
+  `InsertButton`s too, inserting the short name, else math.js's, as a `name`
+  insert ("Insert c"). Both take `InsertProps`: `canInsert` (a line or the
+  title open, or one math element selected; otherwise the buttons are dimmed
+  under "Open a line to insert") and `onInsert`, which App maps onto the line
+  relay's `insert`, with the selected element when nothing is open. **The Format tab**
   (#144): `formatTab.ts` (pure) turns the evaluated sheet (`FormatElement`:
   the panel's element and its `titleFormat`, which `EvaluatedElement` carries)
   and what is open (`FormatTarget`, the overlay's `EditTarget`) into a
