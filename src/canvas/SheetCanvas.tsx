@@ -6,7 +6,7 @@ import type { ExcalidrawImperativeAPI, UIOptions } from '@excalidraw/excalidraw/
 import '@excalidraw/excalidraw/index.css'
 import { isPlacing, startPlacing } from './addMath.ts'
 import { insertImage, measureIn, takeOverImageTool, type PickedImage } from './imageTool.ts'
-import { markMathSelection } from './mathSelection.ts'
+import { markMathSelection, markTouch } from './mathSelection.ts'
 import { SHEET_PANEL_TABS, SHEET_SIDEBAR_CLASS, type SheetPanelTab } from './panelPresses.ts'
 import { BottomSheet } from './BottomSheet.tsx'
 import { closeMoreTools, markMoreTools, useMoreToolsSlot } from './moreTools.ts'
@@ -136,6 +136,11 @@ export interface SheetCanvasProps {
    * Excalidraw's sidebar; the handle and Math settings act on it the same way.
    */
   phone?: boolean
+  /**
+   * The last press in the view was a touch (section 4, Touch, M4d): the hint
+   * for one math element names the taps.
+   */
+  touch?: boolean
 }
 
 /** The vault's image picker, and where the tool's key is heard. */
@@ -177,6 +182,7 @@ export function SheetCanvas({
   vault = false,
   theme,
   phone = false,
+  touch = false,
 }: SheetCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   // The tab Math settings opens: the one last shown.
@@ -297,6 +303,10 @@ export function SheetCanvas({
     const root = containerRef.current
     if (api && root) return markMathSelection(api, root)
   }, [api])
+  useEffect(() => {
+    const root = containerRef.current
+    if (root) return markTouch(root, touch)
+  }, [touch])
 
   // The tabs the panel has, in their order, each with what fills it.
   const panelTabs = sheetPanel

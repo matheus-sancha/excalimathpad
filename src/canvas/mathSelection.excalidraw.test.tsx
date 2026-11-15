@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { convertToExcalidrawElements, FONT_FAMILY } from '@excalidraw/excalidraw'
 import { SheetCanvas, type SheetCanvasHandle } from './SheetCanvas.tsx'
 import { createMathAnchorElements } from './mathAnchor.ts'
-import { MATH_HINT } from './mathSelection.ts'
+import { MATH_HINT, MATH_HINT_TOUCH } from './mathSelection.ts'
 import { sceneLoaded } from '../test/excalidraw.ts'
 import { clickOnCanvas } from '../test/gestures.ts'
 
@@ -117,6 +117,24 @@ describe('the selection mark', () => {
 
     expect(root.style.getPropertyValue('--math-hint')).toBe(JSON.stringify(MATH_HINT))
     expect(MATH_HINT).toBe('Double-click a line or press Enter to edit')
+    expect(root.style.getPropertyValue('--math-hint-touch')).toBe(JSON.stringify(MATH_HINT_TOUCH))
+    expect(MATH_HINT_TOUCH).toBe('Double-tap a line, or tap Edit in Math settings')
+  })
+})
+
+describe('the touch mark (section 4, Touch)', () => {
+  it('is set while the canvas is told the last press was a touch', async () => {
+    let handle: SheetCanvasHandle | undefined
+    const { rerender } = render(<SheetCanvas initialElements={scene()} onReady={(h) => (handle = h)} />)
+    await waitFor(() => expect(handle).toBeDefined())
+    const { root } = handle!
+    expect(root.dataset.mathTouch).toBeUndefined()
+
+    rerender(<SheetCanvas initialElements={scene()} onReady={(h) => (handle = h)} touch />)
+    expect(root.dataset.mathTouch).toBe('')
+
+    rerender(<SheetCanvas initialElements={scene()} onReady={(h) => (handle = h)} touch={false} />)
+    expect(root.dataset.mathTouch).toBeUndefined()
   })
 })
 

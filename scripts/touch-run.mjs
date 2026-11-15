@@ -9,7 +9,7 @@
 //
 // It covers what the device checklist can't leave to chance: a double tap
 // opens a line (and a drawing on top keeps Excalidraw's own), the Format tab's
-// Done, ↑ ↓ and Edit, a tap's tips and the slots and ⚙ a touch selection
+// Done, ↑ ↓ and Edit, the canvas hint by tap and by click, a tap's tips and the slots and ⚙ a touch selection
 // shows, the quick keys and their undo, the panel's open and restore, and the
 // suggestions opening above the field; on the tablet, a mouse keeps hover. It
 // runs in Chromium, so it covers neither WebKit nor a real on-screen keyboard:
@@ -281,6 +281,26 @@ try {
       await pause()
       await closePanel()
       row('the panel’s close closes it', !(await panelOpen()))
+
+      // One element selected by touch, the canvas hint names the taps; a mouse press brings back the keys.
+      const canvasHint = () =>
+        tab.evaluate(() => {
+          const hint = document.querySelector('.HintViewer')
+          return hint ? getComputedStyle(hint, '::after').content : null
+        })
+      await tap(empty)
+      await tap(await pointOf(lineOf('calc', 1)))
+      const byTouch = await canvasHint()
+      const first = await pointOf(lineOf('calc', 1))
+      await tab.mouse.click(first.x, first.y)
+      await pause()
+      const byMouse = await canvasHint()
+      row(
+        'the canvas hint names the taps after a tap, and the keys after a click',
+        byTouch === JSON.stringify('Double-tap a line, or tap Edit in Math settings') &&
+          byMouse === JSON.stringify('Double-click a line or press Enter to edit'),
+        `tap: ${byTouch}, click: ${byMouse}`,
+      )
 
       // A tap on a gutter mark shows its message at once; the next tap anywhere closes it.
       await tap(empty)

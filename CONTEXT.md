@@ -126,8 +126,10 @@ come, and their terms move in here as each M4d issue makes them true.
   `anchorStyle.ts` keeps anchors in the fixed style (`ANCHOR_STYLE`, in
   `mathAnchor.ts`): `restoreAnchorStyles` writes it back with `NEVER`.
   `mathSelection.ts` marks the box Excalidraw fills with
-  `data-math-selection` (`one`, `several`) while only math is selected;
-  `SheetCanvas.css` uses the mark for the reduced panel and the hint.
+  `data-math-selection` (`one`, `several`) while only math is selected, and
+  with `data-math-touch` (`markTouch`) while the `touch` App passes
+  `SheetCanvas` is set; `SheetCanvas.css` uses the marks for the reduced panel
+  and the hint (`MATH_HINT`, or `MATH_HINT_TOUCH` under the touch mark).
   `SheetCanvas` starts new text in the Normal font (Nunito).
   `canvasEvents.ts` (`listenToCanvas`) hands the canvas's double-clicks, presses,
   clicks, pointer moves and keys to the gestures before Excalidraw hears them,
@@ -787,10 +789,12 @@ and everything downstream recalculates. Engine: math.js, client-side.
 - **The reduced panel and the hint are CSS on Excalidraw's DOM**
   (`SheetCanvas.css`): the panel's children that have Opacity
   (`label.control-label`) after them are hidden, and `.HintViewer`'s span is
-  replaced through `::after`. Neither is public API;
+  replaced through `::after`, by a second rule under `data-math-touch` on
+  touch. Neither is public API;
   `mathSelection.excalidraw.test.tsx` pins the order, the class and the span,
   with a desktop-sized container, since jsdom's 0-wide one gets the phone
-  layout.
+  layout. jsdom applies no stylesheet, so the touch run reads the hint's
+  computed `::after` after a tap and after a click, on all four devices.
 - **Size writes go through `writeAnchorSizes`, wrapped in `keepClean`.** A
   `NEVER` write also updates Excalidraw's captured copy of the anchor, which is
   why a line commit after size writes is still one step
@@ -945,8 +949,6 @@ and everything downstream recalculates. Engine: math.js, client-side.
   names the file.
 - On a tablet narrower than 1229 px the floating Sheet panel covers
   Excalidraw's More tools, as on a small desktop window; its ✕ closes it.
-- Excalidraw's hint still reads "Double-click a line or press Enter to edit"
-  on touch; the Format tab's hint names the taps.
 - The plugin's `main.js` is about 3.45 MB and `styles.css` 0.64 MB (#137);
   the audit fails either above 5,000,000 bytes, Obsidian Sync Standard's cap.
 - Excalidraw 0.18.1 listens on the global `document` (copy, cut, paste, `keyup`,

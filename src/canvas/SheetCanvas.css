@@ -79,6 +79,11 @@
   content: var(--math-hint);
 }
 
+/* After a touch press it names the taps (section 4, Touch). */
+[data-math-selection='one'][data-math-touch] .HintViewer::after {
+  content: var(--math-hint-touch);
+}
+
 /* The Sheet panel's tabs (section 8): from M4d six icons, the active one also
    labelled, in one segmented control like Excalidraw's own sidebar tabs. */
 .excalidraw .sheet-sidebar {
