@@ -53,6 +53,17 @@ Amended on 2026-11-14 for M4d, decided by Matheus (#124). Built in #136 (`src/fi
   reloads an idle tab and writes a conflict copy beside a busy one. Nothing Obsidian-specific is
   added to the file, so a sheet moves between the two homes unchanged.
 
+Amended on 2026-11-15 for M4e, decided by Matheus (#182). Not built yet (#195):
+
+- **Format 2, the first migration.** A line's format moves out of its text into the anchor's
+  `customData.formats` (ADR 0002). On open, a format 1 sheet is migrated in memory, on every
+  open path, the recovery copy included; the file changes at the next save. A format 2 sheet
+  is refused by 0.2.x with the "newer Excalimathpad" message, so an older app never
+  overwrites it. Accepted cost: a vault synced between a 1.0.0 device and a 0.2.x device.
+- Rejected: folding the words away in the open line's field with nothing stored, which needed
+  no migration and was the session's recommendation. Matheus chose storing from a prototype
+  of both, so the line's text holds only math and a rule's condition has its own field.
+
 ## Alternatives considered
 
 - **Plain `.excalidraw`.** Opens anywhere, but it has no format number or settings of

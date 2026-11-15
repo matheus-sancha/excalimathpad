@@ -92,6 +92,16 @@ Engineering rules that make it work (Engineer's, found in the #2 spike and #28):
   which the first version of this ADR said didn't exist (#28; built in #45,
   `src/canvas/addMath.ts`).
 
+Amended on 2026-11-15 for M4e, decided by Matheus (#182). Not built yet (#195):
+
+- M4e: `customData.formats`, each line's format (its words and rules), one entry per line of
+  `source` separated by `\n`, each entry the clause as it was written in the line, empty for a
+  line with none. A string, as `titleFormat` is, because a nested object adds an empty undo
+  step to every later write of the anchor. `source` and `formats` change in one write, so a
+  commit, an Enter, a join or a Format tab press is one undo step. A reader pads or cuts the
+  entries to the number of lines. Any later feature that changes the number of lines must keep
+  the two in step.
+
 ## Alternatives considered
 
 - **The overlay owns the position, with its own drag handle.** No coupling to
