@@ -1,13 +1,15 @@
+import { createRef } from 'react'
 import { act, cleanup, createEvent, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import type { ExcalidrawElement } from '@excalidraw/excalidraw/element/types'
 import type { AppState } from '@excalidraw/excalidraw/types'
 import { DARK_THEME_FILTER } from '../canvas/layers.ts'
-import { createMathAnchorElements } from '../canvas/mathAnchor.ts'
+import { createMathAnchorElements, NO_TITLE_FORMAT } from '../canvas/mathAnchor.ts'
 import { linePoint } from '../test/gestures.ts'
 import { fireResizeObservers, layOutBodies } from '../test/layout.ts'
 import { linesOf, resultsOf as sheetResults } from '../test/sheetView.ts'
-import { MathOverlay, type FlashLine, type SceneApi } from './MathOverlay.tsx'
+import { NO_FORMAT } from '../math/lineForm.ts'
+import { MathOverlay, type EditTarget, type FlashLine, type LineEditControl, type MathOverlayProps, type SceneApi } from './MathOverlay.tsx'
 
 /**
  * A fake of the slice of Excalidraw's API the overlay uses: a mutable scene,
@@ -126,7 +128,7 @@ const elementOf = (id: string) =>
 let canvasRoot: HTMLElement
 let current: ReturnType<typeof fakeScene>
 
-function renderOverlay(elements: ExcalidrawElement[]) {
+function renderOverlay(elements: ExcalidrawElement[], extra: Partial<MathOverlayProps> = {}) {
   const scene = fakeScene(elements)
   current = scene
   canvasRoot = document.body.appendChild(document.createElement('div'))
@@ -140,6 +142,7 @@ function renderOverlay(elements: ExcalidrawElement[]) {
       forwardWheel={forwardWheel}
       focusCanvas={focusCanvas}
       flash={flash}
+      {...extra}
     />
   )
   const view = render(overlay(null))
@@ -1831,3 +1834,79 @@ describe('title (docs/spec-v1.md section 4: an optional header on the element)',
   })
 })
 
+// Section 14, Panel controls that act on the open line (M4d): what the Sheet
+// panel reaches through the control, and what it hears of the edit.
+describe('the line edit, as the Sheet panel reaches it', () => {
+  function withControl(source: string) {
+    const control = createRef<LineEditControl>()
+    const edits: (EditTarget | null)[] = []
+    const rendered = renderOverlay([anchorWith(source)], { control, onEdit: (target) => edits.push(target) })
+    return { ...rendered, control: () => control.current!, edits }
+  }
+
+  it('reports what is open on each change, and null when the edit ends', () => {
+    const { edits } = withControl('x = 2\ny = 3')
+    expect(edits).toEqual([null])
+
+    const field = openLine(2)
+    type(field, 'y = 34')
+    fireEvent.keyDown(openField()!, { key: 'Escape' })
+
+    expect(edits).toEqual([
+      null,
+      { anchorId: 'm1', lineIndex: 1, text: 'y = 3' },
+      { anchorId: 'm1', lineIndex: 1, text: 'y = 34' },
+      null,
+    ])
+  })
+
+  it('setFormat writes the open line’s plain format as one line commit, the line kept open, the caret in the code', () => {
+    const { scene, control } = withControl('v = 4 @text-red if v > 3 # speed')
+    const field = openLine(1)
+    field.setSelectionRange(5, 5)
+
+    act(() => control().setFormat({ ...NO_FORMAT, bold: true }))
+
+    expect(scene.sourceOf('m1')).toBe('v = 4 @bold @text-red if v > 3 # speed')
+    expect(scene.sourceWrites()).toBe(1)
+    expect(openField()).toHaveValue('v = 4 @bold @text-red if v > 3 # speed')
+    expect(openField()!.selectionStart).toBe(5)
+  })
+
+  it('moveTo goes to the title and back to the first line; setTitleFormat formats the open title', () => {
+    const { scene, control, edits } = withControl('x = 2\ny = 3')
+    openLine(2)
+
+    act(() => control().setTitleFormat({ ...NO_TITLE_FORMAT, italic: true }))
+    expect(scene.elementOf('m1').customData?.titleFormat).toBeUndefined()
+    act(() => control().moveTo('title'))
+    expect(edits.at(-1)).toMatchObject({ lineIndex: 'title' })
+    act(() => control().setTitleFormat({ ...NO_TITLE_FORMAT, italic: true }))
+    expect(scene.elementOf('m1').customData?.titleFormat).toBe('italic')
+    act(() => control().moveTo('first'))
+    expect(edits.at(-1)).toMatchObject({ lineIndex: 0, text: 'x = 2' })
+  })
+
+  it('insert types at the caret, over the selection, and the sheet runs it', () => {
+    const { control } = withControl('a = 2\nb = a + 3')
+    const field = openLine(2)
+    field.setSelectionRange(5, 5)
+
+    act(() => control().insert('*2'))
+
+    expect(openField()).toHaveValue('b = a*2 + 3')
+    expect(openField()!.selectionStart).toBe(7)
+    expect(resultsOf('m1')).toContain('7')
+  })
+
+  it('does nothing with nothing open', () => {
+    const { scene, control } = withControl('x = 2')
+    act(() => {
+      control().setFormat({ ...NO_FORMAT, bold: true })
+      control().insert('rho')
+      control().moveTo('title')
+    })
+    expect(scene.sourceWrites()).toBe(0)
+    expect(openField()).toBeNull()
+  })
+})

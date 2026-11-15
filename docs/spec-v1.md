@@ -2378,14 +2378,21 @@ Engineer's design gate. Tested on Excalidraw 0.18.1, math.js 15.2 and Chromium.
     `root`, which holds the panel, and leaves the line before the button sees its press.
   - One panel-wide `mousedown` prevention sits on the view's document, in the **bubble** phase. In
     capture, or on the sidebar itself, Radix's tab triggers stopped switching.
+    As built (#143): above React's root, in the bubble phase: the page's document on the web, the view's
+    container in a vault, since the plugin adds no listener to the global document (section 12a).
   - `MathOverlay` reports the open target: `onEdit(target)`, with `target` null or
     `{ anchorId, lineIndex | 'title', text }`, on each keystroke. `LineEditControl` gains
     `setFormat(format)`, `setTitleFormat(format)`, `moveTo('title' | 'first')` and `insert(text)`; the
     insert reaches the live `LineField` through a ref and uses `execCommand('insertText')`, so the
     field's text undo keeps it.
+    As built (#143): the overlay finds its one open field (`.math-element__field`) rather than holding a
+    ref; where `execCommand` isn't there (jsdom), `setRangeText` and an `input` event.
   - A focused `<select>` isn't a text input to Excalidraw's shortcuts, so Delete there deleted the
     selected element and R switched to Rectangle. Every panel control stops its keys reaching
     Excalidraw. The `type="text"` rule for fields inside Excalidraw's container gains a `<select>` clause.
+    As built (#143): a box with no box of its own (`display: contents`) around the panel's tabs stops each
+    key's React propagation, so Excalidraw's `onKeyDown` never hears it and the panel's own handlers still
+    run; `listenToCanvas` doesn't hand the gestures a key aimed at the panel either.
   - As built (#7 and #58 follow-up): an overlay hover is found from geometry on the canvas's `pointermove`
     (`slotAt`, `tipAt`), never from the overlay's own events; a `title` attribute there never shows. The
     root's `pointerleave` (not in capture) hides a problem's tip.
@@ -3021,7 +3028,22 @@ Changes line if it changes behaviour.
 - With presses from `.sheet-sidebar` skipped in `listenToCanvas` and the panel-wide prevention on `document` in
   bubble: every Format, Rules, Symbols and Constants press keeps the line open with its caret, and Radix's tabs
   still switch. Firefox and Safari, a classic scrollbar press and pen input were not probed (#117).
-- `data-prevent-outside-click` keeping the floating panel open, since it is undocumented.
+  **Passed (#143), in Chromium with real mouse and keys** (the dev server at 1400 × 900): with a line open at
+  caret 5, a press on each of Problems, Variables, Symbols and Format switched the tab, and the line stayed
+  open, focused, caret 5; a press on the panel's background kept it too, and the next key typed at the caret.
+  A press in the Variables filter took focus and left the line, as section 8 says. In jsdom the contract tests
+  (`src/canvas/panelPresses.excalidraw.test.tsx`) hold Radix's side against Excalidraw 0.18.1: the tab switches
+  with the prevention heard above React's root, and doesn't (the control) with it in capture on the document
+  or on the sidebar itself. **Found:** the plugin adds no listener to the global `document` (section 12a,
+  `plugin/test/SheetView.test.ts` failed on it), so in a vault the prevention sits on the view's container,
+  which holds React's root, and is heard after React there too. Firefox, Safari, a classic scrollbar and pen
+  input were still not probed.
+- `data-prevent-outside-click` keeping the floating panel open, since it is undocumented. **Passed (#143):** at
+  1000 × 800, with the panel floating on Format and a line open, a press in the field kept the panel and the
+  line; a press on a tab switched it with the line open; a press on the canvas left the line and closed the
+  panel. A new element placed at x 760 opened its line on Format and was scrolled to 160–465 px, clear of the
+  panel's left edge at 624. The contract test holds the mark, with an unmarked press as the control. Delete
+  and R on a focused Settings `<select>`, one math element selected, left the element and the tool.
 - Two taps becoming a `dblclick` on iOS and Android, Excalidraw's phone toolbar reaching Add math, and the
   bottom sheet staying above the on-screen keyboard (`visualViewport`).
 - Whether Obsidian's review passes without a committed `main.js`, by the preview scan.
@@ -3588,3 +3610,15 @@ Changes line if it changes behaviour.
     a comment's size without a word, as the table says.
   - **Suggestions read a clause at the start of a line as a comment's,** before its `#` is typed: a math
     line needs code before its `@`. There the list holds the comment words and never `if`.
+- 2026-11-15, [sections 8](#sheet-panel) and [14](#14-engineering-constraints) (#143, found while building, for
+  Matheus to confirm on the PR):
+  - **An edit that ends from a press in the panel leaves the panel as it is.** A press in the Variables filter,
+    or a row's jump, ends the edit; restoring then closed the panel under the pointer, in Chromium, when it had
+    been closed before the edit. The user is working in the panel, so it stays. Esc, a press elsewhere or any key
+    after the press puts the restore back.
+  - **The panel-wide prevention in a vault** listens on the view's container, not the document (section 14).
+  - **The Format and Symbols tabs** hold one line each until #144 and #146 fill them: "For now, format the open
+    line or title with the bar beside it." and "Greek letters, operators and functions to insert at the caret
+    come here."
+  - **A line under a floating panel** is centred in the strip left of the panel, not in the window's middle as a
+    jump centres, since the middle can still be under the panel.

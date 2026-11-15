@@ -7,6 +7,7 @@ import '@excalidraw/excalidraw/index.css'
 import { isPlacing, startPlacing } from './addMath.ts'
 import { insertImage, measureIn, takeOverImageTool, type PickedImage } from './imageTool.ts'
 import { markMathSelection } from './mathSelection.ts'
+import { SHEET_PANEL_TABS, SHEET_SIDEBAR_CLASS, type SheetPanelTab } from './panelPresses.ts'
 import { closeMoreTools, markMoreTools, useMoreToolsSlot } from './moreTools.ts'
 import type { SheetTheme, ThemeMemory } from './theme.ts'
 import { VAULT_CLASS } from './vaultItems.ts'
@@ -33,6 +34,19 @@ export interface SheetCanvasHandle {
   addMath: () => void
   /** Math settings, as its More tools item does: the panel opens on its last tab, or closes. */
   toggleSheetPanel: () => void
+  /** Whether the Sheet panel is open, and its tab: the one shown, or the one Math settings opens. */
+  sheetPanel: () => SheetPanelState
+  /**
+   * Opens the panel on `tab`, or closes it with `tab` as the one Math settings
+   * opens next (an edit's open and restore, section 8, M4d).
+   */
+  showSheetPanel: (state: SheetPanelState) => void
+}
+
+/** The Sheet panel's state: open or closed, and its tab. */
+export interface SheetPanelState {
+  open: boolean
+  tab: SheetPanelTab
 }
 
 /** The ☰ menu's file items (docs/spec-v1.md section 8). */
@@ -42,21 +56,31 @@ export interface FileMenu {
   saveAs: () => void
 }
 
-/**
- * The Sheet panel's class: the overlay keeps its hover tips clear of it, since
- * the panel (docked or floating) covers the canvas's right edge.
- */
-export const SHEET_SIDEBAR_CLASS = 'sheet-sidebar'
+export { SHEET_SIDEBAR_CLASS } from './panelPresses.ts'
 
 /** Excalidraw's sidebar name for the Sheet panel. */
 export const SHEET_PANEL = 'sheet'
 
-export type SheetPanelTab = 'variables' | 'problems' | 'settings' | 'constants'
+export { SHEET_PANEL_TABS, type SheetPanelTab } from './panelPresses.ts'
+
+/** Each tab's name: its tooltip, its accessible name, and its label while active. */
+const TAB_NAMES: Record<SheetPanelTab, string> = {
+  format: 'Format',
+  symbols: 'Symbols',
+  variables: 'Variables',
+  problems: 'Problems',
+  constants: 'Constants',
+  settings: 'Settings',
+}
 
 /** What fills the Sheet panel (docs/spec-v1.md section 8); the canvas draws its frame. */
 export interface SheetPanelSlot {
-  /** Errors (M4d: warnings alone show none): the badge on Math settings and on More tools. */
+  /** Errors (M4d: warnings alone show none): the badge on Math settings, More tools and Problems. */
   errors: number
+  /** The open line's or title's format (M4d). */
+  format?: ReactNode
+  /** Buttons that type at the caret (M4d). */
+  symbols?: ReactNode
   variables: ReactNode
   problemsTab: ReactNode
   settings?: ReactNode
@@ -182,7 +206,17 @@ export function SheetCanvas({
       focusCanvas()
     }
     const toggleSheetPanel = () => api.toggleSidebar({ name: SHEET_PANEL, tab: lastTab.current })
-    onReadyRef.current?.({ api, forwardWheel, focusCanvas, root, addMath, toggleSheetPanel })
+    const sheetPanel = (): SheetPanelState => {
+      const open = api.getAppState().openSidebar
+      const shown = open?.name === SHEET_PANEL
+      return { open: shown, tab: shown && isPanelTab(open.tab) ? open.tab : lastTab.current }
+    }
+    const showSheetPanel = ({ open, tab }: SheetPanelState) => {
+      lastTab.current = tab
+      if (open) api.toggleSidebar({ name: SHEET_PANEL, tab, force: true })
+      else if (sheetPanel().open) api.toggleSidebar({ name: SHEET_PANEL, force: false })
+    }
+    onReadyRef.current?.({ api, forwardWheel, focusCanvas, root, addMath, toggleSheetPanel, sheetPanel, showSheetPanel })
   }, [api, forwardWheel, focusCanvas])
 
   // A change of light or dark (☰ Dark mode, Alt+Shift+D) is remembered.
@@ -218,6 +252,21 @@ export function SheetCanvas({
     const root = containerRef.current
     if (api && root) return markMathSelection(api, root)
   }, [api])
+
+  // The tabs the panel has, in their order, each with what fills it.
+  const panelTabs = sheetPanel
+    ? SHEET_PANEL_TABS.flatMap((tab) => {
+        const content = {
+          format: sheetPanel.format,
+          symbols: sheetPanel.symbols,
+          variables: sheetPanel.variables,
+          problems: sheetPanel.problemsTab,
+          constants: sheetPanel.constants,
+          settings: sheetPanel.settings,
+        }[tab]
+        return content ? [[tab, content] as const] : []
+      })
+    : []
 
   return (
     <div
@@ -303,20 +352,40 @@ export function SheetCanvas({
               sheetPanel.onChange?.(open, lastTab.current)
             }}
           >
+            {/* No key from a panel control reaches Excalidraw's shortcuts (section 8):
+                a focused <select> or tab isn't a field to them, so Delete deleted the
+                selected element. The panel's own handlers, inside, still run. A box
+                with no box of its own (`display: contents`), so the layout is Excalidraw's. */}
+            <div className="sheet-sidebar__keys" onKeyDown={(event) => event.stopPropagation()}>
             <Sidebar.Tabs>
               <Sidebar.Header>
                 <Sidebar.TabTriggers>
-                  <Sidebar.TabTrigger tab="variables">Variables</Sidebar.TabTrigger>
-                  <Sidebar.TabTrigger tab="problems">Problems</Sidebar.TabTrigger>
-                  {sheetPanel.settings && <Sidebar.TabTrigger tab="settings">Settings</Sidebar.TabTrigger>}
-                  {sheetPanel.constants && <Sidebar.TabTrigger tab="constants">Constants</Sidebar.TabTrigger>}
+                  {panelTabs.map(([tab]) => (
+                    <Sidebar.TabTrigger
+                      key={tab}
+                      tab={tab}
+                      className="excalidraw-button sidebar-tab-trigger sheet-tab"
+                      title={TAB_NAMES[tab]}
+                    >
+                      <TabIcon tab={tab} />
+                      {/* The name: shown on the active tab, read on every tab. */}
+                      <span className="sheet-tab__label">{TAB_NAMES[tab]}</span>
+                      {tab === 'problems' && sheetPanel.errors > 0 && (
+                        <span className="sheet-tab__badge" aria-hidden="true">
+                          {sheetPanel.errors}
+                        </span>
+                      )}
+                    </Sidebar.TabTrigger>
+                  ))}
                 </Sidebar.TabTriggers>
               </Sidebar.Header>
-              <Sidebar.Tab tab="variables">{sheetPanel.variables}</Sidebar.Tab>
-              <Sidebar.Tab tab="problems">{sheetPanel.problemsTab}</Sidebar.Tab>
-              {sheetPanel.settings && <Sidebar.Tab tab="settings">{sheetPanel.settings}</Sidebar.Tab>}
-              {sheetPanel.constants && <Sidebar.Tab tab="constants">{sheetPanel.constants}</Sidebar.Tab>}
+              {panelTabs.map(([tab, content]) => (
+                <Sidebar.Tab key={tab} tab={tab}>
+                  {content}
+                </Sidebar.Tab>
+              ))}
             </Sidebar.Tabs>
+            </div>
           </Sidebar>
         )}
       </Excalidraw>
@@ -325,7 +394,29 @@ export function SheetCanvas({
 }
 
 function isPanelTab(tab: string | undefined): tab is SheetPanelTab {
-  return tab === 'variables' || tab === 'problems' || tab === 'settings' || tab === 'constants'
+  return (SHEET_PANEL_TABS as readonly (string | undefined)[]).includes(tab)
+}
+
+/**
+ * A tab's icon (section 8, from M4d), drawn like Excalidraw's own: Format a
+ * letter over a rule, Symbols π, Variables x =, Problems a warning sign,
+ * Constants ∞, Settings the sliders of Math settings.
+ */
+function TabIcon({ tab }: { tab: SheetPanelTab }) {
+  if (tab === 'settings') return <SettingsIcon />
+  const paths: Record<Exclude<SheetPanelTab, 'settings'>, string> = {
+    format: 'M7 16l5-11 5 11M8.8 12.2h6.4M5 20h14',
+    symbols: 'M4 8.5c1-1.3 2-2 4-2h12M9 6.5c0 5-1 9-3 12M15 6.5v9c0 1.5.8 2.5 2.5 2.5',
+    variables: 'M3.5 7l6 10M9.5 7l-6 10M13.5 10.5h7M13.5 14h7',
+    problems: 'M12 4.5l8.5 15h-17zM12 10v4.5M12 17v.01',
+    constants:
+      'M12 12c-2-2.5-3.5-3.5-5.5-3.5a3.5 3.5 0 0 0 0 7c2 0 3.5-1 5.5-3.5s3.5-3.5 5.5-3.5a3.5 3.5 0 0 1 0 7c-2 0-3.5-1-5.5-3.5z',
+  }
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d={paths[tab]} />
+    </svg>
+  )
 }
 
 /** One item, in the dropdown's own markup so it takes Excalidraw's styles. */
@@ -365,7 +456,7 @@ function MoreToolsItem({
 /** Math settings' icon: three sliders, drawn like Excalidraw's own tool icons. */
 function SettingsIcon() {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" aria-hidden="true">
       <path d="M4 7h9m4 0h3M4 12h3m4 0h9M4 17h11m4 0h1" />
       <circle cx="15" cy="7" r="2" />
       <circle cx="9" cy="12" r="2" />

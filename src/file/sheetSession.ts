@@ -370,9 +370,14 @@ export function isSheetName(name: string | null): boolean {
  * Hands the session's line port to whatever control the overlay mounts. It is
  * a ref object, so it goes straight into `MathOverlay`'s `control`.
  */
-export function createLineRelay(): LineControl & {
+/**
+ * The line edit, as the file chrome and the Sheet panel reach it: the overlay
+ * fills `current` (it is the overlay's `control` ref); the relay's own methods
+ * are what the session uses, and the panel calls `current`'s (M4d).
+ */
+export function createLineRelay<C extends LineControl & { isOpen(): boolean } = LineControl & { isOpen(): boolean }>(): LineControl & {
   isOpen(): boolean
-  current: (LineControl & { isOpen(): boolean }) | null
+  current: C | null
 } {
   return {
     current: null,

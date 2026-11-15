@@ -20,6 +20,7 @@ import {
   writeAnchorTitle,
   writeAnchorTitleFormat,
   type MathAnchor,
+  type TitleFormat,
 } from '../canvas/mathAnchor.ts'
 import { SHEET_SIDEBAR_CLASS, type ForwardWheel } from '../canvas/SheetCanvas.tsx'
 import {
@@ -31,7 +32,7 @@ import {
   type SheetBlock,
   type SheetLine,
 } from '../math/evaluate.ts'
-import { writeDisplayUnit, type TextColor } from '../math/lineForm.ts'
+import { codeLength, writeDisplayUnit, writeFormat, type LineFormat, type TextColor } from '../math/lineForm.ts'
 import { writeArgumentUnit } from '../math/tableLine.ts'
 import { writePlotClauses, type PlotClause } from '../math/plotLine.ts'
 import type { DisplaySettings } from '../math/display.ts'
@@ -71,7 +72,12 @@ export type SceneApi = Pick<
   | 'setCursor'
 >
 
-/** What the app outside the overlay may do to the line edit: the sheet file saves with it. */
+/**
+ * What the app outside the overlay may do to the line edit: the sheet file
+ * saves with it, and the Sheet panel's controls act on the open line or title
+ * (docs/spec-v1.md section 14, Panel controls that act on the open line, M4d).
+ * Each one does nothing when there is nothing it can act on.
+ */
 export interface LineEditControl {
   /** Writes the typed line to the scene, as a line commit, and keeps it open. */
   commitLine(): void
@@ -79,6 +85,24 @@ export interface LineEditControl {
   leaveLine(): void
   /** Whether a line or the title is open for typing (an outside change in a vault asks). */
   isOpen(): boolean
+  /**
+   * The open line's plain format, written as the bar writes it: one line
+   * commit, the line kept open on a new field, the caret in the code.
+   */
+  setFormat(format: LineFormat): void
+  /** The open title's format: one undo step, the title kept open. */
+  setTitleFormat(format: TitleFormat): void
+  /** Moves the edit to the element's title, or from the title to its first line. */
+  moveTo(target: 'title' | 'first'): void
+  /** Types `text` at the open field's caret, over its selection, as typing does: the field's Ctrl+Z takes it back. */
+  insert(text: string): void
+}
+
+/** What is open, for the Sheet panel (section 8): a line or the title, and its typed text. */
+export interface EditTarget {
+  anchorId: string
+  lineIndex: number | 'title'
+  text: string
 }
 
 export interface MathOverlayProps {
@@ -98,6 +122,11 @@ export interface MathOverlayProps {
   keepClean?: (write: () => void) => void
   /** Each evaluation of the sheet, in reading order, for the Sheet panel (section 8). */
   onEvaluated?: (sheet: readonly EvaluatedElement[]) => void
+  /**
+   * What is open, on each change: an edit starting, moving, each keystroke,
+   * and null when it ends (section 8, An edit opens the panel on Format, M4d).
+   */
+  onEdit?: (target: EditTarget | null) => void
   /** The line a jump from the panel flashes. */
   flash?: FlashLine | null
   /** How results show: the sheet's unit system and Digits (section 5). */
@@ -169,6 +198,7 @@ export function MathOverlay({
   control,
   keepClean = runNow,
   onEvaluated,
+  onEdit,
   flash = null,
   settings = DEFAULT_DISPLAY,
   resultColor = 'blue',
@@ -219,6 +249,23 @@ export function MathOverlay({
       })),
     )
   }, [lines, sheetKey, titlesKey])
+
+  // What is open, for the panel: reported after each render that changed it.
+  const onEditRef = useRef(onEdit)
+  useEffect(() => {
+    onEditRef.current = onEdit
+  })
+  const editKey = edit && JSON.stringify([edit.anchorId, edit.lineIndex, edit.text])
+  useEffect(() => {
+    const current = editRef.current
+    onEditRef.current?.(
+      current && {
+        anchorId: current.anchorId,
+        lineIndex: current.lineIndex === TITLE_LINE ? 'title' : current.lineIndex,
+        text: current.text,
+      },
+    )
+  }, [editKey])
 
   const findAnchor = (anchorId: string) =>
     store.getSnapshot().anchors.find(({ id }) => id === anchorId)
@@ -289,6 +336,19 @@ export function MathOverlay({
     changeEdit(next.edit)
   }
 
+  /**
+   * A format from the bar or the panel: the line's new text goes to the scene
+   * as one line commit, and the line stays open on it, on a new field.
+   */
+  const rewriteLine = (text: string, caret: number) => {
+    const current = editRef.current
+    const live = current && findAnchor(current.anchorId)
+    if (!current || !live) return
+    const next = { ...current, text, caret, revision: (current.revision ?? 0) + 1 }
+    writeAnchorSource(api, current.anchorId, withTypedLine(live.source, next))
+    changeEdit(next)
+  }
+
   const openLine = (anchorId: string, lineIndex: number) => {
     moveEdit({ kind: 'leave' })
     const anchor = findAnchor(anchorId)
@@ -306,6 +366,36 @@ export function MathOverlay({
     },
     leaveLine: () => moveEdit({ kind: 'leave' }),
     isOpen: () => editRef.current !== null,
+    setFormat(format) {
+      const current = editRef.current
+      if (!current || current.lineIndex === TITLE_LINE) return
+      const text = writeFormat(current.text, format)
+      if (text === current.text) return
+      const caret = openField(overlayRef.current)?.selectionStart ?? text.length
+      rewriteLine(text, Math.min(caret, codeLength(text)))
+    },
+    setTitleFormat(format) {
+      const current = editRef.current
+      if (current?.lineIndex === TITLE_LINE) writeAnchorTitleFormat(api, current.anchorId, format)
+    },
+    moveTo(target) {
+      const current = editRef.current
+      if (!current) return
+      if (target === 'title') {
+        if (current.lineIndex !== TITLE_LINE) moveEdit({ kind: 'title' })
+      } else if (current.lineIndex === TITLE_LINE) moveEdit({ kind: 'down' })
+    },
+    insert(text) {
+      const field = openField(overlayRef.current)
+      if (!field) return
+      field.focus()
+      // `insertText` keeps the field's own Ctrl+Z, as an accepted suggestion does;
+      // where it isn't there, the text is written and the field told.
+      if (!field.ownerDocument.execCommand?.('insertText', false, text)) {
+        field.setRangeText(text, field.selectionStart ?? field.value.length, field.selectionEnd ?? field.value.length, 'end')
+        field.dispatchEvent(new Event('input', { bubbles: true }))
+      }
+    },
   }))
 
   useSheetGestures({
@@ -384,16 +474,7 @@ export function MathOverlay({
             const current = editRef.current
             if (current) changeEdit({ ...current, text })
           }}
-          onRewrite={(text, caret) => {
-            // A format from the bar: the line's new text goes to the scene as
-            // one line commit, and the line stays open on it.
-            const current = editRef.current
-            const live = current && findAnchor(current.anchorId)
-            if (!current || !live) return
-            const next = { ...current, text, caret, revision: (current.revision ?? 0) + 1 }
-            writeAnchorSource(api, current.anchorId, withTypedLine(live.source, next))
-            changeEdit(next)
-          }}
+          onRewrite={rewriteLine}
           onTitleFormat={(format) => {
             // A press on the title's bar or its keys: one undo step; the title stays open.
             writeAnchorTitleFormat(api, anchor.id, format)
@@ -425,6 +506,11 @@ export function MathOverlay({
 }
 
 const runNow = (write: () => void) => write()
+
+/** The open line's or title's field: the overlay holds at most one. */
+function openField(overlay: HTMLElement | null): HTMLInputElement | null {
+  return overlay?.querySelector<HTMLInputElement>('.math-element__field') ?? null
+}
 
 /**
  * An element's rows as laid out: `offsetTop` and `offsetHeight` ignore CSS
