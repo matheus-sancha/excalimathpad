@@ -2,9 +2,10 @@
 // built `dist-plugin/main.js` loads in headless Chromium against the fake
 // `obsidian` (plugin/test/obsidian.ts), with every non-local request blocked
 // and logged, and opens the pump sheet: math, a table, a plot, an image and
-// CJK text, and reads the ☰ stamp (the version). It fails on any attempted
-// request, any page error, a stamp that isn't the manifest's version, and any
-// <style> or <link> the bundle adds at run time.
+// CJK text. It reads the ☰ stamp (the version) and opens ☰ → Math guide. It
+// fails on any attempted request, any page error, a stamp that isn't the
+// manifest's version, a guide that doesn't open, and any <style> or <link>
+// the bundle adds at run time.
 //
 // Run: `node scripts/blocked-run.mjs` (`npm run test:blocked`), after
 // `npm run build:plugin`. `--probe-request` makes the page try one request
@@ -182,7 +183,20 @@ try {
     .then((element) => element.textContent())
     .catch(() => null)
   if (stamp?.trim() !== manifest.version) failures.push(`the ☰ stamp reads ${JSON.stringify(stamp)}, not the version ${manifest.version}`)
+  // ☰ → Math guide (section 8, Math guide): the guide opens from the bundle,
+  // inside the view, with its 17 sections listed, and asks for nothing.
+  await tab.click('[data-testid="math-guide-item"]')
+  const guide = await tab
+    .waitForSelector('.view-content .math-guide [role="dialog"]', { timeout: 10_000 })
+    .then((dialog) => dialog.evaluate((box) => ({
+      contents: box.querySelectorAll('.math-guide__body ol:first-of-type a').length,
+      sections: box.querySelectorAll('.math-guide__body h2').length,
+    })))
+    .catch(() => null)
+  if (!guide) failures.push("☰ → Math guide didn't open the guide inside the view")
+  else if (guide.contents !== 17 || guide.sections < 17) failures.push(`the Math guide shows ${JSON.stringify(guide)}, not its 17 sections`)
   await tab.keyboard.press('Escape')
+  if (await tab.$('.math-guide')) failures.push("Esc didn't close the Math guide")
   // Let late work (fonts, the plot's chunk, image decoding) try anything it would.
   await tab.waitForTimeout(1500)
   if (screenshot) await tab.screenshot({ path: screenshot })
@@ -207,4 +221,4 @@ if (failures.length) {
   for (const failure of [...new Set(failures)]) console.error(`  - ${failure}`)
   process.exit(1)
 }
-console.log('Network-blocked run passed: math, a table, a plot, an image and CJK text, and no request.')
+console.log('Network-blocked run passed: math, a table, a plot, an image, CJK text and the Math guide, and no request.')

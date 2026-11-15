@@ -12,6 +12,7 @@ import { BottomSheet } from './BottomSheet.tsx'
 import { closeMoreTools, markMoreTools, useMoreToolsSlot } from './moreTools.ts'
 import type { SheetTheme, ThemeMemory } from './theme.ts'
 import { VAULT_CLASS } from './vaultItems.ts'
+import { MathGuide } from '../guide/MathGuide.tsx'
 import './SheetCanvas.css'
 
 /**
@@ -42,6 +43,8 @@ export interface SheetCanvasHandle {
    * opens next (an edit's open and restore, section 8, M4d).
    */
   showSheetPanel: (state: SheetPanelState) => void
+  /** ☰ → Math guide: opens the guide's dialog (section 8, Math guide, M4d). */
+  openMathGuide: () => void
 }
 
 /** The Sheet panel's state: open or closed, and its tab. */
@@ -210,6 +213,9 @@ export function SheetCanvas({
   // The same box as `containerRef`, as state, for what waits on it.
   const [root, setRoot] = useState<HTMLElement | null>(null)
   const moreTools = useMoreToolsSlot(root)
+  // The Math guide's dialog (section 8, Math guide), from ☰ or Obsidian's command.
+  const [guideOpen, setGuideOpen] = useState(false)
+  const openMathGuide = useCallback(() => setGuideOpen(true), [])
 
   const forwardWheel = useCallback((event: WheelEvent) => {
     const canvas = containerRef.current?.querySelector('canvas')
@@ -260,14 +266,24 @@ export function SheetCanvas({
       else if (open) api.toggleSidebar({ name: SHEET_PANEL, tab, force: true })
       else if (sheetPanel().open) api.toggleSidebar({ name: SHEET_PANEL, force: false })
     }
-    onReadyRef.current?.({ api, forwardWheel, focusCanvas, root, addMath, toggleSheetPanel, sheetPanel, showSheetPanel })
-  }, [api, forwardWheel, focusCanvas, phone, showBottom])
+    onReadyRef.current?.({
+      api,
+      forwardWheel,
+      focusCanvas,
+      root,
+      addMath,
+      toggleSheetPanel,
+      sheetPanel,
+      showSheetPanel,
+      openMathGuide,
+    })
+  }, [api, forwardWheel, focusCanvas, phone, showBottom, openMathGuide])
 
-  // Excalidraw's own box, where the bottom sheet is drawn so it takes the theme.
-  // Excalidraw has drawn it by the time its API is handed out.
+  // Excalidraw's own box, where the bottom sheet and the Math guide are drawn,
+  // so they take its theme. Excalidraw has drawn it by the time its API is handed out.
   const excalidrawBox = useMemo(
-    () => (phone && api && root ? root.querySelector<HTMLElement>('.excalidraw') : null),
-    [phone, api, root],
+    () => (api && root ? root.querySelector<HTMLElement>('.excalidraw') : null),
+    [api, root],
   )
 
   // A change of light or dark (☰ Dark mode, Alt+Shift+D) is remembered.
@@ -394,7 +410,7 @@ export function SheetCanvas({
           )
         }
       >
-        <SheetMenu fileMenu={fileMenu} />
+        <SheetMenu fileMenu={fileMenu} onMathGuide={openMathGuide} />
         <SheetWelcome fileMenu={fileMenu} />
         {sheetPanel && !phone && (
           <Sidebar
@@ -439,6 +455,17 @@ export function SheetCanvas({
           </Sidebar>
         )}
       </Excalidraw>
+      {guideOpen &&
+        excalidrawBox &&
+        createPortal(
+          <MathGuide
+            onClose={() => {
+              setGuideOpen(false)
+              focusCanvas()
+            }}
+          />,
+          excalidrawBox,
+        )}
       {sheetPanel &&
         phone &&
         bottom.open &&
@@ -576,11 +603,11 @@ function SheetWelcome({ fileMenu }: { fileMenu?: FileMenu }) {
 export const WELCOME_HINT = 'Press M, or choose Add math under More tools, then click the sheet to place math'
 
 /**
- * The ☰ menu: the app's file items first, then the Excalidraw items v1 keeps.
- * Excalidraw's Open, Save to… and Export image… are left out. Print… arrives
- * in M5.
+ * The ☰ menu: the app's file items first, then the Excalidraw items v1 keeps,
+ * with Math guide just above Excalidraw's Help (M4d). Excalidraw's Open, Save
+ * to… and Export image… are left out. Print… arrives in M5.
  */
-function SheetMenu({ fileMenu }: { fileMenu?: FileMenu }) {
+function SheetMenu({ fileMenu, onMathGuide }: { fileMenu?: FileMenu; onMathGuide: () => void }) {
   return (
     <MainMenu>
       {fileMenu && (
@@ -598,6 +625,9 @@ function SheetMenu({ fileMenu }: { fileMenu?: FileMenu }) {
         </>
       )}
       <MainMenu.DefaultItems.SearchMenu />
+      <MainMenu.Item onSelect={onMathGuide} icon={<GuideIcon />} data-testid="math-guide-item">
+        Math guide
+      </MainMenu.Item>
       <MainMenu.DefaultItems.Help />
       <MainMenu.DefaultItems.ClearCanvas />
       <MainMenu.Separator />
@@ -608,5 +638,15 @@ function SheetMenu({ fileMenu }: { fileMenu?: FileMenu }) {
         {__BUILD_STAMP__}
       </div>
     </MainMenu>
+  )
+}
+
+/** The Math guide item's icon: an open book, drawn as Excalidraw's own menu icons are. */
+function GuideIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M3 5.5c2.5-1 5.5-1 9 1 3.5-2 6.5-2 9-1v13c-2.5-1-5.5-1-9 1-3.5-2-6.5-2-9-1z" />
+      <path d="M12 6.5v13" />
+    </svg>
   )
 }

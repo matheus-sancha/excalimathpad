@@ -48,6 +48,8 @@ import { isInSheetPanel, keepPanelPresses } from './canvas/panelPresses.ts'
 export interface SheetCommands {
   addMath: () => void
   toggleMathSettings: () => void
+  /** ☰ → Math guide (M4d). */
+  openMathGuide: () => void
 }
 
 /**
@@ -202,11 +204,15 @@ export default function App({ files, recovery, panelMemory, vault, initialElemen
     if (canvasRoot) return keepPanelPresses(canvasRoot, vaultContainer)
   }, [canvasRoot, vaultContainer])
 
-  // Obsidian's Add math and Toggle Math settings commands act on this tab.
+  // Obsidian's Add math, Toggle Math settings and Open Math guide commands act on this tab.
   const handCommands = vault?.commands
   useEffect(() => {
     if (!handCommands || !canvas) return
-    handCommands({ addMath: canvas.addMath, toggleMathSettings: canvas.toggleSheetPanel })
+    handCommands({
+      addMath: canvas.addMath,
+      toggleMathSettings: canvas.toggleSheetPanel,
+      openMathGuide: canvas.openMathGuide,
+    })
     return () => handCommands(null)
   }, [handCommands, canvas])
   const imageTool = useMemo(

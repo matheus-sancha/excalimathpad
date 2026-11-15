@@ -17,8 +17,9 @@
 
 import { build } from 'esbuild'
 import { copyFile, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
-import { dirname, join } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { GUIDE_QUERY, guideModule } from './src/guide/markdown.ts'
 
 const root = dirname(fileURLToPath(import.meta.url))
 const out = join(root, 'dist-plugin')
@@ -73,6 +74,25 @@ const trims = {
         '',
       ),
       loader: 'css',
+    }))
+  },
+}
+
+/**
+ * `docs/math-guide.md?guide`: the Math guide, turned into elements at build
+ * time, as `vite.config.ts` does for the web (docs/spec-v1.md section 8).
+ */
+const mathGuide = {
+  name: 'excalimathpad-math-guide',
+  setup(b) {
+    b.onResolve({ filter: /\.md\?guide$/ }, (args) => ({
+      path: resolve(args.resolveDir, args.path.slice(0, -GUIDE_QUERY.length)),
+      namespace: 'math-guide',
+    }))
+    b.onLoad({ filter: /.*/, namespace: 'math-guide' }, async (args) => ({
+      contents: guideModule(await readFile(args.path, 'utf8')),
+      loader: 'js',
+      watchFiles: [args.path],
     }))
   },
 }
@@ -143,7 +163,7 @@ export async function buildPlugin({ outDir = out, log = console.log } = {}) {
       // Section 12, Hosted build: the plugin's stamp is its version.
       __BUILD_STAMP__: JSON.stringify(pkg.version),
     },
-    plugins: [trims],
+    plugins: [mathGuide, trims],
     metafile: true,
     logLevel: 'warning',
   })

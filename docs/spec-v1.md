@@ -1539,7 +1539,8 @@ The Problems badge sits on its icon. Format is the [Format tab](#format-tab) and
 ### Math guide
 
 From M4d. **☰ → Math guide** opens `docs/math-guide.md`, turned into HTML at build time, in an
-in-app dialog that scrolls and starts at its contents list. It has no shortcut (`?` stays
+in-app dialog that scrolls and starts at its contents list. (The build turns it into a tree of
+elements that the dialog draws, so nothing sets `innerHTML`, as Obsidian's review asks.) It has no shortcut (`?` stays
 Excalidraw's Help). It is the same on the web, offline and in a vault, and makes no request.
 
 - It is written for a newcomer engineer, about 400 to 600 lines, in 17 sections in learning
@@ -1552,7 +1553,7 @@ Excalidraw's Help). It is the same on the web, offline and in a vault, and makes
 - It links only to its own sections, and to no file or site.
 - A CI test (`src/math/math-guide.test.ts`) evaluates each section's Write cells in order as
   one sheet and checks each against its Shows cell, at the default Digits. Rows that aren't
-  math carry a marker the test skips.
+  math carry a marker the test skips: a Write cell in italics.
 - The dialog closes on Esc, ✕ or a click outside, and is as wide as the view allows up to
   about 760 px.
 
@@ -1587,7 +1588,7 @@ From M4d, in the plugin. The web app's chrome above is unchanged.
 - **Obsidian's entries:** the commands **New sheet** (always), **Add math**, **Toggle Math
   settings** and **Open Math guide** (only while a sheet tab is active), with no default
   hotkeys; the ribbon icon (New sheet); no settings tab. Add math and Toggle Math settings do
-  what their More tools items do, in the active tab. Open Math guide arrives with the guide.
+  what their More tools items do, in the active tab, and Open Math guide what ☰ → Math guide does.
 - **Side by side and in a pop-out window** each sheet tab keeps its own keys, panel and
   dialogs. In a pop-out (desktop) the tab works as in the main window: drag, place, draw,
   Help and the other dialogs, copy and paste. Excalidraw listens on the main window there, so

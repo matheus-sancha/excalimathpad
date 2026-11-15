@@ -31,7 +31,13 @@ come, and their terms move in here as each M4d issue makes them true.
   `hasTouch`, at a phone and a tablet viewport, each as Android and as iOS,
   `navigator.platform` being what Excalidraw reads; the phone with
   `Platform.isPhone`). CI installs Playwright's Chromium (the version
-  `package.json` pins) for the last three.
+  `package.json` pins) for the last three. The network-blocked run and the pop-out
+  run also open ☰ → Math guide in the built plugin (M4d, #148).
+- `docs/math-guide.md` — the **Math guide** (spec section 8, M4d, #148): every
+  form, key and setting, for users, in 17 sections. Both builds turn it into
+  elements when the app imports `docs/math-guide.md?guide` (`vite.config.ts`
+  and `esbuild.plugin.mjs`, through `src/guide/markdown.ts`), and
+  `src/math/math-guide.test.ts` runs its examples in CI.
 - `.github/workflows/release.yml` — the **Release button** (section 12a,
   Releases): run by hand on `main` with patch, minor or major. It runs
   `npm version`, `npm run check`, then one atomic push of the commit and tag
@@ -74,7 +80,7 @@ come, and their terms move in here as each M4d issue makes them true.
   view's container, and turns Excalidraw's embeds off. It also confines the
   keys to the view (`confineKeys`), bridges the view when it is in a pop-out
   window (`bridgeWindow`, again after `vault.onWindowMigrated`), hands the
-  view its `SheetCommands` (Add math, Toggle Math settings) through
+  view its `SheetCommands` (Add math, Toggle Math settings, Open Math guide) through
   `vault.commands`, and passes the canvas `vault` and `vault.theme` (where
   light or dark is remembered). `panelMemory` is where the panel's open state lives
   (a port: `storagePanelMemory` on the web, `data.json` in the plugin, this
@@ -106,7 +112,10 @@ come, and their terms move in here as each M4d issue makes them true.
   is the official, unforked component; its `onReady` hands out a
   `SheetCanvasHandle`: Excalidraw's imperative API plus `forwardWheel`,
   `focusCanvas`, and `addMath` and `toggleSheetPanel`, what the two More tools
-  items do. With `vault` it marks its box `sheet-canvas--vault` (`VAULT_CLASS`
+  items do, and `openMathGuide`, what ☰ → Math guide does (M4d, #148). The ☰
+  menu holds Math guide just above Excalidraw's Help; its dialog
+  (`MathGuide`, in `src/guide/`) is portalled into `.excalidraw`, as the
+  bottom sheet is, and gives the canvas the keyboard back when it closes. With `vault` it marks its box `sheet-canvas--vault` (`VAULT_CLASS`
   in `vaultItems.ts`), under which `SheetCanvas.css` hides the items
   `VAULT_HIDDEN` names (Web Embed and Mermaid, one test id; the Generate
   heading; Browse libraries; Copy to clipboard as SVG), and turns off
@@ -206,7 +215,7 @@ come, and their terms move in here as each M4d issue makes them true.
   snaps back. It also says when a size write waits (`sizeWritesWait`). The only module that imports
   Excalidraw at runtime; tests may too, and other modules may import its
   types. This is ADR 0001's engineering rule as amended in ADR 0002. Depends
-  on: `@excalidraw/excalidraw`.
+  on: `@excalidraw/excalidraw`, guide (the Math guide's dialog).
 - **math** (`src/math/`) — the engine. Interface: `evaluateSheet(blocks)`,
   with blocks `{ id, source }` already in reading order → one `SheetLine` per
   line, keyed by block id; never throws. A `SheetLine` is the line's
@@ -538,7 +547,7 @@ come, and their terms move in here as each M4d issue makes them true.
   view for `.excalimathpad` only and keeps the panel's open state and light
   or dark in `data.json` (`loadData`/`saveData`; `SheetMemory`, anything else
   read there dropped). It registers New sheet and `SHEET_COMMANDS` (Add math,
-  Toggle Math settings), whose `checkCallback` offers them only while
+  Toggle Math settings, Open Math guide), whose `checkCallback` offers them only while
   `getActiveViewOfType(SheetView)` has `commands`; none has a hotkey. `SheetView.ts` is the `TextFileView`:
   `setViewData` runs the **lookbehind check** (`hasLookbehind`; without it,
   "Excalimathpad needs iOS 16.4 or later."), then `readSheet`; a newer or
@@ -582,6 +591,21 @@ come, and their terms move in here as each M4d issue makes them true.
   blocked run bundles the same file for the browser.
   `plugin/test/pump-sizing.excalimathpad` is the pump sheet with an image and
   CJK text. Depends on: App, file (`readSheet`, the messages), panel memory.
+- **guide** (`src/guide/`, spec section 8, Math guide, M4d, #148) — the Math
+  guide in the app. `markdown.ts` (pure, no DOM and no Node) turns
+  `docs/math-guide.md` into a tree of elements (`guideTree`, `GuideNode`):
+  `#`–`###` headings with GitHub's anchors (`slug`) behind `math-guide-`,
+  paragraphs, lists, tables (`\|` for a pipe), fenced code with an info string,
+  inline code, bold, italic and links to the guide's own headings. It refuses
+  anything else, so a link to a file or a site, or a construct the dialog
+  can't draw, fails the build. `guideModule` is the module both builds hand
+  the app for `?guide` (typed in `mathGuide.d.ts`): the tree as JSON, so the
+  bundle holds no Markdown code and nothing sets `innerHTML`. `MathGuide.tsx`
+  is the dialog: React draws the tree in a box that scrolls and starts at
+  the top (the contents list) with the keyboard; it closes on Esc, ✕ or a
+  click outside that also started outside; its links scroll within it; its
+  keys stop at its box. `guideBox.ts` holds `MATH_GUIDE_CLASS` and
+  `isInMathGuide`, which `listenToCanvas` reads. Depends on: nothing.
 - **test setup** (`src/test/`) — jsdom stubs for browser APIs Excalidraw
   touches on mount (canvas, fonts, matchMedia, ResizeObserver, which tests can
   fire), helpers for tests against the real Excalidraw, body sizes for the
@@ -773,7 +797,12 @@ and everything downstream recalculates. Engine: math.js, client-side.
   run. **The Sheet panel is
   the exception** (M4d, #143): it is drawn inside `root`, but a press, click,
   double-click or key there isn't the canvas's (`isInSheetPanel`,
-  `panelPresses.ts`), so a press in the panel never leaves the open line.
+  `panelPresses.ts`), so a press in the panel never leaves the open line. The
+  Math guide's dialog (M4d, #148) is drawn there too, and is the same
+  (`isInMathGuide`): M typed in it places nothing, and a pointer move over it
+  shows no hover from the math beneath. Excalidraw's own `onKeyDown` is a
+  React prop on its container, and the dialog's React parent is
+  `SheetCanvas`, not Excalidraw, so Excalidraw never hears its keys either.
 - **The line field ignores a press that continues a double-click begun
   elsewhere** (`mousedown` with `detail` 2 or more, before any press of its own),
   so double-clicking another line while editing opens it with the caret at the
