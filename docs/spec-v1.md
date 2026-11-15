@@ -3098,7 +3098,7 @@ Changes line if it changes behaviour.
   flag, the deliberate lookbehind in `hasLookbehind` (#147); the README is users first, with Privacy and
   Support; the issue forms and `SECURITY.md` are in place. **Found:** GitHub's private vulnerability
   reporting, which `SECURITY.md` points to, was off, and the build session couldn't turn it on (the
-  setting is the repository owner's): Matheus turns it on under Settings → Code security before
+  setting is the repository owner's): Matheus turns it on under Settings → Advanced Security before
   submitting.
 - The beta through BRAT (#138, replacing M4b's #85). **`0.1.0` failed on 2026-11-14:** in Matheus's vault,
   every save while a line was open made a conflict copy, and editing the copy made a copy of it. The
