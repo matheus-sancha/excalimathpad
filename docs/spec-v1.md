@@ -2147,6 +2147,7 @@ The wording of every user-facing message. `<…>` is filled in. Numbers follow
 | When | Message | Arrives |
 |---|---|---|
 | Unknown `in xyz` in source | `Unknown unit xyz` | M2 |
+| A complex value with a unit, alone or in a list | `a complex value with a unit can't be shown` | 0.2.1 |
 | A clause word that isn't a format | `Unknown format @bolt`, `Unknown format @text-purple` | #63, M4c |
 | A part of a joined word that isn't a format | `Unknown format @blod in @text-red+blod` | M4d |
 | A comment word on a math line | `@L is for comment lines`, `@upright is for comment lines` | M4d |
@@ -3724,3 +3725,9 @@ Changes line if it changes behaviour.
 - 2026-11-15, [section 12a](#listing) (#149, agreed by Matheus on the screenshot he took): **the listing's
   screenshot shows the panel on Variables,** not Format, in Obsidian's dark theme with the sheet light.
   Matheus kept the screenshot as taken rather than retaking it. It is retaken only when the look changes a lot.
+- 2026-11-15, [section 13](#13-messages) (#179, a hotfix released as 0.2.1, for Matheus to confirm on the PR):
+  **a complex value with a unit is a line error,** `a complex value with a unit can't be shown`, alone
+  (`z = (3 + 4i) mm`, which showed math.js's own wording) or in a list (`r_t cos(theta) i`, the half-typed
+  state of `… in mm`, which took the sheet down). Its value still reaches the lines below, and a complex
+  value without a unit shows as before (`2i`). A throw from outside a line's own handling is now that line's
+  error and the lines below still run; the full rule for unexpected failures is #180's.
