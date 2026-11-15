@@ -1,0 +1,68 @@
+import { createRequire } from 'module'
+const { chromium } = createRequire(import.meta.url)('playwright')
+const b = await chromium.launch()
+const measure = async (p) => p.evaluate(() => {
+  const q = (s) => document.querySelector(s)
+  const r = (s) => { const e = q(s); if (!e) return null; const x = e.getBoundingClientRect(); return { l: Math.round(x.left), r: Math.round(x.right), w: Math.round(x.width) } }
+  const c = q('.excalidraw-container')
+  const tabs = [...document.querySelectorAll('.sheet-sidebar .sheet-tab')].map(e => Math.round(e.getBoundingClientRect().width))
+  const btns = [...document.querySelectorAll('.sheet-sidebar .sidebar__header__buttons button')].map(e => { const x = e.getBoundingClientRect(); return [e.getAttribute('aria-label') || e.title, Math.round(x.left), Math.round(x.right)] })
+  const tl = q('.sheet-sidebar .sidebar-triggers')
+  return {
+    container: r('.excalidraw-container'), mobile: c?.classList.contains('excalidraw--mobile'),
+    varWidth: c && getComputedStyle(c).getPropertyValue('--right-sidebar-width'),
+    sidebar: r('.sheet-sidebar'), docked: q('.sheet-sidebar')?.classList.contains('sidebar--docked') ?? null,
+    wrapper: r('.layer-ui__wrapper'), canvas: r('canvas.interactive'), toolbar: r('.App-toolbar'),
+    tabs, tabsClip: tl ? [tl.clientWidth, tl.scrollWidth] : null, btns, header: r('.sheet-sidebar .sidebar__header'),
+    bottomSheet: !!q('.sheet-bottom'),
+  }
+})
+const open = async (p) => {
+  if (await p.$('.sheet-sidebar')) return true
+  const t = await p.$('.App-toolbar__extra-tools-trigger'); if (!t) return false
+  await t.click(); const item = p.getByText('Math settings', { exact: true }).first()
+  try { await item.click({ timeout: 2000 }) } catch { return false }
+  await p.waitForTimeout(300); return !!(await p.$('.sheet-sidebar'))
+}
+const out = {}
+// 1. window widths, default breakpoint
+for (const [w, h] of [[1536, 864], [1366, 768], [1280, 720], [1230, 800], [1229, 800], [1000, 800], [900, 800], [760, 800], [729, 800], [700, 800], [900, 480]]) {
+  const p = await b.newPage({ viewport: { width: w, height: h } })
+  await p.goto('http://localhost:5199/'); await p.waitForSelector('.excalidraw-container'); await p.waitForTimeout(1500)
+  const auto = !!(await p.$('.sheet-sidebar')); const opened = await open(p)
+  out[`win ${w}x${h}`] = { autoOpened: auto, opened, ...(await measure(p)) }
+  await p.close()
+}
+// 2. runtime width changes at 1536
+{
+  const p = await b.newPage({ viewport: { width: 1536, height: 864 } })
+  await p.goto('http://localhost:5199/'); await p.waitForSelector('.excalidraw-container'); await p.waitForTimeout(1500); await open(p)
+  const scroll0 = await p.evaluate(() => document.querySelector('canvas.interactive').width)
+  for (const px of [200, 240, 280, 302, 340, 384, 480, 600]) {
+    await p.evaluate((px) => document.querySelector('.excalidraw-container').style.setProperty('--right-sidebar-width', px + 'px', 'important'), px)
+    await p.waitForTimeout(200)
+    const m = await measure(p)
+    out[`width ${px}`] = { varWidth: m.varWidth, sidebar: m.sidebar, wrapper: m.wrapper, canvas: m.canvas, tabs: m.tabs, tabsClip: m.tabsClip, btns: m.btns, toolbar: m.toolbar }
+  }
+  // does the inline override survive Excalidraw re-renders? switch tab, toggle dock, draw
+  await p.evaluate(() => document.querySelector('.excalidraw-container').style.setProperty('--right-sidebar-width', '300px', 'important'))
+  await p.locator('.sheet-sidebar .sheet-tab').nth(2).click(); await p.keyboard.press('r'); await p.mouse.move(300, 300); await p.mouse.down(); await p.mouse.move(400, 380); await p.mouse.up()
+  await p.waitForTimeout(300)
+  out['override survives rerender'] = (await measure(p)).varWidth
+  out['canvas backing width before/after'] = [scroll0, await p.evaluate(() => document.querySelector('canvas.interactive').width)]
+  // undock via the dock button
+  const dock = p.locator('.sheet-sidebar .sidebar__dock'); out['dockButton'] = await dock.count()
+  if (await dock.count()) { await dock.first().click(); await p.waitForTimeout(300); const m = await measure(p); out['undocked at 1536'] = { docked: m.docked, sidebar: m.sidebar, wrapper: m.wrapper } }
+  await p.close()
+}
+// 3. custom breakpoint
+for (const [w, bp] of [[1000, 800], [900, 800], [760, 700], [760, 0], [700, 0], [1536, 5000]]) {
+  const p = await b.newPage({ viewport: { width: w, height: 800 } })
+  await p.goto(`http://localhost:5199/?bp=${bp}`); await p.waitForSelector('.excalidraw-container'); await p.waitForTimeout(1500)
+  const auto = !!(await p.$('.sheet-sidebar')); const opened = await open(p)
+  const m = await measure(p)
+  out[`bp ${bp} win ${w}`] = { autoOpened: auto, opened, mobile: m.mobile, docked: m.docked, sidebar: m.sidebar, wrapper: m.wrapper, toolbar: m.toolbar, dockBtn: m.btns }
+  await p.close()
+}
+console.log(JSON.stringify(out, null, 1))
+await b.close()
