@@ -90,6 +90,14 @@ Engineering rules (Engineer's):
   matrix arithmetic, so `Q_s^2` means each point squared.
 - `table`, `plot` and `solve` are reserved names, and from M4d `if`.
 
+Amended on 2026-11-15 for M4e, decided by Matheus (#182). Not built yet (#195):
+
+- **Step 2 reads the format clause from the line's stored format,** not from its text
+  (ADR 0002's `customData.formats`). A clause found in the line's text (a typed one not yet
+  committed, or a hand-edited file) is read as before and joined in front of the stored one.
+  Rules still run after the line, in the same scope. This replaces "the format travels with
+  the line" for math lines and comment lines alike.
+
 ## Alternatives considered
 
 - **Functions added to math.js** (`solve(...)`, `range(...)`) through `import`. A solve needs

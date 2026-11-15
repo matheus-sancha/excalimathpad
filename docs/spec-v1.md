@@ -1,7 +1,7 @@
 # Excalimathpad v1 spec
 
-**Status:** agreed 2026-11-03 · living
-until v1 is done
+**Status:** agreed 2026-11-03 · living. From 1.0.0, "v1" in this file's name is a name, not a
+status: this stays the living spec, at this path and with these section numbers
 
 ## 1. What v1 is, and what it isn't
 
@@ -9,8 +9,9 @@ Excalimathpad v1 is a calc sheet for anyone, built around Matheus's own engineer
 work, with no server; it is free and best effort. It is the Excalidraw whiteboard
 with live, unit-aware math on it. You type math where you want it on the canvas,
 see it typeset with results and units, edit an input and everything below
-recalculates, save the sheet to a file, and print it to PDF. It installs as an
-offline app. It runs on Chrome and Edge on desktop.
+recalculates, save the sheet to a file, and print it to PDF. It runs on Chrome and
+Edge on desktop. Installing it as an offline app is M6, built after 1.0.0
+([section 16](#16-milestones-and-finish-line)).
 
 From M4d it has a second home: an **Obsidian community plugin** that opens
 `.excalimathpad` files from a vault in its own tab, on desktop, phone and tablet,
@@ -27,8 +28,8 @@ Both homes read and write the same file.
   item marked with a milestone isn't built yet.
 - A change Matheus agrees is edited in here, with a line under
   [Changes since agreed](#changes-since-agreed), in the PR that needs it. Behaviour
-  doesn't change without this file changing. When the finish line is met, the
-  status becomes "v1 done, historical".
+  doesn't change without this file changing. When the finish line is met, 1.0.0 is
+  released and this file goes on as the spec of the app, edited in place (M4e).
 
 **Not in v1:**
 
@@ -41,11 +42,11 @@ Both homes read and write the same file.
 | Formats | Sheet-wide rules (an "applies to"); text size, italic or alignment on a math line; alignment on a comment line; a colour picker or hex colours; rules on a title or a comment line; formatting a selected element, or several lines at once, from the Format tab |
 | Programs | Mathcad's program block across lines (local names, `for`, `while`, `return`, the vertical bar); Calcpad-style `#if` / `#else` / `#end` lines; `ifs()` and `error()`; `<` and `>` on text; several statements on one line |
 | Plots | A second y axis; zoom, pan or hover values on curves; renamed axis titles; chosen colours |
-| Print | Printing a selection, frame or viewport; a scale setting; page guides on the canvas |
+| Print | Printing a selection, frame or viewport; a scale setting; page guides on the canvas; Print on a phone or tablet; a preview inside Obsidian |
 | Editing | Cancelling a line edit; placing the caret at the clicked character; Greek or operator characters in the source (`ρ`, `≤`) and new operators (integral, derivative): the Symbols tab types the text the engine already reads |
 | Help | A Help tab in the panel, an example sheet, or a PDF guide: the Math guide is one Markdown file shown in a dialog |
 | Files | Excalidraw's image export; a supported round trip through plain Excalidraw; several sheets in one window; embedding a sheet in an Obsidian note (`![[…]]`, as a picture or a live sheet); resolving links between sheets, or to notes, from inside a sheet |
-| Platforms | Touch and mobile layouts in the web app; browsers other than Chrome and Edge on desktop (a save and open fallback exists, untested); the plugin on iOS below 16.4; Excalidraw's embeds and library browsing in the plugin; the Sheet panel as a view in Obsidian's sidebar; a plugin settings tab |
+| Platforms | The installed offline app (M6, after 1.0.0); touch and mobile layouts in the web app; browsers other than Chrome and Edge on desktop (a save and open fallback exists, untested); the plugin on iOS below 16.4; Excalidraw's embeds and library browsing in the plugin; the Sheet panel as a view in Obsidian's sidebar; a plugin settings tab |
 
 The web app makes no promises on a touch device. The plugin does, from M4d: a phone
 and a tablet edit everything desktop does ([section 4](#touch), [section 8](#on-a-phone)),
@@ -304,8 +305,32 @@ U = I_load * R in V @bold @text-red @yellow # check
 **A comment line's format** (M4d) is a clause written in front of its `#`:
 `@bold @L @text-red # Pumps and pipes`. The comment split stays the first step of reading,
 so nothing after a `#` is read: `# call me @home` stays plain text, and every comment
-saved before M4d reads as before. The clause is text in the line, so split, join, copy,
-paste, undo and save carry it, and nothing goes into `customData`.
+saved before M4d reads as before. Until M4e the clause is text in the line; from M4e it is
+stored beside the line like any other format, below.
+
+**Where a line's format lives** (M4e). A line's format, its words and its rules, is not part
+of the line's text. It is saved beside the line ([section 7](#the-file)) and shown and changed
+in the [Format tab](#format-tab). The open line's field shows the math and the note only. This
+holds for a math line and a comment line alike.
+
+- **Typing it still works.** `@bold`, `@text-green` and a rule such as
+  `@text-red if v > 3 m/s` may be typed at the end of a line (in front of the `#` on a comment
+  line), with the same words, the same suggestions after `@` and the same errors. While the
+  line is open a typed clause shows live. When the line is committed, everything from the
+  first `@` outside a string up to the note moves out of the text into the line's format, in
+  front of what is already stored; a typed word that clashes with a stored one (a second
+  colour) replaces it. The next time the line opens, the field shows the math alone.
+- **Enter** in a line: the first half keeps the format; the new line starts with none.
+- **Backspace** at the start of a line: the joined line keeps the upper line's format; if the
+  upper line had none, it keeps the lower line's.
+- **Copying a line's text** copies the math, not the format. Copying, pasting or duplicating
+  the math element carries every line's format. Text pasted with an `@…` in it is read as
+  typed.
+- **The engine** reads the format from where it is stored. A clause found in a line's text (a
+  typed one not yet committed, or a hand-edited file) is read as before and joined in front
+  of the stored one. Rules run after the line, in the same scope, as before.
+- The open line shows no marker for a stored format: the Format tab and the typeset row show
+  it.
 
 | Word, on a comment line | Sets | Without it |
 |---|---|---|
@@ -641,6 +666,59 @@ there.
   ([section 8](#sheet-panel)).
 - It is fixed behaviour, with no setting. Print already leaves `⚠` off.
 
+### Unexpected failures
+
+From M4e (the line's guard is in 0.2.1). An unexpected failure is the app's own fault, not
+the sheet's. It stays as small as the thing that failed, says whose fault it is, never writes
+the file, and offers details to report that hold no sheet content.
+
+- **A line.** An unexpected throw while one line is read, its parse included, is that line's
+  error: `this line hit an unexpected error in Excalimathpad`, in the result cell. The raw
+  text of the failure is on hover and in the Problems tab, under those words. The line shows
+  as its plain source. The lines below still run; a name the line defines reads
+  `x has an error above` below it.
+- **A math element** has its own boundary. A failed element shows its lines as plain text
+  under a red `●` and `this element hit an unexpected error in Excalimathpad`. It can still
+  be opened and edited. The other elements, the drawings, the canvas and the panel keep
+  working.
+- **A chart** that fails to draw shows `this chart hit an unexpected error in Excalimathpad`
+  in its box; its line stays.
+- **A panel tab** has its own boundary: `this tab hit an unexpected error in Excalimathpad`.
+- A boundary tries again when its element's lines or results change.
+- **The whole view.** A failure outside every boundary replaces the view with a failure
+  screen:
+
+  ```text
+  This sheet hit an unexpected error in Excalimathpad.
+
+  Your sheet is kept up to the last finished line. You were typing:
+
+    zone_x = r_t cos(theta) i     [ Copy ]
+
+  [ Reload the sheet ]   [ Copy details ]   Report this error
+  ```
+
+  - **The failed view never writes the file.** In a vault, what the tab holds is the sheet as
+    of the last line commit or scene change; on the web, the recovery copy. A broken scene
+    can't overwrite a good one.
+  - **Reload the sheet** mounts the sheet again from that kept copy, as an open does: no undo
+    step, history cleared.
+  - The line being typed is shown as text to copy, and isn't put back by itself, since it may
+    be the cause. With no line open, that part of the screen is left out.
+- **Copy details** puts a short text on the clipboard: the version and build stamp, web or
+  Obsidian plugin (and desktop, phone or tablet), what failed (a line, an element, a chart, a
+  tab, the view), and the error with its stack. It ends `(no sheet content is included)`. It
+  holds no line text, name or value.
+- **Report this error** is a plain link to the repository's new-issue page, with nothing
+  filled in. The app sends nothing by itself.
+- Copy details and Report this error appear on the failure screen, on a failed element, and
+  on the failed line's row in the Problems tab.
+- **In print** a line's unexpected error and the notice in place of a failed element or chart
+  print as they show, as errors do.
+
+A line that would freeze the sheet or run it out of memory can't be caught this way; it is
+stopped before it runs ([section 10](#ranges-and-lists)).
+
 ### Solve details
 
 Hovering the result of a solve line (`Q_op`), or of a line that is just one call to a
@@ -680,8 +758,9 @@ function's definition show none. Hover is screen-only.
 
 ### While editing a line
 
-- The line becomes a one-line source field over the line's equation space, starting
-  where the typeset line did, so the text doesn't move. Its result cell shows the live result as plain text, and its note cell is
+- The line becomes a source field over the line's equation space, starting
+  where the typeset line did, so the text doesn't move. Until M4e the field is one row; from
+  M4e it wraps, below. Its result cell shows the live result as plain text, and its note cell is
   empty because the note is in the field.
 - The sheet re-runs on every keystroke. Every other line stays typeset and updates
   live.
@@ -694,13 +773,24 @@ function's definition show none. Hover is screen-only.
   and Esc or a click outside leave. The title keeps what was typed, trimmed; an empty one
   removes the header.
 - **Backspace** at the start joins the line to the one above.
+- **The field wraps** (M4e). A line longer than the wrap width continues on the next row of
+  the field, and the element grows taller, not wider. The wrap width is the element's
+  [chosen width](#chosen-width) when it has one. With none, it is the space from the element's
+  left edge to the visible area's right edge less the 48 px margin, measured when the line
+  opens and kept until it closes (a pan or a resize during the edit doesn't re-wrap), and at
+  least 240 px. If the element's left edge is out of view, or 240 px doesn't fit, the canvas
+  scrolls sideways by the follow rule (0.2.2,
+  [#191](https://github.com/matheus-sancha/excalimathpad/issues/191)). ↑ and ↓ move between
+  the field's rows and leave the line only from its first or last row. Enter still splits the
+  line; a pasted newline becomes a space. Typing in a Format tab field doesn't move the view.
 - A **single click on another line** of the element moves the edit there.
 - **Formatting** is done in the [Format tab](#format-tab), which opens when an edit starts
   (M4d). Until M4d a floating **format bar** beside the open line did it; the bar and the
   title's bar are removed. **Ctrl+B** and **Ctrl+U** toggle bold and underline from the
   field, on a math line, a comment line and the title. **Ctrl+I** toggles italic on a
   comment line (writing or removing `@upright`) and on the title, and does nothing on a
-  math line. A clause typed by hand shows live, like any other typing.
+  math line. A clause typed by hand shows live, like any other typing, and from M4e moves to the
+  line's stored format when the line is committed ([section 3](#3-sheet-lines-every-form)).
 - The line and title fields set `autocapitalize="off"`, `autocorrect="off"` and
   `spellcheck={false}`, and carry `data-prevent-outside-click`, so a press in the field
   never closes a floating panel (M4d).
@@ -860,6 +950,28 @@ Variables tab's naming ("MATH LINE — PIPE FLOW, LINE 3", "COMMENT LINE — …
 with its result and note, rules applied, live as it is typed; a comment line or a title in
 its format.
 
+**From M4e the sample is smaller than the sheet and wraps:**
+
+- It draws the open line with its format and rules applied, at **13 px with 20 px rows** (the
+  sheet's are 16 and 24), in a box as wide as the panel.
+- A line wider than the box **wraps**. Typeset math breaks only where KaTeX allows: after an
+  operator or a relation at the top level, and between the name with its `≔` and the
+  expression. The **result** moves to a row of its own, keeping its rule on the left, when it
+  doesn't fit beside the expression. A note, a comment, a line shown as source and an error's
+  message wrap as text.
+- A part that can't break (a long square root, a fraction, a call's arguments) **scrolls
+  sideways** inside the box. Nothing is scaled down to fit.
+- The box is as tall as its line, up to about **150 px (six rows)**; past that it scrolls
+  inside. A table line may take up to about 300 px.
+- **A plot line shows its line only,** with the note "Its chart is drawn on the sheet." A
+  format doesn't change the chart.
+- **A table line shows its line and the whole table, scaled down to the box's width,** because
+  a rule colours its rows. The scale has no floor.
+- **On a phone** the bottom sheet shows the same sample, **72 px (about three rows) at most**,
+  scrolling inside, and never a chart or a table: a plot or a table line shows its line only,
+  without the note.
+- The title's sample is unchanged: one row, at the title's own size.
+
 - When a true rule overrides a property the buttons set, a line under the sample says so:
   "A rule sets the text colour while v > 3 m/s." The buttons still show and set the plain
   format under it.
@@ -897,8 +1009,26 @@ with the `#` (#144). A title press is one step. Pressing a pressed button takes 
 ### Rules list
 
 From M4d, on a math line only, under the Format tab's rows. Its header says "first true wins,
-top to bottom". No field in the panel takes the keyboard, so the line never leaves while rules
-are edited: **the condition is typed in the line itself**, with its suggestions and units.
+top to bottom". Until M4e no field in the panel takes the keyboard, so the line never leaves
+while rules are edited: **the condition is typed in the line itself**, with its suggestions
+and units.
+
+**From M4e a rule's condition is edited in the Rules list,** in a text field on its row, since
+the line's text no longer holds the format ([section 3](#3-sheet-lines-every-form)):
+
+- While that field has the keyboard **the open line stays open**, with its field and whatever
+  is half-typed in it. It is the one typed field in the panel that doesn't leave the line. A
+  press back in the line continues the edit.
+- The condition is saved on Enter or when its field loses the keyboard, as one undo step. An
+  empty condition removes nothing: the row shows `⚠` and "a rule needs a condition".
+- The field offers the name and unit suggestions the line's field has.
+- **+ Add rule** adds a row with the format `text-red` and the condition `<name> ` already in
+  its field, the caret after it; nothing is written into the line.
+- Add, remove, reorder and each format change write the line's stored format, one undo step
+  each, and never touch the line's text or its caret.
+- At the panel's least width a long condition's field scrolls sideways; the colour rows wrap.
+
+What follows describes M4d, and still holds where M4e doesn't replace it.
 
 Each row is one rule, in the line's order, and holds no-focus controls:
 
@@ -1318,6 +1448,24 @@ M4d adds nothing to the file: a comment line's format, joined words and conditio
 text in the source, so the format number still stays 1, and a sheet moves between the web
 app and a vault unchanged.
 
+**From M4e the file is format 2,** the first migration (ADR 0004):
+
+- An anchor's `customData` gains `formats`: a string with one entry per line of `source`,
+  separated by `\n`, each entry the line's clause as it was written in the line (`@bold`,
+  `@text-green if result == "Pass" @text-red if result == "Fail"`), empty for a line with
+  none. It is a string for the reason `titleFormat` is. An anchor whose lines have no format
+  stores no `formats` key. A reader pads or cuts the entries to the number of lines.
+- `source` and `formats` change in one write, so a commit, an Enter, a join or a press in the
+  Format tab is one undo step.
+- **On open, a format 1 sheet is migrated in memory:** each line's clause moves from its text
+  into `formats`. The file changes at the next save, and opening alone doesn't make the sheet
+  dirty. The migration runs on every open path: Open…, a dropped file, a vault file, an
+  outside change read back, and the recovery copy.
+- **A format 2 sheet is refused by 0.2.x** with "This sheet was saved by a newer
+  Excalimathpad. Update the app.", so an older app never overwrites it. In a vault synced
+  between devices, every device needs 1.0.0 before one of them saves.
+- The example below shows format 1; from M4e `"format"` is `2`.
+
 ```json
 {
   "type": "excalidraw",
@@ -1496,7 +1644,7 @@ Placing isn't in the scene and isn't an undo step until the click.
 ### Sheet panel
 
 Excalidraw's docked sidebar, opened by Math settings. Its tabs, the dock button and
-the close button all fit its width (the panel is 384 px wide, since Excalidraw's own 302 px is too narrow for four tabs), so the close button is never cut by the window. Open at
+the close button all fit its width (until M4e the panel is 384 px wide, since Excalidraw's own 302 px is too narrow for four tabs; from M4e see below), so the close button is never cut by the window. Open at
 launch on a wide window, on Variables, or on Problems
 if the opened sheet has any errors (from M4d; before, any problem). Open or closed is
 remembered per browser, not in the file. On a small window (1229 px or less) it floats over
@@ -1506,6 +1654,30 @@ the canvas, and closes after a jump or a click on the canvas.
 Constants, Settings**. Each is an icon with a tooltip; the active tab also shows its name.
 The Problems badge sits on its icon. Format is the [Format tab](#format-tab) and Symbols the
 [Symbols tab](#symbols-tab).
+
+**From M4e the panel is narrower, resizable, and docks by its own width:**
+
+- **320 px wide by default** (`--right-sidebar-width`; the panel itself is 8 px narrower).
+- **The six tabs are icons only.** The active tab's name is a heading at the top of its
+  content, and stays each tab's tooltip and accessible name. "Keep sidebar open" and Close
+  stay in the header. Tabs are 32 px at 320 px and wider, and shrink to about 28 px at the
+  least width.
+- **Its left edge is a drag handle:** 280 px least, 480 px most; a double-click puts it back
+  to 320 px. With the handle focused, ← and → move it 16 px and Home puts it back. The handle
+  is the app's own control; Excalidraw isn't forked.
+- **The width is remembered per device and never in the file,** beside the open state
+  (browser storage on the web, the plugin's `data.json` in a vault). Resizing never makes the
+  sheet dirty, is no undo step, and never ends an open line's edit.
+- **It docks when the editor is wider than 640 px plus the panel's width** (960 px at the
+  default; 920 to 1120 px across the drag range), not 1229 px. The 640 px is the room
+  Excalidraw's toolbar needs. That one value is passed to Excalidraw as
+  `UIOptions.dockedSidebarBreakpoint` and used for the app's own decisions, and follows the
+  width as it is dragged. At or below it the panel floats over the sheet and closes on a
+  press outside. Opening at launch follows the same width. The remembered open state still
+  counts only a docked panel's choice.
+- **An edit opens the panel on Format only when the panel docks,** or is already open. On an
+  editor too narrow to dock, an edit opens nothing: the user opens the panel from Math
+  settings to format.
 
 - **An edit opens the panel on Format.** When a line or the title opens and none was open,
   the panel opens on Format, or switches to it. Moving within the edit keeps whichever tab
@@ -1579,7 +1751,8 @@ From M4d, in the plugin. The web app's chrome above is unchanged.
   stays the sheet's: M, Enter, Esc, ↑ ↓, Tab in suggestions, Ctrl+B/U/I, Ctrl+Z/Y,
   Excalidraw's letters, Ctrl+C/V/D/A/F, `?` and Alt+Shift+D.
 - **The Sheet panel** is Excalidraw's sidebar inside the tab, docking when the **tab** is
-  wider than 1229 px and floating when narrower, so a split pane floats it. Each tab has its
+  wider than 1229 px (from M4e, 640 px plus the panel's width: [Sheet panel](#sheet-panel))
+  and floating when narrower, so a split pane floats it. Each tab has its
   own panel. Its open or closed memory is kept in the plugin's `data.json`.
 - **Hidden in the plugin:** Web Embed and Mermaid to Excalidraw in More tools, with the
   Generate heading over them, and Excalidraw's AI items; Browse libraries (the library keeps
@@ -1599,8 +1772,8 @@ From M4d, in the plugin. The web app's chrome above is unchanged.
 
 ### On a phone
 
-From M4d, in the plugin on a phone (`Platform.isPhone`). A tablet follows the 1229 px rule
-above.
+From M4d, in the plugin on a phone (`Platform.isPhone`). A tablet follows the docking rule
+above, by the editor's width (1229 px until M4e).
 
 - **The Sheet panel is a bottom sheet** across the view instead of the right sidebar. While a
   line is open it sits just above the on-screen keyboard and is short: the quick keys, the
@@ -1754,6 +1927,37 @@ n = 1 .. 10
 - A negative step counts down. A zero step, or one pointing away from the end, is an error.
   More than 10,000 points is an error.
 
+**math.js's own range and builders take the same limit** (M4e). Matrices stay an undocumented
+passthrough of math.js: small ones (`inv`, `det`, `cross`, `sum(1:100)`) work as they did.
+
+- `a:b`, `a:step:b` and every math.js function that takes a size or a count (`zeros`, `ones`,
+  `identity`, `range`, `nthRoots`, …) are checked on their arguments before math.js runs.
+  Anything that would build more than 10,000 values (rows × columns for a matrix) is a line
+  error: `identity(100)` is allowed, `identity(101)` refused. The 10,000 is one number in the
+  code, shared with the sheet's own range.
+- A function whose result can pass the limit from legal arguments (`kron`, `concat`, `resize`,
+  a list times a matrix) is checked on the size its result would have.
+- An end of `a:b` that isn't a finite number is its own error.
+- A call that is slow without building anything large (`combinations(1e9, 5e8)`) is refused
+  by a bound on its argument, set at what keeps the call inside the sweep's time limit
+  ([section 14](#14-engineering-constraints)); the bounds are listed there as they are found.
+  `1e8!`, `9^9^9` and `gamma(1e7)` answer `∞` at once and are untouched.
+- **A large matrix is summarised where it is shown.** A matrix or math.js range of up to 20
+  values is shown whole. Past that, the result cell and the Variables tab show a one-row
+  summary, and the hover shows the first and last few rows with their index, as a list's
+  does. Nothing is refused for being too big to show.
+
+  ```text
+  1:5               [1, 2, 3, 4, 5]
+  inv(a)            [[-2, 1], [1.5, -0.5]]
+  1:2000            2000 values, 1 … 2000
+  identity(100)     100 × 100 matrix
+  ```
+- **A legal line that is slow is accepted.** It is the user's own request and recovers when
+  the line is fixed. The measured case: `Q_s = 1 L/s .. 30 L/s% step 1 L/s`, a typo, is 3,000
+  values and about 600 ms per key against 41 ms. Evaluation stays synchronous, with no worker
+  and no wait for a pause in typing.
+
 **A line that mentions a list runs once per point,** and its result is a list of the same
 length: `H_s = Hs(Q_s)` is 30 values, from 30 Colebrook solves.
 
@@ -1833,6 +2037,42 @@ closes the popover. Typing the clauses works too.
 An unknown clause is an error on the line. The popover holds Mark, Series names, Points, x axis,
 y axis, Size and Title.
 
+**From M4e a plot can draw a point and a circle, with equal scales.** `plot(x, y1, …)` and every
+clause above work as before. The true-position chart is one line, with no helper line:
+
+```
+plot(dx, dy), circle T_p / 2, title "True position"
+```
+
+| Clause or form | Means |
+|---|---|
+| `plot(x, y)` with two single values | One dot at (x, y), with its coordinates beside it. This replaces `x must be a list` for this case only; one single value against a list is still that error. The axis titles are the two arguments as written, with their units: `dx [mm]`, `dy [mm]` |
+| `point (x, y)` | The same labelled dot, on any plot, drawn over the curves. Can repeat. `mark` stays as it is, with its line |
+| `circle r`, `circle (x0, y0) r` | A circle of radius `r` in the axes' units, centred on the origin or on (x0, y0). An outline, not filled, drawn as one shape from no list. `r` is any expression giving one positive value of the axes' kind. Can repeat. A circle gives the chart equal scales, with no way to turn that off |
+| `equal` | Both axes take one scale, so a unit of x is as long as a unit of y. Needs x and y of the same kind |
+
+- **A point's label** is plain text: `(0.08, −0.05) mm`, each number to the sheet's Digits, the
+  unit once when both share it and after each number when they differ. It sits right of its
+  dot, or left of it when the right has no room, with a halo in the chart's background colour
+  so a line under it doesn't cut through the text. It stays inside the chart.
+- **Equal scales:** the ranges are worked out from what is drawn (curves, points, circles),
+  padded, then the shorter axis is widened around its middle. With a typed `x a .. b` or
+  `y a .. b`, the typed range is kept and only the other axis is widened; with both typed it
+  is an error.
+- **The look of a chart with equal scales** (from `equal` or a circle): a frame, a line through
+  0 on each axis, and no grid. Other charts keep their grid.
+- **Its size is square:** `size S`, M and `size L` give 220, 280 and 360 px a side.
+- **The legend:** a point's row shows a dot and the point as written (`dy against dx` for
+  `plot(dx, dy)`, `(dx, dy)` for a `point` clause); a circle's row shows a line and
+  `circle T_p / 2`. Colours follow the fixed order: curves first, then points, then circles.
+  No pass or fail colour.
+- **Nothing drawn runs past the chart,** on any plot. The app sets all four margins, sized for
+  the tick numbers, the titles and a mark's label (before M4e they could run up to about
+  40 px past it).
+- **The popover** gains Point, Circle and Equal scales.
+- A chart is still a fixed block that sets the element's least width and ignores a chosen
+  width.
+
 - **Arguments follow `table()`:** x must be a list; lists of different lengths are an error; a
   single-value y draws a horizontal line; at least one y is required.
 - **One kind per plot.** Mixed kinds on y are an error on the line. Same kind in different units
@@ -1909,6 +2149,36 @@ title's format print as they show on a light screen, and an element prints at it
   command, "Print…", with no default key, and a ☰ item as on the web. The footer's file name is
   the vault file's name.
 
+**Changed on 2026-11-15, before M5 was built** ([print after M4d and M4e](https://github.com/matheus-sancha/excalimathpad/issues/186)). The page
+rules above stand. Where these differ from the Print flow above, these win:
+
+- **Where Print exists.** The web app, and the plugin on a computer. On a phone or tablet the
+  plugin has no "Print…" command and no ☰ item, and the Math guide says so.
+- **Print… in the plugin.** The pages are built in a hidden frame inside the view's own
+  window, and that frame is printed, so only the pages reach the paper and nothing of
+  Obsidian's does. It opens the operating system's print dialog. It uses no Node or Electron
+  API, writes nothing to the vault and makes no request, so
+  [data protection](#data-protection) is unchanged. "Print…" is a command and the first ☰
+  item. While the dialog is open the plugin may set the window's title to the plain name, and
+  restores it after.
+- **No preview in Obsidian.** "The browser's dialog, which is the preview and the route to
+  Save as PDF" is true on the web only. In Obsidian the route to a PDF is the system's own PDF
+  printer ("Microsoft Print to PDF" on Windows). "No page guides" stands in both homes: to
+  change a bad break, look at the PDF, move something and print again.
+- **The browser's own Print, on the web,** always prints the one line "Use Print… from the
+  app's menu". The cache of the drawing, the pages built in `beforeprint` and the fonts loaded
+  ahead of printing are not built. Obsidian has no such command.
+- **If building the pages fails,** no dialog opens, a notice says so
+  (`The pages couldn't be built, so nothing was printed.`), and the sheet is untouched.
+- **What's on paper** gains: a point with its label, a circle and their legend rows; a square
+  chart, one unbreakable box like any plot; a line's unexpected error and the notice in place
+  of a failed element or chart, as they show; a large matrix as its one-row summary. A line's
+  stored format needs no print rule: the print view is built from the overlay's views.
+- **The web app may use the same frame** as the plugin if it passes the Chromium PDF test, so
+  there is one print path; otherwise it keeps [section 14](#14-engineering-constraints)'s
+  recipe as written.
+- **The Page row** fits the Settings tab at the panel's least width, 280 px.
+
 Decided in: [print](https://github.com/matheus-sancha/excalimathpad/issues/21),
 [Chromium PDF](https://github.com/matheus-sancha/excalimathpad/issues/34),
 [comments](https://github.com/matheus-sancha/excalimathpad/issues/36),
@@ -1918,7 +2188,7 @@ Decided in: [print](https://github.com/matheus-sancha/excalimathpad/issues/21),
 
 ## 12. Offline PWA
 
-Built in M6. The app installs and works fully offline, and a `.excalimathpad` file opens from Windows.
+Built in M6, after 1.0.0 (changed on 2026-11-15). The app installs and works fully offline, and a `.excalimathpad` file opens from Windows.
 
 - **Service worker and manifest:** vite-plugin-pwa, with vite-plugin-static-copy for the fonts.
 - **Fonts:** Excalidraw's fonts are self-hosted from our own origin, including Normal (Nunito).
@@ -2035,7 +2305,11 @@ touch in [section 4](#touch). Research: [`docs/research/obsidian-plugin.md`](res
     `esm.sh`, `AIza`, `indexedDB`, `localStorage`, `new Function`, `<style>`/`<link>` creation
     outside React DOM's and Radix's own library code, or `http(s)://` host missing from a committed
     allowlist (XML namespaces, licence comments, Excalidraw's Help links and its embed patterns, each
-    with why it can't load).
+    with why it can't load). **From 1.0.0, a budget per file** beside that cap: the measured
+    size of the 1.0.0 build of `main.js` and of `styles.css`, plus about 5%. Going over fails
+    `npm run check` with, for example, `main.js is 3,512,004 bytes, over its budget of
+    3,500,000. If the growth is meant, raise BUDGET and say why.` Raising a budget is allowed,
+    as a deliberate line in a commit that says what was added.
   - **Network-blocked run:** the built bundle loads in headless Chromium against the fake
     `obsidian`, with every non-local request blocked and logged, and opens a sample sheet with
     math, a plot, an image and CJK text. Any attempted request fails, and so does any `<style>` or
@@ -2070,6 +2344,22 @@ touch in [section 4](#touch). Research: [`docs/research/obsidian-plugin.md`](res
 - **Betas through BRAT:** releases before the listing are installed by Matheus through BRAT, on
   the work laptop and his devices, and carry `isDesktopOnly: false` so the device checklist can
   run on them. Fixes ship as `0.1.x`.
+- **To 1.0.0** (M4e): `0.2.1` and `0.2.2` are fixes. M4e ships as the beta `0.3.0` through
+  BRAT, M5 follows, and the release after it is `1.0.0`, the version submitted to the
+  community list ([Listing](#listing)). A sheet saved by `0.3.0` or later is format 2, which
+  `0.2.x` refuses ([section 7](#the-file)), so every device takes the beta before one saves.
+- **Before `1.0.0` is published,** besides the draft's checklist and the device checklist
+  (M4e and M5 change panel and overlay code, so it runs again on the four devices), Matheus
+  checks by hand, on the work laptop in Obsidian: a format 1 sheet saved by `0.2.x` opens
+  with its formats and saves as format 2; the pump sheet and the true-position sheet show
+  their values; Print… gives a clean PDF through the system dialog (and in the web app in
+  Chrome); the panel docks, drags and remembers its width; the plugin's start-up time is
+  read; and the odd-values probe (about 8 minutes) has run. On the four devices, also: no
+  Print… command, the bottom sheet's sample, and a tablet docking by its width. The lines
+  are in `CONTRIBUTING.md` with the rest.
+- **Start-up** (M4e): the plugin's own figure in Obsidian's startup-time view is read on the
+  work laptop, and recorded on one phone. Loading the app only when the first sheet opens is
+  built before `1.0.0` only if the work laptop's figure is over 150 ms; otherwise after.
 
 ### Listing
 
@@ -2230,6 +2520,16 @@ The wording of every user-facing message. `<…>` is filled in. Numbers follow
 | An index past the end | `x_r has 2 values` | M4c |
 | An index that isn't a whole number from 1 | `x_r[0]: an index is a whole number from 1` | M4c |
 | An index on something that isn't a name | `an index goes on a name: x_r[2]` | M4c |
+| `a:b` with too many points | `1:1e7 has more than 10,000 points`, `0:1e-7:1 has more than 10,000 points` | M4e |
+| A math.js builder with too many values | `zeros(1e8) has more than 10,000 values`, `ones(3000, 3000) has more than 10,000 values`, `nthRoots(2, 1e7) has more than 10,000 values` | M4e |
+| An end of `a:b` that isn't a finite number | `a range's ends must be finite numbers: log(0) is -∞`, `a range's ends must be finite numbers: 1/0 is ∞` | M4e |
+| A call that is slow without building anything large | `combinations(1e9, 5e8) is too large to compute` | M4e |
+| One single value against a list in a plot | `x must be a list: 2 m is a single value` (two single values draw a point) | M4e |
+| A `point` that isn't two single values of the axes' kinds | `point (Q_s, 2 m): a point is two single values, (x, y)` | M4e |
+| A circle's radius that isn't one positive value of the axes' kind | `circle 2 s: the radius is one positive value of the axes' kind` | M4e |
+| A circle's centre that isn't two single values | `circle (Q_s, 0 m) r: the centre is two single values, (x0, y0)` | M4e |
+| `equal`, or a circle, with x and y of different kinds | `equal scales need x and y of the same kind` | M4e |
+| `equal` with both ranges typed | `equal with both x and y ranges typed: leave one out` | M4e |
 
 **App**
 
@@ -2242,7 +2542,20 @@ The wording of every user-facing message. `<…>` is filled in. Numbers follow
 | A save that fails | `Couldn't save pump-sizing.excalimathpad: <reason>` | M1 |
 | The picker or the file read fails | `Couldn't open the file: <reason>` | M1 |
 | Hint, one math element selected | `Double-click a line or press Enter to edit` (on touch: `Double-tap a line, or tap Edit in Math settings`, M4d) | M1 |
-| Browser's Print with an empty cache | `Use Print… from the app's menu` | M5 |
+| Browser's Print, on the web | `Use Print… from the app's menu` | M5 |
+| The pages couldn't be built (notice) | `The pages couldn't be built, so nothing was printed.` | M5 |
+
+**Unexpected failures** (M4e)
+
+| When | Message |
+|---|---|
+| An unexpected failure while a line is read | `this line hit an unexpected error in Excalimathpad` |
+| An unexpected failure while an element is drawn | `this element hit an unexpected error in Excalimathpad` |
+| An unexpected failure while a chart is drawn | `this chart hit an unexpected error in Excalimathpad` |
+| An unexpected failure in a panel tab | `this tab hit an unexpected error in Excalimathpad` |
+| The view fails as a whole | `This sheet hit an unexpected error in Excalimathpad.` then `Your sheet is kept up to the last finished line.` and, with a line open, `You were typing:` |
+| The screen's actions | `Reload the sheet`, `Copy details`, `Copy`, `Report this error` |
+| The last line of the copied details | `(no sheet content is included)` |
 
 **Panel** (M4d)
 
@@ -2252,6 +2565,8 @@ The wording of every user-facing message. `<…>` is filled in. Numbers follow
 | Format tab, a blank line | `This line takes no format.` | M4d |
 | A true rule overriding a pressed property | `A rule sets the text colour while v > 3 m/s.` | M4d |
 | Symbols tab, no line open | `Open a line to insert` | M4d |
+| Format tab's sample, a plot line | `Its chart is drawn on the sheet.` | M4e |
+| Rules list, a rule with an empty condition | `a rule needs a condition` | M4e |
 
 **In a vault** (M4d)
 
@@ -2564,6 +2879,50 @@ Evidence: [`obsidian-plugin.md`](research/obsidian-plugin.md).
 [`mathjs-katex-typesetting.md`](research/mathjs-katex-typesetting.md),
 [`solver-and-plot-libraries.md`](research/solver-and-plot-libraries.md).
 
+**M4e**
+
+- **Injected failures,** in `npm run check`: a test makes a line (its parse included), an
+  element, a chart, a panel tab and the view throw on purpose, and checks what shows, that the
+  rest keeps working, that the failed view writes nothing, and that the copied details hold no
+  sheet text.
+- **The typing test,** in `npm run check`: every Math guide example, the true-position sheet
+  and the pump sheet, one character at a time, through the engine and the view (4,765 states
+  and 59 s on one core when measured). It fails on any throw and on any state that reaches the
+  per-line guard. It reads its lines from the guide and the acceptance sheets.
+- **The sweep test,** in `npm run check`: every function math.js exposes is called with huge
+  arguments (`1e8`, `(3000, 3000)`, an infinite end such as `1/0`) and with arguments at the
+  limit, and the test fails if any call neither answers nor refuses within 1 s. A math.js
+  update that adds a builder fails it. One unit test per message row and per shown form of a
+  matrix.
+- **The odd-values probe** (about 8 minutes) is run by hand before a release
+  ([section 12a](#releases)).
+- **The format migration** is tested on every open path, the recovery copy included, and on a
+  hand-edited file with a clause both in the text and stored.
+- **`source` and `formats` in one write:** a nested object in `customData` adds an empty undo
+  step, so `formats` is a string, as `titleFormat` is.
+- **The docking width** passed to Excalidraw (`UIOptions.dockedSidebarBreakpoint`) and the
+  app's own must be one value, or the panel docks where the app thinks it floats.
+- **The overlay never scrolls** (`overflow: clip`, 0.2.2): the canvas's pan is the only thing
+  that moves the math.
+- **Plot:** `aspectRatio` is ignored at fixed sizes, so equal scales are made by setting both
+  axis ranges; all four margins are set by the app. Observable Plot is imported by name once
+  the new clauses are built.
+- **Lighter plugin:** math.js's help texts are stubbed out (in `esbuild.plugin.mjs`, and by an
+  alias in `vite.config.ts` for the web app); four unused KaTeX font families are dropped,
+  with a test that typesets every guide line and fails on a font class that was dropped. The
+  web app isn't trimmed otherwise.
+- **Documents:** `npm run check` fails if `CONTEXT.md` is over its budget, its size after the
+  split plus about 10%. A tracked `CLAUDE.md` holds the reading route (always `CONTEXT.md`;
+  the spec sections an issue names; `docs/context/<module>.md` for a module the issue
+  touches; ADRs by number when named) and the writing rule (behaviour goes in the spec;
+  `CONTEXT.md` holds the model, the terms and where things are; a "Changes since agreed"
+  entry is added only for a change to an agreed rule). Sections 16 to 18 move to
+  `docs/spec-history.md`, leaving numbered stubs so citations hold; the finish line stays
+  here.
+- **Print in the plugin:** the frame's styles must arrive in a way the bundle audit accepts
+  (no `<style>` made at run time outside the libraries' own code); the audit's rule is amended
+  only if there is no other way.
+
 ## 15. Acceptance
 
 v1 is judged on the [pump sheet](acceptance/pump-sizing.md), with
@@ -2578,6 +2937,28 @@ The four steps:
 
 **Pass bar:** every result matches the reference to 4 significant figures.
 
+**From M4e a second sheet, true position,** is kept in `docs/acceptance/true-position.md` and
+is a worked example in the Math guide. It is the sheet Matheus built on his work laptop on
+2026-11-15, as it reads once M4e is built:
+
+```text
+# True position, RFS (ASME Y14.5)
+dx = 0.08 mm
+dy = -0.05 mm
+T_p = 0.25 mm
+TP = 2 sqrt(dx^2 + dy^2) in mm
+check = if(TP <= T_p, "Pass", "Fail")
+used = TP / T_p * 100
+margin = T_p - TP in mm
+plot(dx, dy), circle T_p / 2, title "True position"
+```
+
+with `@text-green if result == "Pass" @text-red if result == "Fail"` as the `check` line's
+stored format. CI feeds its lines through `evaluateSheet` and compares: `TP` 0.1887 mm,
+`check` "Pass", `used` 75.47, `margin` 0.06132 mm, and a chart with one point and one circle.
+With `dx = 0.12 mm`, `check` is "Fail". The typing test reads this file too
+([section 14](#14-engineering-constraints)).
+
 Decided in: [acceptance](https://github.com/matheus-sancha/excalimathpad/issues/9),
 [comments](https://github.com/matheus-sancha/excalimathpad/issues/36),
 [spec contents](https://github.com/matheus-sancha/excalimathpad/issues/38).
@@ -2585,7 +2966,8 @@ Decided in: [acceptance](https://github.com/matheus-sancha/excalimathpad/issues/
 ## 16. Milestones and finish line
 
 v1 is built in nine milestones, each usable on a real sheet, with a saved typeset sheet first. The existing
-spike is M0, done.
+spike is M0, done. M4e and M5 are the last two; they are released together as **1.0.0**, which is v1 done.
+M6 is built after 1.0.0.
 
 | Milestone | What it lets Matheus do | Sections |
 |---|---|---|
@@ -2596,8 +2978,9 @@ spike is M0, done.
 | **M4b Hosted build** | Open the app at a public address on a second machine | [12](#hosted-build) |
 | **M4c Improvements** | Find every root in a range, colour text and results, format by rule, set an element's width, format a title | [3](#3-sheet-lines-every-form), [4](#4-math-element-look-and-editing), [9](#9-solve), [10](#10-ranges-tables-plots) |
 | **M4d Plugin & panel** | Open and edit sheets in Obsidian on the work laptop, phone and tablet; format from the panel, with rules; insert symbols; write checks that say "Approved"; format comment lines; read the Math guide | [1](#1-what-v1-is-and-what-it-isnt), [3](#3-sheet-lines-every-form), [4](#4-math-element-look-and-editing), [5](#5-results-units-and-numbers), [7](#a-sheet-in-a-vault), [8](#8-app-chrome), [12a](#12a-obsidian-plugin), [13](#13-messages) |
-| **M5 Print** | Print the sheet to clean PDF pages | [11](#11-print) |
-| **M6 Offline PWA** | Install the app, work offline, open a `.excalimathpad` file from Windows | [12](#12-offline-pwa) |
+| **M4e Room to work** | Keep working when the app fails; keep a line's format out of its text; see long lines wrap; give the sheet more of a small screen; draw a point in a tolerance circle as one clean chart; carry a lighter plugin | [3](#3-sheet-lines-every-form), [4](#4-math-element-look-and-editing), [7](#the-file), [8](#sheet-panel), [10](#10-ranges-tables-plots), [12a](#releases), [13](#13-messages), [14](#14-engineering-constraints), [15](#15-acceptance) |
+| **M5 Print** | Print the sheet to clean PDF pages, from the web app and from Obsidian on a computer | [11](#11-print) |
+| **M6 Offline PWA** (after 1.0.0) | Install the app, work offline, open a `.excalimathpad` file from Windows | [12](#12-offline-pwa) |
 
 **M1's issue order:**
 
@@ -2711,15 +3094,53 @@ since its controls live in the Format tab and its bottom sheet in the plugin. Th
 the finished app, so it is the last build issue, and the listing points to it. The history is rewritten
 last, once everything is merged, then the plugin is submitted.
 
-**M5's issue order** (M4's five are built, #74 to #78; M5 follows M4d):
+**M4e's issue order** (added on 2026-11-15 from Matheus's third batch, six items found building a
+true-position sheet on his work laptop, on the map
+[Spec for the third improvements batch and M5 Print, to 1.0.0](https://github.com/matheus-sancha/excalimathpad/issues/172); M4d's fifteen build
+issues are built, #135 to #149; built before M5). Two fixes come first, outside the milestone: `0.2.1`
+(#179, released) and `0.2.2` (#191), which the fifth issue needs.
+
+1. Documents: a reading route, `CONTEXT.md` by module, the spec's history (#192)
+2. Unexpected failures stay small (#193)
+3. The 10,000 limit on `a:b` and math.js's builders (#194)
+4. A line's format is stored beside it: format 2 and its migration (#195)
+5. The line's field wraps (#196)
+6. Rules list: a rule's condition is edited in the Format tab (#197)
+7. Sheet panel: 320 px, icon tabs, a drag handle, docking by width (#198)
+8. The Format tab's sample: 13 px, wrapped, never a chart (#199)
+9. Plot: a point, a circle, equal scales, and nothing past the chart (#200)
+10. A lighter plugin: math.js's help texts and four KaTeX font families (#201)
+11. The Math guide, the README and the true-position sheet (#202)
+
+The documents come first, so every later build session reads the small set. The two failure issues
+follow: they are what stops a sheet being lost or frozen, they are independent of the rest, and their
+tests (injected failures, typing, the sweep) then guard every later pull request. The stored format is
+next and early on purpose: it is the milestone's one change to the file and its first migration, so it
+gets the most use before 1.0.0. The wrapping field and the condition field build on it. The panel's width
+comes before the sample, which is laid out in it, and the sample after the condition field, which shares
+the Format tab. The plot is independent and comes after the panel work; it also imports Observable Plot by
+name, since its named imports are final only then. The other two plugin cuts follow. The guide describes
+the finished milestone, so it is last, with the second acceptance sheet, and the beta `0.3.0` goes to the
+work laptop and the devices through BRAT. Matheus then reads the plugin's start-up time
+([section 12a](#releases)).
+
+A source repeat from the size research is removed only by the issue that already edits its file. What is
+left, with `evaluate.ts` in four files, the scanner and the palette, is one refactor issue after 1.0.0
+(#204); the spec's change log folded into its body, then one home per fact, is another (#205).
+
+**M5's issue order** (M4's five are built, #74 to #78; M5 follows M4e; changed on 2026-11-15):
 
 1. Page row and page breaks (#80)
-2. Print view and Print… (Ctrl+P) (#81)
-3. The browser's own Print (#82)
+2. Print view and Print… (#81), in both homes, closed by the hand check of step 4 in both
 
-The breaks come first: they are one pure function from boxes and the Page setting, so every break rule is
-tested before anything draws a page. Print… comes before the browser's own Print, which builds the same pages
-from a cache and only adds the `beforeprint` route and its fallback.
+The third, the browser's own Print (#82), is closed as not planned: its cache is cut, and the one line it
+still prints is part of the second issue. The breaks come first: they are one pure function from boxes and
+the Page setting, the same in both homes, so every break rule is tested before anything draws a page. The
+second issue starts with the Obsidian check that decides its route ([section 17](#17-verify-first)).
+
+**To 1.0.0** (#203): the budgets per plugin file are set from the build, the release checklist of
+[section 12a](#releases) is run, and `1.0.0` is released. Then the history is cleaned and the plugin
+submitted with that version (#150, M4d's sixteenth issue, by hand).
 
 **Dates:** set a date for M1 when this spec is agreed. Date each later milestone when the previous one lands,
 from how long it really took. The v1 end is a forecast only.
@@ -2736,8 +3157,9 @@ lines through `evaluateSheet` and compares with the reference at 4 s.f. It grows
 | M4b | none | None from the sheet: the work-laptop check (#85) |
 | M4c | Line 26 with its range, in both columns | none |
 | M4d | A pass/fail line (NPSH available against required gives `OK` or `NOT OK`), in both columns | Open the pump sheet in a vault on the work laptop; the device checklist ([12a](#releases)) |
-| M5 | none new | Steps 3-4: save and reopen, print to PDF |
-| M6 | none | None from the sheet: finish-line condition 2 checks it |
+| M4e | The check line's format read from where it is stored; the true-position sheet's values and chart ([section 15](#15-acceptance)); both sheets in the typing test | A sheet saved by `0.2.x` opens with its formats, on the beta `0.3.0` |
+| M5 | none new | Steps 3-4: save and reopen, print to PDF, in Obsidian on the work laptop and in the web app in Chrome |
+| M6 | none | None from the sheet: installing and working offline are M6's own check, after 1.0.0 |
 
 **Along the way:**
 
@@ -2755,11 +3177,17 @@ lines through `evaluateSheet` and compares with the reference at 4 s.f. It grows
 
 ### The finish line
 
-**v1 is done when all three hold:**
+**v1 is done, and released as 1.0.0, when all three hold** (changed on 2026-11-15):
 
-1. The pump sheet passes steps 1-4.
-2. The installed PWA opens a `.excalimathpad` file and works offline.
-3. Matheus has used it for one real calculation other than the pump sheet. This can happen any time after M5.
+1. The pump sheet passes steps 1-4, step 4 in both homes.
+2. The true-position sheet passes its checks ([section 15](#15-acceptance)), and the release checklist
+   of [section 12a](#releases) has passed on the build that becomes 1.0.0.
+3. Matheus has used it for one real calculation other than the pump sheet. **Met:** the true-position
+   sheet, built on his work laptop on 2026-11-15.
+
+Until 2026-11-15 the second condition was "The installed PWA opens a `.excalimathpad` file and works
+offline". The Obsidian plugin is now the home that works offline, so M6 is built after 1.0.0 and that
+check goes with it.
 
 **Open risks:**
 
@@ -2775,10 +3203,18 @@ lines through `evaluateSheet` and compares with the reference at 4 s.f. It grows
   that is the device checklist's. Obsidian's review, including "build matches
   what's committed", is unverified until the preview scan.
 - M4d's text `==`: the `equal` override was probed in a fresh math.js, not in the hardened instance.
+- M4e's format 2 is the first file migration. A sheet saved by the beta can't go back to `0.2.x`, and a
+  vault synced with a device still on `0.2.x` is refused there.
+- M4e was decided from prototypes run in headless Chromium and from screenshots: nothing was run inside
+  Obsidian or on a device ([section 17](#17-verify-first)).
+- M5's route in Obsidian rests on the system dialog honouring `@page`, unverified until #81's first step.
+- Whether the overlay fix of `0.2.2` is what Matheus saw as the chart "spilling out of its box" is not
+  confirmed until he looks again.
 
 Decided in: [milestones](https://github.com/matheus-sancha/excalimathpad/issues/37),
 [M4c](https://github.com/matheus-sancha/excalimathpad/issues/97),
-[M4d](https://github.com/matheus-sancha/excalimathpad/issues/125).
+[M4d](https://github.com/matheus-sancha/excalimathpad/issues/125),
+[M4e, M5 and 1.0.0](https://github.com/matheus-sancha/excalimathpad/issues/187).
 
 ## 17. Verify first
 
@@ -3134,7 +3570,33 @@ Changes line if it changes behaviour.
 - Taking over Ctrl+P with real keys, and a person at an open dialog.
 - KaTeX 0.16.47, which the repo resolves, against the 0.19.1 the PDF probe used.
 - A hand-set Scale in the dialog, other systems and real printers.
-- The browser's own Print right after a drawing edit, which could show a slightly old drawing.
+- **In Obsidian on a computer, before the print view is built** (a throwaway two-page frame
+  answers all of it in minutes; none of it was run):
+  - The system dialog honours `@page { size; margin: 0 }`, so the app's pages are the paper's
+    pages. This decides the route. If it fails, the question comes back to Matheus before
+    anything is built on it; the known fallback is Electron's own PDF export, a desktop-only
+    API with a review risk.
+  - Obsidian's own print styles don't reach the frame; KaTeX's fonts load inside the frame
+    before it prints.
+  - Printing from a pop-out window prints the sheet in that window.
+  - Whether the saved PDF can be named `pump-sizing.pdf`. If the system dialog doesn't take
+    the name, the file is named by hand there.
+
+**M4e**
+
+- Nothing of M4e's was run inside Obsidian or on a device: the panel's widths stood in for a
+  14-inch laptop, the sample's phone was a 390 px window with no keyboard, and the new chart
+  was drawn outside the app. Each is seen in the beta `0.3.0`.
+- The panel at 280 px: 28 px tabs, the Format tab's colour rows wrapping, a rule's condition
+  field, and the Settings tab.
+- A table of more than three columns in the sample, scaled with no floor.
+- The typing test's time in CI with the new guide examples (59 s when measured).
+- The sweep test's bounds for slow scalar calls, listed in section 14 as they are found.
+- The savings of the plugin cuts (87 KB, about 148 KB and 109 KB) were probed as separate
+  bundles or read from the source, not measured together.
+- The plugin's start-up time in Obsidian, on the work laptop and one phone.
+- That the overlay scrolling (0.2.2) is what Matheus saw as the chart "spilling out of its
+  box" is not confirmed: he looks again on the beta.
 
 **M6**
 
@@ -3731,3 +4193,59 @@ Changes line if it changes behaviour.
   state of `… in mm`, which took the sheet down). Its value still reaches the lines below, and a complex
   value without a unit shows as before (`2i`). A throw from outside a line's own handling is now that line's
   error and the lines below still run; the full rule for unexpected failures is #180's.
+- 2026-11-15, **M4e, M5 and 1.0.0** (agreed by Matheus on the map
+  [Spec for the third improvements batch and M5 Print, to 1.0.0](https://github.com/matheus-sancha/excalimathpad/issues/172), written by its last ticket,
+  [#187](https://github.com/matheus-sancha/excalimathpad/issues/187)). Six items from building a true-position sheet on his work laptop become milestone M4e, built
+  before M5; the two are released as 1.0.0.
+  - **[Section 4](#unexpected-failures), 13, 14:** an unexpected failure stays as small as what failed
+    ([#180](https://github.com/matheus-sancha/excalimathpad/issues/180), on the facts of [#173](https://github.com/matheus-sancha/excalimathpad/issues/173)).
+  - **[Section 10](#ranges-and-lists), 13, 14:** `a:b` and math.js's builders take the 10,000 limit; a large
+    matrix is summarised ([#189](https://github.com/matheus-sancha/excalimathpad/issues/189)).
+  - **[Sections 3](#3-sheet-lines-every-form), [4](#rules-list), [7](#the-file), ADRs 0002, 0004, 0005:** a
+    line's format is stored beside it, the file becomes format 2, a rule's condition is edited in the Rules
+    list, and the line's field wraps ([#182](https://github.com/matheus-sancha/excalimathpad/issues/182), on [#175](https://github.com/matheus-sancha/excalimathpad/issues/175); the wrap width from [#190](https://github.com/matheus-sancha/excalimathpad/issues/190)). This reopens "the
+    format travels with the line" (#119) and "the condition is typed in the line itself" (#123).
+  - **[Section 8](#sheet-panel):** the panel is 320 px, resizable from 280 to 480 px, docks above 640 px plus
+    its width, and an edit opens Format only when it docks ([#181](https://github.com/matheus-sancha/excalimathpad/issues/181), on [#174](https://github.com/matheus-sancha/excalimathpad/issues/174)). This replaces the 384 px
+    and 1229 px of #121 and #127.
+  - **[Section 4](#format-tab):** the sample is 13 px, wraps, and never draws a chart ([#185](https://github.com/matheus-sancha/excalimathpad/issues/185)). This
+    replaces "as the sheet shows it" of #121.
+  - **[Section 10](#plots), 13:** a point, a circle, equal scales, square, all four margins set by the app
+    ([#183](https://github.com/matheus-sancha/excalimathpad/issues/183), on [#176](https://github.com/matheus-sancha/excalimathpad/issues/176) and [#177](https://github.com/matheus-sancha/excalimathpad/issues/177)). Nothing in "Not in v1" is reopened.
+  - **[Section 11](#11-print), 1, 13, 16, 17:** Print is for a computer; Obsidian prints a hidden frame
+    through the system dialog with no preview; the browser's own Print loses its cache; M5 is two issues
+    ([#186](https://github.com/matheus-sancha/excalimathpad/issues/186)).
+  - **Sections 12a, 14, 16:** the documents are split and the plugin trimmed before 1.0.0; budgets per
+    plugin file and on `CONTEXT.md` from 1.0.0; this file stays the living spec ([#184](https://github.com/matheus-sancha/excalimathpad/issues/184), on [#178](https://github.com/matheus-sancha/excalimathpad/issues/178)).
+  - **[Section 16](#the-finish-line), 1, 12, [15](#15-acceptance):** M6 is built after 1.0.0 and the finish
+    line's PWA condition goes with it ("M6 after 1.0.0"); the true-position sheet is the second acceptance
+    sheet and a Math guide example, and is the real calculation of condition 3 ("Acceptance sheet + guide;
+    counts"); the order is "Safety and file format first".
+  - **Written as the tickets read them, not asked one by one, for Matheus to confirm on the PR:**
+    - *Failures:* "Report this bug" of the mock-up reads "Report this error".
+    - *Limits:* a matrix is summarised past 20 values; the sweep's time limit is 1 s; a result that passes
+      the limit from legal arguments is checked on its size.
+    - *Stored format:* the key is `customData.formats`; a typed clause goes in front of the stored one, and a
+      typed word that clashes with a stored one replaces it; the condition field has the line's suggestions;
+      the open line shows no marker for a format; + Add rule fills the condition field, not the line; an
+      empty condition is `a rule needs a condition`.
+    - *Panel:* the handle's keys (← → by 16 px, Home); 28 px tabs at 280 px; the colour rows wrap at 280 px;
+      the remembered open state counts only a docked panel's choice.
+    - *Sample:* the title's sample is unchanged; the note reads "Its chart is drawn on the sheet." and the
+      phone leaves it out; the table's scale has no floor; an error's message wraps.
+    - *Plot:* the label's and the legend's wording; the six new messages; a circle always brings equal
+      scales; `equal` needs x and y of one kind; the popover's three rows; the square sizes 220, 280, 360.
+    - *Print:* "Print…" is the first ☰ item in the plugin; a failed build of the pages opens no dialog and
+      shows `The pages couldn't be built, so nothing was printed.`; the plugin may set the window's title
+      while the dialog is open; the frame's styles pass the audit; the web app may share the frame; the Page
+      row fits at 280 px.
+    - *Follow and wrap (with `0.2.2`):* the scroll isn't animated; a pan by hand is left alone until the
+      caret next moves; a too-small visible area centres the row; the suggestion list doesn't move the view;
+      a Format tab field doesn't move the view; the wrap width is measured once.
+    - *Cuts:* math.js's help texts and Plot by name reach the web app too; 150 ms is the plugin's own figure
+      on the work laptop, the phone recorded only; the module files follow `CONTEXT.md`'s entries.
+    - *This ticket's own:* the milestone's name, "Room to work"; M4e ships as the beta `0.3.0`; Plot by name
+      is done in the plot issue (#200), not the plugin-cuts issue; the budgets are set by a release issue
+      after M5 (#203), not by M4e's last issue, since M5 adds code; the prototypes under `docs/research/` are
+      deleted by the first issue; the true-position reference values (`TP` 0.1887 mm, `used` 75.47,
+      `margin` 0.06132 mm) were worked by hand, not run.

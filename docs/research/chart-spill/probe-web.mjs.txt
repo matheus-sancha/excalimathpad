@@ -1,0 +1,54 @@
+// The web app run: `npx vite --port 5199`, then OUT=<dir> node scripts/chart-spill-web.mjs
+import { createRequire } from 'node:module'
+import { join } from 'node:path'
+import { writeFileSync } from 'node:fs'
+const OUT = process.env.OUT
+const SOURCE = `# True position, RFS (ASME Y14.5)
+dx = 0.08 mm
+dy = -0.05 mm
+T_p = 0.25 mm
+TP = 2 sqrt(dx^2 + dy^2) in mm
+check = if(TP <= T_p, "Pass", "Fail") @text-green if result == "Pass" @text-red if result == "Fail"
+used = TP / T_p * 100
+margin = T_p - TP in mm
+# Graph: tolerance zone and the measured point
+r_t = T_p / 2 in mm
+theta = 0 .. 2 pi step pi / 90
+zone_x = r_t cos(theta) in mm
+zone(a) = r_t sin(a)
+measured(a) = dy + 0 mm * a
+plot(zone_x, zone(theta))`
+const PLOT = 'plot(zone_x in mm, zone(theta) in mm, measured(theta) in mm), mark dx, x -2.3 r_t .. 2.3 r_t, y -1.2 r_t .. 1.2 r_t, size L, title "True position"'
+const sheet = JSON.stringify({ type: 'excalidraw', version: 2, elements: [{ id: 'calc', type: 'rectangle', x: 40, y: 90, width: 160, height: 60, customData: { kind: 'math', source: SOURCE } }], appState: {}, files: {}, excalimathpad: { format: 1 } })
+const { chromium } = createRequire(import.meta.url)('playwright')
+const browser = await chromium.launch()
+const tab = await (await browser.newContext({ viewport: { width: 1366, height: 768 }, deviceScaleFactor: 1 })).newPage()
+await tab.goto('http://localhost:5199/'); await tab.waitForSelector('.excalidraw-container'); await tab.waitForTimeout(1500)
+await tab.evaluate((text) => {
+  const data = new DataTransfer(); data.items.add(new File([text], 'tp.excalimathpad', { type: 'application/json' }))
+  const target = document.querySelector('.excalidraw-container')
+  for (const type of ['dragenter', 'dragover', 'drop']) target.dispatchEvent(new DragEvent(type, { bubbles: true, cancelable: true, dataTransfer: data }))
+}, sheet)
+await tab.waitForSelector('[data-anchor-id="calc"] .math-element__plot-chart svg', { timeout: 20000 }); await tab.waitForTimeout(1000)
+const state = () => tab.evaluate(() => {
+  const R = (e) => { if (!e) return null; const r = e.getBoundingClientRect(); return { l: Math.round(r.left), t: Math.round(r.top), r: Math.round(r.right), b: Math.round(r.bottom) } }
+  const o = document.querySelector('.app-shell__overlay')
+  return { body: R(document.querySelector('[data-anchor-id="calc"] .math-element__body')), field: R(document.querySelector('.math-element__field')), overlayScroll: [o.scrollLeft, o.scrollTop] }
+})
+const report = {}
+const snap = async (step) => { report[step] = await state(); await tab.screenshot({ path: join(OUT, `web-${step}.png`) }) }
+await snap('0-rest')
+const p = await tab.locator('[data-anchor-id="calc"] [data-line="14"]').boundingBox()
+await tab.mouse.dblclick(p.x + 30, p.y + 10); await tab.waitForTimeout(600)
+await tab.keyboard.press('ControlOrMeta+a'); await tab.keyboard.type(PLOT, { delay: 5 }); await tab.waitForTimeout(600)
+await snap('1-typed')
+await tab.keyboard.press('Enter'); await tab.waitForTimeout(800)
+await snap('2-enter')
+await tab.keyboard.press('Escape'); await tab.waitForTimeout(800)
+await snap('3-escape')
+const b = await tab.locator('[data-anchor-id="calc"] [data-line="9"]').boundingBox()
+await tab.mouse.click(b.x + 20, b.y + b.height / 2); await tab.waitForTimeout(500)
+await snap('4-selected')
+writeFileSync(join(OUT, 'report-web.json'), JSON.stringify(report, null, 1))
+for (const [k, v] of Object.entries(report)) console.log(k, JSON.stringify(v))
+await browser.close()

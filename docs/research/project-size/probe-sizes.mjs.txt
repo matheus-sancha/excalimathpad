@@ -1,0 +1,10 @@
+import { build } from '/home/user/excalimathpad/node_modules/esbuild/lib/main.js'
+const base = { bundle: true, minify: true, format: 'esm', platform: 'browser', target: ['es2022'], write: false, nodePaths: ['/home/user/excalimathpad/node_modules'], logLevel: 'error' }
+const size = async (entry, plugins = []) => (await build({ ...base, entryPoints: [entry], plugins })).outputFiles[0].contents.length
+const stubDocs = { name: 'stub', setup(b) {
+  b.onResolve({ filter: /embeddedDocs\.js$/ }, (a) => ({ path: a.path, namespace: 'stub' }))
+  b.onLoad({ filter: /.*/, namespace: 'stub' }, () => ({ contents: 'export const embeddedDocs = {}', loader: 'js' })) } }
+console.log('plot whole (dynamic import)', await size('plot-all.mjs'))
+console.log('plot named: plot,line,dot,text,ruleX,ruleY', await size('plot-named.mjs'))
+console.log('mathjs create(all)', await size('mathjs-all.mjs'))
+console.log('mathjs create(all), embeddedDocs stubbed', await size('mathjs-all.mjs', [stubDocs]))

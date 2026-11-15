@@ -1,0 +1,22 @@
+import { buildPlugin } from '/home/user/excalimathpad/esbuild.plugin.mjs'
+import { writeFile, readFile, stat } from 'node:fs/promises'
+const out = process.argv[2]
+const r = await buildPlugin({ outDir: out + '/plugin', log: console.log })
+await writeFile(out + '/meta.json', JSON.stringify(r.metafile))
+const o = r.metafile.outputs
+for (const [k, v] of Object.entries(o)) {
+  console.log(k, v.bytes)
+  const groups = {}
+  for (const [f, i] of Object.entries(v.inputs)) {
+    let g
+    const m = f.match(/node_modules\/((?:@[^/]+\/)?[^/]+)/g)
+    if (m) g = m[m.length - 1].replace('node_modules/', '')
+    else if (f.includes(':')) g = f.split(':')[0] + ':'
+    else g = f.split('/').slice(0, 1).join('/') + ' (ours)'
+    groups[g] = (groups[g] || 0) + i.bytesInOutput
+  }
+  const rows = Object.entries(groups).sort((a, b) => b[1] - a[1])
+  for (const [g, b] of rows.slice(0, 45)) console.log('  ', String(b).padStart(9), g)
+  console.log('   sum', rows.reduce((a, b) => a + b[1], 0), 'groups', rows.length)
+}
+for (const f of ['main.js', 'styles.css']) console.log(f, (await stat(out + '/plugin/' + f)).size)

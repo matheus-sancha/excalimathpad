@@ -1,0 +1,207 @@
+// A probe of docs/research/chart-spill.md (wayfinder ticket #176), made from scripts/touch-run.mjs, whose header follows.
+// To run it: copy to scripts/ as .mjs, npm run build:plugin, then OUT=<a directory> node scripts/<name>.mjs
+
+// The touch run (docs/spec-v1.md section 4, Touch; section 8, On a phone;
+// section 12a, Releases; section 14, Two taps reach the app first): the built
+// `dist-plugin/main.js` in headless Chromium against the fake `obsidian`, with
+// touch (Playwright's `hasTouch`) at a phone and a tablet viewport. Each runs
+// twice: as Android, and as iOS, where Excalidraw cancels every `touchstart`
+// on its canvas, so the browser sends no click (`navigator.platform` is what
+// Excalidraw reads). On the phone the plugin's `Platform.isPhone` is set, so
+// the Sheet panel is the bottom sheet.
+//
+// It covers what the device checklist can't leave to chance: a double tap
+// opens a line (and a drawing on top keeps Excalidraw's own), the Format tab's
+// Done, ↑ ↓ and Edit, the canvas hint by tap and by click, a tap's tips and the slots and ⚙ a touch selection
+// shows, the quick keys and their undo, the panel's open and restore, and the
+// suggestions opening above the field; on the tablet, a mouse keeps hover. It
+// runs in Chromium, so it covers neither WebKit nor a real on-screen keyboard:
+// those are the device checklist's (CONTRIBUTING.md). It fails on any check
+// that doesn't hold, and on any page error.
+//
+// Run: `node scripts/touch-run.mjs` (`npm run test:touch`), after
+// `npm run build:plugin`.
+
+import { build } from 'esbuild'
+import { createServer } from 'node:http'
+import { readFile } from 'node:fs/promises'
+import { createRequire } from 'node:module'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+const root = join(dirname(fileURLToPath(import.meta.url)), '..')
+const dist = join(root, 'dist-plugin')
+const FILE = 'Calcs/touch.excalimathpad'
+
+const fake = await build({
+  absWorkingDir: root,
+  entryPoints: ['plugin/test/obsidian.ts'],
+  bundle: true,
+  format: 'iife',
+  globalName: 'FakeObsidian',
+  write: false,
+  target: ['es2022'],
+})
+
+const page = `<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="/styles.css">
+<style>html,body{margin:0;height:100%}.workspace,.workspace-leaf,.workspace-leaf-content,.view-content{height:100%}</style>
+</head><body>
+<script src="/fake-obsidian.js"></script>
+<script>
+  var module = { exports: {} }, exports = module.exports
+  window.require = (name) => {
+    if (name === 'obsidian') return FakeObsidian
+    throw new Error('main.js required ' + name)
+  }
+</script>
+<script src="/main.js"></script>
+<script>
+  window.__start = async (sheet, manifest, phone) => {
+    FakeObsidian.Platform.isPhone = phone
+    FakeObsidian.Platform.isTablet = !phone
+    FakeObsidian.Platform.isMobile = true
+    const app = new FakeObsidian.App()
+    app.vault.add(${JSON.stringify(FILE)}, sheet)
+    const plugin = new module.exports.default(app, manifest)
+    await plugin.onload()
+    const leaf = app.workspace.getLeaf()
+    await leaf.openFile(new FakeObsidian.TFile(${JSON.stringify(FILE)}))
+    window.__leaf = leaf
+  }
+  // Whether Excalidraw's text editor has opened since the last reset: in
+  // Chromium's touch, as Android, it closes again by itself (the browser's
+  // \`dblclick\` follows Excalidraw's double tap), the app or not.
+  window.__editorSeen = false
+  new MutationObserver(() => {
+    if (document.querySelector('textarea.excalidraw-wysiwyg')) window.__editorSeen = true
+  }).observe(document, { childList: true, subtree: true })
+  // The scene's text elements, from the view's file as the app holds it.
+  window.__texts = () => JSON.parse(window.__leaf.view.getViewData()).elements.filter((e) => !e.isDeleted && e.type === 'text').length
+</script>
+</body></html>`
+
+const types = { '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json' }
+const server = createServer(async (request, response) => {
+  const path = new URL(request.url, 'http://127.0.0.1').pathname
+  try {
+    let body
+    if (path === '/') body = page
+    else if (path === '/fake-obsidian.js') body = fake.outputFiles[0].text
+    else if (['/main.js', '/styles.css', '/manifest.json'].includes(path)) body = await readFile(join(dist, path))
+    else throw new Error('not found')
+    response.writeHead(200, { 'content-type': types[path.slice(path.lastIndexOf('.'))] ?? 'text/html' })
+    response.end(body)
+  } catch {
+    response.writeHead(404)
+    response.end()
+  }
+})
+await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
+const origin = `http://127.0.0.1:${server.address().port}`
+
+import { writeFileSync, mkdirSync } from 'node:fs'
+const OUT = process.env.OUT
+mkdirSync(OUT, { recursive: true })
+const SOURCE = `# True position, RFS (ASME Y14.5)
+dx = 0.08 mm
+dy = -0.05 mm
+T_p = 0.25 mm
+TP = 2 sqrt(dx^2 + dy^2) in mm
+check = if(TP <= T_p, "Pass", "Fail") @text-green if result == "Pass" @text-red if result == "Fail"
+used = TP / T_p * 100
+margin = T_p - TP in mm
+# Graph: tolerance zone and the measured point
+r_t = T_p / 2 in mm
+theta = 0 .. 2 pi step pi / 90
+zone_x = r_t cos(theta) in mm
+zone(a) = r_t sin(a)
+measured(a) = dy + 0 mm * a
+plot(zone_x in mm, zone(theta) in mm, measured(theta) in mm), mark dx, x -2.3 r_t .. 2.3 r_t, y -1.2 r_t .. 1.2 r_t, size L, title "True position"`
+const PLOT = SOURCE.split('\n').at(-1)
+const el = (id, x, y, source, extra = {}) => ({ id, type: 'rectangle', x, y, width: 160, height: 60, customData: { kind: 'math', source, ...extra } })
+const mk = (elements, appState = {}) => JSON.stringify({ type: 'excalidraw', version: 2, elements, appState, files: {}, excalimathpad: { format: 1 } })
+const cases = {
+  auto: mk([el('calc', 40, 90, SOURCE)]),
+  'size-M': mk([el('calc', 40, 90, SOURCE.replace('size L', 'size M'))]),
+  'size-S': mk([el('calc', 40, 90, SOURCE.replace('size L', 'size S'))]),
+  'chosen-400': mk([el('calc', 40, 90, SOURCE, { width: 400 })]),
+  'chosen-floor': mk([el('calc', 40, 90, SOURCE, { width: 50 })]),
+  'neighbour': mk([el('calc', 40, 90, SOURCE), el('side', 760, 500, 'a = 1\nb = 2\nc = a + b')]),
+  'dark': mk([el('calc', 40, 90, SOURCE)], { theme: 'dark' }),
+  'zoom-50': mk([el('calc', 40, 90, SOURCE)], { zoom: { value: 0.5 } }),
+  'zoom-200': mk([el('calc', 40, 90, SOURCE)], { zoom: { value: 2 }, scrollX: 0, scrollY: -380 }),
+  'plot-only': mk([el('calc', 40, 90, SOURCE.split('\n').slice(0, -1).join('\n') + '\nplot(zone_x in mm, zone(theta) in mm, measured(theta) in mm), size L')]),
+  'labels': mk([el('calc', 40, 90, SOURCE + ', labels direct')]),
+}
+const { chromium } = createRequire(import.meta.url)('playwright')
+const browser = await chromium.launch()
+const manifest = JSON.parse(await readFile(join(dist, 'manifest.json'), 'utf8'))
+const report = {}
+const measure = (tab) => tab.evaluate(() => {
+  const R = (e) => { if (!e) return null; const r = e.getBoundingClientRect(); return { l: +r.left.toFixed(1), t: +r.top.toFixed(1), r: +r.right.toFixed(1), b: +r.bottom.toFixed(1), w: +r.width.toFixed(1), h: +r.height.toFixed(1) } }
+  const q = (s, root = document) => root.querySelector(s)
+  const wrap = q('[data-anchor-id="calc"]')
+  const body = q('.math-element__body', wrap)
+  const svg = q('.math-element__plot-chart svg', wrap)
+  const anchor = JSON.parse(window.__leaf.view.getViewData()).elements.find((e) => e.id === 'calc')
+  const texts = svg ? [...svg.querySelectorAll('text')].map((t) => ({ s: t.textContent.slice(0, 60), ...R(t) })) : []
+  const sv = R(svg), bd = R(body)
+  const out = svg ? texts.filter((t) => t.l < sv.l - 0.5 || t.r > sv.r + 0.5 || t.t < sv.t - 0.5 || t.b > sv.b + 0.5) : []
+  const paths = svg ? [...svg.querySelectorAll('path,line,circle')].map(R).filter((p) => p.w + p.h > 0) : []
+  const ink = paths.concat(texts).reduce((a, p) => ({ l: Math.min(a.l, p.l), t: Math.min(a.t, p.t), r: Math.max(a.r, p.r), b: Math.max(a.b, p.b) }), { l: 1e9, t: 1e9, r: -1e9, b: -1e9 })
+  const results = [...wrap.querySelectorAll('.math-element__row')].map((row) => ({ line: row.dataset.line, ...R(row) }))
+  return {
+    anchor: { x: anchor.x, y: anchor.y, width: anchor.width, height: anchor.height, chosen: anchor.customData.width ?? null },
+    body: bd, bodyOffset: [body.offsetWidth, body.offsetHeight], bodyScroll: [body.scrollWidth, body.scrollHeight],
+    grid: R(q('.math-element__grid', wrap)), plotCell: R(q('.math-element__plot-cell', wrap)), plot: R(q('.math-element__plot', wrap)),
+    title: R(q('.math-element__plot-title', wrap)), legend: R(q('.math-element__plot-legend', wrap)), chartHost: R(q('.math-element__plot-chart', wrap)),
+    svg: sv, svgAttr: svg && [svg.getAttribute('width'), svg.getAttribute('height'), svg.getAttribute('viewBox')], ink,
+    textsOutsideSvg: out,
+    inkPastBody: { left: +(bd.l - ink.l).toFixed(1), top: +(bd.t - ink.t).toFixed(1), right: +(ink.r - bd.r).toFixed(1), bottom: +(ink.b - bd.b).toFixed(1) },
+    plotPastBody: { right: +(R(q('.math-element__plot', wrap)).r - bd.r).toFixed(1), bottom: +(R(q('.math-element__plot-cell', wrap)).b - bd.b).toFixed(1) },
+    allTexts: texts.map((t) => t.s),
+    rows: results.slice(-3),
+    side: R(q('[data-anchor-id="side"] .math-element__body')),
+  }
+})
+for (const [name, sheet] of Object.entries(cases)) {
+  const context = await browser.newContext({ viewport: { width: 1400, height: 1000 }, deviceScaleFactor: 1 })
+  const tab = await context.newPage()
+  const errors = []
+  tab.on('pageerror', (error) => errors.push(error.message.slice(0, 300)))
+  await tab.goto(`${origin}/`)
+  await tab.evaluate(([text, m]) => window.__start(text, m, false), [sheet, manifest])
+  await tab.evaluate(() => { FakeObsidian.Platform.isMobile = false; FakeObsidian.Platform.isTablet = false })
+  try {
+    await tab.waitForSelector('[data-anchor-id="calc"] .math-element__plot-chart svg', { timeout: 30_000 })
+    await tab.waitForTimeout(1200)
+    report[name] = { ...(await measure(tab)), errors }
+  } catch (e) { report[name] = { failed: String(e).slice(0, 200), errors } }
+  await tab.screenshot({ path: join(OUT, `${name}.png`) })
+  if (name === 'auto') {
+    // Select the element so Excalidraw draws the anchor's own border.
+    const b = await tab.locator('[data-anchor-id="calc"] [data-line="1"]').boundingBox()
+    await tab.mouse.click(b.x + 20, b.y + b.height / 2)
+    await tab.waitForTimeout(400)
+    await tab.screenshot({ path: join(OUT, 'auto-selected.png') })
+    // The Format tab's sample: open the plot line.
+    const p = await tab.locator('[data-anchor-id="calc"] [data-line="14"]').boundingBox()
+    await tab.mouse.dblclick(p.x + 30, p.y + 10)
+    await tab.waitForTimeout(800)
+    await tab.screenshot({ path: join(OUT, 'auto-plot-line-open.png') })
+    report['auto-open'] = await tab.evaluate(() => {
+      const R = (e) => { if (!e) return null; const r = e.getBoundingClientRect(); return { l: Math.round(r.left), t: Math.round(r.top), r: Math.round(r.right), b: Math.round(r.bottom), w: Math.round(r.width), h: Math.round(r.height) } }
+      const d = document.querySelector('.sheet-format__drawing')
+      return { sidebar: R(document.querySelector('.sheet-sidebar')), drawing: R(d), drawingScroll: d && [d.scrollWidth, d.clientWidth, d.scrollHeight, d.clientHeight], sampleBody: R(d?.querySelector('.math-element__body')), sampleSvg: R(d?.querySelector('svg')),
+        field: R(document.querySelector('.math-element__field')), body: R(document.querySelector('[data-anchor-id="calc"] .math-element__body')), anchorW: JSON.parse(window.__leaf.view.getViewData()).elements.find((e) => e.id === 'calc').width }
+    })
+  }
+  await context.close()
+}
+writeFileSync(join(OUT, 'report.json'), JSON.stringify(report, null, 1))
+console.log(JSON.stringify(report, null, 1))
+await browser.close()
+server.close()

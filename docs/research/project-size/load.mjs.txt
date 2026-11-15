@@ -1,0 +1,22 @@
+import { chromium } from 'playwright'
+import { readFile } from 'node:fs/promises'
+const code = await readFile(process.argv[2], 'utf8')
+const browser = await chromium.launch()
+const times = []
+for (let i = 0; i < 7; i++) {
+  const page = await browser.newPage()
+  await page.goto('about:blank')
+  const t = await page.evaluate((code) => {
+    const obsidian = new Proxy({}, { get: (_, k) => (k === '__esModule' ? false : class {}) })
+    const module = { exports: {} }
+    const t0 = performance.now()
+    const fn = new Function('module', 'exports', 'require', code)
+    const t1 = performance.now()
+    fn(module, module.exports, () => obsidian)
+    const t2 = performance.now()
+    return { compile: t1 - t0, run: t2 - t1, keys: Object.keys(module.exports) }
+  }, code).catch((e) => ({ error: String(e).slice(0, 300) }))
+  times.push(t); await page.close()
+}
+console.log(JSON.stringify(times))
+await browser.close()
