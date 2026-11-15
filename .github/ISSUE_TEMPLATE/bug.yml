@@ -1,0 +1,52 @@
+name: Bug
+description: Something doesn't work as the Math guide says, or a sheet lost work.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for reporting it. Support is free and best effort, with no response time.
+
+        **A security problem?** Please don't open an issue: report it privately, as [SECURITY.md](https://github.com/matheus-sancha/excalimathpad/blob/main/SECURITY.md) explains.
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: The last line of the ☰ menu. In Obsidian it is the plugin's version (`0.1.1`); in the browser, the build stamp (`389dd51 · 2026-11-12`).
+    validations:
+      required: true
+  - type: dropdown
+    id: home
+    attributes:
+      label: Where you use it
+      options:
+        - In Obsidian (the plugin)
+        - In the browser (the web app)
+    validations:
+      required: true
+  - type: input
+    id: device
+    attributes:
+      label: Device
+      description: The device and its system, and the Obsidian or browser version.
+      placeholder: Windows 11 laptop, Obsidian 1.15.0
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps
+      description: What you did, what you expected, and what you saw. The sheet lines that show it help most.
+      placeholder: |
+        1. Typed `Q = 15 L/s` on a new line
+        2. Pressed Enter
+        3. Expected …, but saw …
+    validations:
+      required: true
+  - type: textarea
+    id: sheet
+    attributes:
+      label: Sheet
+      description: Optional. Drop a `.excalimathpad` file here **only if it holds nothing confidential**. Issues are public, and a sheet carries everything on it, images included.
+    validations:
+      required: false

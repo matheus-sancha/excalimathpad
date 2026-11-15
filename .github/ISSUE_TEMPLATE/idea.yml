@@ -1,0 +1,29 @@
+name: Idea
+description: Something missing for a calculation you want to do.
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for the idea. The roadmap follows its author's own engineering work, and v1 has a written scope ([spec section 1](https://github.com/matheus-sancha/excalimathpad/blob/main/docs/spec-v1.md#1-what-v1-is-and-what-it-isnt)), so an idea may wait or be declined. Support is free and best effort, with no response time.
+  - type: textarea
+    id: calculation
+    attributes:
+      label: The calculation
+      description: What you are trying to calculate or show on a sheet.
+    validations:
+      required: true
+  - type: textarea
+    id: missing
+    attributes:
+      label: What's missing
+      description: What stops you today, or what takes a workaround.
+    validations:
+      required: true
+  - type: textarea
+    id: approach
+    attributes:
+      label: How it could work
+      description: Optional. The lines you would type, or what you would expect to see.
+    validations:
+      required: false

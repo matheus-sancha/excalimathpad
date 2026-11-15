@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Math guide
+    url: https://github.com/matheus-sancha/excalimathpad/blob/main/docs/math-guide.md
+    about: Every line form, unit, setting, key and message, with examples. Also in the app, under ☰ → Math guide.
+  - name: Report a security problem
+    url: https://github.com/matheus-sancha/excalimathpad/security/advisories/new
+    about: Report a vulnerability privately, never in a public issue.

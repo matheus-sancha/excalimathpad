@@ -3088,7 +3088,18 @@ Changes line if it changes behaviour.
   from a `touchstart`, and `visualViewport` with a real keyboard. The touch run checks the sheet and the
   suggestions against a view that shrinks, as a keyboard that resizes the page does, not against
   `visualViewport` itself.
-- Whether Obsidian's review passes without a committed `main.js`, by the preview scan.
+- Whether Obsidian's review passes without a committed `main.js`, by the preview scan. **Not run from the
+  build session (#149):** the preview scan runs on community.obsidian.md, behind Matheus's Obsidian account
+  with GitHub connected, so it is his step, on #149's branch before submission ([Listing](#listing)), and
+  its result goes here. Nothing changes on a guess: `main.js` stays uncommitted, and the Release workflow
+  commits it only if the scan fails for want of it alone. What the scan meets: `build` is the first of the
+  scripts it looks for, and builds both homes (`tsc -b`, then `build:web` and `build:plugin`); Obsidian's
+  lint passes at zero warnings over `plugin/` and `src/`, with one named exception that the scan may still
+  flag, the deliberate lookbehind in `hasLookbehind` (#147); the README is users first, with Privacy and
+  Support; the issue forms and `SECURITY.md` are in place. **Found:** GitHub's private vulnerability
+  reporting, which `SECURITY.md` points to, was off, and the build session couldn't turn it on (the
+  setting is the repository owner's): Matheus turns it on under Settings → Code security before
+  submitting.
 - The beta through BRAT (#138, replacing M4b's #85). **`0.1.0` failed on 2026-11-14:** in Matheus's vault,
   every save while a line was open made a conflict copy, and editing the copy made a copy of it. The
   tab's own write was coming back as an outside change: the view compared the text Obsidian handed it,
