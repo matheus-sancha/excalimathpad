@@ -74,7 +74,13 @@ come, and their terms move in here as each M4d issue makes them true.
   `vault.commands`, and passes the canvas `vault` and `vault.theme` (where
   light or dark is remembered). `panelMemory` is where the panel's open state lives
   (a port: `storagePanelMemory` on the web, `data.json` in the plugin, this
-  page only if unset). App imports none of the browser ports at run time, so
+  page only if unset). **An edit opens the panel on Format** (M4d, #143):
+  from `MathOverlay`'s `onEdit`, App notes the panel's state when an edit
+  starts and opens it on Format (on a small window, scrolling the line clear
+  of the floating panel), and puts it back when the edit ends, unless it was
+  closed meanwhile or the edit ended from a press in the panel. What it opens
+  or restores itself (`automatic`) is never remembered as the user's choice.
+  App imports none of the browser ports at run time, so
   the plugin's bundle holds none. `initialElements` gives tests a sheet.
   Depends on: shell, canvas, overlay, file.
 - **shell** (`src/shell/`) — full-viewport layout with three slots: `canvas`,
@@ -140,7 +146,15 @@ come, and their terms move in here as each M4d issue makes them true.
   `mathAnchor.ts` also has `removeAnchor`, the one-step removal of an element
   left empty. `SheetCanvas` draws the welcome screen, and the app's two
   items in Excalidraw's More tools dropdown: Add math and Math settings, which
-  opens the Sheet panel. `moreTools.ts` finds the open dropdown
+  opens the Sheet panel. `panelPresses.ts` holds `SHEET_SIDEBAR_CLASS`,
+  `isInSheetPanel` and `keepPanelPresses` (see Load-bearing). The Sheet panel
+  (M4d, #143) has six icon tabs, `SHEET_PANEL_TABS`: Format, Symbols,
+  Variables, Problems, Constants, Settings, each named by a label span (shown
+  on the active tab, read on all) and its `title`, the error badge on
+  Problems. The handle's `sheetPanel()` reads whether it is open and its tab,
+  and `showSheetPanel(state)` opens it on a tab or closes it with that tab as
+  the one Math settings opens next. `selection.ts`'s `scrollClearOf` scrolls
+  an anchor clear of a floating panel (`NEVER`). `moreTools.ts` finds the open dropdown
   (`useMoreToolsSlot`, a box of the app's own appended to it; Math settings
   sits in a `display: contents` wrapper carrying `sidebar-trigger`, so a
   floating panel's outside click ignores it without Excalidraw's square-button
@@ -413,7 +427,15 @@ come, and their terms move in here as each M4d issue makes them true.
   `lineHit.ts` (pure) finds the
   element and line under a point from geometry and the rows' `offsetTop` and
   `offsetHeight` (spec section 4, Gestures, section 14). Its `control` lets the
-  sheet file commit the line (Ctrl+S keeps it open) or leave it (Open).
+  sheet file commit the line (Ctrl+S keeps it open) or leave it (Open). From M4d (#143) the Sheet
+  panel acts on it too: `setFormat`, `setTitleFormat`, `moveTo('title' |
+  'first')` and `insert(text)` (at the open field's caret, by
+  `execCommand('insertText')`, which keeps the field's Ctrl+Z), through the
+  line relay (`createLineRelay<LineEditControl>`). `onEdit` reports what is
+  open (`EditTarget`: anchor, line or `'title'`, text) on each change, and
+  null when the edit ends. The line and title fields carry
+  `data-prevent-outside-click`, so a press in them keeps a floating panel, and
+  turn off spelling, capitals and corrections.
   Depends on: canvas (anchor, size, selection and layer contracts, API types),
   math, `katex` (lazily).
 - **file** (`src/file/`) — the sheet file (ADR 0004, spec section 7).
@@ -495,7 +517,8 @@ come, and their terms move in here as each M4d issue makes them true.
   turns the evaluated sheet (`EvaluatedElement`s, which `MathOverlay` hands
   out through `onEvaluated`) into Variables groups and Problems rows (every
   error and warning), and `errorCount`, the Problems badge (errors only, M4d);
-  `SheetPanel.tsx` renders them, and a click asks App to jump.
+  `SheetPanel.tsx` renders them, and a click asks App to jump. Its `FormatTab`
+  and `SymbolsTab` are one-line placeholders until #144 and #146 (M4d).
   `panelMemory.ts` is the `PanelMemory` port for the open/closed state
   (`localStorage` on the web, given by `src/main.tsx`). `SettingsTab.tsx`
   edits the unit system, Custom's kind → unit table, Digits and the Result
@@ -631,7 +654,10 @@ and everything downstream recalculates. Engine: math.js, client-side.
   Esc once stole Esc from the open-file question. `canvasEvents.excalidraw.test.tsx`
   holds the phase contracts and `gestures.excalidraw.test.tsx` the gestures,
   against the installed package, each with the control of what Excalidraw does
-  without the app; jsdom runs Excalidraw's hit-testing.
+  without the app; jsdom runs Excalidraw's hit-testing. **The Sheet panel is
+  the exception** (M4d, #143): it is drawn inside `root`, but a press, click,
+  double-click or key there isn't the canvas's (`isInSheetPanel`,
+  `panelPresses.ts`), so a press in the panel never leaves the open line.
 - **The line field ignores a press that continues a double-click begun
   elsewhere** (`mousedown` with `detail` 2 or more, before any press of its own),
   so double-clicking another line while editing opens it with the caret at the
@@ -685,13 +711,27 @@ and everything downstream recalculates. Engine: math.js, client-side.
 - **The header is in the body, above the grid.** So the measured size
   includes it, and each row's `offsetTop` already counts it: the line hit
   needs no offset. The gestures read its box from `[data-title]`.
-- **The format bar never takes focus.** Its buttons prevent `mousedown` and
-  are out of the tab order: a blur leaves the line. It is absolutely placed,
-  so the measured body, and so the anchor, never includes it.
+- **A control that acts on the open line never takes focus** (spec section
+  14, M4d): the format bar's buttons and every Sheet panel control prevent
+  `mousedown` and are out of the tab order (`tabIndex={-1}`), since a blur
+  leaves the line. For the panel, `keepPanelPresses` (`panelPresses.ts`)
+  prevents every press that isn't on a field, in the bubble phase above
+  React's root (the page's document; the view's container in a vault, which
+  adds no global listener): Radix's tab trigger switches on its own
+  `mousedown` and skips a prevented one, so in capture, or on the sidebar, the
+  tabs stopped switching (`panelPresses.excalidraw.test.tsx`, with the
+  control). A field in the panel (a filter) takes focus, and so leaves the
+  line. The bar is absolutely placed, so the measured body, and so the
+  anchor, never includes it.
 - **A field inside Excalidraw's container is `type="text"`.** Excalidraw
   runs its letter shortcuts on a key from any input that isn't text, number
   or password, so a `type="search"` filter in the Sheet panel lost the
-  keyboard to its colour picker on `s` (#99, `App.test.tsx`).
+  keyboard to its colour picker on `s` (#99, `App.test.tsx`). **A `<select>`
+  or a button isn't a field to it either:** Delete on a focused Settings
+  `<select>` deleted the selected element. So no key from the Sheet panel
+  reaches Excalidraw: `.sheet-sidebar__keys`, a `display: contents` box around
+  its tabs, stops each key's React propagation (#143,
+  `panelPresses.excalidraw.test.tsx` and `App.test.tsx`).
 - **A comment's cell is `width: var(--math-comment-request, 320px);
   max-width: max-content; min-width: 100%`** (`MathOverlay.css`). The
   percentage fills the row and counts as nothing when the grid sizes its

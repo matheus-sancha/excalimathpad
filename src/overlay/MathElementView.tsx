@@ -1233,9 +1233,15 @@ function LineField({
         aria-controls={list ? SUGGEST_LIST_ID : undefined}
         aria-activedescendant={list && list.highlight !== null ? `${SUGGEST_LIST_ID}-${list.highlight}` : undefined}
         defaultValue={opening.text}
+        // Source, not prose: no spelling, capitals or corrections (section 4, M4d).
         spellCheck={false}
         autoCapitalize="off"
+        autoCorrect="off"
         autoComplete="off"
+        // A press here keeps a floating Sheet panel open (section 8, On a small
+        // window): Excalidraw's outside click skips this mark, which isn't public
+        // API (`panelPresses.excalidraw.test.tsx`).
+        data-prevent-outside-click
         onInput={(event) => {
           onType(event.currentTarget.value)
           refresh(event.currentTarget)

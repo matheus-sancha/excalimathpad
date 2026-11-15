@@ -19,6 +19,7 @@
 
 /* Section 8: a red badge counting errors and warnings, on Math settings. */
 .excalidraw .math-tools__badge,
+.excalidraw .sheet-tab__badge,
 [data-math-problems] .App-toolbar__extra-tools-trigger::after {
   min-width: 1.125rem;
   height: 1.125rem;
@@ -78,11 +79,15 @@
   content: var(--math-hint);
 }
 
-/* The Sheet panel's tabs (section 8): labelled, so they size to their words,
-   in one segmented control like Excalidraw's own sidebar tabs. */
+/* The Sheet panel's tabs (section 8): from M4d six icons, the active one also
+   labelled, in one segmented control like Excalidraw's own sidebar tabs. */
 .excalidraw .sheet-sidebar {
   display: flex;
   flex-direction: column;
+}
+
+.excalidraw .sheet-sidebar__keys {
+  display: contents;
 }
 
 .excalidraw .sheet-sidebar .sidebar-triggers {
@@ -94,7 +99,7 @@
   background: var(--default-bg-color);
 }
 
-/* Four labelled tabs, the dock button and the close button have to fit the
+/* Six tabs, the dock button and the close button have to fit the
    panel, so it is wider than Excalidraw's 302px (set inline on the container,
    hence `!important`; the canvas's docked width reads the same variable), and
    the tabs give way: they shrink, and their padding is small enough that the
@@ -131,6 +136,44 @@
 
 .excalidraw .sheet-sidebar .sidebar-tabs-root {
   overflow-y: auto;
+}
+
+/* An icon tab (section 8, M4d): its name shows beside the icon only while it
+   is active, and stays in the DOM on every tab, visually hidden, as its
+   accessible name; the tooltip is its title. */
+.excalidraw .sheet-sidebar .sheet-tab {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3125rem;
+}
+
+.excalidraw .sheet-sidebar .sheet-tab svg {
+  flex: none;
+  width: 1.125rem;
+  height: 1.125rem;
+}
+
+.excalidraw .sheet-sidebar .sheet-tab:not([data-state='active']) .sheet-tab__label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* Problems' error count, on its icon's corner, inside the tab's box. */
+.excalidraw .sheet-tab__badge {
+  position: absolute;
+  top: 0;
+  right: 0;
+  min-width: 0.875rem;
+  height: 0.875rem;
+  padding: 0 0.1875rem;
+  border-radius: 0.4375rem;
+  font-size: 0.5625rem;
+  line-height: 0.875rem;
 }
 
 /* The build stamp, the ☰ menu's last line (section 12, Hosted build). */

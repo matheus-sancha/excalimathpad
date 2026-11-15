@@ -18,7 +18,14 @@
  * The app's own dialogs and panels keep their keys. In a vault view (M4d,
  * section 12a) `keys` is the view's own container, so nothing listens on the
  * global document and each tab hears only its own keys.
+ *
+ * The Sheet panel is drawn inside `root`, in Excalidraw's sidebar, but a
+ * press, click, double-click or key there isn't the canvas's (M4d, section
+ * 14, Panel controls that act on the open line): the gestures never hear it,
+ * so a press in the panel doesn't leave the open line (`panelPresses.ts`).
  */
+import { isInSheetPanel } from './panelPresses.ts'
+
 export interface CanvasEventHandlers {
   /** Returns true when the app took it: it is then stopped before Excalidraw. */
   doubleClick: (event: MouseEvent) => boolean
@@ -45,17 +52,21 @@ export function listenToCanvas(
     event.preventDefault()
   }
   const onDoubleClick = (event: MouseEvent) => {
-    if (handlers.doubleClick(event)) take(event)
+    if (!isInSheetPanel(event.target) && handlers.doubleClick(event)) take(event)
   }
-  const onPointerDown = (event: PointerEvent) => handlers.pointerDown(event)
-  const onClick = (event: MouseEvent) => handlers.click(event)
+  const onPointerDown = (event: PointerEvent) => {
+    if (!isInSheetPanel(event.target)) handlers.pointerDown(event)
+  }
+  const onClick = (event: MouseEvent) => {
+    if (!isInSheetPanel(event.target)) handlers.click(event)
+  }
   const onPointerMove = (event: PointerEvent) => handlers.pointerMove?.(event)
   // Not in capture: each child's own leave would reach it there too.
   const onPointerLeave = (event: PointerEvent) => handlers.pointerLeave?.(event)
   const onKeyDown = (event: KeyboardEvent) => {
     const target = event.target
     const onCanvas =
-      target === root.ownerDocument.body || (isNode(target) && root.contains(target))
+      target === root.ownerDocument.body || (isNode(target) && root.contains(target) && !isInSheetPanel(target))
     if (onCanvas && handlers.keyDown(event)) take(event)
   }
 

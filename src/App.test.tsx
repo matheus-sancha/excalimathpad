@@ -270,6 +270,29 @@ describe('App', () => {
         { id: 'm1', x: 100, y: 100, width: 300, height: 72, source: 'K = 5.4\nx = 1 m + 1 s', title: 'Pipe flow' },
       ])
 
+    it('has six icon tabs in order, each named, the active one labelled, the badge on Problems (M4d)', async () => {
+      renderApp({ initialElements: problemSheet() })
+      await ready()
+      fireEvent.click(await sheetButton())
+
+      const tabs = await screen.findAllByRole('tab')
+      expect(tabs.map((tab) => tab.textContent?.replace(/\d+$/, ''))).toEqual([
+        'Format',
+        'Symbols',
+        'Variables',
+        'Problems',
+        'Constants',
+        'Settings',
+      ])
+      expect(tabs.map((tab) => tab.title)).toEqual(['Format', 'Symbols', 'Variables', 'Problems', 'Constants', 'Settings'])
+      for (const tab of tabs) expect(tab.querySelector('svg')).not.toBeNull()
+      // Each tab is named by its label, read on every tab, shown on the active one only.
+      expect(screen.getByRole('tab', { name: 'Problems' })).toBe(tabs[3])
+      expect(tabs.filter((tab) => tab.dataset.state === 'active')).toHaveLength(1)
+      expect(tabs[3].querySelector('.sheet-tab__badge')).toHaveTextContent('1')
+      expect(tabs[2].querySelector('.sheet-tab__badge')).toBeNull()
+    })
+
     it('the item and the More tools button carry a red badge counting errors only (M4d)', async () => {
       // One warning (K) and one error.
       renderApp({ initialElements: problemSheet() })
@@ -295,6 +318,114 @@ describe('App', () => {
       fireEvent.click(await sheetButton())
       fireEvent.mouseDown(await screen.findByRole('tab', { name: 'Problems' }))
       expect(await screen.findByText('K shadows the unit K')).toBeInTheDocument()
+    })
+
+    // Section 8, An edit opens the panel on Format (M4d). jsdom's canvas has no
+    // width, so the panel floats there: a press on the canvas or Esc would close
+    // it as Excalidraw closes a floating panel. These open the line by keyboard
+    // (select all, then Enter on the one element) and leave it by its blur.
+    describe('an edit opens the panel on Format, and its end restores it', () => {
+      const panel = () => document.querySelector('.sheet-sidebar')
+      const selected = () => screen.getByRole('tab', { selected: true }).textContent?.replace(/\d+$/, '')
+      const editLine = async () => {
+        const excalidraw = document.querySelector<HTMLElement>('.excalidraw')!
+        fireEvent.keyDown(excalidraw, { key: 'a', code: 'KeyA', ctrlKey: true })
+        await waitFor(() => expect(document.querySelector('[data-math-selection]')).not.toBeNull())
+        fireEvent.keyDown(excalidraw, { key: 'Enter', code: 'Enter' })
+        await waitFor(() => expect(lineField()).not.toBeNull())
+      }
+      const leave = () => act(() => lineField()!.blur())
+      const start = async () => {
+        renderApp({ initialElements: problemSheet() })
+        await ready()
+        await screen.findAllByRole('list', { name: 'Lines' })
+      }
+
+      it('opens a closed panel on Format, and closes it when the edit ends', async () => {
+        await start()
+        expect(panel()).toBeNull()
+
+        await editLine()
+        await waitFor(() => expect(panel()).not.toBeNull())
+        expect(selected()).toBe('Format')
+        leave()
+
+        await waitFor(() => expect(panel()).toBeNull())
+        expect(lineField()).toBeNull()
+      })
+
+      it('keeps a tab picked during the edit, the line open, then restores the tab it had', async () => {
+        await start()
+        fireEvent.click(await sheetButton())
+        fireEvent.mouseDown(await screen.findByRole('tab', { name: 'Constants' }))
+        await waitFor(() => expect(selected()).toBe('Constants'))
+
+        await editLine()
+        await waitFor(() => expect(selected()).toBe('Format'))
+        // A press in the panel isn't the canvas's: the line stays open (section 14).
+        const problems = screen.getByRole('tab', { name: 'Problems' })
+        fireEvent.pointerDown(problems)
+        fireEvent.mouseDown(problems)
+        fireEvent.click(problems)
+        await waitFor(() => expect(selected()).toBe('Problems'))
+        expect(lineField()).not.toBeNull()
+        // Back in the line: a key there means the edit no longer ends from the panel.
+        fireEvent.keyDown(lineField()!, { key: 'Shift' })
+        leave()
+
+        await waitFor(() => expect(selected()).toBe('Constants'))
+      })
+
+      it('stays as it is when the edit ends from a press in the panel, its filter or a row (found in Chromium, #143)', async () => {
+        await start()
+        await editLine()
+        await waitFor(() => expect(selected()).toBe('Format'))
+        fireEvent.mouseDown(screen.getByRole('tab', { name: 'Variables' }))
+        const filter = await screen.findByRole('searchbox', { name: 'Filter names' })
+
+        fireEvent.pointerDown(filter)
+        act(() => filter.focus())
+
+        await waitFor(() => expect(lineField()).toBeNull())
+        expect(selected()).toBe('Variables')
+        expect(filter).toHaveFocus()
+      })
+
+      it('stays closed when closed during the edit, until the next edit', async () => {
+        await start()
+        await editLine()
+        await waitFor(() => expect(panel()).not.toBeNull())
+        fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+        await waitFor(() => expect(panel()).toBeNull())
+        leave()
+        await waitFor(() => expect(lineField()).toBeNull())
+        expect(panel()).toBeNull()
+
+        await editLine()
+        await waitFor(() => expect(selected()).toBe('Format'))
+      })
+
+      it('never remembers the automatic open or restore as the user’s choice', async () => {
+        const client = Object.getOwnPropertyDescriptor(Element.prototype, 'clientWidth')!
+        Object.defineProperty(Element.prototype, 'clientWidth', { configurable: true, get: () => 1440 })
+        onTestFinished(() => {
+          Object.defineProperty(Element.prototype, 'clientWidth', client)
+        })
+        const remembered: boolean[] = []
+        const panelMemory = { rememberedOpen: () => false, rememberOpen: (open: boolean) => void remembered.push(open) }
+        renderApp({ initialElements: problemSheet(), panelMemory })
+        await ready()
+        await screen.findAllByRole('list', { name: 'Lines' })
+
+        await editLine()
+        await waitFor(() => expect(panel()).not.toBeNull())
+        leave()
+        await waitFor(() => expect(panel()).toBeNull())
+        expect(remembered).toEqual([])
+        // The user's own choice still is.
+        fireEvent.click(await sheetButton())
+        await waitFor(() => expect(remembered).toEqual([true]))
+      })
     })
 
     describe('at launch on a wide window', () => {
@@ -412,6 +543,30 @@ describe('App', () => {
       expect(space).toBe(true)
       expect(document.querySelector('.color-picker-content')).toBeNull()
       expect(filter).toHaveFocus()
+    })
+
+    // Section 8, A press in the panel never leaves the line (M4d): a focused
+    // control passes no key to Excalidraw, which counts a <select> as no field.
+    it('keeps Delete on a focused Settings select from deleting the selection (the defect #117 found)', async () => {
+      renderApp({ initialElements: sampleSheet() })
+      await ready()
+      await screen.findAllByRole('list', { name: 'Lines' })
+      fireEvent.click(await sheetButton())
+      fireEvent.mouseDown(await screen.findByRole('tab', { name: 'Settings' }))
+      const excalidraw = document.querySelector<HTMLElement>('.excalidraw')!
+      fireEvent.keyDown(excalidraw, { key: 'a', code: 'KeyA', ctrlKey: true })
+      await waitFor(() => expect(document.querySelector('[data-math-selection]')).not.toBeNull())
+      const select = screen.getAllByRole('combobox')[0]
+      select.focus()
+
+      fireEvent.keyDown(select, { key: 'Delete', code: 'Delete' })
+      fireEvent.keyDown(select, { key: 'r', code: 'KeyR' })
+
+      expect(mathElements()).toHaveLength(2)
+      expect(document.querySelector('[data-testid="toolbar-rectangle"]')).not.toBeChecked()
+      // The control: the same key on the canvas deletes the selected math.
+      fireEvent.keyDown(excalidraw, { key: 'Delete', code: 'Delete' })
+      await waitFor(() => expect(mathElements()).toHaveLength(0))
     })
 
     it('opens on Variables: names in reading order, by element, values in the system', async () => {

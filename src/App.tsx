@@ -3,16 +3,24 @@ import type { ExcalidrawElement } from '@excalidraw/excalidraw/element/types'
 import { AppShell } from './shell/AppShell.tsx'
 import {
   SHEET_PANEL,
+  SHEET_SIDEBAR_CLASS,
   SheetCanvas,
   type SheetCanvasHandle,
+  type SheetPanelState,
   type SheetPanelTab,
 } from './canvas/SheetCanvas.tsx'
 import { isMathAnchor } from './canvas/mathAnchor.ts'
 import { sceneFileFor } from './canvas/sceneFile.ts'
-import { jumpToAnchor, SIDEBAR_DOCKS_ABOVE } from './canvas/selection.ts'
-import { MathOverlay, type EvaluatedElement, type FlashLine } from './overlay/MathOverlay.tsx'
+import { jumpToAnchor, scrollClearOf, SIDEBAR_DOCKS_ABOVE } from './canvas/selection.ts'
+import {
+  MathOverlay,
+  type EditTarget,
+  type EvaluatedElement,
+  type FlashLine,
+  type LineEditControl,
+} from './overlay/MathOverlay.tsx'
 import { sessionPanelMemory, type PanelMemory } from './panel/panelMemory.ts'
-import { ConstantsTab, ProblemsTab, VariablesTab } from './panel/SheetPanel.tsx'
+import { ConstantsTab, FormatTab, ProblemsTab, SymbolsTab, VariablesTab } from './panel/SheetPanel.tsx'
 import { SettingsTab } from './panel/SettingsTab.tsx'
 import { DEFAULT_SETTINGS, type SheetSettings } from './file/sheetFormat.ts'
 import { errorCount, type PanelTarget } from './panel/sheetPanel.ts'
@@ -27,6 +35,7 @@ import type { PickedImage } from './canvas/imageTool.ts'
 import type { ThemeMemory } from './canvas/theme.ts'
 import { confineKeys } from './canvas/vaultKeys.ts'
 import { bridgeWindow } from './canvas/popoutBridge.ts'
+import { isInSheetPanel, keepPanelPresses } from './canvas/panelPresses.ts'
 
 /**
  * What Obsidian's commands do in a sheet tab (docs/spec-v1.md section 8,
@@ -112,7 +121,7 @@ interface SheetFile {
  */
 export default function App({ files, recovery, panelMemory, vault, initialElements }: AppProps) {
   const [canvas, setCanvas] = useState<SheetCanvasHandle | null>(null)
-  const [line] = useState(createLineRelay)
+  const [line] = useState(() => createLineRelay<LineEditControl>())
   const [memory] = useState(() => panelMemory ?? sessionPanelMemory())
 
   const file = useMemo((): SheetFile | null => {
@@ -177,6 +186,13 @@ export default function App({ files, recovery, panelMemory, vault, initialElemen
     if (vaultContainer) return bridgeWindow(vaultContainer)
   }, [vaultContainer, migrations])
 
+  // A press in the Sheet panel keeps focus, so it never leaves the open line
+  // (section 8): heard above React's root, on the page or the view's container.
+  const canvasRoot = canvas?.root
+  useEffect(() => {
+    if (canvasRoot) return keepPanelPresses(canvasRoot, vaultContainer)
+  }, [canvasRoot, vaultContainer])
+
   // Obsidian's Add math and Toggle Math settings commands act on this tab.
   const handCommands = vault?.commands
   useEffect(() => {
@@ -199,7 +215,7 @@ export default function App({ files, recovery, panelMemory, vault, initialElemen
   const [sheet, setSheet] = useState<readonly EvaluatedElement[] | null>(null)
   const [flash, setFlash] = useState<FlashLine | null>(null)
   const errors = sheet ? errorCount(sheet) : 0
-  const wide = () => (canvas?.root.clientWidth ?? 0) > SIDEBAR_DOCKS_ABOVE
+  const wide = () => (canvas ? wideRoot(canvas.root) : false)
 
   // The opened sheet: its start has loaded it (the vault's file, or on the web
   // the recovery copy once answered). `start` is the sheet's own, run once.
@@ -226,6 +242,72 @@ export default function App({ files, recovery, panelMemory, vault, initialElemen
     const tab: SheetPanelTab = errorCount(sheet) > 0 ? 'problems' : 'variables'
     canvas.api.toggleSidebar({ name: SHEET_PANEL, tab, force: true })
   }, [canvas, sheet, opened, memory])
+
+  // An edit opens the panel on Format, and its end puts the panel back as it
+  // was (section 8, M4d): closed if it was, else on its tab. A tab picked
+  // during the edit stays while it lasts; closed during the edit, the panel
+  // stays closed. What the app opens or restores itself is never remembered as
+  // the user's choice: `automatic` is the state it asked for, until the panel
+  // reports reaching it.
+  const beforeEdit = useRef<SheetPanelState | null>(null)
+  const automatic = useRef<SheetPanelState | null>(null)
+  // An edit that ends from a press in the panel (its filter, a row's jump)
+  // leaves the panel as it is: the user is working in it. Any key, or a press
+  // anywhere else, ends that.
+  const pressedInPanel = useRef(false)
+  useEffect(() => {
+    if (!canvasRoot) return
+    const scope: EventTarget = vaultContainer ?? canvasRoot.ownerDocument
+    const onPress = (event: Event) => {
+      pressedInPanel.current = isInSheetPanel(event.target)
+    }
+    const onKey = () => {
+      pressedInPanel.current = false
+    }
+    scope.addEventListener('pointerdown', onPress, true)
+    scope.addEventListener('keydown', onKey, true)
+    return () => {
+      scope.removeEventListener('pointerdown', onPress, true)
+      scope.removeEventListener('keydown', onKey, true)
+    }
+  }, [canvasRoot, vaultContainer])
+  const showAutomatically = useCallback(
+    (next: SheetPanelState) => {
+      if (!canvas) return
+      const now = canvas.sheetPanel()
+      if (now.open === next.open && (!next.open || now.tab === next.tab)) {
+        canvas.showSheetPanel(next) // only the tab Math settings opens changes
+        return
+      }
+      automatic.current = next
+      canvas.showSheetPanel(next)
+    },
+    [canvas],
+  )
+  const onEdit = useCallback(
+    (target: EditTarget | null) => {
+      if (!canvas) return
+      if (target && !beforeEdit.current) {
+        beforeEdit.current = canvas.sheetPanel()
+        showAutomatically({ open: true, tab: 'format' })
+        // On a small window the panel floats: the open line moves clear of it.
+        if (!wideRoot(canvas.root)) {
+          const view = canvas.root.ownerDocument.defaultView
+          view?.requestAnimationFrame(() => {
+            const panel = canvas.root.querySelector(`.${SHEET_SIDEBAR_CLASS}`)?.getBoundingClientRect()
+            if (!panel || panel.width === 0) return
+            scrollClearOf(canvas.api, target.anchorId, panel.left - canvas.root.getBoundingClientRect().left)
+          })
+        }
+      } else if (!target && beforeEdit.current) {
+        const before = beforeEdit.current
+        beforeEdit.current = null
+        if (pressedInPanel.current) return
+        showAutomatically({ open: before.open && canvas.sheetPanel().open, tab: before.tab })
+      }
+    },
+    [canvas, showAutomatically],
+  )
 
   const jump = useCallback(
     (target: PanelTarget) => {
@@ -283,13 +365,20 @@ export default function App({ files, recovery, panelMemory, vault, initialElemen
           fileMenu={fileMenu ?? undefined}
           sheetPanel={{
             errors,
+            format: <FormatTab />,
+            symbols: <SymbolsTab />,
             variables: <VariablesTab sheet={sheet ?? []} onJump={jump} />,
             problemsTab: <ProblemsTab sheet={sheet ?? []} onJump={jump} />,
             settings: file && <SettingsTab settings={settings} onChange={file.sheet.setSettings} />,
             constants: <ConstantsTab settings={settings} />,
             // Remembered per home; a floating panel closes by itself, so
             // only a wide window's choice counts.
-            onChange: (open) => {
+            onChange: (open, tab) => {
+              const asked = automatic.current
+              if (asked && asked.open === open && (!open || asked.tab === tab)) {
+                automatic.current = null
+                return
+              }
               if (wide()) memory.rememberOpen(open)
             },
           }}
@@ -308,6 +397,7 @@ export default function App({ files, recovery, panelMemory, vault, initialElemen
               control={line}
               keepClean={file.sheet.keepClean}
               onEvaluated={setSheet}
+              onEdit={onEdit}
               settings={settings}
               resultColor={settings.resultColor}
               flash={flash}
@@ -318,4 +408,9 @@ export default function App({ files, recovery, panelMemory, vault, initialElemen
       }
     />
   )
+}
+
+/** A window wide enough for the panel to dock beside the canvas (section 8). */
+function wideRoot(root: HTMLElement): boolean {
+  return root.clientWidth > SIDEBAR_DOCKS_ABOVE
 }

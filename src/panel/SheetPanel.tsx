@@ -21,6 +21,27 @@ interface TabProps {
   onJump: (target: PanelTarget) => void
 }
 
+/**
+ * The Format tab (section 4, Format tab, M4d), a placeholder until #144 fills
+ * it: the bar beside the open line still formats it.
+ */
+export function FormatTab() {
+  return (
+    <div className="sheet-panel">
+      <p className="sheet-panel__empty">For now, format the open line or title with the bar beside it.</p>
+    </div>
+  )
+}
+
+/** The Symbols tab (section 4, Symbols tab, M4d), a placeholder until #146 fills it. */
+export function SymbolsTab() {
+  return (
+    <div className="sheet-panel">
+      <p className="sheet-panel__empty">Greek letters, operators and functions to insert at the caret come here.</p>
+    </div>
+  )
+}
+
 /** A filter box, then every name in reading order, grouped by element. */
 export function VariablesTab({ sheet, onJump }: TabProps) {
   const [filter, setFilter] = useState('')
