@@ -2078,8 +2078,8 @@ touch in [section 4](#touch). Research: [`docs/research/obsidian-plugin.md`](res
   whiteboard with live, unit-aware math that recalculates as you edit. Works fully offline; makes
   no network requests."
 - **The README, users first** (it is the listing page): the name and that one line; a screenshot
-  of a sheet in Obsidian (`.github/assets/obsidian.png`, desktop, light theme, the panel on
-  Format, taken by Matheus for the version submitted); **Get it** (Obsidian's Community plugins,
+  of a sheet in Obsidian (`.github/assets/obsidian.png`, desktop, the pump sheet with its table
+  and plot, the panel on Variables, taken by Matheus for the version submitted); **Get it** (Obsidian's Community plugins,
   or the web app with today's screenshot); **Your first sheet** in about five steps; **Math
   guide**; **Privacy**; **Support**; **Contributing** (a link to `CONTRIBUTING.md` and one line
   to the spec, `CONTEXT.md` and the ADRs); **Licence and credits** (MIT; Excalidraw, math.js,
@@ -3721,3 +3721,6 @@ Changes line if it changes behaviour.
   from the Format tab's touch hint ("Double-tap a line, or tap Edit") only in naming where Edit is, since the
   canvas hint shows while the panel may be closed. A mouse or pen press brings back the desktop wording, by the
   same last-press rule. Section 17's hint check gains the touch rule, read in the touch run.
+- 2026-11-15, [section 12a](#listing) (#149, agreed by Matheus on the screenshot he took): **the listing's
+  screenshot shows the panel on Variables,** not Format, in Obsidian's dark theme with the sheet light.
+  Matheus kept the screenshot as taken rather than retaking it. It is retaken only when the look changes a lot.

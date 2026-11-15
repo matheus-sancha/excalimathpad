@@ -3,7 +3,7 @@
 Open and edit .excalimathpad calc sheets: an Excalidraw whiteboard with live, unit-aware math that recalculates as you edit. Works fully offline; makes no network requests.
 
 <p align="center">
-  <img src=".github/assets/obsidian.png" alt="A calc sheet in an Obsidian tab: math elements with typeset lines, results and units beside a pump curve plot, and the Sheet panel open on Format" width="900">
+  <img src=".github/assets/obsidian.png" alt="A calc sheet in an Obsidian tab: math elements with typeset lines, results and units beside a pump curve plot, and the Sheet panel listing every variable with its value" width="900">
 </p>
 
 You place math elements wherever you want them on the sheet, type one statement per line, and see each line typeset with its result and unit. Edit an input and every line below it recalculates. Drawings, notes and arrows live on the same sheet as the math.
