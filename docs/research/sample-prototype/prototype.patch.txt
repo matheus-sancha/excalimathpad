@@ -1,0 +1,621 @@
+diff --git a/src/App.tsx b/src/App.tsx
+index 383d3bb..7c40ec9 100644
+--- a/src/App.tsx
++++ b/src/App.tsx
+@@ -20,6 +20,8 @@ import {
+   type LineEditControl,
+ } from './overlay/MathOverlay.tsx'
+ import { sessionPanelMemory, type PanelMemory } from './panel/panelMemory.ts'
++import { panelProto, ProtoBar, usePanelProto } from './prototype/panelProto.tsx' // PROTOTYPE #181
++import { SampleBar } from './prototype/sampleProto.tsx' // PROTOTYPE #185
+ import { ConstantsTab, ProblemsTab, VariablesTab } from './panel/SheetPanel.tsx'
+ import { SymbolsTab } from './panel/SymbolsTab.tsx'
+ import type { SymbolInsert } from './math/symbols.ts'
+@@ -253,7 +255,7 @@ export default function App({ files, recovery, panelMemory, vault, initialElemen
+     if (!canvas || !sheet || !opened || launched.current) return
+     if (sheet.length !== canvas.api.getSceneElements().filter(isMathAnchor).length) return
+     launched.current = true
+-    if (memory.rememberedOpen() === false || canvas.root.clientWidth <= SIDEBAR_DOCKS_ABOVE) return
++    if (memory.rememberedOpen() === false || canvas.root.clientWidth <= docksAbove()) return
+     const tab: SheetPanelTab = errorCount(sheet) > 0 ? 'problems' : 'variables'
+     canvas.showSheetPanel({ open: true, tab })
+   }, [canvas, sheet, opened, memory])
+@@ -311,7 +313,10 @@ export default function App({ files, recovery, panelMemory, vault, initialElemen
+       if (!canvas) return
+       if (target && !beforeEdit.current) {
+         beforeEdit.current = canvas.sheetPanel()
+-        showAutomatically({ open: true, tab: 'format' })
++        // PROTOTYPE #181: when an edit opens the panel.
++        const how = panelProto.edit()
++        if (how === 'always' || (how === 'docked' && (wideRoot(canvas.root) || canvas.sheetPanel().open)))
++          showAutomatically({ open: true, tab: 'format' })
+         // On a phone the open line moves into the space above the bottom sheet
+         // and the keyboard; on a small window the panel floats, and the line
+         // moves clear of it.
+@@ -336,7 +341,8 @@ export default function App({ files, recovery, panelMemory, vault, initialElemen
+ 
+   // On a phone the keyboard and the sheet settle after the edit opens: the
+   // line is moved clear again each time the sheet's room changes.
+-  const phone = vault?.phone ?? false
++  usePanelProto(canvas?.root ?? null) // PROTOTYPE #181
++  const phone = (vault?.phone ?? false) || panelProto.bottom()
+   const editing = editTarget !== null
+   useEffect(() => {
+     if (!phone || !editing || !canvas) return
+@@ -395,7 +401,7 @@ export default function App({ files, recovery, panelMemory, vault, initialElemen
+       jumpToAnchor(canvas.api, target.anchorId)
+       setFlash({ ...target, key: Date.now() })
+       // Floating over a small window, or a sheet on a phone, the panel gets out of the way.
+-      if (canvas.root.clientWidth <= SIDEBAR_DOCKS_ABOVE) {
++      if (canvas.root.clientWidth <= docksAbove()) {
+         canvas.showSheetPanel({ open: false, tab: canvas.sheetPanel().tab })
+       }
+       canvas.focusCanvas()
+@@ -497,6 +503,8 @@ export default function App({ files, recovery, panelMemory, vault, initialElemen
+               touch={touch}
+               flash={flash}
+             />
++            <ProtoBar />
++            <SampleBar />
+             {web && <FileChrome session={web.session} dialogs={web.dialogs} canvasRoot={canvas.root} />}
+           </>
+         )
+@@ -522,5 +530,10 @@ function clearOfBottomSheet(canvas: SheetCanvasHandle) {
+ 
+ /** A window wide enough for the panel to dock beside the canvas (section 8). */
+ function wideRoot(root: HTMLElement): boolean {
+-  return root.clientWidth > SIDEBAR_DOCKS_ABOVE
++  return root.clientWidth > docksAbove()
++}
++
++// PROTOTYPE #181
++function docksAbove(): number {
++  return panelProto.on ? panelProto.docksAbove() : SIDEBAR_DOCKS_ABOVE
+ }
+diff --git a/src/canvas/SheetCanvas.css b/src/canvas/SheetCanvas.css
+index 101e0cf..e49cd31 100644
+--- a/src/canvas/SheetCanvas.css
++++ b/src/canvas/SheetCanvas.css
+@@ -110,7 +110,7 @@
+    the tabs give way: they shrink, and their padding is small enough that the
+    close button stays inside the window. */
+ .excalidraw.excalidraw-container {
+-  --right-sidebar-width: 384px !important;
++  --right-sidebar-width: var(--sheet-panel-width, 384px) !important; /* PROTOTYPE #181 */
+ }
+ 
+ .excalidraw .sheet-sidebar .sidebar__header {
+diff --git a/src/canvas/SheetCanvas.tsx b/src/canvas/SheetCanvas.tsx
+index 457c13a..343b477 100644
+--- a/src/canvas/SheetCanvas.tsx
++++ b/src/canvas/SheetCanvas.tsx
+@@ -14,6 +14,8 @@ import type { SheetTheme, ThemeMemory } from './theme.ts'
+ import { VAULT_CLASS } from './vaultItems.ts'
+ import { MathGuide } from '../guide/MathGuide.tsx'
+ import './SheetCanvas.css'
++import { panelProto, ProtoResizeHandle } from '../prototype/panelProto.tsx' // PROTOTYPE #181
++import '../prototype/panelProto.css'
+ 
+ /**
+  * Re-dispatches a wheel event that landed on something outside Excalidraw
+@@ -351,7 +353,7 @@ export function SheetCanvas({
+       <Excalidraw
+         excalidrawAPI={setApi}
+         initialData={initialData}
+-        UIOptions={UI_OPTIONS}
++        UIOptions={panelProto.on ? { ...UI_OPTIONS, dockedSidebarBreakpoint: panelProto.docksAbove() } : UI_OPTIONS}
+         aiEnabled={!vault}
+         // `false` makes every embed invalid, so none loads its iframe.
+         validateEmbeddable={embeds ? undefined : false}
+@@ -428,6 +430,7 @@ export function SheetCanvas({
+                 a focused <select> or tab isn't a field to them, so Delete deleted the
+                 selected element. The panel's own handlers, inside, still run. A box
+                 with no box of its own (`display: contents`), so the layout is Excalidraw's. */}
++            <ProtoResizeHandle />
+             <div className="sheet-sidebar__keys" onKeyDown={(event) => event.stopPropagation()}>
+             <Sidebar.Tabs>
+               {sheetPanel.quickKeys}
+@@ -447,6 +450,7 @@ export function SheetCanvas({
+               </Sidebar.Header>
+               {panelTabs.map(([tab, content]) => (
+                 <Sidebar.Tab key={tab} tab={tab}>
++                  {panelProto.iconTabs && <div className="proto-tabname">{TAB_NAMES[tab]}</div>}
+                   {content}
+                 </Sidebar.Tab>
+               ))}
+diff --git a/src/main.tsx b/src/main.tsx
+index fd10e18..a191315 100644
+--- a/src/main.tsx
++++ b/src/main.tsx
+@@ -5,6 +5,7 @@ import App from './App.tsx'
+ import { browserFileAccess } from './file/fileAccess.ts'
+ import { indexedDbRecovery } from './file/recovery.ts'
+ import { storagePanelMemory } from './panel/panelMemory.ts'
++import { panelProto, protoSheet } from './prototype/panelProto.tsx' // PROTOTYPE #181
+ 
+ /**
+  * The web app's entry (docs/spec-v1.md section 12a, One source, two builds):
+@@ -21,6 +22,6 @@ const panelMemory = storagePanelMemory(() => {
+ 
+ createRoot(window.document.getElementById('root')!).render(
+   <StrictMode>
+-    <App files={browserFileAccess()} recovery={indexedDbRecovery()} panelMemory={panelMemory} />
++    <App files={browserFileAccess()} recovery={indexedDbRecovery()} panelMemory={panelProto.on ? undefined : panelMemory} initialElements={protoSheet()} />
+   </StrictMode>,
+ )
+diff --git a/src/panel/FormatTab.tsx b/src/panel/FormatTab.tsx
+index 14469de..8b70044 100644
+--- a/src/panel/FormatTab.tsx
++++ b/src/panel/FormatTab.tsx
+@@ -6,6 +6,7 @@ import { TEXT_COLOR_VALUES } from '../overlay/textColors.ts'
+ import { FORMAT_HINTS, formatView, type FormatElement, type FormatTarget } from './formatTab.ts'
+ import { HighlightRow, PanelButton, Row, SizeRow, TextRow, Toggle } from './formatControls.tsx'
+ import { RulesList, type RulesActions } from './RulesList.tsx'
++import { ProtoSample } from '../prototype/sampleProto.tsx' // PROTOTYPE #185
+ 
+ /** What the Format tab's presses do: each acts on the open line or title (`LineEditControl`). */
+ export interface FormatActions extends RulesActions {
+@@ -70,12 +71,12 @@ export function FormatTab({ sheet, target, selected, resultColor = 'blue', touch
+     <div className="sheet-panel sheet-format">
+       <section className="sheet-format__sample" aria-label="Sample">
+         <p className="sheet-format__caption">{view.caption}</p>
+-        <div
+-          className="sheet-format__drawing"
++        <ProtoSample
+           style={{ '--math-result': TEXT_COLOR_VALUES[resultColor] } as CSSProperties}
++          chart={view.kind !== 'title' && !!view.line?.plot}
+         >
+           {sample}
+-        </div>
++        </ProtoSample>
+       </section>
+       <div className="sheet-format__nav" role="toolbar" aria-label="Move the edit">
+         <PanelButton
+diff --git a/src/prototype/panelProto.css b/src/prototype/panelProto.css
+new file mode 100644
+index 0000000..ceee35e
+--- /dev/null
++++ b/src/prototype/panelProto.css
+@@ -0,0 +1,26 @@
++/* PROTOTYPE, throwaway (#181). */
++.proto-bar {
++  position: fixed; left: 50%; bottom: 10px; transform: translateX(-50%); z-index: 9999;
++  display: flex; gap: 10px; align-items: center; flex-wrap: wrap; justify-content: center;
++  max-width: 96vw; padding: 6px 12px; border-radius: 999px;
++  background: #111; color: #fff; font: 12px/1.4 system-ui, sans-serif; box-shadow: 0 4px 16px #0006;
++}
++.proto-bar button { border: 1px solid #666; border-radius: 6px; background: #222; color: #fff; padding: 2px 8px; font: inherit; cursor: pointer; }
++.proto-bar button.is-on { background: #ffd43b; color: #111; border-color: #ffd43b; }
++.proto-bar span { opacity: 0.9; white-space: nowrap; }
++
++/* Icons only: the active tab's name goes under the row, as a heading. */
++.proto-icon-tabs .excalidraw .sheet-sidebar .sheet-tab .sheet-tab__label {
++  position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap;
++}
++.excalidraw .proto-tabname { padding: 0.5rem 0.75rem 0; font-size: 0.8125rem; font-weight: 700; color: var(--color-gray-60, #666); }
++
++.excalidraw .proto-resize {
++  position: absolute; left: -4px; top: 0; bottom: 0; width: 9px; z-index: 5; cursor: col-resize; touch-action: none;
++}
++.excalidraw .proto-resize::after {
++  content: ''; position: absolute; left: 3px; top: 50%; width: 3px; height: 44px; margin-top: -22px;
++  border-radius: 2px; background: var(--color-gray-40, #aaa);
++}
++.excalidraw .proto-resize:hover::after { background: var(--color-primary, #6965db); height: 100%; top: 0; margin-top: 0; }
++.app-shell__overlay { overflow: clip !important; } /* the fix of ticket 190, so the scroll bug does not distract */
+diff --git a/src/prototype/panelProto.tsx b/src/prototype/panelProto.tsx
+new file mode 100644
+index 0000000..7181bc1
+--- /dev/null
++++ b/src/prototype/panelProto.tsx
+@@ -0,0 +1,241 @@
++/**
++ * PROTOTYPE, throwaway (wayfinder ticket #181). Four variants of the Sheet
++ * panel's width, resizing, docking and opening on an edit, in the real panel,
++ * switched by `?panel=A|B|C|D` (and `&edit=always|docked|never` to override
++ * when an edit opens the panel). Not production code: no tests, no memory
++ * port, and it reloads the page to switch. Delete when the ticket is resolved.
++ */
++import { useEffect, useState, useSyncExternalStore } from 'react'
++import { createMathAnchorElements } from '../canvas/mathAnchor.ts'
++
++type Edit = 'always' | 'docked' | 'never'
++interface Variant {
++  key: string
++  name: string
++  /** The panel's width for an editor of this width. */
++  width: (editor: number, dragged: number) => number
++  resize: boolean
++  iconTabs: boolean
++  /** The editor docks the panel when wider than this. */
++  docksAbove: (width: number) => number
++  /** Below the docking width: float over the sheet, or the bottom sheet. */
++  narrow: 'float' | 'bottom'
++  edit: Edit
++}
++
++const TOOLBAR_ROOM = 640
++const VARIANTS: Variant[] = [
++  {
++    key: 'A',
++    name: 'Today: 384, docks above 1229',
++    width: () => 384,
++    resize: false,
++    iconTabs: false,
++    docksAbove: () => 1229,
++    narrow: 'float',
++    edit: 'always',
++  },
++  {
++    key: 'B',
++    name: 'Slim: 320 fixed, docks above 960',
++    width: () => 320,
++    resize: false,
++    iconTabs: true,
++    docksAbove: (w) => TOOLBAR_ROOM + w,
++    narrow: 'float',
++    edit: 'always',
++  },
++  {
++    key: 'C',
++    name: 'Drag: 280 to 480, starts at 320; an edit opens it only when docked',
++    width: (_e, dragged) => dragged,
++    resize: true,
++    iconTabs: true,
++    docksAbove: (w) => TOOLBAR_ROOM + w,
++    narrow: 'float',
++    edit: 'docked',
++  },
++  {
++    key: 'D',
++    name: 'Follows the window: 22% of it, 288 to 360; never floats (bottom sheet)',
++    width: (editor) => Math.round(Math.min(360, Math.max(288, editor * 0.22))),
++    resize: false,
++    iconTabs: true,
++    docksAbove: (w) => TOOLBAR_ROOM + w,
++    narrow: 'bottom',
++    edit: 'always',
++  },
++]
++
++const params = new URLSearchParams(window.location.search)
++const key = params.get('panel') ?? (params.has('sample') ? 'C' : null) // PROTOTYPE #185: the sample is judged in variant C
++const variant = VARIANTS.find((v) => v.key === key) ?? null
++const editParam = params.get('edit') as Edit | null
++const DRAG_KEY = 'PROTOTYPE.panelWidth'
++
++/** Live state, kept outside React so App, SheetCanvas and the bar read one value. */
++let state = { editor: 1536, dragged: Number(window.localStorage.getItem(DRAG_KEY)) || 320 }
++const listeners = new Set<() => void>()
++function set(next: Partial<typeof state>) {
++  state = { ...state, ...next }
++  listeners.forEach((l) => l())
++}
++const subscribe = (l: () => void) => (listeners.add(l), () => void listeners.delete(l))
++
++export const panelProto = {
++  on: variant !== null,
++  width: () => (variant ? variant.width(state.editor, state.dragged) : 384),
++  docksAbove: () => (variant ? variant.docksAbove(panelProto.width()) : 1229),
++  /** True when the narrow editor gets the bottom sheet instead of a floating panel. */
++  bottom: () => params.has('phone') || (!!variant && variant.narrow === 'bottom' && state.editor <= panelProto.docksAbove()),
++  edit: (): Edit => editParam ?? variant?.edit ?? 'always',
++  iconTabs: variant?.iconTabs ?? false,
++  resize: variant?.resize ?? false,
++}
++
++/** Re-renders on a width or drag change and keeps the CSS variable in step. */
++export function usePanelProto(root: HTMLElement | null) {
++  const snapshot = useSyncExternalStore(subscribe, () => state)
++  useEffect(() => {
++    if (!variant || !root) return
++    const measure = () => set({ editor: root.clientWidth })
++    measure()
++    const observer = new ResizeObserver(measure)
++    observer.observe(root)
++    return () => observer.disconnect()
++  }, [root])
++  const width = panelProto.width()
++  useEffect(() => {
++    if (!variant) return
++    document.documentElement.style.setProperty('--sheet-panel-width', `${width}px`)
++    document.documentElement.classList.toggle('proto-icon-tabs', variant.iconTabs)
++  }, [width])
++  return snapshot
++}
++
++/** The drag handle on the panel's left edge (variant C). Double-click: back to 320. */
++export function ProtoResizeHandle() {
++  if (!panelProto.resize) return null
++  return (
++    <div
++      className="proto-resize"
++      title="Drag to resize (double-click: 320)"
++      data-prevent-outside-click
++      onDoubleClick={() => drag(320)}
++      onPointerDown={(event) => {
++        event.preventDefault()
++        event.stopPropagation()
++        const handle = event.currentTarget
++        handle.setPointerCapture(event.pointerId)
++        const right = handle.closest('.excalidraw-container')!.getBoundingClientRect().right
++        const move = (e: PointerEvent) => drag(right - e.clientX)
++        const up = () => {
++          handle.removeEventListener('pointermove', move)
++          handle.removeEventListener('pointerup', up)
++        }
++        handle.addEventListener('pointermove', move)
++        handle.addEventListener('pointerup', up)
++      }}
++    />
++  )
++}
++function drag(width: number) {
++  const next = Math.round(Math.min(480, Math.max(280, width)))
++  window.localStorage.setItem(DRAG_KEY, String(next))
++  set({ dragged: next })
++}
++
++/** The floating switcher: variant, when an edit opens the panel, and the live state. */
++export function ProtoBar() {
++  useSyncExternalStore(subscribe, () => state)
++  const [docked, setDocked] = useState('closed')
++  useEffect(() => {
++    const timer = window.setInterval(() => {
++      const panel = document.querySelector('.sheet-sidebar')
++      setDocked(
++        document.querySelector('.sheet-bottom')
++          ? 'bottom sheet'
++          : !panel
++            ? 'closed'
++            : panel.classList.contains('sidebar--docked') && state.editor > panelProto.docksAbove()
++              ? 'docked'
++              : 'floating',
++      )
++    }, 200)
++    return () => window.clearInterval(timer)
++  }, [])
++  useEffect(() => {
++    const onKey = (event: KeyboardEvent) => {
++      const target = event.target as HTMLElement
++      if (target.closest('input, textarea, select, [contenteditable]')) return
++      if (event.key === 'ArrowLeft' && event.altKey) go(-1)
++      if (event.key === 'ArrowRight' && event.altKey) go(1)
++    }
++    window.addEventListener('keydown', onKey)
++    return () => window.removeEventListener('keydown', onKey)
++  }, [])
++  if (!variant || params.has('nobar') || params.has('sample')) return null
++  const edits: Edit[] = ['always', 'docked', 'never']
++  return (
++    <div className="proto-bar">
++      <button onClick={() => go(-1)}>←</button>
++      <b>
++        {variant.key} — {variant.name}
++      </b>
++      <button onClick={() => go(1)}>→</button>
++      <span>
++        an edit opens Format:{' '}
++        {edits.map((e) => (
++          <button key={e} className={e === panelProto.edit() ? 'is-on' : ''} onClick={() => goto({ edit: e })}>
++            {e === 'docked' ? 'only docked' : e}
++          </button>
++        ))}
++      </span>
++      <span>
++        editor {state.editor} · panel {panelProto.width()} · docks above {panelProto.docksAbove()} · {docked}
++      </span>
++    </div>
++  )
++}
++function go(step: number) {
++  const at = VARIANTS.indexOf(variant!)
++  const next = VARIANTS[(at + step + VARIANTS.length) % VARIANTS.length]
++  const url = new URL(window.location.href)
++  url.searchParams.set('panel', next.key)
++  url.searchParams.delete('edit')
++  window.location.href = url.href
++}
++function goto(change: Record<string, string>) {
++  const url = new URL(window.location.href)
++  for (const [k, v] of Object.entries(change)) url.searchParams.set(k, v)
++  window.location.href = url.href
++}
++
++/** The map's true-position sheet, so the panel is judged against real lines. */
++export function protoSheet() {
++  if (!variant) return undefined
++  const lines = [
++    'dx = 0.08 mm',
++    'dy = -0.05 mm',
++    'T_p = 0.25 mm',
++    'TP = 2 sqrt(dx^2 + dy^2) in mm',
++    'check = if(TP <= T_p, "Pass", "Fail") @text-green if result == "Pass" @text-red if result == "Fail"',
++    'used = TP / T_p * 100',
++    'margin = T_p - TP in mm',
++    'r_h = sqrt((dx + 0.02 mm)^2 + (dy - 0.01 mm)^2) + sqrt(dx^2 + dy^2) / 2 + T_p / 4 - margin / 3 in mm # a long line',
++  ]
++  const table = ['r_z = 0.125 mm', 'a_s = 0 .. 2 pi step pi / 4', 'table(a_s, r_z cos(a_s) in mm, r_z sin(a_s) in mm)']
++  const graph = [
++    'r_t = T_p / 2 in mm',
++    'theta = 0 .. 2 pi step pi / 90',
++    'zone_x = r_t cos(theta) in mm',
++    'zone(a) = r_t sin(a)',
++    'measured(a) = dy + 0 mm * a',
++    'plot(zone_x in mm, zone(theta) in mm, measured(theta) in mm), mark dx, x -2.3 r_t .. 2.3 r_t, y -1.2 r_t .. 1.2 r_t, size L, title "True position"',
++  ]
++  return createMathAnchorElements([
++    { id: 'proto-tp', x: 120, y: 110, width: 520, height: 300, source: lines.join('\n'), title: 'True position, RFS (ASME Y14.5)' },
++    { id: 'proto-graph', x: 120, y: 470, width: 520, height: 420, source: graph.join('\n'), title: 'Graph: tolerance zone and the measured point' },
++    { id: 'proto-table', x: 900, y: 110, width: 420, height: 300, source: table.join('\n'), title: 'Zone points' },
++  ])
++}
+diff --git a/src/prototype/sampleProto.css b/src/prototype/sampleProto.css
+new file mode 100644
+index 0000000..8485c7c
+--- /dev/null
++++ b/src/prototype/sampleProto.css
+@@ -0,0 +1,57 @@
++/* PROTOTYPE, throwaway (#185). Variant A is today's box, untouched. */
++.proto-sample { overflow-x: auto; }
++.proto-sample__note { margin: 0; padding: 0 10px 8px 28px; color: #868e96; font: italic 12px/16px system-ui, sans-serif; }
++
++/* Wrapping, shared by B, D and C's fallback: the row is a wrapping flex line,
++   KaTeX may break after an operator or a relation, plain text anywhere. */
++.proto-sample--B .math-element__body.is-sample,
++.proto-sample--D .math-element__body.is-sample { width: 100%; padding: 8px 10px; }
++.proto-sample--B .math-element__grid,
++.proto-sample--D .math-element__grid,
++.proto-sample--C .is-wrapping .math-element__grid { display: block; }
++.proto-sample--B .math-element__row,
++.proto-sample--C .is-wrapping .math-element__row { display: flex; flex-wrap: wrap; align-items: center; row-gap: 2px; }
++.proto-sample--B .math-element__equation,
++.proto-sample--D .math-element__equation,
++.proto-sample--C .is-wrapping .math-element__equation { flex-wrap: wrap; min-width: 0; max-width: calc(100% - 14px); }
++.proto-sample--B .katex,
++.proto-sample--D .katex,
++.proto-sample--C .is-wrapping .katex { white-space: normal; }
++.proto-sample--B .math-element__expression,
++.proto-sample--D .math-element__expression,
++.proto-sample--C .is-wrapping .math-element__expression { min-width: 0; }
++.proto-sample--B :is(.math-element__result, .math-element__source, .math-element__raw, .math-element__comment, .math-element__note),
++.proto-sample--D :is(.math-element__result, .math-element__source, .math-element__raw, .math-element__comment, .math-element__note),
++.proto-sample--C .is-wrapping :is(.math-element__result, .math-element__source, .math-element__raw, .math-element__comment, .math-element__note) {
++  white-space: pre-wrap; overflow-wrap: anywhere; max-width: 100%;
++}
++
++/* B: smaller, wrapped, at most about six rows, then it scrolls. */
++.proto-sample--B { max-height: 150px; overflow-y: auto; }
++.proto-sample--B.proto-sample:has(.math-element__plot-cell, .math-element__table-cell) { max-height: 300px; }
++.proto-sample--B .math-element__body.is-sample { font-size: 13px; line-height: 20px; }
++.proto-sample--B .math-element__row { min-height: 20px; }
++.proto-sample--B :is(.math-element__plot-cell, .math-element__table-cell) { flex: none; }
++
++/* C: one row, scaled by the script. */
++.proto-sample--C { min-height: 40px; }
++.proto-sample--C .math-element__plot-cell { display: none; }
++.proto-sample--C .math-element__table-cell { display: none; }
++
++/* D: the expression, then the result on a row of its own at sheet size. */
++.proto-sample--D { max-height: 220px; overflow-y: auto; }
++.proto-sample--D .math-element__body.is-sample { font-size: 13px; line-height: 20px; }
++.proto-sample--D .math-element__row { display: flex; flex-direction: column; align-items: stretch; }
++.proto-sample--D .math-element__gutter { position: absolute; }
++.proto-sample--D .math-element__equation { padding-left: 14px; max-width: none; }
++.proto-sample--D .math-element__result {
++  align-self: stretch; justify-content: flex-end; margin: 6px 0 0; padding: 4px 0 0;
++  border-left: 0; border-top: 1px solid var(--math-rule); font-size: 16px; line-height: 24px;
++}
++.proto-sample--D .math-element__result.is-error { text-align: right; }
++.proto-sample--D .math-element__note { padding-left: 14px; }
++.proto-sample--D :is(.math-element__plot-cell, .math-element__table-cell) { align-self: center; }
++
++/* The phone's bottom sheet: at most about three rows, and never a chart or a table. */
++.sheet-bottom .proto-sample:not(.proto-sample--A) { max-height: 72px; overflow-y: auto; min-height: 36px; }
++.sheet-bottom .proto-sample:not(.proto-sample--A) :is(.math-element__plot-cell, .math-element__table-cell, .proto-sample__note) { display: none; }
+diff --git a/src/prototype/sampleProto.tsx b/src/prototype/sampleProto.tsx
+new file mode 100644
+index 0000000..586de9a
+--- /dev/null
++++ b/src/prototype/sampleProto.tsx
+@@ -0,0 +1,100 @@
++/**
++ * PROTOTYPE, throwaway (wayfinder ticket #185). Four variants of the Format
++ * tab's sample, in the real Sheet panel at the width ticket #181 chose,
++ * switched live by the bar or `?sample=A|B|C|D` (`&phone=1` for the bottom
++ * sheet). Not production code. Delete when the ticket is resolved.
++ */
++import { useLayoutEffect, useRef, useSyncExternalStore, type CSSProperties, type ReactNode } from 'react'
++import './sampleProto.css'
++
++const VARIANTS = [
++  ['A', 'Today: sheet size, one row that scrolls sideways, the whole chart'],
++  ['B', 'Smaller and wrapped: 13 px, breaks at operators, chart scaled to the panel'],
++  ['C', 'Shrink to fit: one row scaled down (to 60%), then wraps; no chart, a note instead'],
++  ['D', 'Two parts: the expression wrapped, the result on its own row; chart as a thumbnail'],
++] as const
++type Key = (typeof VARIANTS)[number][0]
++
++const params = new URLSearchParams(window.location.search)
++let current: Key | null = (VARIANTS.find(([k]) => k === params.get('sample'))?.[0] ?? null) as Key | null
++const listeners = new Set<() => void>()
++const subscribe = (l: () => void) => (listeners.add(l), () => void listeners.delete(l))
++function go(step: number) {
++  const at = VARIANTS.findIndex(([k]) => k === current)
++  current = VARIANTS[(at + step + VARIANTS.length) % VARIANTS.length][0]
++  const url = new URL(window.location.href)
++  url.searchParams.set('sample', current)
++  window.history.replaceState(null, '', url)
++  listeners.forEach((l) => l())
++}
++const useVariant = () => useSyncExternalStore(subscribe, () => current)
++
++/** The sample's box. Without `?sample=` it is today's box, untouched. */
++export function ProtoSample({ style, chart, children }: { style: CSSProperties; chart: boolean; children: ReactNode }) {
++  const variant = useVariant()
++  const box = useRef<HTMLDivElement>(null)
++
++  useLayoutEffect(() => {
++    const el = box.current
++    if (!el) return
++    const fit = () => {
++      const body = el.querySelector<HTMLElement>('.math-element__body')
++      if (!body) return
++      const room = el.clientWidth
++      const set = (node: HTMLElement | null, zoom: number) => node && (node.style.zoom = zoom >= 1 ? '' : String(zoom))
++      const plot = el.querySelector<HTMLElement>('.math-element__plot-cell')
++      const table = el.querySelector<HTMLElement>('.math-element__table-cell')
++      for (const node of [body, plot, table]) if (node) node.style.zoom = ''
++      body.classList.remove('is-wrapping')
++      body.style.width = ''
++      if (variant === 'B') {
++        // The chart and the table, whole, scaled to the box's width.
++        for (const node of [plot, table]) if (node) set(node, (room - 34) / node.offsetWidth)
++      }
++      if (variant === 'C') {
++        // One row scaled down to fit; below 60% it wraps at 60%.
++        const zoom = room / body.offsetWidth
++        if (zoom >= 0.6) set(body, zoom)
++        else {
++          body.classList.add('is-wrapping')
++          body.style.width = `${room / 0.6}px`
++          set(body, 0.6)
++        }
++      }
++      if (variant === 'D') {
++        if (plot) set(plot, Math.min((room - 34) / plot.offsetWidth, 120 / plot.offsetHeight))
++        if (table) set(table, (room - 34) / table.offsetWidth)
++      }
++    }
++    fit()
++    const observer = new ResizeObserver(fit)
++    observer.observe(el)
++    const mutation = new MutationObserver(fit)
++    mutation.observe(el, { childList: true, subtree: true, characterData: true })
++    return () => (observer.disconnect(), mutation.disconnect())
++  }, [variant])
++
++  return (
++    <div ref={box} className={`sheet-format__drawing${variant ? ` proto-sample proto-sample--${variant}` : ''}`} style={style}>
++      {children}
++      {variant === 'C' && chart && <p className="proto-sample__note">Its chart is drawn on the sheet.</p>}
++    </div>
++  )
++}
++
++/** The floating switcher. Buttons only: a line is open while the sample is judged, so no keys. */
++export function SampleBar() {
++  const variant = useVariant()
++  if (!variant || params.has('nobar')) return null
++  const name = VARIANTS.find(([k]) => k === variant)![1]
++  const stay = (event: { preventDefault: () => void }) => event.preventDefault() // keeps the open line open
++  return (
++    <div className="proto-bar" onPointerDown={stay} onMouseDown={stay} data-prevent-outside-click>
++      <button onClick={() => go(-1)}>←</button>
++      <b>
++        Sample {variant} — {name}
++      </b>
++      <button onClick={() => go(1)}>→</button>
++    </div>
++  )
++}
