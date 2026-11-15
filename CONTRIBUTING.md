@@ -53,12 +53,13 @@ You need **Node.js** `^22.22.2 || ^24.15.0 || >=26` and **npm 10+**. CI runs on 
 | `npm run audit:plugin` | Check `dist-plugin/`: three files, each under 5,000,000 bytes, nothing that reaches the network |
 | `npm run test:blocked` | Open the built plugin in headless Chromium with the network blocked (Playwright's Chromium: `npx playwright install chromium` once) |
 | `npm run test:popout` | Open the built plugin in headless Chromium with a sheet tab in a pop-out window, and check it drags, places math, opens Help, pastes and copies there |
+| `npm run test:touch` | Open the built plugin in headless Chromium by touch, at a phone and a tablet viewport, as Android and as iOS, and check the touch gestures, the quick keys and the phone's bottom sheet |
 | `npm run preview` | Serve `dist/` locally |
 | `npm run lint` | Lint with oxlint, then Obsidian's ESLint rules at zero warnings |
 | `npm test` | Run the tests once with Vitest (jsdom) |
 | `npm run test:watch` | Run the tests in watch mode |
 | `npm run typecheck` | Run the TypeScript project build, with no output files |
-| `npm run check` | Run lint, the tests, both builds, the plugin audit, the blocked run and the pop-out run. **This is what CI runs, so run it before you push** |
+| `npm run check` | Run lint, the tests, both builds, the plugin audit, the blocked run, the pop-out run and the touch run. **This is what CI runs, so run it before you push** |
 
 ### Typical workflow
 
@@ -179,7 +180,9 @@ The web app and the Obsidian plugin share **one version**, from `package.json` (
 - [ ] Open a sheet
 - [ ] Type a line and see its result
 - [ ] Close and reopen it, and see the line kept
-- [ ] Repeat on one phone or tablet (skip while `manifest.json` has `isDesktopOnly: true`: Obsidian there won't load the plugin)
+- [ ] Repeat on one phone or tablet
+- [ ] The device checklist, on an iPhone, an iPad, an Android phone and an Android tablet, before the first release with `isDesktopOnly: false` and before any release that changes touch, panel or overlay code (otherwise say in the notes that it was skipped): open a sheet from the vault; Add math from More tools, then a tap; double-tap a line and the title, and see the keyboard come up; Done, ↑ ↓ and Edit; format, with a rule; Symbols and the quick keys; a tap's tip, and the unit slots and ⚙ a touch selection shows; save, close and reopen; a sync round trip; on a phone, the bottom sheet stays above the keyboard
+- [ ] Write each device's result, with the device and OS versions, in the release notes. If any device failed, don't publish: set `isDesktopOnly: true` in `manifest.json` and release again
 
 ## Reporting Issues
 

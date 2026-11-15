@@ -179,6 +179,11 @@ export interface MathOverlayProps {
   settings?: DisplaySettings
   /** The sheet's result colour (section 4, Colours and rules, M4c). */
   resultColor?: TextColor
+  /**
+   * The last press was a touch (section 4, Touch, M4d): a selected math
+   * element shows what hover reveals, its unit slots outlined and each plot's ⚙.
+   */
+  touch?: boolean
 }
 
 /** One math element as evaluated: what the Sheet panel lists. */
@@ -204,6 +209,8 @@ interface SceneSnapshot {
   dark: boolean
   /** Add math is waiting for its click (docs/spec-v1.md section 8). */
   placing: boolean
+  /** The selected math elements' ids, sorted and joined by spaces: on touch they show their slots. */
+  selected: string
 }
 
 /**
@@ -240,10 +247,13 @@ export function MathOverlay({
   flash = null,
   settings = DEFAULT_DISPLAY,
   resultColor = 'blue',
+  touch = false,
 }: MathOverlayProps) {
   const overlayRef = useRef<HTMLDivElement>(null)
   const store = useMemo(() => createSceneStore(api), [api])
-  const { viewport, anchors, dark, placing } = useSyncExternalStore(store.subscribe, store.getSnapshot)
+  const { viewport, anchors, dark, placing, selected } = useSyncExternalStore(store.subscribe, store.getSnapshot)
+  // Selected by touch, an element shows what hover would (section 4, Touch).
+  const revealed = new Set(touch && selected ? selected.split(' ') : [])
 
   const [edit, setEdit] = useState<LineEdit | null>(null)
   // Events read the latest edit from here: a field being removed can report its
@@ -321,7 +331,7 @@ export function MathOverlay({
 
   // A problem's message under the pointer (section 4, Problems). It is placed
   // where its mark was, so a scroll, zoom or scene change takes it away.
-  const { tip, hover: hoverTip } = useHoverTip()
+  const { tip, hover: hoverTip, showNow: showTip } = useHoverTip()
   useEffect(() => {
     hoverTip(null)
   }, [viewport, anchors, hoverTip])
@@ -525,6 +535,7 @@ export function MathOverlay({
     hoverRow,
     tipAt: (clientX, clientY) => tipAt(overlayRef.current, clientX, clientY),
     hoverTip,
+    showTip,
     openUnit: (target) => {
       moveEdit({ kind: 'leave' })
       setUnitEdit(target)
@@ -602,6 +613,7 @@ export function MathOverlay({
           suggest={edit?.anchorId === anchor.id ? suggestForEdit : null}
           unitSlots={{
             hovered: slotHover?.anchorId === anchor.id ? slotHover.line : null,
+            revealed: revealed.has(anchor.id),
             open: unitEdit?.anchorId === anchor.id ? unitEdit.line : null,
             openColumn: unitEdit?.anchorId === anchor.id ? (unitEdit.column ?? null) : null,
             apply: (lineIndex, unit, column) => applyUnit(anchor.id, lineIndex, unit, column),
@@ -695,13 +707,19 @@ function tipAt(overlay: HTMLElement | null, clientX: number, clientY: number): T
 
 /**
  * Where a tip can show, in the overlay's coordinates: the overlay's box, short
- * of the Sheet panel where the panel covers its right edge.
+ * of the Sheet panel where the panel covers its right edge, or above a phone's
+ * bottom sheet.
  */
 function tipRoom(overlay: HTMLElement | null, canvasRoot: HTMLElement) {
   if (!overlay) return { width: 0, height: 0 }
   const origin = overlay.getBoundingClientRect()
   const panel = canvasRoot.querySelector(`.${SHEET_SIDEBAR_CLASS}`)?.getBoundingClientRect()
-  const covered = panel && panel.width > 0 ? Math.max(0, origin.right - panel.left) : 0
+  if (!panel || panel.width === 0) return { width: overlay.clientWidth, height: overlay.clientHeight }
+  // A phone's bottom sheet spans the view: the room ends at its top (section 8, On a phone).
+  if (panel.left <= origin.left + 1 && panel.right >= origin.right - 1) {
+    return { width: overlay.clientWidth, height: Math.max(0, Math.min(overlay.clientHeight, panel.top - origin.top)) }
+  }
+  const covered = Math.max(0, origin.right - panel.left)
   return { width: overlay.clientWidth - covered, height: overlay.clientHeight }
 }
 
@@ -738,7 +756,10 @@ function createSceneStore(api: SceneApi) {
     // Excalidraw fires onChange for every pointer move and selection change.
     getSnapshot: () => {
       const next = readSnapshot(api)
-      if (!sameSnapshot(current, next)) current = next
+      if (sameSnapshot(current, next)) return current
+      // A change of selection alone keeps the anchors as they were, so what
+      // follows the scene (a tip's place) doesn't take it for a scene change.
+      current = sameAnchors(current, next) ? { ...next, anchors: current.anchors } : next
       return current
     },
   }
@@ -746,12 +767,18 @@ function createSceneStore(api: SceneApi) {
 
 function readSnapshot(api: SceneApi): SceneSnapshot {
   const app = api.getAppState()
-  const { scrollX, scrollY, zoom, theme } = app
+  const { scrollX, scrollY, zoom, theme, selectedElementIds } = app
+  const anchors = api.getSceneElements().filter(isMathAnchor).map(toMathAnchor)
   return {
     viewport: { scrollX, scrollY, zoom: zoom.value },
-    anchors: api.getSceneElements().filter(isMathAnchor).map(toMathAnchor),
+    anchors,
     dark: theme === 'dark',
     placing: isPlacing(app),
+    selected: anchors
+      .filter(({ id }) => selectedElementIds[id])
+      .map(({ id }) => id)
+      .sort()
+      .join(' '),
   }
 }
 
@@ -761,7 +788,11 @@ function sameSnapshot(a: SceneSnapshot, b: SceneSnapshot): boolean {
   if (va.scrollX !== vb.scrollX || va.scrollY !== vb.scrollY || va.zoom !== vb.zoom) {
     return false
   }
-  if (a.dark !== b.dark || a.placing !== b.placing) return false
+  if (a.dark !== b.dark || a.placing !== b.placing || a.selected !== b.selected) return false
+  return sameAnchors(a, b)
+}
+
+function sameAnchors(a: SceneSnapshot, b: SceneSnapshot): boolean {
   if (a.anchors.length !== b.anchors.length) return false
   return a.anchors.every((anchor, i) => sameAnchor(anchor, b.anchors[i]))
 }

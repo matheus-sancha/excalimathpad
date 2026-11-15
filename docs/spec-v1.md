@@ -975,7 +975,10 @@ that hovers keeps hover.
 
 - **A double tap on a line** opens it, by the double-click rule of [Gestures](#gestures):
   math's only when the first tap selected the element; a drawing on top keeps Excalidraw's
-  double tap; a locked element still edits.
+  double tap; a locked element still edits. A double tap is Excalidraw's own: a second
+  one-finger touch within 300 ms of the first, wherever it lands. The app takes that second
+  touch before Excalidraw does ([section 14](#14-engineering-constraints)), so Excalidraw adds no
+  label to the anchor.
 - **The keys' places** are taken by the Format tab's **Done**, **↑ ↓** and **Edit**. A tap on
   another line of the element moves the edit; a tap outside or a drag leaves; Enter on the
   on-screen keyboard splits the line; a tap on empty canvas deselects. Hiding the
@@ -984,10 +987,13 @@ that hovers keeps hover.
 - **A tap shows a tip** where hover would: a gutter `●` or `⚠` (when shown), a table's red
   —, a solve's result, a list's summary. The next tap anywhere closes it.
 - **A math element selected by touch** shows its result unit slots outlined (a tap opens
-  the unit choice) and each plot's ⚙.
+  the unit choice) and each plot's ⚙. A slot shows only while its element is selected, so a
+  tap on an unselected element's slot selects the element, as any tap does.
 - **Quick keys:** while a line or the title is open, a pinned row above the panel's tab icons:
   `_` `^` `=` `(` `)` `*` `/` `,` `..` and a pair of quotes, no-focus, inserting by the
-  Symbols tab's rules, one Ctrl+Z step each.
+  Symbols tab's rules, one Ctrl+Z step each: `_ ^ ) ,` tight, `= * / ..` spaced, the quotes a
+  pair with the caret between. `(` wraps a selection and otherwise types only itself, since
+  `)` is its own key.
 
 ### Selected math element
 
@@ -1595,7 +1601,8 @@ above.
 - **The Sheet panel is a bottom sheet** across the view instead of the right sidebar. While a
   line is open it sits just above the on-screen keyboard and is short: the quick keys, the
   tab icons and a few rows of the tab, which scroll inside it. With no line open it is
-  taller, about half the view. The tab contents are the same components.
+  taller, about half the view. Its ✕ closes it, as Math settings does. The tab contents are
+  the same components.
 - The open-then-restore rule holds, and the view scrolls the open line into the space left
   above the sheet and the keyboard.
 - Buttons for a finger are at least 40 px. The quick keys sit in the order
@@ -2048,7 +2055,8 @@ touch in [section 4](#touch). Research: [`docs/research/obsidian-plugin.md`](res
   the three files in a test vault (by hand or with BRAT), open a sheet, type a line and see its
   result, close and reopen, and repeat on one phone or tablet.
 - **Phone and tablet:** `isDesktopOnly: false` ships to strangers only after the CI touch tests
-  (Playwright with `hasTouch`, at a phone and a tablet viewport) and Matheus's **device
+  (Playwright with `hasTouch`, at a phone and a tablet viewport, as Android and as iOS:
+  `scripts/touch-run.mjs`, `npm run test:touch`) and Matheus's **device
   checklist** have passed on an iPhone, an iPad, an Android phone and an Android tablet: open
   from the vault, Add math, edit lines and the title, format and rules, Symbols and quick keys,
   tips, save, close and reopen, a sync round trip, and the keyboard with the bottom sheet. It runs
@@ -2414,6 +2422,13 @@ Engineer's design gate. Tested on Excalidraw 0.18.1, math.js 15.2 and Chromium.
     Keys act only when their target is inside that box or is the page's body: the app's own dialogs keep
     theirs. Nothing acts while Excalidraw is busy (its text or line editor, a shape being drawn, a menu,
     dialog, popup or context menu open).
+  - **Touch (M4d, #147):** two taps don't become a `dblclick` first. Excalidraw 0.18.1 runs its own double
+    tap from a native `touchstart` on its interactive canvas: a second one-finger touch within 300 ms of the
+    first calls its double-click handler directly. So the same box also captures `touchstart`, follows
+    that count, and offers the second touch to the double-click rule; one it takes is stopped and
+    cancelled, so neither Excalidraw nor the browser's mouse events and `dblclick` see it. On iOS
+    Excalidraw cancels every `touchstart` on its canvas, so a tap sends no `click`: a touch's click is its
+    `pointerup`, handed over a task later, and the browser's own click after a touch is skipped.
   - A press leaves the open line before Excalidraw sees it, so a drag starts on the committed scene. A
     click is a press whose `click` follows with the anchor's `x` and `y` unchanged, on an anchor that owns
     the point by the double-click's rule.
@@ -2481,7 +2496,7 @@ Evidence: [`excalidraw-gestures.md`](research/excalidraw-gestures.md).
 | Radix's tab trigger switches on its own `mousedown` | With the panel-wide prevention on `document` in bubble, a tab press switches tabs and the line stays open | M4d |
 | `data-prevent-outside-click` keeps a floating sidebar open | A press in the line field leaves the floating panel open (control: without it, it closes) | M4d |
 | A focused `<select>` gets Excalidraw's shortcuts | Delete on a focused Settings `<select>` leaves the selected element (control: unpatched, it deletes it) | M4d |
-| Two taps become a `dblclick` | A double tap (Playwright `hasTouch`) on a selected element's line opens it | M4d |
+| Two taps reach the app first | Two touches within 300 ms that the app takes never reach Excalidraw: no editor, no label (control: left, Excalidraw opens its editor); a tap's click is its release; and, by touch in Chromium at a phone and a tablet, as Android and as iOS, a double tap on a selected element's line opens it while a drawing on top keeps Excalidraw's | #147, `canvasEvents.excalidraw.test.tsx` and `scripts/touch-run.mjs` (`npm run test:touch`, in CI) |
 | Hidden items in the plugin | Web Embed, Mermaid, Browse libraries and Copy as SVG aren't in their menus, and Ctrl+/ and Ctrl+Shift+P open no palette | #137, `vaultItems.excalidraw.test.tsx` (the selectors pick exactly those items, and `SheetCanvas.css` hides them; jsdom applies no CSS) |
 | Excalidraw answers Ctrl+P and Ctrl+Shift+E | Confined, Ctrl+P that Obsidian took shows no toast and Ctrl+Shift+E opens no export (controls: unconfined, both do) | #137, `vaultItems.excalidraw.test.tsx` |
 | Excalidraw listens on the code's window in a pop-out | In a pop-out tab, and one moved there, a drag moves, M and a click place, `?` opens Help there and Esc removes it, a paste adds text and a copy writes the element (control: the main window's tab) | #137, `scripts/popout-run.mjs` (`npm run test:popout`, in CI) |
@@ -2750,8 +2765,9 @@ lines through `evaluateSheet` and compares with the reference at 4 s.f. It grows
   per-evaluation costs, not measured with a search in the engine. Every solved value saved with a guess
   becomes an error until its line is rewritten.
 - M4d's plugin: the app ran from one 3.5 MB file offline in a probe (#116), not yet inside a real
-  Obsidian view with its listeners confined. Two taps becoming a `dblclick`, and Excalidraw's phone
-  toolbar reaching Add math, are unverified on a device. Obsidian's review, including "build matches
+  Obsidian view with its listeners confined. The double tap, Excalidraw's phone toolbar reaching Add
+  math and the bottom sheet above the keyboard pass in Chromium's touch (#147), not yet on a device:
+  that is the device checklist's. Obsidian's review, including "build matches
   what's committed", is unverified until the preview scan.
 - M4d's text `==`: the `equal` override was probed in a fresh math.js, not in the hardened instance.
 
@@ -3054,7 +3070,18 @@ Changes line if it changes behaviour.
   panel's left edge at 624. The contract test holds the mark, with an unmarked press as the control. Delete
   and R on a focused Settings `<select>`, one math element selected, left the element and the tool.
 - Two taps becoming a `dblclick` on iOS and Android, Excalidraw's phone toolbar reaching Add math, and the
-  bottom sheet staying above the on-screen keyboard (`visualViewport`).
+  bottom sheet staying above the on-screen keyboard (`visualViewport`). **Found (#147), in Chromium with
+  touch, on the built plugin, as Android and as iOS (`navigator.platform`, which Excalidraw reads):** two
+  taps don't become a `dblclick` first. Excalidraw's own double tap runs from a native `touchstart` on its
+  canvas, so before the fix a double tap on a selected math line opened Excalidraw's text editor on the
+  anchor: as iOS it added a label; as Android the browser's `dblclick` came after, the gesture found
+  Excalidraw busy, and nothing opened. As iOS a tap sent no `click` at all, so a tap on another line
+  didn't move the edit. With the `touchstart` taken first and a touch's click read from its release, the
+  touch run passes on both (section 14). Excalidraw's phone toolbar (390 × 844) shows More tools with
+  **Add math** and **Math settings**. **Still on a device:** iOS bringing up the keyboard for a line opened
+  from a `touchstart`, and `visualViewport` with a real keyboard. The touch run checks the sheet and the
+  suggestions against a view that shrinks, as a keyboard that resizes the page does, not against
+  `visualViewport` itself.
 - Whether Obsidian's review passes without a committed `main.js`, by the preview scan.
 - The beta through BRAT (#138, replacing M4b's #85). **`0.1.0` failed on 2026-11-14:** in Matheus's vault,
   every save while a line was open made a conflict copy, and editing the copy made a copy of it. The
@@ -3648,3 +3675,24 @@ Changes line if it changes behaviour.
     come here."
   - **A line under a floating panel** is centred in the strip left of the panel, not in the window's middle as a
     jump centres, since the middle can still be under the panel.
+- 2026-11-15, [sections 4](#touch), [8](#on-a-phone), [12a](#releases), [14](#14-engineering-constraints) and
+  [17](#17-verify-first) (#147, found while building, for Matheus to confirm on the PR):
+  - **Two taps aren't a `dblclick`.** The contract test "Two taps become a `dblclick`" is now "Two taps reach
+    the app first": the app takes Excalidraw's own double tap, a second one-finger touch within 300 ms. Excalidraw
+    doesn't ask where the two touches land, so neither does the app: two quick taps in two places on a
+    selected element open the second one's line, where Excalidraw would have opened its editor.
+  - **On touch a slot shows only on a selected element,** so a tap on an unselected element's slot selects
+    the element; the next tap opens the unit choice (section 4 said a tap opens it).
+  - **Touch is the last press in the view:** any press there, the panel's included, decides whether the hint,
+    the quick keys and a selection's slots are touch's. A mouse or a pen that hovers turns them back.
+  - **The quick keys' `(` types only itself** when nothing is selected, since `)` is its own key, and wraps a
+    selection; `,` is tight and the quotes are a pair, as the Symbols tab's `" "` is.
+  - **The bottom sheet has a ✕,** and its heights are about half the visible view, and while a line is open
+    the lesser of 15 rem and 45 % of it. A line already in the strip above it isn't moved.
+  - **On a tablet narrower than 1229 px the floating panel covers More tools,** as on a small desktop window:
+    its ✕ closes it.
+  - **`isDesktopOnly` is `false` from here,** so the device checklist can run on a beta through BRAT
+    (section 12a); the checklist is in `CONTRIBUTING.md` and the release's draft.
+  - **Obsidian's lint flags the lookbehind test** once `isDesktopOnly` is `false`
+    (`obsidianmd/regex-lookbehind`): `hasLookbehind` builds `(?<=a)b` on purpose, so it is a named exception in
+    `eslint.config.mjs`. The community scanner may flag it too; that is for the preview scan (section 17).

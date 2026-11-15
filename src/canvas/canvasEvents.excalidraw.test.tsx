@@ -1,6 +1,6 @@
 import { act, fireEvent, render, waitFor } from '@testing-library/react'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
-import { clickOnCanvas, doubleClickOnCanvas, interactiveCanvas } from '../test/gestures.ts'
+import { afterTapCount, clickOnCanvas, doubleClickOnCanvas, interactiveCanvas, tapOnCanvas } from '../test/gestures.ts'
 import { sceneLoaded } from '../test/excalidraw.ts'
 import { listenToCanvas, type CanvasEventHandlers } from './canvasEvents.ts'
 import { createMathAnchorElements } from './mathAnchor.ts'
@@ -116,5 +116,71 @@ describe('listenToCanvas on real Excalidraw', () => {
 
     expect(notStopped).toBe(true)
     expect(handlers.keyDown).not.toHaveBeenCalled()
+  })
+
+  // Section 14, Two taps reach the app first (section 4, Touch; verified in
+  // section 17): Excalidraw runs its own double tap from a native `touchstart`
+  // on its canvas, with no `dblclick` for the app to take first.
+  describe('two taps', () => {
+    it('a double tap the app takes never reaches Excalidraw: no editor, no label', async () => {
+      await afterTapCount()
+      const { handlers, editingText, textElements } = await mount(true)
+
+      const first = tapOnCanvas(inside)
+      const second = tapOnCanvas(inside)
+
+      expect(first).toBe(true)
+      expect(handlers.doubleClick).toHaveBeenCalledOnce()
+      expect(handlers.doubleClick).toHaveBeenCalledWith(
+        expect.objectContaining({ ...inside, target: interactiveCanvas() }),
+      )
+      // Cancelled, so the browser sends no mouse events or `dblclick` for it.
+      expect(second).toBe(false)
+      expect(editingText()).toBe(false)
+      expect(textElements()).toBe(0)
+      await afterTapCount()
+    })
+
+    it('a double tap the app leaves is Excalidraw’s own (the control)', async () => {
+      await afterTapCount()
+      const { handlers, editingText } = await mount(false)
+
+      tapOnCanvas(inside)
+      tapOnCanvas(inside)
+
+      expect(handlers.doubleClick).toHaveBeenCalledOnce()
+      expect(editingText()).toBe(true)
+      await closeTextEditor()
+    })
+
+    it('two taps further apart than 300 ms are two taps', async () => {
+      await afterTapCount()
+      const { handlers, editingText } = await mount(true)
+
+      tapOnCanvas(inside)
+      await afterTapCount()
+      tapOnCanvas(inside)
+
+      expect(handlers.doubleClick).not.toHaveBeenCalled()
+      expect(editingText()).toBe(false)
+      await afterTapCount()
+    })
+
+    it('a tap’s click is its release, a task later, and the browser’s click after it is skipped', async () => {
+      await afterTapCount()
+      const order: string[] = []
+      const { api, handlers } = await mount(false)
+      vi.mocked(handlers.click).mockImplementation((event) => {
+        order.push(`${(event as PointerEvent).pointerType}, selected: ${Object.keys(api.getAppState().selectedElementIds)}`)
+      })
+
+      tapOnCanvas(inside)
+      expect(handlers.click).not.toHaveBeenCalled()
+      await act(() => new Promise((resolve) => setTimeout(resolve, 0)))
+      fireEvent.click(interactiveCanvas(), inside)
+
+      expect(order).toEqual(['touch, selected: m1'])
+      await afterTapCount()
+    })
   })
 })

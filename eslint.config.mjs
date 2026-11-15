@@ -77,4 +77,12 @@ export default defineConfig([
     files: ['src/file/FileChrome.tsx'],
     rules: { '@typescript-eslint/no-deprecated': 'off' },
   },
+  {
+    // The lookbehind test itself (section 12a, Data protection): `hasLookbehind`
+    // builds `(?<=a)b` in a try, so a device without lookbehind (iOS below 16.4)
+    // is told so and the sheet is never opened or written. The rule checks
+    // only once `isDesktopOnly` is false (M4d, #147).
+    files: ['plugin/SheetView.ts'],
+    rules: { 'obsidianmd/regex-lookbehind': 'off' },
+  },
 ])

@@ -80,7 +80,7 @@ export function planInsert(value: string, start: number, end: number, insert: Sy
         const text = open + selected + close
         return at(text, text.length)
       }
-      return at(open + close, open.length)
+      return insert.alone ? at(open, open.length) : at(open + close, open.length)
     }
   }
 }

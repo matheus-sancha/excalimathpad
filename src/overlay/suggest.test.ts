@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { evaluateSheet, listConstants } from '../math/evaluate.ts'
 import {
   accept,
+  listGoesAbove,
   constantSuggestions,
   FUNCTION_SUGGESTIONS,
   sheetNames,
@@ -185,5 +186,21 @@ describe('suggestions in a format clause (docs/spec-v1.md section 4, Suggestions
   it('offers nothing in a note or a string', () => {
     expect(names('v = 1 # @')).toBeNull()
     expect(names('s = "@')).toBeNull()
+  })
+})
+
+describe('listGoesAbove (docs/spec-v1.md section 4, While editing a line, M4d)', () => {
+  const room = { fieldTop: 300, fieldBottom: 324, listHeight: 168, visibleTop: 0 }
+
+  it('stays below the field while it fits there', () => {
+    expect(listGoesAbove({ ...room, visibleBottom: 800 })).toBe(false)
+  })
+
+  it('opens above when the keyboard or the bottom sheet would cover it and there is more room above', () => {
+    expect(listGoesAbove({ ...room, visibleBottom: 400 })).toBe(true)
+  })
+
+  it('stays below when there is no more room above than below', () => {
+    expect(listGoesAbove({ ...room, fieldTop: 60, fieldBottom: 84, visibleBottom: 200 })).toBe(false)
   })
 })

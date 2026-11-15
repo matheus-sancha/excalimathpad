@@ -53,6 +53,24 @@ export function scrollClearOf(
 }
 
 /**
+ * Scrolls the view so a line whose box is `line` (px from the canvas's top)
+ * sits in the strip above `clearBottom` (the bottom sheet's top, section 8, On
+ * a phone, M4d), at its middle: only when the line isn't wholly in that strip.
+ * No undo step. Returns whether it scrolled.
+ */
+export function scrollClearAbove(
+  api: Pick<ExcalidrawImperativeAPI, 'getAppState' | 'updateScene'>,
+  line: { top: number; bottom: number },
+  clearBottom: number,
+): boolean {
+  if (clearBottom <= 0 || (line.top >= 0 && line.bottom <= clearBottom)) return false
+  const { scrollY, zoom } = api.getAppState()
+  const by = clearBottom / 2 - (line.top + line.bottom) / 2
+  api.updateScene({ appState: { scrollY: scrollY + by / zoom.value }, captureUpdate: CaptureUpdateAction.NEVER })
+  return true
+}
+
+/**
  * Excalidraw docks its sidebar only when the editor is wider than this
  * (`MQ_RIGHT_SIDEBAR_MIN_WIDTH`, Excalidraw 0.18); narrower, it floats over
  * the canvas.

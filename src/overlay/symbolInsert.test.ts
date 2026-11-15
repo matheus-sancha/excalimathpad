@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { evaluateSheet } from '../math/evaluate.ts'
 import { SYMBOLS, type SymbolEntry, type SymbolInsert } from '../math/symbols.ts'
+import { QUICK_KEYS } from '../panel/quickKeys.ts'
 import { isPlainAt, planInsert } from './symbolInsert.ts'
 
 /**
@@ -131,6 +132,36 @@ const CASES: Record<string, { line: string; fill?: string }> = {
   'count': { line: 'x = «l»' },
   '" "': { line: 'x = «OK»' },
 }
+
+const quick = (label: string) => QUICK_KEYS.find((key) => key.label === label)!.insert
+
+describe('what a quick key types (docs/spec-v1.md section 4, Touch, M4d)', () => {
+  it('has the keys in their order', () => {
+    expect(QUICK_KEYS.map(({ label }) => label)).toEqual(['_', '^', '=', '(', ')', '*', '/', ',', '..', '" "'])
+  })
+
+  it('types by the Symbols tab’s rules: _ ^ ( ) , tight, = * / .. spaced', () => {
+    expect(typed('T|', quick('_'))).toBe('T_|')
+    expect(typed('x = a|', quick('^'))).toBe('x = a^|')
+    expect(typed('x|', quick('='))).toBe('x = |')
+    expect(typed('x = a|', quick('*'))).toBe('x = a * |')
+    expect(typed('x = a |', quick('/'))).toBe('x = a / |')
+    expect(typed('f(a|', quick(','))).toBe('f(a,|')
+    expect(typed('x = 1|', quick('..'))).toBe('x = 1 .. |')
+    expect(typed('f(a|', quick(')'))).toBe('f(a)|')
+  })
+
+  it('( types alone, since ) is its own key, but wraps a selection; the quotes type a pair', () => {
+    expect(typed('x = |', quick('('))).toBe('x = (|')
+    expect(typed('x = «a + b» * 2', quick('('))).toBe('x = (a + b)| * 2')
+    expect(typed('s = |', quick('" "'))).toBe('s = "|"')
+    expect(typed('s = «OK»', quick('" "'))).toBe('s = "OK"|')
+  })
+
+  it('goes in as typed on a title or a comment line', () => {
+    expect(typed('# Pumps|', quick('='), true)).toBe('# Pumps=|')
+  })
+})
 
 describe('every catalogue entry runs in a minimal line (section 4, Symbols tab)', () => {
   it.each(SYMBOLS.map((each) => [`${each.group} ${each.spelling}`, each] as const))('%s', (_, each) => {

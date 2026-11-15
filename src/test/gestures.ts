@@ -127,3 +127,39 @@ export async function dragOnCanvas(from: ClientPoint, to: ClientPoint) {
     fireEvent.click(canvas, to)
   })
 }
+
+/**
+ * A finger landing on the canvas, as Excalidraw's own double tap hears it: a
+ * native `touchstart` on its interactive canvas (section 4, Touch). Returns
+ * false when a listener cancelled it.
+ */
+export function touchOnCanvas(point: ClientPoint): boolean {
+  const event = new Event('touchstart', { bubbles: true, cancelable: true })
+  Object.defineProperty(event, 'touches', { value: [{ ...point }] })
+  let went = true
+  act(() => {
+    went = interactiveCanvas().dispatchEvent(event)
+  })
+  return went
+}
+
+/**
+ * A tap on the canvas as a touch screen sends it: a touch press, the
+ * `touchstart`, the release, and no click (iOS sends none after Excalidraw
+ * cancels the touch). Returns whether the `touchstart` went on.
+ */
+export function tapOnCanvas(point: ClientPoint): boolean {
+  const canvas = interactiveCanvas()
+  const touch = { ...pointer(point), pointerType: 'touch' }
+  act(() => {
+    fireEvent.pointerDown(canvas, touch)
+  })
+  const went = touchOnCanvas(point)
+  act(() => {
+    fireEvent.pointerUp(canvas, { ...touch, buttons: 0 })
+  })
+  return went
+}
+
+/** Excalidraw counts two touches within 300 ms as a double tap: a wait longer than that starts its count afresh. */
+export const afterTapCount = () => act(() => new Promise((resolve) => setTimeout(resolve, 350)))

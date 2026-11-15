@@ -1,4 +1,4 @@
-import { Notice, TextFileView, TFile, type TAbstractFile, type WorkspaceLeaf } from 'obsidian'
+import { Notice, Platform, TextFileView, TFile, type TAbstractFile, type WorkspaceLeaf } from 'obsidian'
 import { createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import App, { type SheetCommands } from '../src/App.tsx'
@@ -284,6 +284,8 @@ export class SheetView extends TextFileView {
             this.commands = commands
           },
           onWindowMigrated: (listener) => content.onWindowMigrated(listener),
+          // On a phone the Sheet panel is a bottom sheet (section 8, On a phone).
+          phone: Platform.isPhone,
         },
         panelMemory: this.memory.panel,
       }),

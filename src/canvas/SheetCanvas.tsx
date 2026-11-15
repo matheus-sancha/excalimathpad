@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { Excalidraw, FONT_FAMILY, MainMenu, Sidebar, WelcomeScreen } from '@excalidraw/excalidraw'
 import type { ExcalidrawElement } from '@excalidraw/excalidraw/element/types'
@@ -8,6 +8,7 @@ import { isPlacing, startPlacing } from './addMath.ts'
 import { insertImage, measureIn, takeOverImageTool, type PickedImage } from './imageTool.ts'
 import { markMathSelection } from './mathSelection.ts'
 import { SHEET_PANEL_TABS, SHEET_SIDEBAR_CLASS, type SheetPanelTab } from './panelPresses.ts'
+import { BottomSheet } from './BottomSheet.tsx'
 import { closeMoreTools, markMoreTools, useMoreToolsSlot } from './moreTools.ts'
 import type { SheetTheme, ThemeMemory } from './theme.ts'
 import { VAULT_CLASS } from './vaultItems.ts'
@@ -86,6 +87,13 @@ export interface SheetPanelSlot {
   settings?: ReactNode
   /** The built-in constants. */
   constants?: ReactNode
+  /**
+   * The pinned row above the tab icons, on touch while a line or the title is
+   * open (section 4, Touch, M4d); unset, there is none.
+   */
+  quickKeys?: ReactNode
+  /** A line or the title is open: on a phone the bottom sheet is short (section 8, On a phone). */
+  compact?: boolean
   /** Opened, closed, or moved to another tab. */
   onChange?: (open: boolean, tab: SheetPanelTab) => void
 }
@@ -122,6 +130,12 @@ export interface SheetCanvasProps {
    * and remembers nothing.
    */
   theme?: ThemeMemory
+  /**
+   * On a phone (the plugin's `Platform.isPhone`, section 8, On a phone, M4d)
+   * the Sheet panel is a bottom sheet (`BottomSheet.tsx`) in place of
+   * Excalidraw's sidebar; the handle and Math settings act on it the same way.
+   */
+  phone?: boolean
 }
 
 /** The vault's image picker, and where the tool's key is heard. */
@@ -162,11 +176,31 @@ export function SheetCanvas({
   imageTool,
   vault = false,
   theme,
+  phone = false,
 }: SheetCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   // The tab Math settings opens: the one last shown.
   const lastTab = useRef<SheetPanelTab>('variables')
   const [docked, setDocked] = useState(true)
+  // On a phone the panel is the bottom sheet, whose state is held here.
+  const [bottom, setBottom] = useState<SheetPanelState>({ open: false, tab: 'variables' })
+  const bottomRef = useRef(bottom)
+  const showBottom = useCallback((next: SheetPanelState) => {
+    lastTab.current = next.tab
+    bottomRef.current = next
+    setBottom(next)
+  }, [])
+  // The bottom sheet reports each change, as Excalidraw's sidebar does.
+  const onPanelChange = useRef(sheetPanel?.onChange)
+  useLayoutEffect(() => {
+    onPanelChange.current = sheetPanel?.onChange
+  })
+  const reported = useRef(bottom)
+  useEffect(() => {
+    if (reported.current === bottom) return
+    reported.current = bottom
+    onPanelChange.current?.(bottom.open, bottom.tab)
+  }, [bottom])
   // The same box as `containerRef`, as state, for what waits on it.
   const [root, setRoot] = useState<HTMLElement | null>(null)
   const moreTools = useMoreToolsSlot(root)
@@ -205,19 +239,30 @@ export function SheetCanvas({
       // The keyboard goes to the canvas, so Esc cancels and M keeps placing.
       focusCanvas()
     }
-    const toggleSheetPanel = () => api.toggleSidebar({ name: SHEET_PANEL, tab: lastTab.current })
+    const toggleSheetPanel = phone
+      ? () => showBottom({ open: !bottomRef.current.open, tab: lastTab.current })
+      : () => api.toggleSidebar({ name: SHEET_PANEL, tab: lastTab.current })
     const sheetPanel = (): SheetPanelState => {
+      if (phone) return { open: bottomRef.current.open, tab: lastTab.current }
       const open = api.getAppState().openSidebar
       const shown = open?.name === SHEET_PANEL
       return { open: shown, tab: shown && isPanelTab(open.tab) ? open.tab : lastTab.current }
     }
     const showSheetPanel = ({ open, tab }: SheetPanelState) => {
       lastTab.current = tab
-      if (open) api.toggleSidebar({ name: SHEET_PANEL, tab, force: true })
+      if (phone) showBottom({ open, tab })
+      else if (open) api.toggleSidebar({ name: SHEET_PANEL, tab, force: true })
       else if (sheetPanel().open) api.toggleSidebar({ name: SHEET_PANEL, force: false })
     }
     onReadyRef.current?.({ api, forwardWheel, focusCanvas, root, addMath, toggleSheetPanel, sheetPanel, showSheetPanel })
-  }, [api, forwardWheel, focusCanvas])
+  }, [api, forwardWheel, focusCanvas, phone, showBottom])
+
+  // Excalidraw's own box, where the bottom sheet is drawn so it takes the theme.
+  // Excalidraw has drawn it by the time its API is handed out.
+  const excalidrawBox = useMemo(
+    () => (phone && api && root ? root.querySelector<HTMLElement>('.excalidraw') : null),
+    [phone, api, root],
+  )
 
   // A change of light or dark (☰ Dark mode, Alt+Shift+D) is remembered.
   useEffect(() => {
@@ -315,11 +360,12 @@ export function SheetCanvas({
                   <MoreToolsItem
                     icon={<SettingsIcon />}
                     label="Math settings"
-                    pressed={appState.openSidebar?.name === SHEET_PANEL}
+                    pressed={phone ? bottom.open : appState.openSidebar?.name === SHEET_PANEL}
                     title="Math settings: variables, problems and settings"
                     onSelect={() => {
                       closeMoreTools(root)
-                      api.toggleSidebar({ name: SHEET_PANEL, tab: lastTab.current })
+                      if (phone) showBottom({ open: !bottomRef.current.open, tab: lastTab.current })
+                      else api.toggleSidebar({ name: SHEET_PANEL, tab: lastTab.current })
                     }}
                   >
                     {sheetPanel.errors > 0 && (
@@ -340,7 +386,7 @@ export function SheetCanvas({
       >
         <SheetMenu fileMenu={fileMenu} />
         <SheetWelcome fileMenu={fileMenu} />
-        {sheetPanel && (
+        {sheetPanel && !phone && (
           <Sidebar
             name={SHEET_PANEL}
             docked={docked}
@@ -358,6 +404,7 @@ export function SheetCanvas({
                 with no box of its own (`display: contents`), so the layout is Excalidraw's. */}
             <div className="sheet-sidebar__keys" onKeyDown={(event) => event.stopPropagation()}>
             <Sidebar.Tabs>
+              {sheetPanel.quickKeys}
               <Sidebar.Header>
                 <Sidebar.TabTriggers>
                   {panelTabs.map(([tab]) => (
@@ -367,14 +414,7 @@ export function SheetCanvas({
                       className="excalidraw-button sidebar-tab-trigger sheet-tab"
                       title={TAB_NAMES[tab]}
                     >
-                      <TabIcon tab={tab} />
-                      {/* The name: shown on the active tab, read on every tab. */}
-                      <span className="sheet-tab__label">{TAB_NAMES[tab]}</span>
-                      {tab === 'problems' && sheetPanel.errors > 0 && (
-                        <span className="sheet-tab__badge" aria-hidden="true">
-                          {sheetPanel.errors}
-                        </span>
-                      )}
+                      <TabFace tab={tab} errors={sheetPanel.errors} />
                     </Sidebar.TabTrigger>
                   ))}
                 </Sidebar.TabTriggers>
@@ -389,7 +429,42 @@ export function SheetCanvas({
           </Sidebar>
         )}
       </Excalidraw>
+      {sheetPanel &&
+        phone &&
+        bottom.open &&
+        excalidrawBox &&
+        createPortal(
+          <BottomSheet
+            tabs={panelTabs.map(([tab, content]) => ({
+              tab,
+              name: TAB_NAMES[tab],
+              face: <TabFace tab={tab} errors={sheetPanel.errors} />,
+              content,
+            }))}
+            active={bottom.tab}
+            compact={sheetPanel.compact ?? false}
+            quickKeys={sheetPanel.quickKeys}
+            onTab={(tab) => showBottom({ open: true, tab })}
+            onClose={() => showBottom({ open: false, tab: bottom.tab })}
+          />,
+          excalidrawBox,
+        )}
     </div>
+  )
+}
+
+/** A tab trigger's face: its icon, its name (shown on the active tab, read on every tab) and Problems' badge. */
+function TabFace({ tab, errors }: { tab: SheetPanelTab; errors: number }) {
+  return (
+    <>
+      <TabIcon tab={tab} />
+      <span className="sheet-tab__label">{TAB_NAMES[tab]}</span>
+      {tab === 'problems' && errors > 0 && (
+        <span className="sheet-tab__badge" aria-hidden="true">
+          {errors}
+        </span>
+      )}
+    </>
   )
 }
 

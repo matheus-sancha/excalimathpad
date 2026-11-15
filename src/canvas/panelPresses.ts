@@ -29,6 +29,9 @@
  */
 export const SHEET_SIDEBAR_CLASS = 'sheet-sidebar'
 
+/** The Sheet panel's frame on a phone, a bottom sheet (section 8, On a phone, M4d); it also carries `SHEET_SIDEBAR_CLASS`. */
+export const BOTTOM_SHEET_CLASS = 'sheet-bottom'
+
 /** The panel's tabs, in their order (section 8, from M4d). */
 export const SHEET_PANEL_TABS = ['format', 'symbols', 'variables', 'problems', 'constants', 'settings'] as const
 export type SheetPanelTab = (typeof SHEET_PANEL_TABS)[number]

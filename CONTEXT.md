@@ -26,8 +26,12 @@ come, and their terms move in here as each M4d issue makes them true.
   build, the **bundle audit** (`scripts/audit-plugin.mjs`) and the
   **network-blocked run** (`scripts/blocked-run.mjs`) and the **pop-out run**
   (`scripts/popout-run.mjs`: the built plugin with sheet tabs in a second,
-  same-origin window, as an Obsidian pop-out). CI installs Playwright's
-  Chromium (the version `package.json` pins) for the last two.
+  same-origin window, as an Obsidian pop-out), and the **touch run**
+  (`scripts/touch-run.mjs`, M4d, #147: the built plugin by touch, Playwright's
+  `hasTouch`, at a phone and a tablet viewport, each as Android and as iOS,
+  `navigator.platform` being what Excalidraw reads; the phone with
+  `Platform.isPhone`). CI installs Playwright's Chromium (the version
+  `package.json` pins) for the last three.
 - `.github/workflows/release.yml` — the **Release button** (section 12a,
   Releases): run by hand on `main` with patch, minor or major. It runs
   `npm version`, `npm run check`, then one atomic push of the commit and tag
@@ -80,6 +84,16 @@ come, and their terms move in here as each M4d issue makes them true.
   of the floating panel), and puts it back when the edit ends, unless it was
   closed meanwhile or the edit ended from a press in the panel. What it opens
   or restores itself (`automatic`) is never remembered as the user's choice.
+  **Touch** (M4d, #147): App holds `touch`, whether the last press in the
+  view was a touch (`pointerType`, so a mouse or a pen that hovers turns it
+  back), and hands it to the overlay and the Format tab's hint; on touch, while
+  a line or the title is open, it fills the panel's `quickKeys` (`QuickKeys`,
+  inserting through the line relay as the Symbols tab does). With
+  `vault.phone` the canvas draws the panel as the bottom sheet (`compact`
+  while something is open), and an edit moves the open line into the strip
+  above the sheet (`scrollClearAbove`), again as `visualViewport` or the
+  window resizes. The launch and a jump open and close the panel through the
+  handle, so they work on the bottom sheet too.
   App imports none of the browser ports at run time, so
   the plugin's bundle holds none. `initialElements` gives tests a sheet.
   Depends on: shell, canvas, overlay, file.
@@ -117,7 +131,12 @@ come, and their terms move in here as each M4d issue makes them true.
   `SheetCanvas` starts new text in the Normal font (Nunito).
   `canvasEvents.ts` (`listenToCanvas`) hands the canvas's double-clicks, presses,
   clicks, pointer moves and keys to the gestures before Excalidraw hears them,
-  and stops the ones they take. Keys are heard on a target it is given: the
+  and stops the ones they take. On touch (M4d, #147) it follows Excalidraw's
+  own double tap (`TAP_TWICE_MS`, a second one-finger `touchstart` on the
+  canvas) and offers the second touch as a double-click (`PointAt`), stopping
+  and cancelling one the app takes; a touch's click is its `pointerup`, a task
+  later, and the browser's click after a touch is skipped; `anyPress` hears
+  every press under `root`, the panel's too. Keys are heard on a target it is given: the
   page's document on the web, the view's container in a vault (`keyScope`,
   through `MathOverlay` and `useSheetGestures`). `isCanvasElement` tells
   Excalidraw's canvas by node name, so it holds in a pop-out window. `sceneFile.ts` is
@@ -154,7 +173,20 @@ come, and their terms move in here as each M4d issue makes them true.
   Problems. The handle's `sheetPanel()` reads whether it is open and its tab,
   and `showSheetPanel(state)` opens it on a tab or closes it with that tab as
   the one Math settings opens next. `selection.ts`'s `scrollClearOf` scrolls
-  an anchor clear of a floating panel (`NEVER`). `moreTools.ts` finds the open dropdown
+  an anchor clear of a floating panel (`NEVER`), and `scrollClearAbove` (M4d,
+  #147) a line into the strip above a phone's bottom sheet.
+  **The bottom sheet** (`BottomSheet.tsx`, M4d, #147): with `phone`,
+  `SheetCanvas` draws the panel there instead of Excalidraw's `Sidebar`,
+  portalled into `.excalidraw` (Excalidraw's theme, above the overlay), with
+  the same tabs (`TabFace`) and contents, a ✕, and the slot's `quickKeys`
+  above the tab icons; it carries `SHEET_SIDEBAR_CLASS` and
+  `BOTTOM_SHEET_CLASS`, so presses there are the panel's. Its state is held in
+  `SheetCanvas`; the handle's `sheetPanel`, `showSheetPanel` and
+  `toggleSheetPanel`, and the Math settings item, act on it, and it reports
+  each change through the slot's `onChange`, as the sidebar does. It sits
+  above the on-screen keyboard (how far the visual viewport's bottom falls
+  short of its box) at about half the visible height, short while `compact`.
+  The sidebar takes `quickKeys` too, above its tab triggers. `moreTools.ts` finds the open dropdown
   (`useMoreToolsSlot`, a box of the app's own appended to it; Math settings
   sits in a `display: contents` wrapper carrying `sidebar-trigger`, so a
   floating panel's outside click ignores it without Excalidraw's square-button
@@ -391,7 +423,9 @@ come, and their terms move in here as each M4d issue makes them true.
   names above the line (`sheetNames`), the constants, the functions and line
   forms (`FUNCTION_SUGGESTIONS`, built from the Symbols catalogue's entries
   spelled as names, Greek left out) and the units; `MathOverlay` builds the sources for the open line and
-  `LineField` draws the list and takes its keys (Tab, ↓ ↑, Enter, Esc); after
+  `LineField` draws the list and takes its keys (Tab, ↓ ↑, Enter, Esc), and
+  opens it above the field (`listGoesAbove`, M4d) when below it the on-screen
+  keyboard (`visualViewport`) or a phone's bottom sheet would cover it; after
   `@` it holds the format words, and on a clause at the start of a line, a
   comment's, the comment words and never `if` (M4d);
   `UnitField` (the field and list, one of the overlay's
@@ -417,7 +451,12 @@ come, and their terms move in here as each M4d issue makes them true.
   the mark under the pointer from its screen box (`tipAt`, the error cell only
   while it is cut short) on each `pointerMove` over the canvas, and `HoverTip`
   shows it after a rest, short of the Sheet panel; a press, a drag, leaving the
-  canvas or a scene or viewport change hides it. Screen only. A **solve's
+  canvas or a scene or viewport change hides it. **On touch** (M4d, #147) a
+  tap shows the same tip at once (`showNow`), until the next press anywhere
+  (`anyPress`), above a phone's bottom sheet; with `touch` set, every selected
+  math element (the scene snapshot's `selected`) shows its rows as hovered
+  (`UnitSlots.revealed`): slots outlined, each plot's ⚙. On touch a slot opens
+  its field only on a tap on an element selected before the press. Screen only. A **solve's
   details** (spec section 4) use the same tip: a value with `solveDetails`
   sits in a `math-element__detailed` span, dotted underline, whose `data-tip`
   reads `Brent, 5 iterations`, the residual and the bracket; a range solve's
@@ -503,7 +542,7 @@ come, and their terms move in here as each M4d issue makes them true.
   "Excalimathpad needs iOS 16.4 or later."), then `readSheet`; a newer or
   unreadable file shows section 13's message in the view and nothing mounts;
   otherwise it mounts `<App vault=…>` on `contentEl` with React's `createRoot`
-  and unmounts on close. It holds the tab's `commands` while the app is up and
+  and unmounts on close, with `phone: Platform.isPhone` (the bottom sheet). It holds the tab's `commands` while the app is up and
   passes `contentEl.onWindowMigrated` for the bridge. **Autosave** (section 7, A sheet in a vault): the
   vault sheet calls `onUnwritten` when its `saveKey` (plus the settings)
   leaves the key the file holds, and the view calls `requestSave`; `save` is
@@ -582,6 +621,10 @@ come, and their terms move in here as each M4d issue makes them true.
   one row per rule (a chip in its format that opens its Text, Highlight and
   Style rows, its condition, which puts the caret at its end, ↑ ↓ ✕ and its
   live state), and + Add rule, whose new rule's controls open at once.
+  **The quick keys** (M4d, #147): `quickKeys.ts` is `QUICK_KEYS`, the pinned
+  row's keys in order, each a `SymbolInsert` (`(` with `alone`: it wraps a
+  selection, else types only itself); `QuickKeys.tsx` draws them as no-focus
+  `InsertButton`s.
   `panelMemory.ts` is the `PanelMemory` port for the open/closed state
   (`localStorage` on the web, given by `src/main.tsx`). `SettingsTab.tsx`
   edits the unit system, Custom's kind → unit table, Digits and the Result
@@ -717,7 +760,15 @@ and everything downstream recalculates. Engine: math.js, client-side.
   Esc once stole Esc from the open-file question. `canvasEvents.excalidraw.test.tsx`
   holds the phase contracts and `gestures.excalidraw.test.tsx` the gestures,
   against the installed package, each with the control of what Excalidraw does
-  without the app; jsdom runs Excalidraw's hit-testing. **The Sheet panel is
+  without the app; jsdom runs Excalidraw's hit-testing. **Two taps reach the
+  app first** (M4d, #147): Excalidraw 0.18.1's double tap is a native
+  `touchstart` listener on its interactive canvas that calls its double-click
+  handler itself (on iOS it also cancels every touch, so no `click` follows a
+  tap). A `dblclick` listener never sees it, so the app's capture
+  `touchstart` on `root` keeps Excalidraw's count (300 ms, one finger) and
+  runs first; the contract is in `canvasEvents.excalidraw.test.tsx`, with
+  Excalidraw's own double tap as the control, and end to end in the touch
+  run. **The Sheet panel is
   the exception** (M4d, #143): it is drawn inside `root`, but a press, click,
   double-click or key there isn't the canvas's (`isInSheetPanel`,
   `panelPresses.ts`), so a press in the panel never leaves the open line.
@@ -775,7 +826,8 @@ and everything downstream recalculates. Engine: math.js, client-side.
   includes it, and each row's `offsetTop` already counts it: the line hit
   needs no offset. The gestures read its box from `[data-title]`.
 - **A control that acts on the open line never takes focus** (spec section
-  14, M4d): every Sheet panel control, the Format tab's included, prevents
+  14, M4d): every Sheet panel control, the Format tab's, the quick keys and
+  the bottom sheet's included, prevents
   `mousedown` and are out of the tab order (`tabIndex={-1}`), since a blur
   leaves the line. For the panel, `keepPanelPresses` (`panelPresses.ts`)
   prevents every press that isn't on a field, in the bubble phase above
@@ -847,7 +899,8 @@ and everything downstream recalculates. Engine: math.js, client-side.
 - **Obsidian's lint runs over shipping code only**, as the community scanner
   does: tests and Node scripts are left out. Its exceptions are named in
   `eslint.config.mjs`: the web-only modules, `execCommand('insertText')` (the
-  line field's own undo) and the leave prompt's `returnValue`. Its sentence-case
+  line field's own undo), the leave prompt's `returnValue` and, once
+  `isDesktopOnly` is false (#147), the lookbehind test in `SheetView.ts`. Its sentence-case
   rule doesn't read JSX text, so UI labels are kept in sentence case by hand.
 - **Obsidian's keys pass by Obsidian's own mark** (`vaultKeys.ts`). Its keymap
   hears a key before the view, and a core key it acted on comes marked
@@ -887,8 +940,13 @@ and everything downstream recalculates. Engine: math.js, client-side.
 - `test.server.deps.inline` for Excalidraw in `vite.config.ts` exists because
   its ESM build imports JSON without import attributes, which Node rejects.
 - In Excalidraw's phone layout (a narrow window), ☰ moves to the bottom bar and
-  the file name, placed beside it, sits under that bar, so it doesn't show. v1
-  targets desktop Chrome and Edge.
+  the file name, placed beside it, sits under that bar, so it doesn't show. The
+  web app targets desktop Chrome and Edge; in the plugin Obsidian's tab title
+  names the file.
+- On a tablet narrower than 1229 px the floating Sheet panel covers
+  Excalidraw's More tools, as on a small desktop window; its ✕ closes it.
+- Excalidraw's hint still reads "Double-click a line or press Enter to edit"
+  on touch; the Format tab's hint names the taps.
 - The plugin's `main.js` is about 3.45 MB and `styles.css` 0.64 MB (#137);
   the audit fails either above 5,000,000 bytes, Obsidian Sync Standard's cap.
 - Excalidraw 0.18.1 listens on the global `document` (copy, cut, paste, `keyup`,
