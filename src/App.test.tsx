@@ -424,6 +424,60 @@ describe('App', () => {
         await waitFor(() => expect(row()).not.toHaveClass('is-bold'))
       })
 
+      it('the Symbols and Constants tabs insert at the caret; with nothing open, the selected element’s last line opens (#146)', async () => {
+        await start()
+        fireEvent.click(await sheetButton())
+        fireEvent.mouseDown(await screen.findByRole('tab', { name: 'Symbols' }))
+        const inPanel = (name: string) => within(panel() as HTMLElement).getAllByRole('button', { name })[0]
+        const press = (button: HTMLElement) => {
+          fireEvent.pointerDown(button)
+          const down = createEvent.mouseDown(button)
+          fireEvent(button, down)
+          fireEvent.click(button)
+          return down
+        }
+
+        // Nothing open or selected: dimmed under the hint, the hover still the spelling.
+        expect(await screen.findByText('Open a line to insert')).toBeInTheDocument()
+        const rho = inPanel('rho')
+        expect(rho).toHaveAttribute('aria-disabled', 'true')
+        expect(rho).toHaveAttribute('title', 'rho — type _ for a subscript: rho_w')
+        press(rho)
+        expect(lineField()).toBeNull()
+        expect(within(panel() as HTMLElement).getByRole('region', { name: 'Sheet forms' })).toBeInTheDocument()
+
+        // A line open: a press keeps it, and types at its caret.
+        await editLine()
+        await waitFor(() => expect(selected()).toBe('Format'))
+        fireEvent.mouseDown(screen.getByRole('tab', { name: 'Symbols' }))
+        await waitFor(() => expect(selected()).toBe('Symbols'))
+        expect(screen.queryByText('Open a line to insert')).toBeNull()
+        expect(press(inPanel('rho')).defaultPrevented).toBe(true)
+        await waitFor(() => expect(lineField()).toHaveValue('x = 1 m + 1 s rho'))
+        expect(lineField()).toHaveFocus()
+        leave()
+        await waitFor(() => expect(lineField()).toBeNull())
+
+        // The one element still selected: √ opens its last line and inserts at its end.
+        await waitFor(() => expect(selected()).toBe('Symbols'))
+        press(inPanel('sqrt'))
+        await waitFor(() => expect(lineField()).toHaveValue('x = 1 m + 1 s rho sqrt()'))
+        expect(lineField()!.selectionStart).toBe(23)
+
+        // A Constants row inserts its short name by the same rules, its hover "Insert c".
+        fireEvent.mouseDown(screen.getByRole('tab', { name: 'Constants' }))
+        const light = await screen.findByLabelText(/^Speed of light in vacuum/)
+        expect(light).toHaveAttribute('title', 'Insert c')
+        press(light)
+        await waitFor(() => expect(lineField()).toHaveValue('x = 1 m + 1 s rho sqrt(c)'))
+
+        // The filter matches the spelling, the letter's name and the hint.
+        fireEvent.mouseDown(screen.getByRole('tab', { name: 'Symbols' }))
+        fireEvent.change(await screen.findByRole('searchbox', { name: 'Filter symbols' }), { target: { value: 'root' } })
+        expect(within(panel() as HTMLElement).getAllByRole('button', { name: /^(sqrt|cbrt|nthRoot)$/ })).toHaveLength(3)
+        expect(within(panel() as HTMLElement).queryByRole('region', { name: 'Greek' })).toBeNull()
+      })
+
       it('stays closed when closed during the edit, until the next edit', async () => {
         await start()
         await editLine()

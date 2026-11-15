@@ -2239,11 +2239,44 @@ describe('the line edit, as the Sheet panel reaches it', () => {
     const field = openLine(2)
     field.setSelectionRange(5, 5)
 
-    act(() => control().insert('*2'))
+    act(() => control().insert({ mode: 'tight', text: '*2' }))
 
     expect(openField()).toHaveValue('b = a*2 + 3')
     expect(openField()!.selectionStart).toBe(7)
     expect(resultsOf('m1')).toContain('7')
+  })
+
+  it('insert wraps a selection in a call, and spaces a Greek letter after a name (section 4, Symbols tab)', () => {
+    const { control } = withControl('a = 2\nb = a + 3')
+    const field = openLine(2)
+    field.setSelectionRange(4, 9)
+
+    act(() => control().insert({ mode: 'wrap', text: 'sqrt(', close: ')' }))
+    expect(openField()).toHaveValue('b = sqrt(a + 3)')
+    expect(openField()!.selectionStart).toBe(15)
+
+    openField()!.setSelectionRange(10, 10)
+    act(() => control().insert({ mode: 'name', text: 'rho' }))
+    expect(openField()).toHaveValue('b = sqrt(a rho + 3)')
+  })
+
+  it('insert with no line open opens the given element’s last line and inserts at its end', () => {
+    const { scene, control, edits } = withControl('a = 2\nb = a')
+    act(() => control().insert({ mode: 'spaced', text: '+' }, 'm1'))
+
+    expect(edits.at(-1)).toMatchObject({ anchorId: 'm1', lineIndex: 1 })
+    expect(openField()).toHaveValue('b = a + ')
+    expect(openField()!.selectionStart).toBe(8)
+    // Typing, not a commit: the scene changes when the line is left.
+    expect(scene.sourceWrites()).toBe(0)
+  })
+
+  it('an open title takes an insert as plain text', () => {
+    const { control } = withControl('x = 2')
+    openLine(1)
+    act(() => control().moveTo('title'))
+    act(() => control().insert({ mode: 'wrap', text: 'sqrt(', close: ')' }))
+    expect(screen.getByRole('textbox', { name: 'Title' })).toHaveValue('sqrt()')
   })
 
   it('openLast opens an element’s last line, as Enter does; setCommentFormat formats an open comment line', () => {
@@ -2263,7 +2296,7 @@ describe('the line edit, as the Sheet panel reaches it', () => {
     act(() => {
       control().setFormat({ ...NO_FORMAT, bold: true })
       control().setCommentFormat({ ...NO_COMMENT_FORMAT, bold: true })
-      control().insert('rho')
+      control().insert({ mode: 'name', text: 'rho' })
       control().moveTo('title')
       control().move('up')
     })

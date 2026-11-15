@@ -39,7 +39,8 @@
 }
 
 .sheet-panel__row,
-.sheet-panel__problem {
+.sheet-panel__problem,
+.sheet-panel__constant {
   box-sizing: border-box;
   width: 100%;
   border: 0;
@@ -53,9 +54,24 @@
 
 .sheet-panel__row:hover,
 .sheet-panel__problem:hover,
+.sheet-panel__constant:not(.is-dimmed):hover,
 .sheet-panel__row:focus-visible,
 .sheet-panel__problem:focus-visible {
   background: var(--button-hover-bg, rgba(0, 0, 0, 0.05));
+}
+
+/* "Open a line to insert" (section 13): over dimmed buttons that still hover. */
+.sheet-panel__hint {
+  margin: 0 4px;
+  color: var(--color-gray-60, #495057);
+}
+
+.sheet-panel__constant.is-dimmed {
+  cursor: default;
+}
+
+.sheet-panel__constant.is-dimmed > * {
+  opacity: 0.55;
 }
 
 /* Name, value, unit: the numbers line up in their own column. */
@@ -171,7 +187,7 @@
   border-radius: 6px;
 }
 
-.sheet-panel__constant + .sheet-panel__constant {
+li + li > .sheet-panel__constant {
   border-top: 1px solid var(--default-border-color, #dee2e6);
   border-radius: 0;
 }
@@ -196,9 +212,72 @@
   user-select: all;
 }
 
-/* The Format tab's bordered boxes sit inside the panel, clear of the window's
-   edge: the other tabs' borderless rows can run to it. */
-.sheet-panel.sheet-format {
+/* The Symbols tab (section 4, Symbols tab, M4d): each group's buttons wrap
+   in rows; Greek keeps its three (letters, variants, capitals). */
+.sheet-symbols__buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 0 4px;
+}
+
+.sheet-symbols__buttons + .sheet-symbols__buttons {
+  margin-top: 6px;
+}
+
+.sheet-symbols__button {
+  position: relative;
+  box-sizing: border-box;
+  min-width: 32px;
+  height: 32px;
+  padding: 0 7px;
+  border: 1px solid var(--default-border-color, #dee2e6);
+  border-radius: 6px;
+  background: var(--island-bg-color, #fff);
+  color: inherit;
+  font: inherit;
+  font-size: 14px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.sheet-symbols__buttons.is-greek .sheet-symbols__button {
+  font-family: 'Times New Roman', Times, serif;
+  font-size: 16px;
+}
+
+.sheet-symbols__buttons.is-functions .sheet-symbols__button,
+.sheet-symbols__buttons.is-logic .sheet-symbols__button,
+.sheet-symbols__buttons.is-forms .sheet-symbols__button {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+}
+
+.sheet-symbols__button:not(.is-dimmed):hover {
+  background: var(--button-hover-bg, rgba(0, 0, 0, 0.05));
+}
+
+.sheet-symbols__button.is-dimmed {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/* A letter that is also a constant (π, σ, α…): a small dot in its corner. */
+.sheet-symbols__button.is-constant::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--color-primary, #6965db);
+}
+
+/* The Format and Symbols tabs' bordered boxes sit inside the panel, clear of
+   the window's edge: the other tabs' borderless rows can run to it. */
+.sheet-panel.sheet-format,
+.sheet-panel.sheet-symbols {
   padding: 4px 12px 12px 8px;
 }
 

@@ -91,7 +91,7 @@ src/
 ├── canvas/       Everything that knows Excalidraw
 ├── math/         The engine: evaluateSheet, units, solve, lists, tables, plots, TeX
 ├── overlay/      Typeset grids, the line edit, gestures, unit slot, suggestions
-├── panel/        Sheet panel tabs: Variables, Problems, Settings, Constants
+├── panel/        Sheet panel tabs: Format, Symbols, Variables, Problems, Constants, Settings
 ├── file/         The .excalimathpad file, save, open, recovery copy
 └── test/         jsdom stubs and helpers (not app code)
 plugin/           The Obsidian plugin: the only code that imports `obsidian`

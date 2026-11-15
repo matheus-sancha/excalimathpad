@@ -934,8 +934,8 @@ reads. It adds no grammar.
 
 1. **Greek:** the 24 lowercase letters except omicron; the variants `varepsilon`, `vartheta`,
    `varpi`, `varrho`, `varsigma`, `varphi` on a second row; the 11 capitals unlike Latin
-   (Γ Δ Θ Λ Ξ Π Σ Υ Φ Ψ Ω). A button shows ρ and inserts `rho`. π, σ and α carry a small dot:
-   "also the constant …; a sheet may take the name".
+   (Γ Δ Θ Λ Ξ Π Σ Υ Φ Ψ Ω). A button shows ρ and inserts `rho`. The letters that are also
+   constants (π, σ, τ, φ, α) carry a small dot: "also the constant …; a sheet may take the name".
 2. **Operators:** `+` `−` (`-`) `·` (`*`) `÷` (`/`) `x²` (`^2`) `xⁿ` (`^`) `√` (`sqrt`)
    `∛` (`cbrt`) `ⁿ√` (`nthRoot`) `|x|` (`abs`) `n!` `( )` `[ ]` `<` `>` `≤` (`<=`) `≥` (`>=`).
 3. **Functions:** today's function suggestions, in that order.
@@ -3155,6 +3155,19 @@ Changes line if it changes behaviour.
 
 ## Changes since agreed
 
+- 2026-11-15, [section 4](#symbols-tab) (#146, found while building, for Matheus to confirm on the PR):
+  - **The dot marks every letter that is also a constant,** read from the constants list: τ (2π) and φ (the
+    golden ratio) are math.js constants too, so they carry it beside π, σ and α.
+  - **Spacing reaches the far side too.** A Greek letter or `true` / `false` before a name character gets a
+    space after it (`|b` + ρ gives `rho b`), and a call right after a name character gets one before it
+    (`a` + `sin` gives `a sin()`), so no click joins a name. A prefix (`not`, `solve`) always ends in one
+    space. `? :` goes in spaced, the caret between: `c ? | : `.
+  - **Plain text** in an open title or comment line, and in a line's note after its `#`, is the spelling as
+    it is, over the selection, the caret after it: no spacing and no wrapping (`sqrt()` in a comment).
+  - **The Constants tab shows "Open a line to insert"** over its dimmed rows too, by the same no-line rule.
+  - **The typing suggestions** gain the catalogue's other words: `and`, `or`, `not`, `true`, `false` and `in`.
+    `guess` stays in them: the catalogue holds it as a suggestion that isn't a button, since the Sheet forms
+    group leaves it out.
 - 2026-11-15, [section 4](#format-tab) (#144, found while building, not asked): a Format tab press on a
   comment line keeps the caret where it was in the comment text, moving with the `#`. A comment line
   has no code, so `min(selectionStart, codeLength)` would have sent the caret to the start of the line
