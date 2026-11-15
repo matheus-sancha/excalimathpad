@@ -1945,3 +1945,45 @@ describe('conditionals and text (docs/spec-v1.md section 3, Conditionals and tex
     })
   })
 })
+
+describe('a half-typed line never throws (#179)', () => {
+  const above = 'T_p = 0.25 mm\nr_t = T_p / 2 in mm\ntheta = 0 .. 2 pi step pi / 90'
+  const typed = 'zone_x = r_t cos(theta) in mm'
+  const lastLine = (source: string) => evaluateSheet([{ id: 'b', source }]).get('b')!.at(-1)!
+  const complexQuantity = error("a complex value with a unit can't be shown")
+
+  it('evaluates every prefix of a line typed under a list, one key at a time', () => {
+    for (let length = 1; length <= typed.length; length++) {
+      const prefix = typed.slice(0, length)
+      expect(() => lastLine(`${above}\n${prefix}`), prefix).not.toThrow()
+    }
+  })
+
+  it('a list of complex values with a unit is a line error, and an error in Variables', () => {
+    const line = lastLine(`${above}\nzone_x = r_t cos(theta) i`)
+
+    expect(line.result).toEqual(complexQuantity)
+    expect(line.variables).toEqual([{ name: 'zone_x', kind: 'error' }])
+    expect(lastLine(`${above}\nzone_x = r_t cos(theta) i in mm`).result).toEqual(complexQuantity)
+  })
+
+  it('one complex value with a unit says the same, and still reaches the lines below', () => {
+    expect(block('z = (3 + 4i) mm\nabs(z)')).toEqual([complexQuantity, value('5 mm')])
+    expect(block('z = 2 mm i in mm')).toEqual([complexQuantity])
+  })
+
+  it('complex values without a unit show as before, alone and in a list', () => {
+    expect(block('sqrt(-4)\nx = 1 .. 3\ny = x i')).toEqual([
+      value('2i'),
+      { kind: 'list', text: '3 values, 1 … 3', failed: null },
+      { kind: 'list', text: '3 values, i … 3i', failed: null },
+    ])
+  })
+
+  it('the lines below a list of complex quantities still run', () => {
+    const results = block('x = 1 .. 3\ny = x i mm\ntable(x, y)\nplot(x, y)\ny if result > 1 mm: bold\n2 + 2')
+
+    expect(results[1]).toEqual(complexQuantity)
+    expect(results[5]).toEqual(value('4'))
+  })
+})

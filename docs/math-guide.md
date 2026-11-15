@@ -139,6 +139,7 @@ Every result shows with **Digits** significant digits, 4 unless the Settings tab
 | `1 / 3` | `0.3333` | |
 | `1 / 0` | `∞` | |
 | `sqrt(-4)` | `2i` | A complex result shows both parts |
+| `(3 + 4i) mm` | ● `a complex value with a unit can't be shown` | A complex value takes no unit, alone or in a list |
 
 **Constants.** Every math.js constant is built in under its own name, and the common ones also have a short name, as in Mathcad. The [Sheet panel](#14-the-sheet-panel)'s Constants tab lists them all.
 

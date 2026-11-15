@@ -565,10 +565,10 @@ export function evaluateSheet(
   settings: DisplaySettings = DEFAULT_DISPLAY,
 ): ReadonlyMap<string, SheetLine[]> {
   messageSettings = settings
-  const sheet = blocks.map(({ id, source }) => ({
-    id,
-    lines: splitLines(source).map(parseLine),
-  }))
+  const sheet = blocks.map(({ id, source }) => {
+    const sources = splitLines(source)
+    return { id, sources, lines: sources.map(parseLine) }
+  })
 
   // Where each name is assigned, as positions in reading order.
   const definedAt = new Map<string, number[]>()
@@ -614,44 +614,73 @@ export function evaluateSheet(
   // The display unit each list was given on the line that defined it, for table columns.
   const listUnits = new Map<string, { unit: ShownUnit; text: string }>()
   position = 0
-  for (const { id, lines } of sheet) {
+  for (const { id, lines, sources } of sheet) {
     results.set(
       id,
-      lines.map((line): SheetLine => {
-        // Read before the line runs: what the scope holds above it.
-        const warnings = warningsOf(line, position)
-        if (line.kind !== 'blank') line.defines.forEach((name) => assigned.add(name))
-        slot = null
-        details = null
-        preview = null
-        table = null
-        plot = null
-        lineValue = undefined
-        const result = evaluateLine(line)
-        let typeset = typesetLine(line, names)
-        const ruled = runRules(line, result, position - 1)
-        if (ruled !== null) {
-          if (typeset.kind === 'math') typeset = { ...typeset, format: ruled.format }
-          warnings.push(...ruled.warnings)
-          if (ruled.counts.length > 0 && preview !== null) preview = [preview, ...ruled.counts].join('\n')
-        }
-        return {
-          result,
-          typeset,
-          warnings,
-          variables: variablesOf(line),
-          unitSlot: slot,
-          solveDetails: result.kind === 'value' || result.kind === 'roots' ? details : null,
-          listPreview: result.kind === 'list' ? preview : null,
-          table,
-          plot,
-          ruleTruth: ruled?.truth ?? [],
-          ruleStates: ruled?.states ?? [],
+      lines.map((line, index): SheetLine => {
+        const here = position
+        try {
+          return readLine(line)
+        } catch (error) {
+          // #179: a throw from outside a line's own handling is that line's
+          // error, not the sheet's, and the lines below still run. The full
+          // rule for an unexpected failure is #180's to set.
+          position = here + 1
+          if (line.kind !== 'blank') {
+            for (const name of line.defines) if (!scope.holds(name)) failed.add(name)
+          }
+          return {
+            result: { kind: 'error', message: error instanceof Error ? error.message : String(error) },
+            typeset: { kind: 'unparsed', source: sources[index] },
+            warnings: [],
+            variables: line.kind === 'blank' ? [] : line.defines.map((name): SheetVariable => ({ name, kind: 'error' })),
+            unitSlot: null,
+            solveDetails: null,
+            listPreview: null,
+            table: null,
+            plot: null,
+            ruleTruth: [],
+            ruleStates: [],
+          }
         }
       }),
     )
   }
   return results
+
+  /** One line, start to finish: its warnings, result, typeset form, rules and variables. */
+  function readLine(line: ParsedLine): SheetLine {
+    // Read before the line runs: what the scope holds above it.
+    const warnings = warningsOf(line, position)
+    if (line.kind !== 'blank') line.defines.forEach((name) => assigned.add(name))
+    slot = null
+    details = null
+    preview = null
+    table = null
+    plot = null
+    lineValue = undefined
+    const result = evaluateLine(line)
+    let typeset = typesetLine(line, names)
+    const ruled = runRules(line, result, position - 1)
+    if (ruled !== null) {
+      if (typeset.kind === 'math') typeset = { ...typeset, format: ruled.format }
+      warnings.push(...ruled.warnings)
+      if (ruled.counts.length > 0 && preview !== null) preview = [preview, ...ruled.counts].join('\n')
+    }
+    return {
+      result,
+      typeset,
+      warnings,
+      variables: variablesOf(line),
+      unitSlot: slot,
+      solveDetails: result.kind === 'value' || result.kind === 'roots' ? details : null,
+      listPreview: result.kind === 'list' ? preview : null,
+      table,
+      plot,
+      ruleTruth: ruled?.truth ?? [],
+      ruleStates: ruled?.states ?? [],
+    }
+  }
 
   /**
    * A line's rules (section 3, A rule; section 10, per point), run after the
@@ -816,7 +845,14 @@ export function evaluateSheet(
         return { name, kind: 'error' }
       }
       const value = scope.peek(name)
-      if (isSheetList(value)) return { name, kind: 'list', text: summaryOf(value, null) }
+      if (isSheetList(value)) {
+        // A list whose values can't be shown (#179) is an error here, as one such value is below.
+        try {
+          return { name, kind: 'list', text: summaryOf(value, null) }
+        } catch {
+          return { name, kind: 'error' }
+        }
+      }
       if (isSheetFunction(value)) {
         const { params, solve } = value.sheetFunction
         return { name, kind: 'function', params, solve: solve === true }

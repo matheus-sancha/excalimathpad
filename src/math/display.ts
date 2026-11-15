@@ -13,6 +13,9 @@ import {
   type UnitSettings,
 } from './unitSystems.ts'
 
+/** Section 13: a quantity whose number is complex, alone or in a list (#179). */
+const COMPLEX_QUANTITY = "a complex value with a unit can't be shown"
+
 /**
  * The shown result (docs/spec-v1.md section 5): a line's value in its display
  * unit, balanced if the kinds differ; else in the unit system for its kind;
@@ -180,6 +183,9 @@ export function createDisplay(math: MathJsInstance, parse: (text: string) => Mat
   function show(value: unknown, unit: ShownUnit | null, settings: DisplaySettings): string {
     // Section 5, Shown result: a text shows plain, without math.js's quotes.
     if (typeof value === 'string' && unit === null) return value
+    // A complex number shows both parts (section 5), but math.js can't size a
+    // complex quantity for a system or a unit: the sheet's words, not its (#179).
+    if (isUnit(value) && math.isComplex(value.value)) throw new Error(COMPLEX_QUANTITY)
     if (unit === 'percent') {
       const hundredfold = math.multiply(value as never, 100) as unknown
       const shown = isUnit(hundredfold) ? inSystem(hundredfold, settings) : format(hundredfold, settings.digits)
