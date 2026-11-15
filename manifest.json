@@ -1,7 +1,7 @@
 {
   "id": "excalimathpad",
   "name": "Excalimathpad",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "minAppVersion": "1.7.2",
   "description": "Open and edit .excalimathpad calc sheets: an Excalidraw whiteboard with live, unit-aware math that recalculates as you edit. Works fully offline; makes no network requests.",
   "author": "matheus-sancha",
