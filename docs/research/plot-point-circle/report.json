@@ -1,0 +1,115 @@
+{
+  "A": {
+    "caption": "today: plot(zone_x, zone(theta), measured(theta)), mark dx, x …, y …, size L",
+    "w": 640,
+    "h": 360,
+    "spill": 0,
+    "round": 1.002
+  },
+  "B": {
+    "caption": "aspectRatio: 1 with width 640 and height 360 given",
+    "w": 640,
+    "h": 360,
+    "spill": 0,
+    "round": 1.871
+  },
+  "C": {
+    "caption": "aspectRatio: 1 with width 360 only (height derived)",
+    "w": 360,
+    "h": 350,
+    "spill": 0,
+    "round": 1
+  },
+  "D": {
+    "caption": "size L, equal scales from our domains; dot + text label; zone = line of 181 points",
+    "w": 640,
+    "h": 360,
+    "spill": 0,
+    "round": 1
+  },
+  "E1": {
+    "caption": "equal scales at 360 × 220",
+    "w": 360,
+    "h": 220,
+    "spill": 0,
+    "round": 1
+  },
+  "E2": {
+    "caption": "equal scales at 360 × 360",
+    "w": 360,
+    "h": 360,
+    "spill": "10.9 px (text (0.08, −0.05) mm)",
+    "round": 1
+  },
+  "E3": {
+    "caption": "equal scales at 480 × 280",
+    "w": 480,
+    "h": 280,
+    "spill": 0,
+    "round": 1
+  },
+  "F": {
+    "caption": "circle as a function mark (centre, radius in data units), no list of points",
+    "w": 480,
+    "h": 280,
+    "spill": 0,
+    "round": 1
+  },
+  "G": {
+    "caption": "Plot.dot with r: 0.125 (a dot radius is pixels, not data)",
+    "w": 360,
+    "h": 220,
+    "spill": 0,
+    "round": null
+  },
+  "H": {
+    "caption": "label as Plot.tip (static), point near the right edge",
+    "w": 360,
+    "h": 220,
+    "spill": "64 px (text ​(0.25, −0.05) mm)",
+    "round": 1
+  },
+  "I": {
+    "caption": "label as Plot.text, dx 8, point near the right edge",
+    "w": 360,
+    "h": 220,
+    "spill": "72.2 px (text (0.25, −0.05) mm)",
+    "round": 1
+  },
+  "J": {
+    "caption": "zero rules, frame, filled zone, point with a haloed label",
+    "w": 480,
+    "h": 280,
+    "spill": 0,
+    "round": 1
+  },
+  "exports": [
+    "dot:function",
+    "text:function",
+    "tip:function",
+    "frame:function",
+    "ruleX:function",
+    "ruleY:function",
+    "geo:function",
+    "vector:function",
+    "arrow:function",
+    "link:function",
+    "crosshair:function",
+    "pointer:function"
+  ],
+  "version": "0.6.17",
+  "settledSpill": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    10.9,
+    0,
+    0,
+    0,
+    0,
+    72.2,
+    0
+  ]
+}

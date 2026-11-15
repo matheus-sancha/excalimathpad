@@ -1,0 +1,189 @@
+// Probe for docs/research/plot-point-circle.md (wayfinder ticket #177).
+// Draws the true-position chart several ways with the Observable Plot the app bundles
+// (node_modules/@observablehq/plot 0.6.17, UMD build, with node_modules/d3), in headless Chromium.
+// Run from the repo root, with playwright resolvable (here: the global one, by absolute path): node <copy>.mjs
+import { chromium } from 'playwright'
+import { readFileSync, writeFileSync } from 'node:fs'
+const root = process.cwd()
+const out = `${root}/docs/research/plot-point-circle`
+const d3 = readFileSync(`${root}/node_modules/d3/dist/d3.min.js`, 'utf8')
+const plot = readFileSync(`${root}/node_modules/@observablehq/plot/dist/plot.umd.min.js`, 'utf8')
+const browser = await chromium.launch()
+const page = await browser.newPage({ viewport: { width: 1500, height: 1700 }, deviceScaleFactor: 2 })
+await page.setContent(`<body style="font-family:system-ui;margin:16px;background:#fff"><div id="root" style="display:grid;grid-template-columns:repeat(2,700px);gap:18px"></div></body>`)
+await page.addScriptTag({ content: d3 })
+await page.addScriptTag({ content: plot })
+const report = await page.evaluate(() => {
+  const report = {}
+  const dx = 0.08, dy = -0.05, r = 0.125
+  const theta = d3.range(0, 2 * Math.PI + 1e-9, Math.PI / 90)
+  const zone = theta.map((a) => ({ x: r * Math.cos(a), y: r * Math.sin(a) }))
+  const BLUE = '#1971c2', ORANGE = '#e8590c', GREY = '#495057'
+  const base = { style: { background: 'transparent', fontSize: '11px', overflow: 'visible' } }
+  const box = (svg) => { const b = svg.getBoundingClientRect(); return { w: Math.round(b.width), h: Math.round(b.height) } }
+  // How far any drawn thing runs past the SVG's own box, in px (0 = stays inside).
+  const spill = (svg) => {
+    const s = svg.getBoundingClientRect(); let m = 0, what = ''
+    svg.querySelectorAll('text, path, circle, line, ellipse').forEach((n) => {
+      const b = n.getBoundingClientRect(); if (b.width === 0 && b.height === 0) return
+      const d = Math.max(s.left - b.left, b.right - s.right, s.top - b.top, b.bottom - s.bottom)
+      if (d > m) { m = d; what = `${n.tagName} ${(n.textContent || '').slice(0, 24)}`.trim() }
+    })
+    return m < 1 ? 0 : `${Math.round(m * 10) / 10} px (${what})`
+  }
+  // Is the zone round on screen? width/height of the drawn zone path or ellipse.
+  const roundness = (svg, sel) => { const n = svg.querySelector(sel); if (!n) return null; const b = n.getBoundingClientRect(); return Math.round((b.width / b.height) * 1000) / 1000 }
+  const add = (key, caption, make) => {
+    const cell = document.createElement('div')
+    const h = document.createElement('div'); h.textContent = `${key}. ${caption}`; h.style.cssText = 'font-size:13px;margin-bottom:6px'
+    cell.append(h)
+    try {
+      const svg = make()
+      const frame = document.createElement('div'); frame.style.cssText = 'display:inline-block;outline:1px dashed #adb5bd'
+      frame.append(svg); cell.append(frame)
+      document.getElementById('root').append(cell)
+      report[key] = { caption, ...box(svg), spill: spill(svg), round: roundness(svg, '.zone path, .zone ellipse, ellipse.zone') }
+    } catch (e) { report[key] = { caption, error: String(e) }; cell.append(String(e)); document.getElementById('root').append(cell) }
+  }
+  // Equal scales at a fixed chart size: widen the shorter axis' domain around its middle.
+  const equalDomains = (xs, ys, width, height, m) => {
+    const iw = width - m.left - m.right, ih = height - m.top - m.bottom
+    let [x0, x1] = d3.extent(xs), [y0, y1] = d3.extent(ys)
+    const pad = 0.08; const px = (x1 - x0) * pad, py = (y1 - y0) * pad; x0 -= px; x1 += px; y0 -= py; y1 += py
+    const k = Math.max((x1 - x0) / iw, (y1 - y0) / ih) // data units per px
+    const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2
+    return { x: [cx - (k * iw) / 2, cx + (k * iw) / 2], y: [cy - (k * ih) / 2, cy + (k * ih) / 2] }
+  }
+  const M = { top: 20, right: 20, bottom: 30, left: 40 } // Plot's defaults
+  const label = `(${dx}, ${String(dy).replace('-', '−')}) mm`
+
+  // A. Today (0.2.x): six helper lines; zone as a line against zone_x, measured as a flat series, mark dx.
+  add('A', 'today: plot(zone_x, zone(theta), measured(theta)), mark dx, x …, y …, size L', () => Plot.plot({
+    ...base, width: 640, height: 360, marginTop: 28,
+    x: { label: 'zone_x [mm]', domain: [-2.3 * r, 2.3 * r] }, y: { label: 'zone(theta), measured(theta) [mm]', domain: [-1.2 * r, 1.2 * r], grid: true },
+    marks: [
+      Plot.line(zone, { x: 'x', y: 'y', stroke: BLUE, strokeWidth: 1.6, className: 'zone' }),
+      Plot.line(zone.map((p) => ({ x: p.x, y: dy })), { x: 'x', y: 'y', stroke: ORANGE, strokeWidth: 1.6 }),
+      Plot.ruleX([dx], { stroke: GREY, strokeDasharray: '4 3' }),
+      Plot.dot([{ x: dx, y: dy }, { x: dx, y: Math.sqrt(r * r - dx * dx) }, { x: dx, y: -Math.sqrt(r * r - dx * dx) }], { x: 'x', y: 'y', fill: GREY, r: 3 }),
+      Plot.text([`dx = ${dx} mm`], { x: () => dx, text: (d) => d, frameAnchor: 'top', dy: -10, fill: GREY }),
+    ],
+  }))
+  // B. aspectRatio: 1 WITH our fixed height: does Plot honour it?
+  add('B', 'aspectRatio: 1 with width 640 and height 360 given', () => Plot.plot({
+    ...base, width: 640, height: 360, aspectRatio: 1, x: { label: 'x [mm]' }, y: { label: 'y [mm]', grid: true },
+    marks: [Plot.line(zone, { x: 'x', y: 'y', stroke: BLUE, className: 'zone' }), Plot.dot([{ x: dx, y: dy }], { x: 'x', y: 'y', fill: ORANGE, r: 4 })],
+  }))
+  // C. aspectRatio: 1 with the width only: the height follows the data.
+  add('C', 'aspectRatio: 1 with width 360 only (height derived)', () => Plot.plot({
+    ...base, width: 360, aspectRatio: 1, x: { label: 'x [mm]' }, y: { label: 'y [mm]', grid: true },
+    marks: [Plot.line(zone, { x: 'x', y: 'y', stroke: BLUE, className: 'zone' }), Plot.dot([{ x: dx, y: dy }], { x: 'x', y: 'y', fill: ORANGE, r: 4 })],
+  }))
+  // D. Fixed size L, equal scales by our own domains; point as dot + text mark; zone as a line of points.
+  add('D', 'size L, equal scales from our domains; dot + text label; zone = line of 181 points', () => {
+    const dom = equalDomains([-r, r], [-r, r], 640, 360, M)
+    return Plot.plot({
+      ...base, width: 640, height: 360, x: { label: 'x [mm]', domain: dom.x }, y: { label: 'y [mm]', domain: dom.y, grid: true },
+      marks: [
+        Plot.line(zone, { x: 'x', y: 'y', stroke: BLUE, strokeWidth: 1.6, className: 'zone' }),
+        Plot.dot([{ x: dx, y: dy }], { x: 'x', y: 'y', fill: ORANGE, r: 4 }),
+        Plot.text([{ x: dx, y: dy }], { x: 'x', y: 'y', text: () => label, dx: 8, textAnchor: 'start', fill: ORANGE }),
+      ],
+    })
+  })
+  // E. Same at size S (360 × 220) and square 360 × 360: does the circle stay round at any size?
+  for (const [key, w, h] of [['E1', 360, 220], ['E2', 360, 360], ['E3', 480, 280]]) {
+    add(key, `equal scales at ${w} × ${h}`, () => {
+      const dom = equalDomains([-r, r], [-r, r], w, h, M)
+      return Plot.plot({
+        ...base, width: w, height: h, x: { label: 'x [mm]', domain: dom.x }, y: { label: 'y [mm]', domain: dom.y, grid: true },
+        marks: [
+          Plot.line(zone, { x: 'x', y: 'y', stroke: BLUE, strokeWidth: 1.6, className: 'zone' }),
+          Plot.dot([{ x: dx, y: dy }], { x: 'x', y: 'y', fill: ORANGE, r: 4 }),
+          Plot.text([{ x: dx, y: dy }], { x: 'x', y: 'y', text: () => label, dx: 8, textAnchor: 'start', fill: ORANGE }),
+        ],
+      })
+    })
+  }
+  // F. The circle as one mark in data units: a function mark that reads the scales.
+  add('F', 'circle as a function mark (centre, radius in data units), no list of points', () => {
+    const dom = equalDomains([-r, r], [-r, r], 480, 280, M)
+    const circle = (cx, cy, rad, stroke) => (index, scales) => {
+      const e = document.createElementNS('http://www.w3.org/2000/svg', 'ellipse')
+      e.setAttribute('class', 'zone')
+      e.setAttribute('cx', scales.x(cx)); e.setAttribute('cy', scales.y(cy))
+      e.setAttribute('rx', Math.abs(scales.x(cx + rad) - scales.x(cx))); e.setAttribute('ry', Math.abs(scales.y(cy + rad) - scales.y(cy)))
+      e.setAttribute('fill', stroke); e.setAttribute('fill-opacity', 0.08); e.setAttribute('stroke', stroke); e.setAttribute('stroke-width', 1.6)
+      return e
+    }
+    return Plot.plot({
+      ...base, width: 480, height: 280, x: { label: 'x [mm]', domain: dom.x }, y: { label: 'y [mm]', domain: dom.y, grid: true },
+      marks: [
+        circle(0, 0, r, BLUE),
+        Plot.dot([{ x: dx, y: dy }], { x: 'x', y: 'y', fill: ORANGE, r: 4 }),
+        Plot.text([{ x: dx, y: dy }], { x: 'x', y: 'y', text: () => label, dx: 8, textAnchor: 'start', fill: ORANGE }),
+      ],
+    })
+  })
+  // G. A dot mark's r is in pixels, not data units: r = 0.125 "mm" on a dot.
+  add('G', 'Plot.dot with r: 0.125 (a dot radius is pixels, not data)', () => Plot.plot({
+    ...base, width: 360, height: 220, x: { domain: [-0.3, 0.3] }, y: { domain: [-0.15, 0.15], grid: true },
+    marks: [Plot.dot([{ x: 0, y: 0 }], { x: 'x', y: 'y', r: r, stroke: BLUE, className: 'zone' }), Plot.dot([{ x: 0.2, y: 0 }], { x: 'x', y: 'y', r: 40, stroke: BLUE })],
+  }))
+  // H. The label as a tip mark: a boxed callout that picks its own side to stay in the frame.
+  add('H', 'label as Plot.tip (static), point near the right edge', () => {
+    const dom = equalDomains([-r, r], [-r, r], 360, 220, M)
+    const px = dom.x[1] - 0.01
+    return Plot.plot({
+      ...base, width: 360, height: 220, x: { label: 'x [mm]', domain: dom.x }, y: { label: 'y [mm]', domain: dom.y, grid: true },
+      marks: [
+        Plot.line(zone, { x: 'x', y: 'y', stroke: BLUE, strokeWidth: 1.6, className: 'zone' }),
+        Plot.dot([{ x: px, y: dy }], { x: 'x', y: 'y', fill: ORANGE, r: 4 }),
+        Plot.tip([{ x: px, y: dy }], { x: 'x', y: 'y', title: () => `(${px.toFixed(2)}, −0.05) mm`, pointerEvents: 'none' }),
+      ],
+    })
+  })
+  // I. The same point near the right edge with a plain text mark to the right: how far past the box?
+  add('I', 'label as Plot.text, dx 8, point near the right edge', () => {
+    const dom = equalDomains([-r, r], [-r, r], 360, 220, M)
+    const px = dom.x[1] - 0.01
+    return Plot.plot({
+      ...base, width: 360, height: 220, x: { label: 'x [mm]', domain: dom.x }, y: { label: 'y [mm]', domain: dom.y, grid: true },
+      marks: [
+        Plot.line(zone, { x: 'x', y: 'y', stroke: BLUE, strokeWidth: 1.6, className: 'zone' }),
+        Plot.dot([{ x: px, y: dy }], { x: 'x', y: 'y', fill: ORANGE, r: 4 }),
+        Plot.text([{ x: px, y: dy }], { x: 'x', y: 'y', text: () => `(${px.toFixed(2)}, −0.05) mm`, dx: 8, textAnchor: 'start', fill: ORANGE }),
+      ],
+    })
+  })
+  // J. Crosshair-free "target" look: origin rules at 0, frame, no grid; point + drop lines are NOT drawn.
+  add('J', 'zero rules, frame, filled zone, point with a haloed label', () => {
+    const dom = equalDomains([-r, r], [-r, r], 480, 280, M)
+    return Plot.plot({
+      ...base, width: 480, height: 280, x: { label: 'dx [mm]', domain: dom.x }, y: { label: 'dy [mm]', domain: dom.y },
+      marks: [
+        Plot.frame({ stroke: '#ced4da' }), Plot.ruleX([0], { stroke: '#ced4da' }), Plot.ruleY([0], { stroke: '#ced4da' }),
+        Plot.line(zone, { x: 'x', y: 'y', stroke: BLUE, strokeWidth: 1.6, fill: BLUE, fillOpacity: 0.08, className: 'zone' }),
+        Plot.dot([{ x: dx, y: dy }], { x: 'x', y: 'y', fill: ORANGE, r: 4 }),
+        Plot.text([{ x: dx, y: dy }], { x: 'x', y: 'y', text: () => label, dx: 8, textAnchor: 'start', fill: ORANGE, stroke: 'white', strokeWidth: 4 }),
+      ],
+    })
+  })
+  report.exports = ['dot', 'text', 'tip', 'frame', 'ruleX', 'ruleY', 'geo', 'vector', 'arrow', 'link', 'crosshair', 'pointer'].map((k) => `${k}:${typeof Plot[k]}`)
+  report.version = Plot.version
+  return report
+})
+// A tip mark lays itself out a frame after it is attached: measure the spill again once settled.
+await page.waitForTimeout(300)
+report.settledSpill = await page.evaluate(() => [...document.querySelectorAll('#root svg')].map((svg) => {
+  const s = svg.getBoundingClientRect(); let m = 0
+  svg.querySelectorAll('text, path, circle, line, ellipse').forEach((n) => {
+    const b = n.getBoundingClientRect(); if (b.width === 0 && b.height === 0) return
+    m = Math.max(m, s.left - b.left, b.right - s.right, s.top - b.top, b.bottom - s.bottom)
+  })
+  return m < 1 ? 0 : Math.round(m * 10) / 10
+}))
+await page.screenshot({ path: `${out}/variants.png`, fullPage: true })
+writeFileSync(`${out}/report.json`, JSON.stringify(report, null, 2) + '\n')
+console.log(JSON.stringify(report, null, 1))
+await browser.close()
