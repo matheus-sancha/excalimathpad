@@ -8,7 +8,8 @@
 // is then moved there, as Obsidian's Move to new window does.
 //
 // In each tab it drags the math element, places math with M and a click,
-// opens and closes Excalidraw's Help, pastes text and copies the element. The
+// opens and closes Excalidraw's Help and the Math guide, pastes text and
+// copies the element. The
 // main window's tab is the control; the pop-out's work only through the
 // bridge (`src/canvas/popoutBridge.ts`). It fails on any check that doesn't
 // hold, and on any page error.
@@ -231,6 +232,18 @@ try {
     const boxes = await Promise.all([tab, mainPage].map((p) => p.locator('.excalidraw-modal-container').count()))
     row('Esc closes Help, and its box goes', left === 0 && boxes.every((n) => n === 0), `dialogs left: ${left}, boxes: ${boxes}`)
 
+    // ☰ → Math guide (section 8, M4d) opens its dialog in this window, inside this tab's view.
+    const ofThisTab = (selector) => (which === 'moved' ? tab.locator(selector).last() : tab.locator(selector).first())
+    await ofThisTab('[data-testid="main-menu-trigger"]').click()
+    await ofThisTab('[data-testid="math-guide-item"]').click()
+    await tab.waitForTimeout(300)
+    const guideHere = await tab.locator('.math-guide [role="dialog"]').count()
+    const guideInMain = which === 'main' ? 0 : await mainPage.locator('.math-guide').count()
+    row('☰ → Math guide opens the guide in this window', guideHere === 1 && guideInMain === 0, `here: ${guideHere}, in the main window: ${guideInMain}`)
+    await tab.keyboard.press('Escape')
+    await tab.waitForTimeout(200)
+    row('Esc closes the Math guide', (await tab.locator('.math-guide').count()) === 0)
+
     // A paste of text, as the browser fires it on the focused element: a
     // headless Ctrl+V fires none, so the event is made here. Excalidraw hears
     // paste on the code's \`document\`, so this checks where it listens.
@@ -277,4 +290,4 @@ if (failed.length || errors.length || results.length === 0) {
   for (const error of errors) console.error(`  - ${error}`)
   process.exit(1)
 }
-console.log('Pop-out run passed: a sheet tab in a pop-out window drags, places, opens Help, pastes and copies.')
+console.log('Pop-out run passed: a sheet tab in a pop-out window drags, places, opens Help and the Math guide, pastes and copies.')

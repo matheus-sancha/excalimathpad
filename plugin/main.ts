@@ -30,12 +30,12 @@ export const NEW_SHEET_ICON = 'calculator'
 /**
  * The commands that act on the active sheet tab, and are offered only while
  * one is active (docs/spec-v1.md section 8, Inside an Obsidian tab). None has
- * a default hotkey. Open Math guide arrives with the guide (#148), Print… with
- * M5.
+ * a default hotkey. Print… arrives with M5.
  */
 export const SHEET_COMMANDS: readonly { id: string; name: string; run: keyof SheetCommands }[] = [
   { id: 'add-math', name: 'Add math', run: 'addMath' },
   { id: 'toggle-math-settings', name: 'Toggle Math settings', run: 'toggleMathSettings' },
+  { id: 'open-math-guide', name: 'Open Math guide', run: 'openMathGuide' },
 ]
 
 /**

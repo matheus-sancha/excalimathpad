@@ -1,11 +1,30 @@
+import { readFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import react from '@vitejs/plugin-react'
+import type { Plugin } from 'vite'
 import { defineConfig } from 'vitest/config'
 import { buildStamp } from './buildStamp.ts'
+import { GUIDE_QUERY, guideModule } from './src/guide/markdown.ts'
+
+/**
+ * `docs/math-guide.md?guide`: the Math guide, turned into elements at build
+ * time (docs/spec-v1.md section 8, Math guide). `esbuild.plugin.mjs` does the
+ * same for the plugin.
+ */
+const mathGuide: Plugin = {
+  name: 'excalimathpad-math-guide',
+  enforce: 'pre',
+  async load(id) {
+    if (!id.endsWith(GUIDE_QUERY)) return null
+    const file = id.slice(0, -GUIDE_QUERY.length)
+    this.addWatchFile(file)
+    return guideModule(await readFile(file, 'utf8'))
+  },
+}
 
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [react()],
+  plugins: [mathGuide, react()],
   // Relative asset URLs, so `dist/` works from any static host and sub-path
   // (e.g. GitHub Pages at /excalimathpad/) without rebuilding.
   base: './',

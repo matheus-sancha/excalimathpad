@@ -147,25 +147,28 @@ describe('the theme (section 8: Excalimathpad’s own light or dark, remembered)
 })
 
 describe('Obsidian’s commands (section 8: only while a sheet tab is active, no default hotkeys)', () => {
-  it('registers New sheet, Add math and Toggle Math settings, none with a hotkey', async () => {
+  it('registers New sheet, Add math, Toggle Math settings and Open Math guide, none with a hotkey', async () => {
     const vault = await setUp()
     expect(vault.recorded.commands.map((c) => [c.id, c.name])).toEqual([
       ['new-sheet', 'New sheet'],
       ['add-math', 'Add math'],
       ['toggle-math-settings', 'Toggle Math settings'],
+      ['open-math-guide', 'Open Math guide'],
     ])
-    expect(SHEET_COMMANDS.map((c) => c.id)).toEqual(['add-math', 'toggle-math-settings'])
+    expect(SHEET_COMMANDS.map((c) => c.id)).toEqual(['add-math', 'toggle-math-settings', 'open-math-guide'])
     expect(vault.recorded.commands.every((c) => c.hotkeys === undefined)).toBe(true)
   })
 
-  it('offers Add math and Toggle Math settings only with a sheet tab active; New sheet always', async () => {
+  it('offers the sheet commands only with a sheet tab active; New sheet always', async () => {
     const vault = await setUp()
     expect(isOffered(command(vault, 'new-sheet'))).toBe(true)
     expect(isOffered(command(vault, 'add-math'))).toBe(false)
     expect(isOffered(command(vault, 'toggle-math-settings'))).toBe(false)
+    expect(isOffered(command(vault, 'open-math-guide'))).toBe(false)
     const leaf = await openTab(vault, A)
     expect(isOffered(command(vault, 'add-math'))).toBe(true)
     expect(isOffered(command(vault, 'toggle-math-settings'))).toBe(true)
+    expect(isOffered(command(vault, 'open-math-guide'))).toBe(true)
     await act(() => leaf.detach())
     open.splice(open.indexOf(leaf), 1)
     expect(isOffered(command(vault, 'add-math'))).toBe(false)
@@ -199,6 +202,26 @@ describe('Obsidian’s commands (section 8: only while a sheet tab is active, no
       runCommand(command(vault, 'toggle-math-settings'))
     })
     await waitFor(() => expect(panelIn(second)).toBeNull())
+  })
+
+  it('Open Math guide opens the guide in the active tab only, inside its view', async () => {
+    const vault = await setUp()
+    const first = await openTab(vault, A)
+    const second = await openTab(vault, B)
+    vault.app.workspace.setActiveLeaf(first)
+    act(() => {
+      runCommand(command(vault, 'open-math-guide'))
+    })
+    const guide = await waitFor(() => {
+      const found = first.containerEl.querySelector('[role="dialog"][aria-labelledby="math-guide-math-guide"]')
+      expect(found).not.toBeNull()
+      return found!
+    })
+    expect(guide.textContent).toContain('A first sheet')
+    expect(second.containerEl.querySelector('.math-guide')).toBeNull()
+    // Esc closes it, and the key stops in the view.
+    fireEvent.keyDown(guide, { key: 'Escape' })
+    await waitFor(() => expect(first.containerEl.querySelector('.math-guide')).toBeNull())
   })
 })
 

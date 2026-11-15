@@ -36,7 +36,6 @@ It wraps the official `@excalidraw/excalidraw` component, never a fork ([ADR 000
 - [Features](#features)
 - [Quick Start](#quick-start)
 - [Writing a Sheet](#writing-a-sheet)
-- [Keyboard Shortcuts](#keyboard-shortcuts)
 - [Scripts](#scripts)
 - [Build and Deploy](#build-and-deploy)
 - [Architecture](#architecture)
@@ -77,6 +76,7 @@ It wraps the official `@excalidraw/excalidraw` component, never a fork ([ADR 000
 - **Recovery copy.** Unsaved work is kept in IndexedDB and offered back on the next launch.
 - **In an Obsidian vault** (the plugin, not yet released). A sheet saves itself as Obsidian's notes do, and **New sheet** is a command, a ribbon icon and a folder menu item. If sync or another tab changes a sheet you are editing, your version is kept beside it as a conflict copy. Obsidian Sync carries `.excalimathpad` files only with **Sync all other types** turned on.
 - **Excalidraw's own undo.** Undo covers math: one step per committed line, alongside Excalidraw's own steps.
+- **Math guide.** Every form, key and setting, with examples, in a dialog from the ☰ menu.
 - **Build stamp.** The last line of the ☰ menu shows which build is running.
 
 ## Quick Start
@@ -107,51 +107,7 @@ Then open [http://localhost:5173](http://localhost:5173).
 
 An element left with no text is removed when you leave it.
 
-### Line forms
-
-| Form | Example | Shows |
-|---|---|---|
-| Comment line | `# Water at 20 C` | Text across the row |
-| Plain input | `D = 102.3 mm` | The typeset input |
-| Assignment | `v_d = Q_d / A_p` | Its value and unit |
-| Bare expression | `2 * pi` | Its value |
-| Function | `Hp(Q) = H_0 - (H_0 - H_r) (Q/Q_r)^2` | Nothing, unless it has a problem |
-| Solve, value | `Q_op = solve Hp(Q) = Hs(Q), for Q = 1 L/s .. 30 L/s` | Every root found in the range |
-| Solve, function | `f(Re, r) = solve …, guess f = 0.02` | Nothing, unless it has a problem |
-| Range | `Q_s = 1 L/s .. 30 L/s step 1 L/s` | A list summary |
-| Table | `table(Q_s, Hs(Q_s), Hp(Q_s))` | Rows under the line |
-| Plot | `plot(Q_s, Hs(Q_s), Hp(Q_s)), mark Q_op` | A chart under the line |
-
-Any line with code can end with `in <unit>`, then a format clause, then a `# note`, in that order:
-
-```text
-dP_pipe = f_d * (L_p/D) rho v_d^2 / 2 in kPa @bold @text-red if dP_pipe > 50 kPa # friction only
-```
-
-Things to know:
-
-- **Assignment is plain `=`.** Mathcad's `:=` is not accepted. One line holds one statement.
-- **Don't name variables after units** (`V`, `A`, `m`, `s`, `L`). The name shadows the unit for every line below it. The app warns when this happens.
-- **A name directly before `(` is a function call** in math.js. Write `f_d * (L_p/D)`, not `f_d (L_p/D)`.
-
-The full grammar, including every format word and every message, is in [spec section 3](docs/spec-v1.md#3-sheet-lines-every-form). A complete worked example is the [pump-sizing acceptance sheet](docs/acceptance/pump-sizing.md).
-
-## Keyboard Shortcuts
-
-| Keys | Action |
-|---|---|
-| **M** | Add math: click the canvas to place an element. **Esc** cancels |
-| Double-click a line | Edit that line |
-| **Enter** on a selected element | Edit its last line |
-| **↑ / ↓** | Move between lines (↑ on the first line edits the title) |
-| **Enter** / **Backspace** at the start | Split the line / join it to the line above |
-| **Tab**, **↓ ↑**, **Enter** | Accept a suggestion while typing |
-| **Esc** | Leave the line. Press it again to deselect |
-| **Ctrl+B / I / U** | Bold, italic or underline in a title |
-| **Ctrl+Z** / **Ctrl+Shift+Z** | Undo / redo, one committed line at a time |
-| **Ctrl+D** | Duplicate an element with the same source |
-| **Ctrl+S** / **Ctrl+Shift+S** | Save / Save as `.excalimathpad` |
-| **Ctrl+O** | Open a sheet (or drop the file on the canvas) |
+Every line form, unit, setting, key and message is in the **[Math guide](docs/math-guide.md)**, with examples that CI runs against the app. In the app it is under **☰ → Math guide**, offline and in Obsidian too. A complete worked example is the [pump-sizing acceptance sheet](docs/acceptance/pump-sizing.md).
 
 ## Scripts
 
@@ -204,6 +160,7 @@ src/
 │                     unit slot, suggestions, hover tips, plot drawing
 ├── panel/            Sheet panel tabs: Variables, Problems, Settings, Constants
 ├── file/             The .excalimathpad file: save, open, recovery copy, migrations
+├── guide/            The Math guide: docs/math-guide.md as elements, and its dialog
 └── test/             jsdom stubs and helpers for tests against real Excalidraw
 ```
 
@@ -255,6 +212,7 @@ What v1 deliberately leaves out is listed in [spec section 1](docs/spec-v1.md#1-
 
 | Document | What it says |
 |---|---|
+| [`docs/math-guide.md`](docs/math-guide.md) | **How to use it**: every form, key and setting, with examples. Also in the app, under ☰ → Math guide |
 | [`docs/spec-v1.md`](docs/spec-v1.md) | What v1 **will be**. Behaviour doesn't change without this file changing |
 | [`CONTEXT.md`](CONTEXT.md) | What the code **is today**: the module map, terms and invariants |
 | [`docs/adr/`](docs/adr/) | **Why**: the decisions that are hard to reverse |

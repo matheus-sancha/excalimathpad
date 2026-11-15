@@ -52,7 +52,7 @@ You need **Node.js** `^22.22.2 || ^24.15.0 || >=26` and **npm 10+**. CI runs on 
 | `npm run build:plugin` | The Obsidian plugin in `dist-plugin/`: `main.js`, `styles.css`, `manifest.json` (`esbuild.plugin.mjs`) |
 | `npm run audit:plugin` | Check `dist-plugin/`: three files, each under 5,000,000 bytes, nothing that reaches the network |
 | `npm run test:blocked` | Open the built plugin in headless Chromium with the network blocked (Playwright's Chromium: `npx playwright install chromium` once) |
-| `npm run test:popout` | Open the built plugin in headless Chromium with a sheet tab in a pop-out window, and check it drags, places math, opens Help, pastes and copies there |
+| `npm run test:popout` | Open the built plugin in headless Chromium with a sheet tab in a pop-out window, and check it drags, places math, opens Help and the Math guide, pastes and copies there |
 | `npm run test:touch` | Open the built plugin in headless Chromium by touch, at a phone and a tablet viewport, as Android and as iOS, and check the touch gestures, the quick keys and the phone's bottom sheet |
 | `npm run preview` | Serve `dist/` locally |
 | `npm run lint` | Lint with oxlint, then Obsidian's ESLint rules at zero warnings |
@@ -73,13 +73,14 @@ You need **Node.js** `^22.22.2 || ^24.15.0 || >=26` and **npm 10+**. CI runs on 
 
 ## Spec, CONTEXT.md and ADRs
 
-The project keeps three documents in step with the code. A pull request that changes what they describe updates them in the same pull request.
+The project keeps four documents in step with the code. A pull request that changes what they describe updates them in the same pull request.
 
 | Document | Says | Update it when |
 |---|---|---|
 | [`docs/spec-v1.md`](docs/spec-v1.md) | What v1 **will be** | Behaviour changes. **Behaviour doesn't change without this file changing.** Record the change under [Changes since agreed](docs/spec-v1.md#changes-since-agreed) |
 | [`CONTEXT.md`](CONTEXT.md) | What the code **is today**: modules, interfaces, terms, invariants | You add or change a module, an interface, a term or an invariant. Use the spec's names |
 | [`docs/adr/`](docs/adr/) | **Why**, for choices that are hard to reverse | You make, or amend, a decision of that kind. Add a new numbered ADR or amend the existing one |
+| [`docs/math-guide.md`](docs/math-guide.md) | **How to use it**, for users: every form, key and setting, with examples. Shown in the app from ☰ → Math guide | Something a user types, sees or presses changes: a line form, a unit, a setting, a key or a message. Its examples run in CI, so a change that alters one fails `src/math/math-guide.test.ts` until the guide follows |
 
 Background investigations go in [`docs/research/`](docs/research/).
 
@@ -94,12 +95,14 @@ src/
 ├── overlay/      Typeset grids, the line edit, gestures, unit slot, suggestions
 ├── panel/        Sheet panel tabs: Format, Symbols, Variables, Problems, Constants, Settings
 ├── file/         The .excalimathpad file, save, open, recovery copy
+├── guide/        The Math guide: docs/math-guide.md as elements, and its dialog
 └── test/         jsdom stubs and helpers (not app code)
 plugin/           The Obsidian plugin: the only code that imports `obsidian`
 └── test/         The fake `obsidian`, the plugin's tests and the pump sheet fixture
 scripts/          The plugin's bundle audit, its browser runs and the version step
 docs/
 ├── spec-v1.md    The v1 spec
+├── math-guide.md The Math guide, for users, shown in the app
 ├── adr/          Architecture decision records
 ├── research/     Investigations behind decisions
 └── acceptance/   The pump-sizing acceptance sheet and its Python reference
@@ -134,6 +137,7 @@ These rules keep the architecture sound, and the tests check several of them. Pl
 - **Unit tests** sit next to the code, as `*.test.ts` or `*.test.tsx`.
 - **Tests against the real Excalidraw component** are named `*.excalidraw.test.tsx`. Use them when behaviour depends on Excalidraw's DOM or API, such as class names in More tools or undo steps.
 - **The pump sheet is in CI.** `src/math/pump-sizing.test.ts` reads its lines from [`docs/acceptance/pump-sizing.md`](docs/acceptance/pump-sizing.md) and checks every result to 4 significant figures against an independent Python reference. A change that alters a result there needs a very good reason.
+- **The Math guide is in CI.** `src/math/math-guide.test.ts` runs each section of [`docs/math-guide.md`](docs/math-guide.md) as one sheet: every `Write | Shows | Note` row (a Write cell in italics marks a row that isn't math, and is skipped) and every `sheet` code block, whose results follow `→`. It also fails on a link outside the guide. Write a Shows cell as the screen shows the result (`82.19 cm²`); `—` is an empty result cell, `` ● `message` `` an error and `` ⚠ `message` `` a warning.
 - **Fixing a bug?** Add a test that fails without the fix.
 
 ## Commit Messages

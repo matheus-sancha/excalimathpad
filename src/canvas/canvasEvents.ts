@@ -23,6 +23,7 @@
  * press, click, double-click or key there isn't the canvas's (M4d, section
  * 14, Panel controls that act on the open line): the gestures never hear it,
  * so a press in the panel doesn't leave the open line (`panelPresses.ts`).
+ * The Math guide's dialog, drawn there too, is the same (`isAppChrome`).
  *
  * **Touch** (M4d, section 4, Touch; verified in section 17):
  *
@@ -40,7 +41,17 @@
  *   handed over a task later, once Excalidraw has handled the release, as the
  *   browser's click would be; the browser's own click after a touch is ignored.
  */
+import { isInMathGuide } from '../guide/guideBox.ts'
 import { isInSheetPanel } from './panelPresses.ts'
+
+/**
+ * The app's own chrome drawn inside `root`: the Sheet panel, and the Math
+ * guide's dialog (section 8, M4d). A press, click, double-click, pointer move
+ * or key there isn't the canvas's.
+ */
+function isAppChrome(target: EventTarget | null): boolean {
+  return isInSheetPanel(target) || isInMathGuide(target)
+}
 
 export interface CanvasEventHandlers {
   /**
@@ -89,11 +100,11 @@ export function listenToCanvas(
     event.preventDefault()
   }
   const onDoubleClick = (event: MouseEvent) => {
-    if (!isInSheetPanel(event.target) && handlers.doubleClick(event)) take(event)
+    if (!isAppChrome(event.target) && handlers.doubleClick(event)) take(event)
   }
   const onPointerDown = (event: PointerEvent) => {
     handlers.anyPress?.(event)
-    if (!isInSheetPanel(event.target)) handlers.pointerDown(event)
+    if (!isAppChrome(event.target)) handlers.pointerDown(event)
   }
   const view = root.ownerDocument.defaultView ?? window
   // A touch's click is its release, a task later; the browser's own click after it is skipped.
@@ -107,14 +118,14 @@ export function listenToCanvas(
       tookTap = false
       return
     }
-    if (isInSheetPanel(event.target)) return
+    if (isAppChrome(event.target)) return
     view.setTimeout(() => handlers.click(event), 0)
   }
   const onClick = (event: MouseEvent) => {
     // A click that says what made it is trusted; one that doesn't (older WebKit) goes by the time.
     const kind = (event as PointerEvent).pointerType
     const touch = kind ? kind === 'touch' : event.timeStamp - tappedAt < TAP_CLICK_MS
-    if (!touch && !isInSheetPanel(event.target)) handlers.click(event)
+    if (!touch && !isAppChrome(event.target)) handlers.click(event)
   }
   // Excalidraw's double tap, followed: armed by a touch on the canvas, for `TAP_TWICE_MS`.
   let armed = false
@@ -138,13 +149,15 @@ export function listenToCanvas(
     armed = false
     view.clearTimeout(disarm)
   }
-  const onPointerMove = (event: PointerEvent) => handlers.pointerMove?.(event)
+  const onPointerMove = (event: PointerEvent) => {
+    if (!isInMathGuide(event.target)) handlers.pointerMove?.(event)
+  }
   // Not in capture: each child's own leave would reach it there too.
   const onPointerLeave = (event: PointerEvent) => handlers.pointerLeave?.(event)
   const onKeyDown = (event: KeyboardEvent) => {
     const target = event.target
     const onCanvas =
-      target === root.ownerDocument.body || (isNode(target) && root.contains(target) && !isInSheetPanel(target))
+      target === root.ownerDocument.body || (isNode(target) && root.contains(target) && !isAppChrome(target))
     if (onCanvas && handlers.keyDown(event)) take(event)
   }
 
