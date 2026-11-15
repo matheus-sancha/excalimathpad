@@ -30,8 +30,13 @@ come, and their terms move in here as each M4d issue makes them true.
   (`scripts/touch-run.mjs`, M4d, #147: the built plugin by touch, Playwright's
   `hasTouch`, at a phone and a tablet viewport, each as Android and as iOS,
   `navigator.platform` being what Excalidraw reads; the phone with
-  `Platform.isPhone`). CI installs Playwright's Chromium (the version
-  `package.json` pins) for the last three. The network-blocked run and the pop-out
+  `Platform.isPhone`), and the **follow run** (`scripts/follow-run.mjs`,
+  0.2.2, #191: the built plugin with real keys at 1366 × 768 and 1000 × 800;
+  it types the true-position plot line near the window's bottom, presses
+  Enter and Esc, and fails if any box around the math was scrolled by the
+  browser, if the content isn't drawn where the overlay put it, or if the
+  caret is outside the visible area). CI installs Playwright's Chromium (the
+  version `package.json` pins) for the last four. The network-blocked run and the pop-out
   run also open ☰ → Math guide in the built plugin (M4d, #148).
 - `docs/math-guide.md` — the **Math guide** (spec section 8, M4d, #148): every
   form, key and setting, for users, in 17 sections. Both builds turn it into
@@ -96,16 +101,22 @@ come, and their terms move in here as each M4d issue makes them true.
   a line or the title is open, it fills the panel's `quickKeys` (`QuickKeys`,
   inserting through the line relay as the Symbols tab does). With
   `vault.phone` the canvas draws the panel as the bottom sheet (`compact`
-  while something is open), and an edit moves the open line into the strip
-  above the sheet (`scrollClearAbove`), again as `visualViewport` or the
-  window resizes. The launch and a jump open and close the panel through the
+  while something is open). **The view follows the caret** (0.2.2, #191):
+  on each `onEdit` with a target, `followCaret` waits a frame, then scrolls
+  the canvas by `scrollIntoArea` so the open field's `caretRow` is inside
+  `visibleArea` less 48 px; again when the panel reports it opened during an
+  edit, and on a phone as `visualViewport` or the window resizes. Only while
+  the open field has the keyboard. The launch and a jump open and close the panel through the
   handle, so they work on the bottom sheet too.
   App imports none of the browser ports at run time, so
   the plugin's bundle holds none. `initialElements` gives tests a sheet.
   Depends on: shell, canvas, overlay, file.
 - **shell** (`src/shell/`) — full-viewport layout with three slots: `canvas`,
   `overlay` (stacked exactly over the canvas, pointer-transparent by default)
-  and `sidePanel` (docked right). Empty (falsy) slots render nothing. Neither
+  and `sidePanel` (docked right). Empty (falsy) slots render nothing. The
+  overlay slot is `overflow: clip` and is never scrolled (0.2.2, #191: the
+  browser scrolls a `hidden` box to show a focused field, which drew the math
+  away from its box); only the canvas's pan and zoom move its content. Neither
   slot sets a z-index (see Load-bearing). Interface: the `AppShell` props.
   Depends on: nothing.
 - **canvas** (`src/canvas/`) — everything that knows Excalidraw. `SheetCanvas`
@@ -183,9 +194,12 @@ come, and their terms move in here as each M4d issue makes them true.
   on the active tab, read on all) and its `title`, the error badge on
   Problems. The handle's `sheetPanel()` reads whether it is open and its tab,
   and `showSheetPanel(state)` opens it on a tab or closes it with that tab as
-  the one Math settings opens next. `selection.ts`'s `scrollClearOf` scrolls
-  an anchor clear of a floating panel (`NEVER`), and `scrollClearAbove` (M4d,
-  #147) a line into the strip above a phone's bottom sheet.
+  the one Math settings opens next. `selection.ts`'s `scrollIntoArea` is
+  the follow rule (0.2.2, #191): it scrolls the canvas the least distance
+  that puts a row inside an area less `FOLLOW_MARGIN` (48 px), centring a row
+  the area has no room for, with `NEVER`; `visibleArea` is the canvas less
+  the Sheet panel where it covers it (floating or docked), a phone's bottom
+  sheet and the keyboard (`visualViewport`).
   **The bottom sheet** (`BottomSheet.tsx`, M4d, #147): with `phone`,
   `SheetCanvas` draws the panel there instead of Excalidraw's `Sidebar`,
   portalled into `.excalidraw` (Excalidraw's theme, above the overlay), with
@@ -525,7 +539,9 @@ come, and their terms move in here as each M4d issue makes them true.
   null when the edit ends. The line and title fields carry
   `data-prevent-outside-click`, so a press in them keeps a floating panel, and
   turn off spelling, capitals and corrections.
-  Depends on: canvas (anchor, size, selection and layer contracts, API types),
+  `caretRow.ts` gives the follow rule its row (0.2.2, #191): the open
+  field's box, narrowed to the caret, measured on the field's hidden copy,
+  when the field is wider than the room. Depends on: canvas (anchor, size, selection and layer contracts, API types),
   math, `katex` (lazily).
 - **file** (`src/file/`) — the sheet file (ADR 0004, spec section 7).
   `sheetFormat.ts` (pure) reads and writes the `excalimathpad` block, settings

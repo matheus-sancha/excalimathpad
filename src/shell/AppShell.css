@@ -24,10 +24,16 @@
    canvas's own layers and the overlay's content then all stack in the
    stage's context, so overlay content can set a z-index that slots it
    *between* the canvas's layers (above Excalidraw's drawing, below its
-   toolbar). On a z-index tie, the overlay wins by coming later in the DOM. */
+   toolbar). On a z-index tie, the overlay wins by coming later in the DOM.
+
+   `clip`, not `hidden`: a hidden box is still scrolled by the browser to show
+   a focused field's caret, which drew the math away from its box (#191). Only
+   the canvas's pan and zoom move the overlay's content. `hidden` stays for a
+   browser without `clip`, where AppShell puts each scroll back. */
 .app-shell__overlay {
   pointer-events: none;
   overflow: hidden;
+  overflow: clip;
 }
 
 .app-shell__side-panel {

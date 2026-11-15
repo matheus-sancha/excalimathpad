@@ -1,5 +1,6 @@
 import { CaptureUpdateAction } from '@excalidraw/excalidraw'
 import type { ExcalidrawImperativeAPI } from '@excalidraw/excalidraw/types'
+import { SHEET_SIDEBAR_CLASS } from './panelPresses.ts'
 
 /**
  * Clears Excalidraw's selection, for the second Esc on a math element
@@ -31,43 +32,70 @@ export function jumpToAnchor(
   })
 }
 
+/** A box in px, in any one frame: the window's, here. */
+export interface Box {
+  left: number
+  top: number
+  right: number
+  bottom: number
+}
+
+/** How far inside the visible area the caret's row is kept (section 4, While editing a line). */
+export const FOLLOW_MARGIN = 48
+
 /**
- * Scrolls the view so the anchor sits clear of a floating Sheet panel whose
- * left edge is `clearRight` px from the canvas's left, centred in the strip
- * left of it (section 8, On a small window, M4d): only when the panel covers
- * part of it. No undo step. Returns whether it scrolled.
+ * The follow rule (docs/spec-v1.md section 4, While editing a line, 0.2.2,
+ * #191): when `row` isn't wholly inside `area` less the margin, the canvas
+ * scrolls the least distance that puts it there, up, down or sideways. Where
+ * the area is too small for the row and both margins, the margin gives way
+ * and the row is centred. No zoom change and no undo step. Returns whether it
+ * scrolled.
  */
-export function scrollClearOf(
-  api: Pick<ExcalidrawImperativeAPI, 'getSceneElements' | 'getAppState' | 'updateScene'>,
-  anchorId: string,
-  clearRight: number,
+export function scrollIntoArea(
+  api: Pick<ExcalidrawImperativeAPI, 'getAppState' | 'updateScene'>,
+  row: Box,
+  area: Box,
+  margin = FOLLOW_MARGIN,
 ): boolean {
-  const anchor = api.getSceneElements().find((element) => element.id === anchorId)
-  if (!anchor || clearRight <= 0) return false
-  const { scrollX, zoom } = api.getAppState()
-  const right = (anchor.x + anchor.width + scrollX) * zoom.value
-  if (right <= clearRight) return false
-  const next = clearRight / 2 / zoom.value - (anchor.x + anchor.width / 2)
-  api.updateScene({ appState: { scrollX: next }, captureUpdate: CaptureUpdateAction.NEVER })
+  const dx = leastShift(row.left, row.right, area.left, area.right, margin)
+  const dy = leastShift(row.top, row.bottom, area.top, area.bottom, margin)
+  // Under half a pixel is rounding, not a row out of place.
+  if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) return false
+  const { scrollX, scrollY, zoom } = api.getAppState()
+  api.updateScene({
+    appState: { scrollX: scrollX + dx / zoom.value, scrollY: scrollY + dy / zoom.value },
+    captureUpdate: CaptureUpdateAction.NEVER,
+  })
   return true
 }
 
+/** How far `from..to` moves to sit inside `low..high` less the margin: 0 when it does. */
+function leastShift(from: number, to: number, low: number, high: number, margin: number): number {
+  if (high <= low) return 0
+  if (to - from > high - low - 2 * margin) return (low + high) / 2 - (from + to) / 2
+  if (from < low + margin) return low + margin - from
+  if (to > high - margin) return high - margin - to
+  return 0
+}
+
 /**
- * Scrolls the view so a line whose box is `line` (px from the canvas's top)
- * sits in the strip above `clearBottom` (the bottom sheet's top, section 8, On
- * a phone, M4d), at its middle: only when the line isn't wholly in that strip.
- * No undo step. Returns whether it scrolled.
+ * The visible area (section 4, While editing a line): the canvas less the
+ * Sheet panel where it covers the canvas's right (floating, and docked too:
+ * Excalidraw draws its docked sidebar over the canvas) and, with `phone`, the
+ * bottom sheet; and less the on-screen keyboard, which is where the visual
+ * viewport ends.
  */
-export function scrollClearAbove(
-  api: Pick<ExcalidrawImperativeAPI, 'getAppState' | 'updateScene'>,
-  line: { top: number; bottom: number },
-  clearBottom: number,
-): boolean {
-  if (clearBottom <= 0 || (line.top >= 0 && line.bottom <= clearBottom)) return false
-  const { scrollY, zoom } = api.getAppState()
-  const by = clearBottom / 2 - (line.top + line.bottom) / 2
-  api.updateScene({ appState: { scrollY: scrollY + by / zoom.value }, captureUpdate: CaptureUpdateAction.NEVER })
-  return true
+export function visibleArea(root: HTMLElement, phone: boolean): Box {
+  const { left, top, right, bottom } = root.getBoundingClientRect()
+  const area = { left, top, right, bottom }
+  const panel = root.querySelector(`.${SHEET_SIDEBAR_CLASS}`)?.getBoundingClientRect()
+  if (panel && panel.width > 0 && panel.height > 0) {
+    if (phone) area.bottom = Math.min(area.bottom, panel.top)
+    else if (panel.left > area.left) area.right = Math.min(area.right, panel.left)
+  }
+  const viewport = root.ownerDocument.defaultView?.visualViewport
+  if (viewport) area.bottom = Math.min(area.bottom, viewport.offsetTop + viewport.height)
+  return area
 }
 
 /**

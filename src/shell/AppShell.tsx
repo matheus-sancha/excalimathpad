@@ -25,7 +25,13 @@ export function AppShell({ canvas, overlay, sidePanel }: AppShellProps) {
       <main className="app-shell__stage">
         <div className="app-shell__canvas">{canvas}</div>
         {overlay ? (
-          <div className="app-shell__overlay" data-testid="app-shell-overlay">
+          <div
+            className="app-shell__overlay"
+            data-testid="app-shell-overlay"
+            // Never scrolled (#191): `overflow: clip` sees to it; where a
+            // browser lacks it, a scroll is put back at once.
+            onScroll={(event) => event.currentTarget.scrollTo(0, 0)}
+          >
             {overlay}
           </div>
         ) : null}

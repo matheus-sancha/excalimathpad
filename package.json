@@ -21,7 +21,8 @@
     "test:blocked": "node scripts/blocked-run.mjs",
     "test:popout": "node scripts/popout-run.mjs",
     "test:touch": "node scripts/touch-run.mjs",
-    "check": "npm run lint && npm run test && npm run build && npm run audit:plugin && npm run test:blocked && npm run test:popout && npm run test:touch",
+    "test:follow": "node scripts/follow-run.mjs",
+    "check": "npm run lint && npm run test && npm run build && npm run audit:plugin && npm run test:blocked && npm run test:popout && npm run test:touch && npm run test:follow",
     "version": "node scripts/version.mjs"
   },
   "dependencies": {
