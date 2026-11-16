@@ -1,5 +1,5 @@
 // The follow run (docs/spec-v1.md section 4, While editing a line: the math
-// is always drawn on its box, and the view follows the caret; 0.2.2, #191):
+// is always drawn on its box, and the view follows the caret; 0.2.1, #191):
 // the built `dist-plugin/main.js` in headless Chromium against the fake
 // `obsidian`, with real keys and mouse.
 //

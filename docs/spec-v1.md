@@ -764,9 +764,9 @@ function's definition show none. Hover is screen-only.
   empty because the note is in the field.
 - The sheet re-runs on every keystroke. Every other line stays typeset and updates
   live.
-- **The math is always drawn on its box** (0.2.2, [#191](https://github.com/matheus-sancha/excalimathpad/issues/191)): nothing but the canvas's own
+- **The math is always drawn on its box** (0.2.1, [#191](https://github.com/matheus-sancha/excalimathpad/issues/191)): nothing but the canvas's own
   pan and zoom moves it. The overlay can't be scrolled by the browser.
-- **The view follows the caret** (0.2.2). When a line or the title opens, on Enter, on ↑ and
+- **The view follows the caret** (0.2.1). When a line or the title opens, on Enter, on ↑ and
   ↓, and while typing, if the caret's row isn't wholly inside the visible area less a 48 px
   margin, the canvas scrolls the least distance that puts it there: up, down or sideways.
   Otherwise nothing moves. There is no zoom change, no undo step, no animation, and no scroll
@@ -795,7 +795,7 @@ function's definition show none. Hover is screen-only.
   left edge to the visible area's right edge less the 48 px margin, measured when the line
   opens and kept until it closes (a pan or a resize during the edit doesn't re-wrap), and at
   least 240 px. If the element's left edge is out of view, or 240 px doesn't fit, the canvas
-  scrolls sideways by the follow rule (0.2.2,
+  scrolls sideways by the follow rule (0.2.1,
   [#191](https://github.com/matheus-sancha/excalimathpad/issues/191)). ↑ and ↓ move between
   the field's rows and leave the line only from its first or last row. Enter still splits the
   line; a pasted newline becomes a space. Typing in a Format tab field doesn't move the view.
@@ -1703,7 +1703,7 @@ The Problems badge sits on its icon. Format is the [Format tab](#format-tab) and
 - **On a small window** the same rule holds. The fields carry `data-prevent-outside-click`,
   so a press in them keeps the floating panel; a press on the canvas still closes it, and
   the next edit reopens it. If the open line would sit under the panel, the view scrolls it
-  clear by the [follow rule](#while-editing-a-line) (0.2.2): the least distance, with no
+  clear by the [follow rule](#while-editing-a-line) (0.2.1): the least distance, with no
   centring. A jump from the panel still centres its element.
 - **A press in the panel never leaves the line.** Its controls that act on the open line
   are no-focus buttons. A typed field in it (a filter) takes focus, and so leaves an open
@@ -1798,7 +1798,7 @@ above, by the editor's width (1229 px until M4e).
   taller, about half the view. Its ✕ closes it, as Math settings does. The tab contents are
   the same components.
 - The open-then-restore rule holds, and the view scrolls the open line into the space left
-  above the sheet and the keyboard by the [follow rule](#while-editing-a-line) (0.2.2): the
+  above the sheet and the keyboard by the [follow rule](#while-editing-a-line) (0.2.1): the
   least distance, with no centring.
 - Buttons for a finger are at least 40 px. The quick keys sit in the order
   `_ ^ = ( ) * / , ..` then the quotes.
@@ -2362,7 +2362,7 @@ touch in [section 4](#touch). Research: [`docs/research/obsidian-plugin.md`](res
 - **Betas through BRAT:** releases before the listing are installed by Matheus through BRAT, on
   the work laptop and his devices, and carry `isDesktopOnly: false` so the device checklist can
   run on them. Fixes ship as `0.1.x`.
-- **To 1.0.0** (M4e): `0.2.1` and `0.2.2` are fixes. M4e ships as the beta `0.3.0` through
+- **To 1.0.0** (M4e): `0.2.1` is a fix release (#179 and #191). M4e ships as the beta `0.3.0` through
   BRAT, M5 follows, and the release after it is `1.0.0`, the version submitted to the
   community list ([Listing](#listing)). A sheet saved by `0.3.0` or later is format 2, which
   `0.2.x` refuses ([section 7](#the-file)), so every device takes the beta before one saves.
@@ -2920,7 +2920,7 @@ Evidence: [`obsidian-plugin.md`](research/obsidian-plugin.md).
   step, so `formats` is a string, as `titleFormat` is.
 - **The docking width** passed to Excalidraw (`UIOptions.dockedSidebarBreakpoint`) and the
   app's own must be one value, or the panel docks where the app thinks it floats.
-- **The overlay never scrolls** (`overflow: clip`, 0.2.2): the canvas's pan is the only thing
+- **The overlay never scrolls** (`overflow: clip`, 0.2.1): the canvas's pan is the only thing
   that moves the math. `overflow: hidden` isn't enough: the browser still scrolls a hidden box to
   show a focused field's caret. The follow run (`scripts/follow-run.mjs`, `npm run test:follow`)
   fails if any box around the math has been scrolled.
@@ -3117,8 +3117,8 @@ last, once everything is merged, then the plugin is submitted.
 **M4e's issue order** (added on 2026-11-15 from Matheus's third batch, six items found building a
 true-position sheet on his work laptop, on the map
 [Spec for the third improvements batch and M5 Print, to 1.0.0](https://github.com/matheus-sancha/excalimathpad/issues/172); M4d's fifteen build
-issues are built, #135 to #149; built before M5). Two fixes come first, outside the milestone: `0.2.1`
-(#179, released) and `0.2.2` (#191), which the fifth issue needs.
+issues are built, #135 to #149; built before M5). Two fixes come first, outside the milestone, released
+together as `0.2.1`: #179, and #191, which the fifth issue needs.
 
 1. Documents: a reading route, `CONTEXT.md` by module, the spec's history (#192)
 2. Unexpected failures stay small (#193)
@@ -3228,7 +3228,7 @@ check goes with it.
 - M4e was decided from prototypes run in headless Chromium and from screenshots: nothing was run inside
   Obsidian or on a device ([section 17](#17-verify-first)).
 - M5's route in Obsidian rests on the system dialog honouring `@page`, unverified until #81's first step.
-- Whether the overlay fix of `0.2.2` is what Matheus saw as the chart "spilling out of its box" is not
+- Whether the overlay fix of `0.2.1` is what Matheus saw as the chart "spilling out of its box" is not
   confirmed until he looks again.
 
 Decided in: [milestones](https://github.com/matheus-sancha/excalimathpad/issues/37),
@@ -3615,7 +3615,7 @@ Changes line if it changes behaviour.
 - The savings of the plugin cuts (87 KB, about 148 KB and 109 KB) were probed as separate
   bundles or read from the source, not measured together.
 - The plugin's start-up time in Obsidian, on the work laptop and one phone.
-- That the overlay scrolling (0.2.2) is what Matheus saw as the chart "spilling out of its
+- That the overlay scrolling (0.2.1) is what Matheus saw as the chart "spilling out of its
   box" is not confirmed: he looks again on the beta.
 
 **M6**
@@ -4207,7 +4207,7 @@ Changes line if it changes behaviour.
 - 2026-11-15, [section 12a](#listing) (#149, agreed by Matheus on the screenshot he took): **the listing's
   screenshot shows the panel on Variables,** not Format, in Obsidian's dark theme with the sheet light.
   Matheus kept the screenshot as taken rather than retaking it. It is retaken only when the look changes a lot.
-- 2026-11-15, [section 13](#13-messages) (#179, a hotfix released as 0.2.1, for Matheus to confirm on the PR):
+- 2026-11-15, [section 13](#13-messages) (#179, a hotfix released in 0.2.1, for Matheus to confirm on the PR):
   **a complex value with a unit is a line error,** `a complex value with a unit can't be shown`, alone
   (`z = (3 + 4i) mm`, which showed math.js's own wording) or in a list (`r_t cos(theta) i`, the half-typed
   state of `… in mm`, which took the sheet down). Its value still reaches the lines below, and a complex
@@ -4259,7 +4259,7 @@ Changes line if it changes behaviour.
       shows `The pages couldn't be built, so nothing was printed.`; the plugin may set the window's title
       while the dialog is open; the frame's styles pass the audit; the web app may share the frame; the Page
       row fits at 280 px.
-    - *Follow and wrap (with `0.2.2`):* the scroll isn't animated; a pan by hand is left alone until the
+    - *Follow and wrap (with `0.2.1`):* the scroll isn't animated; a pan by hand is left alone until the
       caret next moves; a too-small visible area centres the row; the suggestion list doesn't move the view;
       a Format tab field doesn't move the view; the wrap width is measured once.
     - *Cuts:* math.js's help texts and Plot by name reach the web app too; 150 ms is the plugin's own figure
@@ -4269,7 +4269,7 @@ Changes line if it changes behaviour.
       after M5 (#203), not by M4e's last issue, since M5 adds code; the prototypes under `docs/research/` are
       deleted by the first issue; the true-position reference values (`TP` 0.1887 mm, `used` 75.47,
       `margin` 0.06132 mm) were worked by hand, not run.
-- 2026-11-15, [sections 4](#while-editing-a-line) and [8](#8-app-chrome) ([#191](https://github.com/matheus-sancha/excalimathpad/issues/191), a fix released as 0.2.2; the rule
+- 2026-11-15, [sections 4](#while-editing-a-line) and [8](#8-app-chrome) ([#191](https://github.com/matheus-sancha/excalimathpad/issues/191), a fix released in 0.2.1; the rule
   agreed by Matheus in [#190](https://github.com/matheus-sancha/excalimathpad/issues/190)): **the math is always
   drawn on its box, and the view follows the caret.**
   - **The overlay can't be scrolled by the browser.** It was `overflow: hidden`, which the browser still scrolls
@@ -4294,3 +4294,8 @@ Changes line if it changes behaviour.
     - *Where a browser has no `overflow: clip`* the overlay stays `hidden` and each scroll is put back at once.
   - **Not verified:** Obsidian itself, a phone's real keyboard, Firefox and Safari. The follow run is headless
     Chromium at 1366 × 768 and 1000 × 800 against the built plugin; the phone's bottom sheet is the touch run's.
+- 2026-11-16, [section 12a](#releases) (found at the release, agreed by Matheus): **the two fixes are one
+  release, `0.2.1`.** The crash fix (#179) was merged but never released by itself, so the Release button's
+  patch after the overlay fix ([#191](https://github.com/matheus-sancha/excalimathpad/issues/191)) made `0.2.1`
+  with both in it. Every "0.2.2" in this spec, `CONTEXT.md` and the code's comments now reads 0.2.1; there is no
+  0.2.2. The issues and the pull request for #191 still say 0.2.2 in their titles and text.

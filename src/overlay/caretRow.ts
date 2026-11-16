@@ -8,7 +8,7 @@ export interface RowBox {
 
 /**
  * The caret's row, for the follow rule (docs/spec-v1.md section 4, While
- * editing a line, 0.2.2, #191): the open field's box. A field wider than
+ * editing a line, 0.2.1, #191): the open field's box. A field wider than
  * `room` can't be wholly in view, so its row narrows to the caret: the field
  * doesn't wrap until M4e, and the view then follows the caret sideways.
  *

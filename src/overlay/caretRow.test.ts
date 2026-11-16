@@ -18,7 +18,7 @@ function fieldOf(text: string, box: DOMRect, caret: number) {
   return field
 }
 
-describe('caretRow (docs/spec-v1.md section 4, While editing a line: the view follows the caret, 0.2.2)', () => {
+describe('caretRow (docs/spec-v1.md section 4, While editing a line: the view follows the caret, 0.2.1)', () => {
   it('is the field’s box when the field fits the room', () => {
     expect(caretRow(fieldOf('a = 2 m', rect(100, 180), 3), 900)).toEqual({ left: 100, top: 300, right: 180, bottom: 324 })
   })
