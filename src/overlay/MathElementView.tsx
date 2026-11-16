@@ -24,11 +24,9 @@ import {
   type TypesetLine,
 } from '../math/evaluate.ts'
 import {
-  caretAfterFormat,
   NO_FORMAT,
   readLine,
-  writeCommentFormat,
-  writeFormat,
+  withFormat,
   type CommentFormat,
   type LineFormat,
 } from '../math/lineForm.ts'
@@ -54,8 +52,12 @@ export interface MathElementViewProps {
   /** The sheet's line edit, when it is in this element. */
   edit: LineEdit | null
   onType: (text: string) => void
-  /** The app rewrote the open line's text (a format key): one line commit. */
-  onRewrite: (text: string, caret: number) => void
+  /** The open line's stored format (section 3, Where a line's format lives, M4e); empty for none. */
+  stored?: string
+  /** A format key on the open math line: its new plain format, written as the Format tab writes it. */
+  onFormat?: (format: LineFormat) => void
+  /** The same on a comment line. */
+  onCommentFormat?: (format: CommentFormat) => void
   onMove: (move: LineMove) => void
   onEscape: () => void
   onBlurLine: (lineIndex: number) => void
@@ -133,7 +135,9 @@ export function MathElementView({
   lines,
   edit,
   onType,
-  onRewrite,
+  stored = '',
+  onFormat = () => {},
+  onCommentFormat = () => {},
   onMove,
   onEscape,
   onBlurLine,
@@ -211,7 +215,7 @@ export function MathElementView({
                   key={flashing ? `${i}:${flash.key}` : i}
                   className={`math-element__row is-${open ? 'editing' : line.typeset.kind}${
                     open
-                      ? formatClasses(formatOf(edit.text))
+                      ? formatClasses(formatOf(withFormat(edit.text, stored)))
                       : line.typeset.kind === 'math'
                         ? formatClasses(line.typeset.format)
                         : line.typeset.kind === 'comment'
@@ -228,7 +232,9 @@ export function MathElementView({
                       warnings={line.warnings}
                       isEmpty={isEmpty}
                       onType={onType}
-                      onRewrite={onRewrite}
+                      stored={stored}
+                      onFormat={onFormat}
+                      onCommentFormat={onCommentFormat}
                       onMove={onMove}
                       onEscape={onEscape}
                       onBlur={() => onBlurLine(i)}
@@ -897,7 +903,9 @@ interface EditingRowProps {
   warnings: readonly string[]
   isEmpty: boolean
   onType: (text: string) => void
-  onRewrite: (text: string, caret: number) => void
+  stored: string
+  onFormat: (format: LineFormat) => void
+  onCommentFormat: (format: CommentFormat) => void
   onMove: (move: LineMove) => void
   onEscape: () => void
   onBlur: () => void
@@ -910,34 +918,30 @@ interface EditingRowProps {
  * text shares the field's cell, so the column widens as you type, and the
  * element with it, without the field's value ever being set from code.
  */
-function EditingRow({ edit, result, warnings, isEmpty, onRewrite, ...field }: EditingRowProps) {
+function EditingRow({ edit, result, warnings, isEmpty, stored, onFormat, onCommentFormat, ...field }: EditingRowProps) {
   const fieldRef = useRef<HTMLInputElement>(null)
-  const form = readLine(edit.text)
+  // The line's format is its stored one, behind any clause typed in the text.
+  const form = readLine(withFormat(edit.text, stored))
 
   // Ctrl+B, Ctrl+U and, on a comment line, Ctrl+I (section 4, While editing a
-  // line): the clause is written into the line's text as one line commit. The
-  // caret keeps its place (`caretAfterFormat`). A blank line takes no format.
-  const rewrite = (text: string) => {
-    if (text === edit.text) return
-    onRewrite(text, caretAfterFormat(edit.text, text, fieldRef.current?.selectionStart ?? text.length))
-  }
+  // line): a press in the Format tab, so the line's stored format is written
+  // and its text is left alone. A blank line takes no format.
   const onFormatKey =
     form.kind === 'code'
       ? (key: FormatKey) => {
           // Ctrl+I does nothing on a math line.
-          if (key === 'b') rewrite(writeFormat(edit.text, { ...form.format, bold: !form.format.bold }))
-          if (key === 'u') rewrite(writeFormat(edit.text, { ...form.format, underline: !form.format.underline }))
+          if (key === 'b') onFormat({ ...form.format, bold: !form.format.bold })
+          if (key === 'u') onFormat({ ...form.format, underline: !form.format.underline })
         }
       : form.kind === 'comment'
-        ? (key: FormatKey) => {
-            const next =
+        ? (key: FormatKey) =>
+            onCommentFormat(
               key === 'b'
                 ? { ...form.format, bold: !form.format.bold }
                 : key === 'u'
                   ? { ...form.format, underline: !form.format.underline }
-                  : { ...form.format, upright: !form.format.upright }
-            rewrite(writeCommentFormat(edit.text, next))
-          }
+                  : { ...form.format, upright: !form.format.upright },
+            )
         : null
 
   return (
@@ -981,7 +985,8 @@ interface LineFieldProps {
  * The line being edited. It takes only what the user types: setting the value
  * from code clears the browser's text undo, so it is uncontrolled. Each line
  * gets its own field, which is why that text undo starts fresh on each line; a
- * format press or key rewrites the text, so it mounts a new field too. Its
+ * format press writes the line's stored format and leaves the field alone,
+ * and mounts a new one only when it moved a typed clause out of the text. Its
  * Ctrl+Z never reaches the sheet's undo, because Excalidraw only hears keys
  * inside its own container.
  */

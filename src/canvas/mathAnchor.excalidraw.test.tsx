@@ -188,6 +188,87 @@ describe('a title’s format on real Excalidraw (M4c, #111)', () => {
   })
 })
 
+// docs/spec-v1.md sections 7 and 14 (M4e, #195): a line's format is stored
+// beside its source, as a string, and the two change in one write.
+describe('a line’s format beside its source on real Excalidraw (M4e, #195)', () => {
+  const FORMATS = '@bold\n@text-red if I > 1 mA'
+
+  it('writes source and formats in one write: one undo step, undone and redone together', async () => {
+    const { api, canUndo, undo, redo, sourceOf } = await mount()
+    const data = () => api.getSceneElements().find((element) => element.id === 'm1')!.customData
+    let wrote = false
+    act(() => {
+      wrote = writeAnchorSource(api, 'm1', 'R = 10 kohm\nI = 4 mA', FORMATS)
+    })
+    expect(wrote).toBe(true)
+    expect(data()).toEqual({ kind: 'math', source: 'R = 10 kohm\nI = 4 mA', formats: FORMATS })
+    expect(toMathAnchor(api.getSceneElements()[0]).formats).toBe(FORMATS)
+
+    undo()
+    await waitFor(() => expect(sourceOf()).toBe(SOURCE))
+    expect(data()).not.toHaveProperty('formats')
+    expect(canUndo()).toBe(false)
+
+    redo()
+    await waitFor(() => expect(sourceOf()).toBe('R = 10 kohm\nI = 4 mA'))
+    expect(data()?.formats).toBe(FORMATS)
+  })
+
+  it('a format alone is one step, and it adds no step to later writes of the anchor', async () => {
+    const { api, canUndo, undo, sourceOf, write } = await mount()
+    const formats = () => api.getSceneElements().find((element) => element.id === 'm1')!.customData?.formats as unknown
+    act(() => {
+      writeAnchorSource(api, 'm1', SOURCE, FORMATS)
+    })
+    // A source write that says nothing of the formats keeps them.
+    write('a = 1\nb = 2')
+    expect(formats()).toBe(FORMATS)
+    act(() => {
+      writeAnchorTitle(api, 'm1', 'Inputs')
+    })
+
+    undo()
+    await waitFor(() => expect(api.getSceneElements()[0].customData).not.toHaveProperty('title'))
+    undo()
+    await waitFor(() => expect(sourceOf()).toBe(SOURCE))
+    expect(formats()).toBe(FORMATS)
+    undo()
+    await waitFor(() => expect(formats()).toBeUndefined())
+    // A nested object here would have left an empty step behind (#111).
+    expect(canUndo()).toBe(false)
+  })
+
+  it('writes nothing for no change, and no format at all stores no key', async () => {
+    const { api, canUndo } = await mount()
+    const data = () => api.getSceneElements().find((element) => element.id === 'm1')!.customData
+    let wrote = true
+    act(() => {
+      wrote = writeAnchorSource(api, 'm1', SOURCE, '')
+    })
+    expect(wrote).toBe(false)
+    expect(canUndo()).toBe(false)
+
+    act(() => {
+      writeAnchorSource(api, 'm1', SOURCE, FORMATS)
+    })
+    act(() => {
+      wrote = writeAnchorSource(api, 'm1', SOURCE, FORMATS)
+    })
+    expect(wrote).toBe(false)
+    act(() => {
+      writeAnchorSource(api, 'm1', SOURCE, '')
+    })
+    expect(data()).toEqual({ kind: 'math', source: SOURCE })
+  })
+
+  it('reads anything but a string as no format', async () => {
+    const { api } = await mount()
+    const [anchor] = api.getSceneElements()
+    expect(toMathAnchor(anchor).formats).toBe('')
+    expect(toMathAnchor(newElementWith(anchor, { customData: { ...anchor.customData, formats: ['@bold'] } })).formats).toBe('')
+  })
+})
+
 describe('writeAnchorSource after a change Excalidraw did not capture', () => {
   async function mountSelected() {
     const mounted = await mount()
@@ -319,6 +400,39 @@ describe('a copied anchor keeps its source', () => {
     expect(sourceOf('m1')).toBe(SOURCE)
   })
 
+  // Section 3, Where a line's format lives (M4e): the element carries every line's format.
+  it('and every line’s format, through Ctrl+D', async () => {
+    const { api, container, select, focusCanvas } = await mount()
+    act(() => {
+      writeAnchorSource(api, 'm1', SOURCE, '@bold\n@text-red if I > 1 mA')
+    })
+    select()
+    focusCanvas()
+
+    fireEvent.keyDown(container, { key: 'd', code: 'KeyD', ctrlKey: true })
+    await waitFor(() => expect(api.getSceneElements()).toHaveLength(2))
+
+    const copy = api.getSceneElements().find((e) => e.id !== 'm1')!
+    expect(copy.customData).toEqual({ kind: 'math', source: SOURCE, formats: '@bold\n@text-red if I > 1 mA' })
+    expect(toMathAnchor(copy).formats).toBe('@bold\n@text-red if I > 1 mA')
+  })
+
+  it('and every line’s format, through copy and paste', async () => {
+    const { api, container, select, focusCanvas } = await mount()
+    act(() => {
+      writeAnchorSource(api, 'm1', SOURCE, '@bold\n@text-red if I > 1 mA')
+    })
+    document.elementFromPoint = () => container.querySelector('canvas')
+    select()
+    focusCanvas()
+
+    await copyAndPaste()
+
+    await waitFor(() => expect(api.getSceneElements()).toHaveLength(2))
+    const copy = api.getSceneElements().find((e) => e.id !== 'm1')!
+    expect(copy.customData).toEqual({ kind: 'math', source: SOURCE, formats: '@bold\n@text-red if I > 1 mA' })
+  })
+
   it('through copy and paste, under a new id', async () => {
     const { api, container, select, focusCanvas } = await mount()
     // jsdom has no layout. Excalidraw pastes only with the canvas under the cursor.
@@ -326,6 +440,15 @@ describe('a copied anchor keeps its source', () => {
     select()
     focusCanvas()
 
+    await copyAndPaste()
+
+    await waitFor(() => expect(api.getSceneElements()).toHaveLength(2))
+    const copy = api.getSceneElements().find((e) => e.id !== 'm1')!
+    expect(copy.customData).toEqual({ kind: 'math', source: SOURCE })
+  })
+
+  /** A copy and a paste as the browser sends them, over one clipboard. */
+  async function copyAndPaste() {
     const clipboard = new Map<string, string>()
     const clipboardData = {
       setData: (type: string, value: string) => void clipboard.set(type, value),
@@ -349,11 +472,7 @@ describe('a copied anchor keeps its source', () => {
       document.dispatchEvent(clipboardEvent('paste'))
       await new Promise((resolve) => setTimeout(resolve, 200))
     })
-
-    await waitFor(() => expect(api.getSceneElements()).toHaveLength(2))
-    const copy = api.getSceneElements().find((e) => e.id !== 'm1')!
-    expect(copy.customData).toEqual({ kind: 'math', source: SOURCE })
-  })
+  }
 })
 
 // docs/spec-v1.md section 14: `#ffffff01` counts as not transparent for hit-testing.

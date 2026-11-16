@@ -72,11 +72,11 @@ One name per concept, used the same in conversation, code, tests, docs and the U
 | **Sheet** | All live math elements in reading order, plus drawings and settings. The unit of evaluation |
 | **Reading order** | By the top of each anchor's visual bounds, then its left, then its id. Derived, never stored |
 | **Math element** | A block of source lines anchored at a scene position, shown as a typeset grid |
-| **Anchor** | The marked Excalidraw rectangle that carries a math element. Its `customData` holds `kind`, `source` and, each optional, `title`, `titleFormat` and `width` |
+| **Anchor** | The marked Excalidraw rectangle that carries a math element. Its `customData` holds `kind`, `source` and, each optional, `title`, `titleFormat`, `width` and, from M4e, `formats` |
 | **Line** | One string of an element's source: one statement. See [section 3](#3-sheet-lines-every-form) for its forms |
 | **Typeset row** | One line on screen: *gutter · equation (name · `≔` · expression, plus guess, search range or step) · result · note* |
 | **Line edit** | The one line shown as raw source, held as *anchor id + line index*. UI state |
-| **Line commit** | The moment an edit leaves a line whose text differs from the scene. Writes the source once |
+| **Line commit** | The moment an edit leaves a line whose text differs from the scene. Writes the source once and, from M4e, the line's stored format with it |
 | **Result** | What a line computes: a value with unit, a list, an error, or empty |
 | **Shown result** | A result as displayed: in its display unit, else in the unit system, with Digits applied |
 | **Plain input** | A line whose right side is a literal (`D = 102.3 mm`). Its result cell stays empty |
@@ -105,7 +105,7 @@ One name per concept, used the same in conversation, code, tests, docs and the U
 | **Series, mark** | One list drawn on a plot; a value of the x kind drawn as a guide, dot and label |
 | **Comment line, note** | A line starting with `#`; the text after `#` on a line with code |
 | **Formatted comment line** | A line whose code is only a format clause, followed by comment text: `@bold @L # Pumps` (M4d) |
-| **Format** | A line's `@` words, after its code and before its note: bold, underline, one text colour, one highlight. A comment line's also take italic off and a size (M4d) |
+| **Format** | A line's `@` words, after its code and before its note: bold, underline, one text colour, one highlight. A comment line's also take italic off and a size (M4d). From M4e it is stored beside the line, not in its text ([section 3](#3-sheet-lines-every-form)) |
 | **Plain format, rule** | A format word with no `if`, which always applies; `@word if <condition>`, which applies while its condition is true |
 | **Joined word** | Several format words joined by `+` with no spaces, read as one word: `@text-red+red+bold` (M4d). One rule with one condition |
 | **Conditional** | `cond ? a : b` or `if(cond, a, b)`: a value chosen by a condition, only the branch taken run (M4d) |
@@ -334,6 +334,20 @@ holds for a math line and a comment line alike.
   of the stored one. Rules run after the line, in the same scope, as before.
 - The open line shows no marker for a stored format: the Format tab and the typeset row show
   it.
+- **What counts as committed.** The clause moves out when the edit leaves the line: ↑ / ↓,
+  Enter, Backspace at the start, a click elsewhere, Esc, Done. A save while the line is still
+  open (Ctrl+S, a vault's autosave) writes the text as typed, the clause still in it, so
+  typing isn't cut short; the clause moves out when the edit then leaves the line. A line
+  that holds a clause in its text (a hand-edited file) is put right the same way, the first
+  time an edit leaves it, typed or not.
+- **Enter with a clause typed in the line:** a clause before the caret goes to the first
+  half's format. Text after the caret is the new line's own, read as typed, so
+  `a = 1│ @L # Results` leaves `a = 1` and a new comment line `# Results` in the L size.
+- **Backspace with a clause typed in the lower line:** it is read on the joined line, and
+  moves out in front of the format the joined line keeps.
+- A format is kept for whatever its line holds: on a line emptied to a blank it formats
+  nothing, and shows again once the line has code or comment text.
+- A line that doesn't parse shows as its text, which doesn't hold the stored clause.
 
 | Word, on a comment line | Sets | Without it |
 |---|---|---|
@@ -391,7 +405,8 @@ v = Q / A @bold @text-red if v > 3 m/s @text-orange if v > 2 m/s # check
 - On a list or a table a rule is tested per point ([section 10](#ranges-and-lists)).
 - Rules are typed, in the line. From M4d the Format tab's **Rules list**
   ([section 4](#rules-list)) adds, removes, reorders and formats them, writing the same
-  clause; the condition is always typed in the line.
+  clause; the condition is always typed in the line. From M4e the clause it writes is the
+  line's stored format, and a typed rule moves there when the line is committed.
 
 **Conditionals and text** (M4d)
 
@@ -447,7 +462,10 @@ Q_op = solve Hp(Q) = Hs(Q), for Q = 1 L/s .. 30 L/s in L/s
 2. **Format:** take off everything from the first `@` outside a string: the format
    words (from M4d, `+`-joined words too) and, from M4c, each word's `if <condition>`.
    math.js rejects `@`, so a clause can never be read as code. A condition goes to
-   math.js on its own, after the line has run.
+   math.js on its own, after the line has run. From M4e the line's stored clause is read
+   with it, after any clause found in the text: a plain word in the text replaces what the
+   stored clause says of the same property, and the text's rules come before the stored
+   ones.
 3. **Display unit:** take off a trailing top-level `in` or `to` whose target is a
    pure unit. The target is read outside the sheet's scope, so a variable named `K`
    doesn't change what `in K` means. A conversion inside the expression
@@ -463,7 +481,9 @@ Q_op = solve Hp(Q) = Hs(Q), for Q = 1 L/s .. 30 L/s in L/s
 **Rules for what the app writes:** the unit slot, the plot popover and the Format tab
 (before M4d, the format bar) write before the `#`, so a line reads
 `D = 102.3 mm in cm @bold # 4" Sch 40`. The slot and the popover don't put the line in
-source. Each write is one line commit.
+source. Each write is one line commit. From M4e the Format tab writes the same words, in the
+same order, into the line's stored clause, not its text: the line reads `D = 102.3 mm in cm
+# 4" Sch 40`, and `@bold` is stored beside it.
 
 - The Format tab writes a math line's plain words in a fixed order,
   `@bold @underline @text-<name> @<highlight>`, and then every rule.
@@ -1045,6 +1065,14 @@ line commit that keeps the line open with its caret in the code
 on a comment line, which has no code, the caret keeps its place in the comment text, moving
 with the `#` (#144). A title press is one step. Pressing a pressed button takes that format off.
 
+**From M4e a line press writes the line's stored format** ([section 3](#3-sheet-lines-every-form)),
+with the line's typed text, in one write: one undo step. It doesn't touch the open field: its
+text, its caret and its own Ctrl+Z stay as they were. Ctrl+B, Ctrl+U and Ctrl+I in the field are
+the same press. One case rewrites the field: plain words typed in the line (`@red`, not yet
+committed, or in a hand-edited file) move out with the press, so the buttons and the line agree;
+the field is then mounted again with the caret in the code, as in M4d. A rule being typed in the
+line stays there.
+
 ### Rules list
 
 From M4d, on a math line only, under the Format tab's rows. Its header says "first true wins,
@@ -1066,6 +1094,20 @@ the line's text no longer holds the format ([section 3](#3-sheet-lines-every-for
 - Add, remove, reorder and each format change write the line's stored format, one undo step
   each, and never touch the line's text or its caret.
 - At the panel's least width a long condition's field scrolls sideways; the colour rows wrap.
+
+**Until the condition's field is built** (#197; the stored format is #195) a condition stays
+read-only in the list and is typed in the line, as in M4d:
+
+- **+ Add rule** types ` @text-red if <name> ` into the line, the caret after it, and opens the
+  new rule's controls. The rule is the line's text until the line is committed; it then moves
+  in front of the stored rules, so it is first in priority, not last.
+- The list shows the rules typed in the line first, then the stored ones. A press on a typed
+  rule (its format, ✕, or ↑ ↓ among typed rules) rewrites it in the line and puts the caret back
+  at the end of its condition, so the condition can still be typed. A press on a stored rule
+  writes the stored format and leaves the line alone. Moving a stored rule above a typed one
+  moves every rule out of the line.
+- A click on a stored rule's condition does nothing: to change it, remove the rule and add
+  it again.
 
 What follows describes M4d, and still holds where M4e doesn't replace it.
 
@@ -1426,8 +1468,12 @@ Excalidraw's own selection steps, and a nudge or Link edit that a line commit fo
   automatic. Excalidraw's resize and the stored width land in the same step.
 - **A format from the Format tab, its Rules list or a format key** (before M4d, the bar) is
   one line commit too, written at once with the line's typed text, so each press is one
-  step. The line stays open. The field's text undo starts fresh after it, because the app
-  rewrote the field.
+  step. The line stays open. Until M4e the field's text undo starts fresh after it, because
+  the app rewrote the field; from M4e the press writes the stored format and leaves the
+  field alone, so its text undo is kept, except where the press moved a typed clause out of
+  the line ([section 4](#format-tab)).
+- **A line's text and its stored format are one write** (M4e): a commit that moves a typed
+  clause out, an Enter and a join are each one step, and undo puts both back.
 - **An insert from the Symbols tab, the Constants tab or a quick key** (M4d) is typing:
   one step of the field's own Ctrl+Z, and part of the line's one commit.
 - **Redo** (Ctrl+Y, Ctrl+Shift+Z) is Excalidraw's own and mirrors undo.
@@ -1493,27 +1539,35 @@ app and a vault unchanged.
   separated by `\n`, each entry the line's clause as it was written in the line (`@bold`,
   `@text-green if result == "Pass" @text-red if result == "Fail"`), empty for a line with
   none. It is a string for the reason `titleFormat` is. An anchor whose lines have no format
-  stores no `formats` key. A reader pads or cuts the entries to the number of lines.
+  stores no `formats` key. A reader pads or cuts the entries to the number of lines. An entry
+  that doesn't start with `@` is read as none, and a `#` ends an entry: neither can come from
+  the app, only from a hand-edited file.
 - `source` and `formats` change in one write, so a commit, an Enter, a join or a press in the
   Format tab is one undo step.
 - **On open, a format 1 sheet is migrated in memory:** each line's clause moves from its text
   into `formats`. The file changes at the next save, and opening alone doesn't make the sheet
   dirty. The migration runs on every open path: Open…, a dropped file, a vault file, an
-  outside change read back, and the recovery copy.
+  outside change read back, and the recovery copy. The math and the note stay as typed; one
+  space stands between them where the clause was. An element whose lines hold no clause is
+  left exactly as it was. A drawing with no block opens as format 1, so it is migrated too.
+- **A format 2 file can still hold a clause in a line's text:** a hand-edited file, or a
+  save made while that line was open. It is read in front of the stored clause
+  ([section 3](#3-sheet-lines-every-form)) and moves out when an edit next leaves the line.
 - **A format 2 sheet is refused by 0.2.x** with "This sheet was saved by a newer
   Excalimathpad. Update the app.", so an older app never overwrites it. In a vault synced
   between devices, every device needs 1.0.0 before one of them saves.
-- The example below shows format 1; from M4e `"format"` is `2`.
+- The example below shows format 2. In format 1 the block says `"format": 1`, there is no
+  `formats` key, and the first line's text is `D = 102.3 mm @bold`.
 
 ```json
 {
   "type": "excalidraw",
   "version": 2,
-  "elements": [ { "customData": { "kind": "math", "source": "D = 102.3 mm\n…" } } ],
+  "elements": [ { "customData": { "kind": "math", "source": "D = 102.3 mm\n…", "formats": "@bold\n…" } } ],
   "appState": { },
   "files": { },
   "excalimathpad": {
-    "format": 1,
+    "format": 2,
     "settings": {
       "units": { "system": "si-prefixed", "custom": { "pressure": "bar" } },
       "digits": 4,
@@ -1544,6 +1598,8 @@ app and a vault unchanged.
   as Save as and suggests `<name>.excalimathpad`, so the drawing file keeps its own format.
 - The file on disk changes only when you save, as in Mathcad.
 - **Saving during a line edit** commits the line first, as a line commit, and the line stays open.
+  From M4e a clause typed in that line is saved in its text, and moves to the line's stored
+  format when the edit leaves the line ([section 3](#3-sheet-lines-every-form)).
 - **A failed save** (permission refused, a disk error) shows a message and leaves the sheet dirty.
 - **Unsaved changes** show as `●` before the file name. Closing the tab or window with
   unsaved changes asks to confirm.
@@ -2996,9 +3052,21 @@ Evidence: [`obsidian-plugin.md`](research/obsidian-plugin.md).
   ([section 12a](#releases)): `npm run test:probe` (`src/oddValues.probe.tsx`, about 40,000
   sheets), a line of the release checklist. It fails as the typing test does.
 - **The format migration** is tested on every open path, the recovery copy included, and on a
-  hand-edited file with a clause both in the text and stored.
+  hand-edited file with a clause both in the text and stored: the step itself, every format
+  word, comment lines, rules, titles and the pump sheet in `src/file/sheetFormat.test.ts`;
+  Open…, a dropped file and the recovery copy in `src/file/sheetSession.test.ts` and, on the
+  real Excalidraw, `src/file/FileChrome.excalidraw.test.tsx`; a vault file and an outside
+  change in `plugin/test/vault.test.ts`. The three Playwright runs that open a sheet
+  (`scripts/popout-run.mjs`, `touch-run.mjs`, `follow-run.mjs`) open a format 1 file, so they
+  run the migration in the built plugin.
 - **`source` and `formats` in one write:** a nested object in `customData` adds an empty undo
-  step, so `formats` is a string, as `titleFormat` is.
+  step, so `formats` is a string, as `titleFormat` is (`writeAnchorSource`,
+  `mathAnchor.excalidraw.test.tsx`). **Whatever changes the number of an element's lines
+  writes both** (today only Enter and Backspace-join, in `src/overlay/lineEdit.ts`); a write
+  that keeps every line in its place (a unit slot, a plot's settings) may leave `formats` out.
+- **The engine reads one line:** a line's text and its stored clause are joined into the line
+  as it would have been typed (`withFormat`, `src/math/lineForm.ts`) before anything reads
+  it, so every form, error and rule is read by the code that read format 1.
 - **The docking width** passed to Excalidraw (`UIOptions.dockedSidebarBreakpoint`) and the
   app's own must be one value, or the panel docks where the app thinks it floats.
 - **The overlay never scrolls** (`overflow: clip`, 0.2.1): the canvas's pan is the only thing

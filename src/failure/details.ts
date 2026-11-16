@@ -98,6 +98,8 @@ export function sheetWords(
   sheet: readonly {
     title?: string | null
     source?: string
+    /** The lines' stored formats (section 7): a rule's condition is the sheet's text too. */
+    formats?: string
     lines: readonly { result: { kind: string; text?: string }; variables: readonly { name: string; text?: string }[] }[]
   }[],
   typing: string | null = null,
@@ -115,6 +117,7 @@ export function sheetWords(
   for (const element of sheet) {
     addText(element.title)
     element.source?.split(/\r?\n/).forEach(addText)
+    element.formats?.split(/\r?\n/).forEach(addText)
     for (const line of element.lines) {
       add(line.result.text)
       for (const variable of line.variables) {

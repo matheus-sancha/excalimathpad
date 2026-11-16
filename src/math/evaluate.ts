@@ -25,7 +25,9 @@ import {
   applyFormatWord,
   hasTopLevelSemicolon,
   NO_FORMAT,
+  lineFormats,
   readLine,
+  withFormat,
   type CommentFormat,
   type FormatRule,
   type FormatWord,
@@ -461,6 +463,12 @@ export type SheetVariable =
 export interface SheetBlock {
   id: string
   source: string
+  /**
+   * Each line's stored clause, as `customData.formats` holds them (section 7,
+   * M4e): the engine reads a line's format from here, after any clause typed
+   * in the line's text (ADR 0005, step 2).
+   */
+  formats?: string
 }
 
 /** A line of the sheet, parsed once before anything is evaluated. */
@@ -596,9 +604,12 @@ export function evaluateSheet(
   // A parse that threw (section 4, Unexpected failures): the line stands in as
   // one that defines what its text assigns, and its guard below rethrows this.
   const parseFailures = new Map<ParsedLine, unknown>()
-  const parse = (text: string): ParsedLine => {
+  const parse = (shown: string, stored: string): ParsedLine => {
+    const text = withFormat(shown, stored)
     try {
-      return parseLine(text)
+      const line = parseLine(text)
+      // A line that didn't parse shows as its text, which doesn't hold a stored format.
+      return line.kind === 'syntax-error' ? { ...line, source: shown } : line
     } catch (error) {
       let defines: string[] = []
       try {
@@ -606,14 +617,15 @@ export function evaluateSheet(
       } catch {
         // The names are lost with the parse.
       }
-      const line: ParsedLine = { kind: 'syntax-error', message: UNEXPECTED_LINE, defines, source: text }
+      const line: ParsedLine = { kind: 'syntax-error', message: UNEXPECTED_LINE, defines, source: shown }
       parseFailures.set(line, error)
       return line
     }
   }
-  const sheet = blocks.map(({ id, source }) => {
+  const sheet = blocks.map(({ id, source, formats = '' }) => {
     const sources = splitLines(source)
-    return { id, sources, lines: sources.map(parse) }
+    const stored = lineFormats(formats, sources.length)
+    return { id, sources, lines: sources.map((text, index) => parse(text, stored[index])) }
   })
 
   // Where each name is assigned, as positions in reading order.

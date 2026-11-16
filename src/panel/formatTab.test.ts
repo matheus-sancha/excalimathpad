@@ -28,6 +28,36 @@ describe('formatView (docs/spec-v1.md section 4, Format tab)', () => {
     expect(view).toMatchObject({ kind: 'math', overrides: [] })
   })
 
+  // Section 3, Where a line's format lives (M4e): the format is the stored one.
+  it('reads a line’s format from where it is stored, behind a clause typed in the text', () => {
+    const lines = evaluateSheet([{ id: 'm1', source: 'v = 4\n# Pumps', formats: '@bold @red @text-red if v > 3\n@L' }]).get('m1')!
+    const sheet: FormatElement[] = [{ anchorId: 'm1', title: null, titleFormat: NO_TITLE_FORMAT, lines }]
+
+    expect(formatView(sheet, { anchorId: 'm1', lineIndex: 0, text: 'v = 4', stored: '@bold @red @text-red if v > 3' })).toMatchObject({
+      kind: 'math',
+      text: 'v = 4',
+      format: { bold: true, underline: false, color: 'red', textColor: null },
+      overrides: ['A rule sets the text colour while v > 3.'],
+      rules: [{ condition: 'v > 3', text: '@text-red if v > 3' }],
+      typedRules: 0,
+      ruleStates: [{ kind: 'true' }],
+    })
+    expect(formatView(sheet, { anchorId: 'm1', lineIndex: 1, text: '# Pumps', stored: '@L' })).toMatchObject({
+      kind: 'comment',
+      format: { size: 'L' },
+    })
+    // A typed word replaces the stored one it clashes with; a typed rule comes first.
+    expect(
+      formatView(sheet, { anchorId: 'm1', lineIndex: 0, text: 'v = 4 @yellow @bold if v > 9', stored: '@bold @red @text-red if v > 3' }),
+    ).toMatchObject({
+      format: { bold: true, color: 'yellow' },
+      rules: [{ condition: 'v > 9' }, { condition: 'v > 3' }],
+      typedRules: 1,
+    })
+    // Stored on a blank line, a clause formats nothing.
+    expect(formatView(sheet, { anchorId: 'm1', lineIndex: 0, text: '', stored: '@bold' })).toMatchObject({ kind: 'blank' })
+  })
+
   it('reads the kind and the link from what is typed and the title the element has', () => {
     const sheet = sheetOf('x = 1\n\n# Pumps', 'Pipe flow')
     expect(formatView(sheet, { anchorId: 'm1', lineIndex: 1, text: '' })).toMatchObject({

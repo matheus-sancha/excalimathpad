@@ -473,6 +473,159 @@ export function writeDisplayUnit(line: string, unit: string | null): string {
   return `${written}${clause}${tail ? ` ${tail}` : ''}`
 }
 
+/**
+ * Where a line's format lives (section 3, M4e): beside the line, in the
+ * anchor's `customData.formats`, one **stored clause** per line (section 7).
+ * The functions below move a clause between a line's text and its stored
+ * clause. They keep the text's math and note exactly as typed.
+ */
+
+/** A line's text with its clause taken out, and that clause, trimmed: from the first `@` outside a string up to the note. */
+export function splitFormat(line: string): { text: string; clause: string } {
+  const { rest, clause, tail, found } = lineParts(line)
+  return found ? { text: placeClause(rest, '', tail), clause } : { text: line, clause: '' }
+}
+
+/**
+ * The line as the engine reads it: its text with the stored clause joined
+ * after any clause typed in it, before the note (ADR 0005, step 2). A line
+ * with no stored clause comes back as it is.
+ */
+export function withFormat(line: string, stored: string): string {
+  if (stored === '') return line
+  const { rest, clause, tail } = lineParts(line)
+  return placeClause(rest, joinClauses(clause, stored), tail)
+}
+
+/**
+ * A typed clause in front of a stored one. A plain word typed replaces what
+ * the stored clause says of the same property (a second colour, a second
+ * size); rules are never dropped, and the typed ones come first, so they win.
+ */
+export function joinClauses(typed: string, stored: string): string {
+  if (typed === '' || stored === '') return typed || stored
+  const set = new Set<string>()
+  for (const segment of splitClause(typed).segments) {
+    const parts = segmentParts(segment)
+    if (parts?.rest === '') parts.names.forEach((name) => set.add(propertyOf(name) ?? ''))
+  }
+  const kept = splitClause(stored).segments.flatMap((segment) => {
+    const parts = segmentParts(segment)
+    if (!parts || parts.rest !== '') return [segment]
+    const names = parts.names.filter((name) => !set.has(propertyOf(name) ?? '?'))
+    if (names.length === parts.names.length) return [segment]
+    return names.length === 0 ? [] : [`@${names.join('+')}`]
+  })
+  return [typed, ...kept].join(' ')
+}
+
+/** What a line commit writes (section 3): the typed clause moves out of the text, in front of the stored one. */
+export function commitFormat(line: string, stored: string): { text: string; stored: string } {
+  const { text, clause } = splitFormat(line)
+  return { text, stored: joinClauses(clause, stored) }
+}
+
+/**
+ * The stored clauses of an element's lines, from `customData.formats`: one
+ * entry per line, padded or cut to `count` (section 7). An entry that isn't a
+ * clause (a hand-edited file) is none, and a `#` ends one.
+ */
+export function lineFormats(formats: string, count: number): string[] {
+  const entries = formats === '' ? [] : formats.split(/\r?\n/).map(storedClause)
+  return Array.from({ length: count }, (_, i) => entries[i] ?? '')
+}
+
+/** The entries as `customData.formats` holds them; empty when no line has a format, which stores no key. */
+export function storeFormats(entries: readonly string[]): string {
+  return entries.every((entry) => entry === '') ? '' : entries.join('\n')
+}
+
+function storedClause(entry: string): string {
+  const at = commentStart(entry)
+  const clause = (at === -1 ? entry : entry.slice(0, at)).trim()
+  return clause.startsWith('@') ? clause : ''
+}
+
+/**
+ * A Format tab press on a math line (section 4, Format tab, Writes): the
+ * stored clause takes `format` as its plain words, its rules kept. Plain words
+ * typed in the open line move out with the press; rules still being typed
+ * stay in the text, which is otherwise left exactly as it is.
+ */
+export function pressFormat(line: string, stored: string, format: LineFormat): { text: string; stored: string } {
+  const { text: bare, clause } = splitFormat(line)
+  if (readLine(bare).kind !== 'code') return { text: line, stored }
+  const typed = splitClause(clause).segments
+  const typedRules = typed.filter(isRuleSegment)
+  return {
+    text: typedRules.length === typed.length ? line : withFormat(bare, typedRules.join(' ')),
+    stored: splitFormat(writeFormat(withFormat(bare, stored), format)).clause,
+  }
+}
+
+/** The same press on a comment line: the stored clause becomes `format`'s words, and a typed clause goes. */
+export function pressCommentFormat(line: string, stored: string, format: CommentFormat): { text: string; stored: string } {
+  const read = withFormat(line, stored)
+  if (readLine(read).kind !== 'comment') return { text: line, stored }
+  return { text: splitFormat(line).text, stored: splitFormat(writeCommentFormat(read, format)).clause }
+}
+
+/**
+ * A Rules list press (section 4, Rules list): `rows` are the line's rules as
+ * they should be, each saying which rule it was (`from`, counting the rules
+ * typed in the text first, then the stored ones). Stored rules are written to
+ * the stored clause. Rules still typed in the open line stay in its text, so
+ * their conditions can go on being typed, unless the press puts a stored rule
+ * above one: then every rule moves out.
+ */
+export function pressRules(
+  line: string,
+  stored: string,
+  rows: readonly (RuleRow & { from: number | null })[],
+): { text: string; stored: string } {
+  const { text: bare, clause } = splitFormat(line)
+  if (readLine(bare).kind !== 'code') return { text: line, stored }
+  const typed = splitClause(clause).segments
+  const typedRules = typed.filter(isRuleSegment)
+  const isTyped = rows.map(({ from }) => from !== null && from < typedRules.length)
+  const firstStored = isTyped.indexOf(false)
+  if (firstStored !== -1 && isTyped.lastIndexOf(true) > firstStored) {
+    return { text: bare, stored: splitFormat(writeRules(withFormat(line, stored), rows)).clause }
+  }
+  const textOf = (row: RuleRow) => row.text ?? ruleText(row.words, row.condition)
+  const nextTyped = rows.filter((_, i) => isTyped[i]).map(textOf)
+  const same = nextTyped.length === typedRules.length && nextTyped.every((text, i) => text === typedRules[i])
+  const storedPlain = splitClause(stored).segments.filter((segment) => !isRuleSegment(segment))
+  return {
+    text: same ? line : withFormat(bare, [...typed.filter((segment) => !isRuleSegment(segment)), ...nextTyped].join(' ')),
+    stored: [...storedPlain, ...rows.filter((_, i) => !isTyped[i]).map(textOf)].join(' '),
+  }
+}
+
+function isRuleSegment(segment: string): boolean {
+  return readSegment(segment)?.condition != null
+}
+
+/** The property a plain word sets (`text`, `highlight`, `size`, ...), or null when it isn't a word. */
+function propertyOf(name: string): string | null {
+  return readCommentWord(name)?.kind ?? null
+}
+
+/** A line as the code before its clause, its clause and its `#` tail. */
+function lineParts(line: string): { rest: string; clause: string; tail: string; found: boolean } {
+  const at = commentStart(line)
+  const head = at === -1 ? line : line.slice(0, at)
+  const tail = at === -1 ? '' : line.slice(at)
+  const start = clauseStart(head)
+  if (start === -1) return { rest: head.trimEnd(), clause: '', tail, found: false }
+  return { rest: head.slice(0, start).trimEnd(), clause: head.slice(start).trim(), tail, found: true }
+}
+
+function placeClause(rest: string, clause: string, tail: string): string {
+  const head = [rest, clause].filter((part) => part !== '').join(' ')
+  return tail === '' ? head : head === '' ? tail : `${head} ${tail}`
+}
+
 /** Where the code part of a line ends: before its clause and its note. */
 export function codeLength(line: string): number {
   const at = commentStart(line)

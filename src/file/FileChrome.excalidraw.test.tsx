@@ -343,7 +343,7 @@ describe('opening', () => {
     const { files } = await mount()
     files.open.mockResolvedValue({
       name: 'future.excalimathpad',
-      text: JSON.stringify({ type: 'excalidraw', elements: [], excalimathpad: { format: 2 } }),
+      text: JSON.stringify({ type: 'excalidraw', elements: [], excalimathpad: { format: 3 } }),
       handle: null,
     })
 
@@ -372,5 +372,139 @@ describe('opening', () => {
     expect(drop.defaultPrevented).toBe(true)
     await waitFor(() => expect(linesOnScreen()).toEqual(['dropped = 1']))
     expect(name).toHaveTextContent(/^dropped\.excalimathpad$/)
+  })
+})
+
+// docs/spec-v1.md section 7, The file (M4e, #195): a format 1 sheet opens with
+// every line looking as it did, clean, and its next save is format 2.
+describe('a sheet saved by 0.2.x (format 1)', () => {
+  const OLD = JSON.stringify({
+    type: 'excalidraw',
+    version: 2,
+    elements: [
+      {
+        id: 'old',
+        type: 'rectangle',
+        x: 0,
+        y: 0,
+        width: 300,
+        height: 60,
+        customData: {
+          kind: 'math',
+          source: 'v = 4 m/s @bold @text-red if v > 3 m/s # speed\n@L @underline # Pumps\nw = v * 2 @yellow',
+          title: 'Flow',
+        },
+      },
+    ],
+    appState: {},
+    files: {},
+    excalimathpad: { format: 1, settings: { units: { system: 'si-prefixed', custom: {} }, digits: 4, resultColor: 'blue', page: { size: 'A4', orientation: 'portrait' } } },
+  })
+  const row = (n: number) => document.querySelector<HTMLElement>(`[data-anchor-id="old"] [data-line="${n - 1}"]`)
+  /** The sheet looks as 0.2.x drew it: each line's format on its row, the clause not in its text. */
+  const looksAsItDid = async () => {
+    await waitFor(() => expect(linesOnScreen()).toEqual(['v = 4 m/s # speed# Pumpsw = v * 2']))
+    expect(row(1)).toHaveClass('is-math', 'is-bold', 'is-text-red')
+    expect(row(2)).toHaveClass('is-comment', 'is-size-L', 'is-underline')
+    expect(row(3)).toHaveClass('is-math', 'is-yellow')
+    expect(row(3)!.querySelector('.math-element__result')).toHaveAttribute('data-text', '8 m / s')
+  }
+  const saved = (text: string | undefined) => {
+    const data = JSON.parse(text ?? '{}') as {
+      excalimathpad: { format: number }
+      elements: { customData: Record<string, unknown> }[]
+    }
+    return { format: data.excalimathpad.format, customData: data.elements[0].customData }
+  }
+  const MIGRATED = {
+    kind: 'math',
+    source: 'v = 4 m/s # speed\n# Pumps\nw = v * 2',
+    formats: '@bold @text-red if v > 3 m/s\n@L @underline\n@yellow',
+    title: 'Flow',
+  }
+
+  it('Open… shows every line as it looked, not dirty, and the next save writes format 2', async () => {
+    onTestFinished(layOutBodies(() => ({ width: 230, height: 96 })))
+    const { files, name, recovery } = await mount()
+    files.open.mockResolvedValue({ name: 'old.excalimathpad', text: OLD, handle: files.handleFor('old.excalimathpad') })
+
+    fireEvent.keyDown(canvasRoot(), { key: 'o', ctrlKey: true })
+
+    await looksAsItDid()
+    // Sized to its content, and still clean: opening alone doesn't make the sheet dirty.
+    await waitFor(() => expect(document.querySelector<HTMLElement>('.math-element')!.style.width).toBe('230px'))
+    expect(name).toHaveTextContent(/^old\.excalimathpad$/)
+    expect(document.title).toBe('old')
+    expect(recovery.current()).toBeNull()
+    // The open line holds the math alone.
+    doubleClickLine('old', 1)
+    expect(screen.getByRole('textbox', { name: 'Line source' })).toHaveValue('v = 4 m/s # speed')
+    fireEvent.keyDown(screen.getByRole('textbox', { name: 'Line source' }), { key: 'Escape' })
+    expect(name).toHaveTextContent(/^old\.excalimathpad$/)
+
+    fireEvent.keyDown(canvasRoot(), { key: 's', ctrlKey: true })
+    await waitFor(() => expect(files.save).toHaveBeenCalledOnce())
+    expect(saved(files.disk.get('old.excalimathpad'))).toEqual({ format: 2, customData: MIGRATED })
+  })
+
+  it('a dropped file is migrated the same way', async () => {
+    const { name } = await mount()
+    const drop = new Event('drop', { bubbles: true, cancelable: true })
+    Object.defineProperty(drop, 'dataTransfer', {
+      value: { files: [new File([OLD], 'dropped.excalimathpad', { type: 'application/json' })], items: [{ kind: 'file' }] },
+    })
+
+    act(() => {
+      canvasRoot().dispatchEvent(drop)
+    })
+
+    await looksAsItDid()
+    expect(name).toHaveTextContent(/^dropped\.excalimathpad$/)
+  })
+
+  it('a recovery copy written by 0.2.x is migrated when it is restored', async () => {
+    const { name, files } = await mount({ text: OLD, name: 'old.excalimathpad', handle: null })
+
+    fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Restore' }))
+
+    await looksAsItDid()
+    expect(name).toHaveTextContent('● old.excalimathpad')
+    fireEvent.keyDown(canvasRoot(), { key: 's', ctrlKey: true })
+    await waitFor(() => expect(files.saveAs).toHaveBeenCalledOnce())
+    expect(saved(files.disk.get('old.excalimathpad'))).toEqual({ format: 2, customData: MIGRATED })
+  })
+
+  // Section 14: a hand-edited file with a clause both in a line's text and stored.
+  it('a format 2 file with a clause both in a line’s text and stored reads the typed one in front', async () => {
+    const { files, name } = await mount()
+    const data = JSON.parse(OLD) as { elements: { customData: Record<string, unknown> }[]; excalimathpad: { format: number } }
+    data.excalimathpad.format = 2
+    data.elements[0].customData = {
+      kind: 'math',
+      source: 'v = 4 m/s @red @text-green if v > 2 m/s # speed',
+      formats: '@bold @yellow @text-red if v > 3 m/s',
+    }
+    files.open.mockResolvedValue({ name: 'edited.excalimathpad', text: JSON.stringify(data), handle: files.handleFor('edited.excalimathpad') })
+
+    fireEvent.keyDown(canvasRoot(), { key: 'o', ctrlKey: true })
+
+    // The typed highlight replaces the stored one, the typed rule wins, and the stored bold stays.
+    await waitFor(() => expect(row(1)).toHaveClass('is-bold', 'is-red', 'is-text-green'))
+    expect(row(1)).not.toHaveClass('is-yellow')
+    expect(row(1)).not.toHaveClass('is-text-red')
+    expect(name).toHaveTextContent(/^edited\.excalimathpad$/)
+
+    // The first edit that leaves the line moves its clause out, in front of the stored one.
+    doubleClickLine('old', 1)
+    expect(screen.getByRole('textbox', { name: 'Line source' })).toHaveValue('v = 4 m/s @red @text-green if v > 2 m/s # speed')
+    fireEvent.keyDown(screen.getByRole('textbox', { name: 'Line source' }), { key: 'Escape' })
+    fireEvent.keyDown(canvasRoot(), { key: 's', ctrlKey: true })
+    await waitFor(() => expect(files.save).toHaveBeenCalledOnce())
+    expect(saved(files.disk.get('edited.excalimathpad')).customData).toEqual({
+      kind: 'math',
+      source: 'v = 4 m/s # speed',
+      formats: '@red @text-green if v > 2 m/s @bold @text-red if v > 3 m/s',
+    })
+    expect(row(1)).toHaveClass('is-bold', 'is-red', 'is-text-green')
   })
 })

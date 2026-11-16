@@ -517,6 +517,70 @@ describe('the format clause (docs/spec-v1.md section 3)', () => {
   })
 })
 
+// docs/spec-v1.md section 3, Where a line's format lives (M4e, #195; ADR 0005, step 2).
+describe('a format stored beside its line', () => {
+  const stored = (source: string, formats: string) => evaluateSheet([{ id: 'm1', source, formats }]).get('m1')!
+  const formatOf = (line: SheetLine) => (line.typeset.kind === 'math' || line.typeset.kind === 'comment' ? line.typeset.format : null)
+
+  it('is read from the store, one entry per line, as the same clause in the text is', () => {
+    const typed = evaluateSheet([
+      { id: 'm1', source: 'a = 2 m @bold @yellow\nb = a * 3 # tripled\n@L @bold # Results\nc = b @text-red if c > 5 m' },
+    ]).get('m1')!
+    expect(stored('a = 2 m\nb = a * 3 # tripled\n# Results\nc = b', '@bold @yellow\n\n@L @bold\n@text-red if c > 5 m')).toEqual(typed)
+    expect(formatOf(typed[0])).toMatchObject({ bold: true, color: 'yellow' })
+    expect(formatOf(typed[2])).toMatchObject({ bold: true, size: 'L' })
+    expect(formatOf(typed[3])).toMatchObject({ textColor: 'red' })
+  })
+
+  it('never changes a result, and never reaches math.js', () => {
+    expect(stored('a = 2 m\nb = a * 3', '@bold @red if a > 1 m\n@underline').map((line) => line.result)).toEqual(
+      block('a = 2 m\nb = a * 3'),
+    )
+  })
+
+  it('pads entries short of the lines and ignores those past them', () => {
+    expect(stored('a = 1\nb = 2', '@bold').map(formatOf)).toMatchObject([{ bold: true }, { bold: false }])
+    expect(stored('a = 1', '@bold\n@red\n@green').map(formatOf)).toMatchObject([{ bold: true, color: null }])
+  })
+
+  it('a clause typed in the line is read in front of the stored one: its word replaces a stored one that clashes', () => {
+    const [line] = stored('a = 1 @red', '@bold @yellow @text-blue')
+    expect(formatOf(line)).toEqual({ bold: true, underline: false, color: 'red', textColor: 'blue' })
+  })
+
+  it('a typed rule comes before the stored rules, so it wins when both are true', () => {
+    const [line] = stored('v = 4 @text-green if v > 3', '@text-red if v > 1')
+    expect(formatOf(line)).toMatchObject({ textColor: 'green' })
+    expect(line.ruleStates).toEqual([{ kind: 'true' }, { kind: 'overridden' }])
+    const [below] = stored('v = 2 @text-green if v > 3', '@text-red if v > 1')
+    expect(formatOf(below)).toMatchObject({ textColor: 'red' })
+  })
+
+  it('a stored word that isn’t a format is the line’s error, and its value still reaches the lines below', () => {
+    expect(stored('a = 2 m * 2\nb = a * 3', '@bolt').map((line) => line.result)).toEqual([
+      error('Unknown format @bolt'),
+      value('12 m'),
+    ])
+  })
+
+  it('a stored rule’s condition that can’t be decided is the line’s warning', () => {
+    const [line] = stored('v = 4 m/s', '@text-red if v > 3 kg')
+    expect(line.result).toEqual(empty)
+    expect(line.warnings).toHaveLength(1)
+    expect(line.ruleStates[0].kind).toBe('warning')
+  })
+
+  it('a blank line takes no format, and an entry that isn’t a clause is none', () => {
+    expect(stored('\na = 1', '@bold\nbold + 1')).toEqual(evaluateSheet([{ id: 'm1', source: '\na = 1' }]).get('m1'))
+  })
+
+  it('a stored format is kept out of a line shown as its text', () => {
+    const [line] = stored('a = (1', '@bold')
+    expect(line.typeset).toEqual({ kind: 'unparsed', source: 'a = (1' })
+    expect(line.result.kind).toBe('error')
+  })
+})
+
 describe('numbers (docs/spec-v1.md section 5)', () => {
   it.each([
     ['1234', '1234'],

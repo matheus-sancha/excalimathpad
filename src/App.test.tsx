@@ -446,8 +446,12 @@ describe('App', () => {
         }
         const row = () => document.querySelector('[data-anchor-id="m1"] [data-line="1"]')
 
+        // From M4e the press writes the line's stored format: its text is left alone.
+        const opened = lineField()
         expect(press(inPanel('Bold (Ctrl+B)')).defaultPrevented).toBe(true)
-        await waitFor(() => expect(lineField()).toHaveValue('x = 1 m + 1 s @bold'))
+        await waitFor(() => expect(inPanel('Bold (Ctrl+B)')).toHaveAttribute('aria-pressed', 'true'))
+        expect(lineField()).toBe(opened)
+        expect(lineField()).toHaveValue('x = 1 m + 1 s')
         expect(lineField()).toHaveFocus()
 
         press(inPanel('Done (Esc)'))
@@ -456,7 +460,8 @@ describe('App', () => {
         // The edit ended from the panel, so it stays on Format, with Edit for the selected element.
         expect(selected()).toBe('Format')
         press(inPanel('Edit (Enter)'))
-        await waitFor(() => expect(lineField()).toHaveValue('x = 1 m + 1 s @bold'))
+        await waitFor(() => expect(lineField()).toHaveValue('x = 1 m + 1 s'))
+        expect(inPanel('Bold (Ctrl+B)')).toHaveAttribute('aria-pressed', 'true')
         press(inPanel('Done (Esc)'))
         await waitFor(() => expect(lineField()).toBeNull())
 

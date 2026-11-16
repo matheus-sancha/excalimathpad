@@ -37,14 +37,16 @@ import {
 import {
   caretAfterFormat,
   codeLength,
+  lineFormats,
+  pressCommentFormat,
+  pressFormat,
+  pressRules,
   readLine,
-  writeCommentFormat,
+  storeFormats,
   writeNewRule,
-  writeRules,
   type FormatRule,
   type RuleRow,
   writeDisplayUnit,
-  writeFormat,
   type CommentFormat,
   type LineFormat,
   type TextColor,
@@ -107,12 +109,14 @@ export interface LineEditControl {
   /** Whether a line or the title is open for typing (an outside change in a vault asks). */
   isOpen(): boolean
   /**
-   * The open math line's plain format, as the Format tab writes it (section 3,
-   * Rules for what the app writes): one line commit, the line kept open on a
-   * new field, the caret in the code.
+   * The open math line's plain format, as the Format tab writes it (section 4,
+   * Format tab, Writes): the line's stored format, with the typed text, in one
+   * write and one undo step. The field, its text and its caret are left alone,
+   * unless plain words were typed in the line: they move out with the press,
+   * on a new field with the caret in the code.
    */
   setFormat(format: LineFormat): void
-  /** The open comment line's format: the same, the caret kept in the comment text. */
+  /** The open comment line's format: the same, a caret in the comment text keeping its place. */
   setCommentFormat(format: CommentFormat): void
   /** The open title's format: one undo step, the title kept open. */
   setTitleFormat(format: TitleFormat): void
@@ -124,14 +128,19 @@ export interface LineEditControl {
   openLast(anchorId: string): void
   /**
    * The open math line's rules, as the Rules list writes them (section 4,
-   * Rules list, M4d): one line commit, the line kept open. Each row says which
-   * rule it was (`from`), so a caret inside a rule goes back to that rule's
-   * condition; elsewhere it stays in the code.
+   * Rules list): the stored format, one undo step, the line kept open. Each
+   * row says which rule it was (`from`: the rules typed in the line first,
+   * then the stored ones). A rule still typed in the line is rewritten there,
+   * and a caret inside it goes back to its condition's end.
    */
   setRules(rows: readonly RuleEdit[]): void
-  /** Puts the caret at the end of the open line's `index`th rule's condition. */
+  /** Puts the caret at the end of the `index`th rule's condition, when that rule is typed in the open line. */
   caretToRule(index: number): void
-  /** + Add rule: ` @text-red if <name> ` after the clause, the caret after it; null names nothing (a table line). */
+  /**
+   * + Add rule: types ` @text-red if <name> ` after the line's code, the caret
+   * after it; null names nothing (a table line). The rule is the line's text
+   * until the line is committed.
+   */
   addRule(name: string | null): void
   /**
    * A Symbols or Constants button (section 4, What a click inserts, M4d): types
@@ -151,6 +160,8 @@ export interface EditTarget {
   anchorId: string
   lineIndex: number | 'title'
   text: string
+  /** The open line's stored format (section 3, Where a line's format lives, M4e); empty for none and for the title. */
+  stored: string
 }
 
 export interface MathOverlayProps {
@@ -203,6 +214,8 @@ export interface EvaluatedElement {
   lines: readonly SheetLine[]
   /** The element's lines as text, the typed line in place. */
   source: string
+  /** The lines' stored formats, as the anchor holds them (section 7, M4e). */
+  formats?: string
 }
 
 /** A line to flash; a new `key` flashes it again. */
@@ -286,7 +299,7 @@ export function MathOverlay({
   const sheetKey = JSON.stringify(
     readingOrder(anchors).map((id): SheetBlock => {
       const anchor = anchors.find((candidate) => candidate.id === id)
-      return { id, source: anchor ? typedSourceOf(anchor) : '' }
+      return { id, source: anchor ? typedSourceOf(anchor) : '', formats: anchor?.formats ?? '' }
     }),
   )
   const lines = useMemo(
@@ -305,9 +318,10 @@ export function MathOverlay({
     const titles = new Map(JSON.parse(titlesKey) as [string, { title: string; titleFormat: TitleFormat }][])
     const blocks = JSON.parse(sheetKey) as SheetBlock[]
     onEvaluatedRef.current?.(
-      blocks.map(({ id: anchorId, source }) => ({
+      blocks.map(({ id: anchorId, source, formats }) => ({
         anchorId,
         source,
+        formats,
         title: titles.get(anchorId)?.title || null,
         titleFormat: titles.get(anchorId)?.titleFormat ?? NO_TITLE_FORMAT,
         lines: lines.get(anchorId) ?? [],
@@ -320,7 +334,11 @@ export function MathOverlay({
   useEffect(() => {
     onEditRef.current = onEdit
   })
-  const editKey = edit && JSON.stringify([edit.anchorId, edit.lineIndex, edit.text])
+  const findAnchor = (anchorId: string) =>
+    store.getSnapshot().anchors.find(({ id }) => id === anchorId)
+
+  const editStored = storedFormat(anchors, edit)
+  const editKey = edit && JSON.stringify([edit.anchorId, edit.lineIndex, edit.text, editStored])
   useEffect(() => {
     const current = editRef.current
     onEditRef.current?.(
@@ -328,12 +346,10 @@ export function MathOverlay({
         anchorId: current.anchorId,
         lineIndex: current.lineIndex === TITLE_LINE ? 'title' : current.lineIndex,
         text: current.text,
+        stored: storedFormat(store.getSnapshot().anchors, current),
       },
     )
-  }, [editKey])
-
-  const findAnchor = (anchorId: string) =>
-    store.getSnapshot().anchors.find(({ id }) => id === anchorId)
+  }, [editKey, store])
 
   // The unit slots (section 5): the hovered row, and the slot whose field is open.
   const [slotHover, setSlotHover] = useState<SlotTarget | null>(null)
@@ -391,40 +407,57 @@ export function MathOverlay({
       changeEdit(null)
       return
     }
-    const next = applyLineMove(anchor.source, current, move, anchor.title)
+    const next = applyLineMove(anchor.source, current, move, anchor.title, anchor.formats)
     if (next.remove) removeAnchor(api, current.anchorId)
     else {
       // A move changes the line or the title, never both: one write, one step.
-      writeAnchorSource(api, current.anchorId, next.source)
+      // The line's text and its format go in that one write (section 7).
+      writeAnchorSource(api, current.anchorId, next.source, next.formats)
       writeAnchorTitle(api, current.anchorId, next.title)
     }
     changeEdit(next.edit)
   }
 
   /**
-   * A format from the Format tab or a format key: the line's new text goes to the scene
-   * as one line commit, and the line stays open on it, on a new field.
+   * A press in the Format tab or a format key on the open line (section 4,
+   * Format tab, Writes): `write` gives the line's text and its stored format
+   * after the press, and both go to the scene in one write, one undo step. The
+   * field is left alone, with its text undo, unless the press changed the
+   * line's text (a clause typed in it moved out): then the line stays open on
+   * a new field, the caret where `caretOf` puts it.
    */
-  const rewriteLine = (text: string, caret: number) => {
+  const pressLine = (
+    write: (text: string, stored: string) => { text: string; stored: string },
+    caretOf: (before: string, after: string, caret: number) => number = caretAfterFormat,
+  ) => {
     const current = editRef.current
     const live = current && findAnchor(current.anchorId)
-    if (!current || !live) return
-    const next = { ...current, text, caret, revision: (current.revision ?? 0) + 1 }
-    writeAnchorSource(api, current.anchorId, withTypedLine(live.source, next))
-    changeEdit(next)
+    if (!current || !live || current.lineIndex === TITLE_LINE) return
+    const sourceLines = splitLines(live.source)
+    if (current.lineIndex >= sourceLines.length) return
+    const entries = lineFormats(live.formats, sourceLines.length)
+    const next = write(current.text, entries[current.lineIndex])
+    const same = next.text === sourceLines[current.lineIndex] && next.stored === entries[current.lineIndex]
+    sourceLines[current.lineIndex] = next.text
+    entries[current.lineIndex] = next.stored
+    if (!same) writeAnchorSource(api, current.anchorId, sourceLines.join('\n'), storeFormats(entries))
+    if (next.text === current.text) return
+    const caret = openField(overlayRef.current)?.selectionStart ?? next.text.length
+    changeEdit({
+      ...current,
+      text: next.text,
+      caret: caretOf(current.text, next.text, caret),
+      revision: (current.revision ?? 0) + 1,
+    })
   }
+  const setFormat = (format: LineFormat) => pressLine((text, stored) => pressFormat(text, stored, format))
+  const setCommentFormat = (format: CommentFormat) =>
+    pressLine((text, stored) => pressCommentFormat(text, stored, format))
 
   /** The rules a line's typed text holds. */
   const rulesOf = (text: string): readonly FormatRule[] => {
     const form = readLine(text)
     return form.kind === 'code' ? form.rules : []
-  }
-
-  /** A press in the Format tab: the line rewritten as one line commit, the caret kept in place. */
-  const rewriteFormat = (before: string, text: string) => {
-    if (text === before) return
-    const caret = openField(overlayRef.current)?.selectionStart ?? text.length
-    rewriteLine(text, caretAfterFormat(before, text, caret))
   }
 
   const openLine = (anchorId: string, lineIndex: number) => {
@@ -464,14 +497,8 @@ export function MathOverlay({
     },
     leaveLine: () => moveEdit({ kind: 'leave' }),
     isOpen: () => editRef.current !== null,
-    setFormat(format) {
-      const current = editRef.current
-      if (current && current.lineIndex !== TITLE_LINE) rewriteFormat(current.text, writeFormat(current.text, format))
-    },
-    setCommentFormat(format) {
-      const current = editRef.current
-      if (current && current.lineIndex !== TITLE_LINE) rewriteFormat(current.text, writeCommentFormat(current.text, format))
-    },
+    setFormat,
+    setCommentFormat,
     setTitleFormat(format) {
       const current = editRef.current
       if (current?.lineIndex === TITLE_LINE) writeAnchorTitleFormat(api, current.anchorId, format)
@@ -491,17 +518,21 @@ export function MathOverlay({
       if (anchor) openLine(anchorId, splitLines(anchor.source).length - 1)
     },
     setRules(rows) {
-      const current = editRef.current
-      if (!current || current.lineIndex === TITLE_LINE) return
-      const before = current.text
-      const text = writeRules(before, rows)
-      if (text === before) return
-      const caret = openField(overlayRef.current)?.selectionStart ?? text.length
-      // A caret inside a rule follows it to its condition's end (section 4, Rules list).
-      const inside = rulesOf(before).findIndex(({ start, end }) => caret >= start && caret <= end)
-      const followed = inside === -1 ? -1 : rows.findIndex(({ from }) => from === inside)
-      const target = followed === -1 ? null : rulesOf(text)[followed]
-      rewriteLine(text, target ? target.end : inside === -1 ? caretAfterFormat(before, text, caret) : codeLength(text))
+      pressLine(
+        (text, stored) => pressRules(text, stored, rows),
+        (before, text, caret) => {
+          // A caret inside a typed rule follows it to its condition's end (section 4, Rules list).
+          const typed = rulesOf(before)
+          // Just after + Add rule the caret is a space past the rule, where its condition goes on.
+          const inside = typed.findIndex(
+            ({ start, end }) => caret >= start && (caret <= end || before.slice(end, caret).trim() === ''),
+          )
+          if (inside === -1) return caretAfterFormat(before, text, caret)
+          const followed = rows.filter(({ from }) => from !== null && from < typed.length).findIndex(({ from }) => from === inside)
+          const target = followed === -1 ? undefined : rulesOf(text)[followed]
+          return target ? target.end : codeLength(text)
+        },
+      )
     },
     caretToRule(index) {
       const current = editRef.current
@@ -513,9 +544,14 @@ export function MathOverlay({
     },
     addRule(name) {
       const current = editRef.current
-      if (!current || current.lineIndex === TITLE_LINE || readLine(current.text).kind !== 'code') return
+      const live = current && findAnchor(current.anchorId)
+      if (!current || !live || current.lineIndex === TITLE_LINE || readLine(current.text).kind !== 'code') return
+      // Typed for the user: the rule is the line's text until the line is
+      // committed, so its condition is typed after it (section 4, Rules list).
       const { text, caret } = writeNewRule(current.text, name)
-      rewriteLine(text, caret)
+      const next = { ...current, text, caret, revision: (current.revision ?? 0) + 1 }
+      writeAnchorSource(api, current.anchorId, withTypedLine(live.source, next))
+      changeEdit(next)
     },
     insert(insert, anchorId = null) {
       if (editRef.current) return typeInsert(insert)
@@ -639,7 +675,9 @@ export function MathOverlay({
           lines={elementLines ?? []}
           edit={own}
           onType={onType}
-          onRewrite={rewriteLine}
+          stored={own ? editStored : ''}
+          onFormat={setFormat}
+          onCommentFormat={setCommentFormat}
           onTitleFormat={(format) => {
             // A title format key: one undo step; the title stays open.
             writeAnchorTitleFormat(api, anchor.id, format)
@@ -671,6 +709,13 @@ export function MathOverlay({
 }
 
 const runNow = (write: () => void) => write()
+
+/** The stored format of the line `edit` is on (section 3, M4e): none for the title. */
+function storedFormat(anchors: readonly MathAnchor[], edit: LineEdit | null): string {
+  const anchor = edit && edit.lineIndex !== TITLE_LINE ? anchors.find(({ id }) => id === edit.anchorId) : undefined
+  if (!edit || !anchor) return ''
+  return lineFormats(anchor.formats, splitLines(anchor.source).length)[edit.lineIndex] ?? ''
+}
 
 /** The open line's or title's field: the overlay holds at most one. */
 function openField(overlay: HTMLElement | null): HTMLInputElement | null {

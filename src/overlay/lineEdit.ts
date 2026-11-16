@@ -1,4 +1,5 @@
 import { splitLines } from '../math/evaluate.ts'
+import { commitFormat, lineFormats, storeFormats } from '../math/lineForm.ts'
 
 /**
  * The one line shown as raw source (docs/spec-v1.md section 4). UI state: it is
@@ -11,8 +12,9 @@ export interface LineEdit {
   text: string
   caret: number
   /**
-   * Goes up each time the app rewrites the text of the open line (the format
-   * bar): the field takes only what the user types, so it is mounted again.
+   * Goes up each time the app rewrites the text of the open line (+ Add rule,
+   * a format press that moves a typed clause out): the field takes only what
+   * the user types, so it is mounted again.
    */
   revision?: number
 }
@@ -39,6 +41,8 @@ export type LineMove =
 /** What a move leads to: the source the scene should hold, and the next edit. */
 export interface LineMoveResult {
   source: string
+  /** The lines' stored formats the scene should hold, written with the source (section 7, M4e). */
+  formats: string
   /** The title the scene should hold: changed only by an edit on the title. */
   title: string
   edit: LineEdit | null
@@ -78,9 +82,36 @@ export function withTypedLine(source: string, edit: LineEdit): string {
 }
 
 /**
- * What each way of leaving a line does (docs/spec-v1.md section 6). `source` is
- * the scene's. The returned source is the same string when the move commits
- * nothing, so a line left unchanged writes nothing. A move with nowhere to go
+ * What a line commit writes (docs/spec-v1.md section 3, Where a line's format
+ * lives, M4e): the typed text with its clause moved out, into the line's
+ * stored format, in front of what is stored. The same strings come back when
+ * that changes nothing.
+ */
+export function commitTypedLine(source: string, formats: string, edit: LineEdit): { source: string; formats: string } {
+  const lines = splitLines(source)
+  if (edit.lineIndex === TITLE_LINE || edit.lineIndex >= lines.length) return { source, formats }
+  const entries = lineFormats(formats, lines.length)
+  const { text, stored } = commitFormat(edit.text, entries[edit.lineIndex])
+  if (text === lines[edit.lineIndex] && stored === entries[edit.lineIndex]) return { source, formats }
+  lines[edit.lineIndex] = text
+  entries[edit.lineIndex] = stored
+  return { source: lines.join('\n'), formats: storeFormats(entries) }
+}
+
+/** Where a caret is once a clause has gone from the text around it. */
+function caretAfterCommit(before: string, after: string, caret: number): number {
+  let same = 0
+  while (same < after.length && before[same] === after[same]) same++
+  return caret <= same ? caret : Math.max(same, caret - (before.length - after.length))
+}
+
+/**
+ * What each way of leaving a line does (docs/spec-v1.md section 6). `source` and
+ * `formats` are the scene's. The returned source and formats are the same
+ * strings when the move commits nothing, so a line left unchanged writes
+ * nothing. A split's first half keeps the line's stored format and the new
+ * line starts with none; a join keeps the upper line's, or the lower line's
+ * when the upper has none (section 3). A move with nowhere to go
  * (up from the first line, down from the last, join on the first) keeps the
  * edit open and commits nothing, because the edit hasn't left its line. Only a
  * leave can remove the element: the other moves stay inside it.
@@ -90,13 +121,15 @@ export function applyLineMove(
   edit: LineEdit,
   move: LineMove,
   title = '',
+  formats = '',
 ): LineMoveResult {
-  if (edit.lineIndex === TITLE_LINE) return applyTitleMove(source, edit, move, title)
+  if (edit.lineIndex === TITLE_LINE) return { ...applyTitleMove(source, edit, move, title), formats }
   const lines = splitLines(source)
+  const entries = lineFormats(formats, lines.length)
   const { anchorId, lineIndex, text } = edit
-  const stay = { source, title, edit, remove: false }
+  const stay = { source, formats, title, edit, remove: false }
   const toTitle = (): LineMoveResult => ({
-    source: withTypedLine(source, edit),
+    ...commitTypedLine(source, formats, edit),
     title,
     edit: startLineEdit(source, anchorId, TITLE_LINE, title),
     remove: false,
@@ -106,7 +139,7 @@ export function applyLineMove(
     case 'leave': {
       const typed = withTypedLine(source, edit)
       // A title is text too: an element holding only a title is kept.
-      return { source: typed, title, edit: null, remove: !hasText(typed) && title === '' }
+      return { ...commitTypedLine(source, formats, edit), title, edit: null, remove: !hasText(typed) && title === '' }
     }
 
     case 'title':
@@ -119,7 +152,7 @@ export function applyLineMove(
       if (target < 0) return toTitle()
       if (target >= lines.length) return stay
       return {
-        source: withTypedLine(source, edit),
+        ...commitTypedLine(source, formats, edit),
         title,
         edit: startLineEdit(source, anchorId, target),
         remove: false,
@@ -127,13 +160,16 @@ export function applyLineMove(
     }
 
     case 'split': {
-      const before = text.slice(0, move.from)
-      const after = text.slice(move.to)
-      lines.splice(lineIndex, 1, before, after)
+      // Each half is committed: a clause typed in it moves out (section 3).
+      const before = commitFormat(text.slice(0, move.from), entries[lineIndex] ?? '')
+      const after = commitFormat(text.slice(move.to), '')
+      lines.splice(lineIndex, 1, before.text, after.text)
+      entries.splice(lineIndex, 1, before.stored, after.stored)
       return {
         source: lines.join('\n'),
+        formats: storeFormats(entries),
         title,
-        edit: { anchorId, lineIndex: lineIndex + 1, text: after, caret: 0 },
+        edit: { anchorId, lineIndex: lineIndex + 1, text: after.text, caret: 0 },
         remove: false,
       }
     }
@@ -141,12 +177,20 @@ export function applyLineMove(
     case 'join': {
       if (lineIndex === 0) return stay
       const above = lines[lineIndex - 1]
-      const joined = above + text
-      lines.splice(lineIndex - 1, 2, joined)
+      const typed = above + text
+      const joined = commitFormat(typed, entries[lineIndex - 1] || (entries[lineIndex] ?? ''))
+      lines.splice(lineIndex - 1, 2, joined.text)
+      entries.splice(lineIndex - 1, 2, joined.stored)
       return {
         source: lines.join('\n'),
+        formats: storeFormats(entries),
         title,
-        edit: { anchorId, lineIndex: lineIndex - 1, text: joined, caret: above.length },
+        edit: {
+          anchorId,
+          lineIndex: lineIndex - 1,
+          text: joined.text,
+          caret: caretAfterCommit(typed, joined.text, above.length),
+        },
         remove: false,
       }
     }
@@ -164,7 +208,7 @@ function applyTitleMove(
   edit: LineEdit,
   move: LineMove,
   sceneTitle: string,
-): LineMoveResult {
+): Omit<LineMoveResult, 'formats'> {
   const title = edit.text.trim()
   switch (move.kind) {
     case 'leave':

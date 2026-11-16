@@ -235,7 +235,7 @@ describe('saving', () => {
     expect(session.getState()).toMatchObject({ name: 'Untitled.excalimathpad', dirty: false })
     expect(JSON.parse(files.disk.get('Untitled.excalimathpad')!)).toMatchObject({
       elements: [{ source: 'a = 1' }],
-      excalimathpad: { format: 1, settings: DEFAULT_SETTINGS },
+      excalimathpad: { format: 2, settings: DEFAULT_SETTINGS },
     })
   })
 
@@ -600,6 +600,124 @@ describe('opening', () => {
 
       expect(scene.source()).toBe('mine')
     })
+  })
+})
+
+// docs/spec-v1.md section 7, The file (M4e, #195): a format 1 sheet is migrated
+// in memory on every open path; the file changes at the next save.
+describe('a sheet saved by 0.2.x (format 1)', () => {
+  const OLD = JSON.stringify({
+    type: 'excalidraw',
+    version: 2,
+    elements: [
+      {
+        id: 'm1',
+        type: 'rectangle',
+        customData: { kind: 'math', source: 'v = 4 m/s @bold @text-red if v > 3 m/s # speed\n@L # Pumps', title: 'Flow' },
+      },
+    ],
+    appState: {},
+    files: {},
+    excalimathpad: { format: 1, settings: { ...DEFAULT_SETTINGS, digits: 6 } },
+  })
+  const MIGRATED = {
+    kind: 'math',
+    source: 'v = 4 m/s # speed\n# Pumps',
+    formats: '@bold @text-red if v > 3 m/s\n@L',
+    title: 'Flow',
+  }
+  const loaded = (scene: Awaited<ReturnType<typeof setup>>['scene']) =>
+    (vi.mocked(scene.load).mock.calls.at(-1)![0].elements as { customData: unknown }[])[0].customData
+  const formatOf = (text: string | undefined) => (JSON.parse(text ?? '{}') as { excalimathpad?: { format?: number } }).excalimathpad?.format
+
+  it('Open… loads it with each line’s format beside it, clean, and the next save is format 2', async () => {
+    const { session, scene, files, recovery } = await setup()
+    files.open.mockResolvedValue(picked('pump.excalimathpad', OLD))
+
+    await session.open()
+
+    expect(loaded(scene)).toEqual(MIGRATED)
+    expect(session.getState()).toMatchObject({ name: 'pump.excalimathpad', dirty: false, settings: { digits: 6 } })
+    // Opening alone changed nothing on disk and left no copy to recover.
+    await vi.advanceTimersByTimeAsync(5000)
+    expect(files.save).not.toHaveBeenCalled()
+    expect(recovery.write).not.toHaveBeenCalled()
+
+    scene.edit('changed')
+    await session.save()
+    expect(formatOf(files.disk.get('pump.excalimathpad'))).toBe(2)
+  })
+
+  it('a dropped file is migrated the same way', async () => {
+    const { session, scene, files } = await setup()
+
+    await session.open(async () => picked('dropped.excalimathpad', OLD))
+
+    expect(loaded(scene)).toEqual(MIGRATED)
+    expect(session.getState()).toMatchObject({ name: 'dropped.excalimathpad', dirty: false })
+    await session.save()
+    expect(formatOf(files.disk.get('dropped.excalimathpad'))).toBe(2)
+  })
+
+  it('a recovery copy written by 0.2.x is migrated when it is restored, and stays dirty', async () => {
+    const copy = { text: OLD, name: 'pump.excalimathpad', handle: handleFor('pump.excalimathpad') }
+    const { session, scene, files, recovery } = await setup({ recovery: copy })
+
+    expect(loaded(scene)).toEqual(MIGRATED)
+    expect(session.getState()).toMatchObject({ name: 'pump.excalimathpad', dirty: true, settings: { digits: 6 } })
+
+    // The copy it writes from now on is format 2, and so is the save.
+    scene.edit('changed')
+    await vi.advanceTimersByTimeAsync(500)
+    expect(formatOf(recovery.current()?.text)).toBe(2)
+    await session.save()
+    expect(formatOf(files.disk.get('pump.excalimathpad'))).toBe(2)
+  })
+
+  it('the file read again after a save in the open flow is migrated too', async () => {
+    const { session, scene, files, dialogs } = await setup()
+    files.open.mockResolvedValue(picked('old.excalimathpad', OLD))
+    files.disk.set('old.excalimathpad', OLD)
+    scene.edit('unsaved')
+    dialogs.askSaveChanges.mockResolvedValue('save')
+    // The save goes to another file, so the picked one is read back as 0.2.x left it.
+    files.saveAs.mockImplementation(async (_name, text) => {
+      files.disk.set('mine.excalimathpad', text)
+      return { name: 'mine.excalimathpad', handle: handleFor('mine.excalimathpad') }
+    })
+
+    await session.open()
+
+    expect(files.read).toHaveBeenCalled()
+    expect(loaded(scene)).toEqual(MIGRATED)
+    expect(session.getState()).toMatchObject({ name: 'old.excalimathpad', dirty: false })
+  })
+
+  it('a kept sheet after a failed view comes back as it was kept', async () => {
+    const scene = fakeScene()
+    const session = createSheetSession({
+      scene,
+      files: fakeFiles(),
+      recovery: fakeRecovery(),
+      dialogs: fakeDialogs(),
+      line: { commitLine: vi.fn(), leaveLine: vi.fn() },
+      resume: { text: OLD, dirty: false, name: 'pump.excalimathpad', handle: handleFor('pump.excalimathpad') },
+    })
+    await session.start()
+
+    expect(loaded(scene)).toEqual(MIGRATED)
+    expect(session.getState()).toMatchObject({ dirty: false })
+  })
+
+  it('a sheet from a newer format is refused with its message, and the sheet stays as it was', async () => {
+    const { session, scene, files, dialogs } = await setup()
+    const newer = JSON.stringify({ ...(JSON.parse(OLD) as object), excalimathpad: { format: 3 } })
+    files.open.mockResolvedValue(picked('newer.excalimathpad', newer))
+
+    await session.open()
+
+    expect(dialogs.message).toHaveBeenCalledWith(MESSAGES.newer)
+    expect(scene.load).not.toHaveBeenCalled()
   })
 })
 

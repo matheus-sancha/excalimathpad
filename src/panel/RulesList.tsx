@@ -13,6 +13,12 @@ export interface RulesActions {
 
 export interface RulesListProps {
   rules: readonly FormatRule[]
+  /**
+   * How many of the rules, the first ones, are still typed in the open line's
+   * text (section 3, Where a line's format lives, M4e): the rest are stored
+   * beside the line. + Add rule's new rule goes after the typed ones.
+   */
+  typed?: number
   /** Each rule's live state; null while the evaluation hasn't caught up with the typed rules. */
   states: readonly RuleState[] | null
   /** What + Add rule names: null on a table line, which writes ` @text-red if ` alone. */
@@ -30,7 +36,7 @@ export interface RulesListProps {
  * changes is written as one joined word and one condition; the others keep
  * their exact text.
  */
-export function RulesList({ rules, states, name, actions }: RulesListProps) {
+export function RulesList({ rules, typed = rules.length, states, name, actions }: RulesListProps) {
   // The rule whose format controls are open.
   const [open, setOpen] = useState<number | null>(null)
 
@@ -121,8 +127,8 @@ export function RulesList({ rules, states, name, actions }: RulesListProps) {
         label="+ Add rule"
         onPress={() => {
           actions.addRule(name)
-          // The new rule is last; its format controls open at once.
-          setOpen(rules.length)
+          // The new rule is the last one typed in the line; its format controls open at once.
+          setOpen(typed)
         }}
       >
         + Add rule

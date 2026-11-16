@@ -17,6 +17,7 @@ const anchor = (props: Partial<MathAnchor> = {}): MathAnchor => ({
   height: 100,
   angle: 0,
   source: 'a = 1',
+  formats: '',
   locked: false,
   title: '',
   opacity: 100,
