@@ -91,7 +91,7 @@ The project keeps five documents in step with the code. A pull request that chan
 
 The issue orders of the milestones already built, the results of the spec's Verify first items and its decision index are in [`docs/spec-history.md`](docs/spec-history.md). [`CLAUDE.md`](CLAUDE.md) tells a coding agent which of these to read for an issue.
 
-Background investigations go in [`docs/research/`](docs/research/): units, solvers, undo, printing, the PWA and the Obsidian plugin. The acceptance sheet and its independent reference calculation are in [`docs/acceptance/`](docs/acceptance/).
+Background investigations go in [`docs/research/`](docs/research/): units, solvers, undo, printing, the PWA and the Obsidian plugin. The two acceptance sheets are in [`docs/acceptance/`](docs/acceptance/): the pump sheet with its independent reference calculation, and the true-position sheet.
 
 ## Architecture
 
@@ -124,7 +124,8 @@ docs/
 ├── math-guide.md     The Math guide, for users, shown in the app
 ├── adr/              Architecture decision records
 ├── research/         Investigations behind decisions
-└── acceptance/       The pump-sizing acceptance sheet and its Python reference
+└── acceptance/       The acceptance sheets: pump sizing, with its Python reference,
+                      and true position
 ```
 
 ### How it works
@@ -178,6 +179,8 @@ These rules keep the architecture sound, and the tests check several of them. Pl
 - **Unit tests** sit next to the code, as `*.test.ts` or `*.test.tsx`.
 - **Tests against the real Excalidraw component** are named `*.excalidraw.test.tsx`. Use them when behaviour depends on Excalidraw's DOM or API, such as class names in More tools or undo steps.
 - **The pump sheet is in CI.** `src/math/pump-sizing.test.ts` reads its lines from [`docs/acceptance/pump-sizing.md`](docs/acceptance/pump-sizing.md) and checks every result to 4 significant figures against an independent Python reference. A change that alters a result there needs a very good reason.
+- **The true-position sheet is in CI** (from M4e). `src/math/true-position.test.ts` reads its lines and its `check` line's stored format from [`docs/acceptance/true-position.md`](docs/acceptance/true-position.md), and checks its results to 4 significant figures, its chart (one point, one circle) and "Fail" with `dx = 0.12 mm`.
+- **The typing test** (`src/typing.test.tsx`) types every Math guide example and both acceptance sheets one character at a time, and fails on any throw. A new example in the guide is typed too.
 - **The Math guide is in CI.** `src/math/math-guide.test.ts` runs each section of [`docs/math-guide.md`](docs/math-guide.md) as one sheet: every `Write | Shows | Note` row (a Write cell in italics marks a row that isn't math, and is skipped) and every `sheet` code block, whose results follow `→`. It also fails on a link outside the guide. Write a Shows cell as the screen shows the result (`82.19 cm²`); `—` is an empty result cell, `` ● `message` `` an error and `` ⚠ `message` `` a warning.
 - **Fixing a bug?** Add a test that fails without the fix.
 
@@ -238,6 +241,8 @@ The web app and the Obsidian plugin share **one version**, from `package.json` (
 - **`main.js` is never committed.** It is built in the workflow and attached to the release.
 - **The plugin's stamp** in the ☰ menu is its version (`0.1.0`); the web app's stamp stays the commit and date.
 - **Betas** are installed through [BRAT](https://github.com/TfTHacker/obsidian42-brat) from this repository until the plugin is listed. Fixes ship as `0.1.x`.
+- **To 1.0.0.** `0.2.1` is a fix release. M4e ships as the beta `0.3.0` through BRAT, M5 follows, and the release after it is `1.0.0`, the version submitted to the community list. A sheet saved by `0.3.0` or later is format 2, which `0.2.x` refuses, so every device takes the beta before one of them saves a sheet.
+- **Start-up.** The plugin's own figure in Obsidian's startup-time view is read on the work laptop and recorded on one phone. If the laptop's figure is over 150 ms, loading the app only when the first sheet opens is built before `1.0.0`; otherwise after.
 
 **Before Publish,** tick the draft's checklist. It is this list, kept in `.github/release-checklist.md`:
 
@@ -250,9 +255,19 @@ The web app and the Obsidian plugin share **one version**, from `package.json` (
 - [ ] The device checklist, on an iPhone, an iPad, an Android phone and an Android tablet, before the first release with `isDesktopOnly: false` and before any release that changes touch, panel or overlay code (otherwise say in the notes that it was skipped): open a sheet from the vault; Add math from More tools, then a tap; double-tap a line and the title, and see the keyboard come up; Done, ↑ ↓ and Edit; format, with a rule; Symbols and the quick keys; a tap's tip, and the unit slots and ⚙ a touch selection shows; save, close and reopen; a sync round trip; on a phone, the bottom sheet stays above the keyboard
 - [ ] Write each device's result, with the device and OS versions, in the release notes. If any device failed, don't publish: set `isDesktopOnly: true` in `manifest.json` and release again
 
+**Before `1.0.0` is published,** besides the draft's checklist and the device checklist (M4e and M5 change panel and overlay code, so it runs again on the four devices), check by hand:
+
+- On the work laptop, in Obsidian: a format 1 sheet saved by `0.2.x` opens with its formats and saves as format 2.
+- The pump sheet and the true-position sheet show their values.
+- Print… gives a clean PDF through the system dialog, and in the web app in Chrome.
+- The Sheet panel docks, drags and remembers its width.
+- The plugin's start-up time is read in Obsidian's startup-time view.
+- The odd-values probe (about 8 minutes) has run.
+- On the four devices, also: no Print… command, the bottom sheet's sample, and a tablet docking the panel by its width.
+
 ## Roadmap
 
-v1 is built in milestones ([spec section 16](docs/spec-v1.md#16-milestones-and-finish-line)). M1 to M4c are built, and M4d is being finished. The web app targets Chrome and Edge on desktop; the plugin targets Obsidian 1.7.2 or later.
+v1 is built in milestones ([spec section 16](docs/spec-v1.md#16-milestones-and-finish-line)). M1 to M4e are built; M5 is next, and then `1.0.0`. The web app targets Chrome and Edge on desktop; the plugin targets Obsidian 1.7.2 or later.
 
 - [x] **M0 Spike.** Live recalculation across math elements.
 - [x] **M1 Keepable sheet.** Typeset lines, line-by-line editing, undo, save and open, recovery copy.
@@ -261,15 +276,16 @@ v1 is built in milestones ([spec section 16](docs/spec-v1.md#16-milestones-and-f
 - [x] **M4 Ranges & plots.** Ranges and lists, tables, plots, plot settings.
 - [x] **M4b Hosted build.** Deployed to Cloudflare Pages on merge, with a build stamp.
 - [x] **M4c Improvements.** Range solve for every root, indexing, text colours, conditional formats, chosen width, title format.
-- [ ] **M4d Plugin & panel.** The Obsidian plugin on desktop, phone and tablet; the Format, Rules and Symbols tabs; checks with `if()` and text; comment-line formats; the Math guide; the community listing.
-- [ ] **M5 Print.** Print the sheet to clean PDF pages.
-- [ ] **M6 Offline PWA.** Install the app, work offline, open a `.excalimathpad` file from the desktop.
+- [x] **M4d Plugin & panel.** The Obsidian plugin on desktop, phone and tablet; the Format, Rules and Symbols tabs; checks with `if()` and text; comment-line formats; the Math guide.
+- [x] **M4e Room to work.** Unexpected failures stay small; a line's format stored beside it; the line's field wraps; a wider, resizable Sheet panel; a point in a tolerance circle as one chart; a lighter plugin; the true-position sheet.
+- [ ] **M5 Print.** Print the sheet to clean PDF pages, from the web app and from Obsidian on a computer. Then `1.0.0`, submitted to Obsidian's community list.
+- [ ] **M6 Offline PWA** (after 1.0.0). Install the app, work offline, open a `.excalimathpad` file from the desktop.
 
-**v1 is done** when all three hold:
+**v1 is done, and released as 1.0.0,** when all three hold:
 
-1. The [pump sheet](docs/acceptance/pump-sizing.md) passes steps 1-4.
-2. The installed PWA opens a `.excalimathpad` file and works offline.
-3. It has been used for one real calculation other than the pump sheet.
+1. The [pump sheet](docs/acceptance/pump-sizing.md) passes steps 1-4, step 4 in both homes.
+2. The [true-position sheet](docs/acceptance/true-position.md) passes its checks, and the release checklist has passed on the build that becomes 1.0.0.
+3. It has been used for one real calculation other than the pump sheet. This is met: the true-position sheet.
 
 What v1 deliberately leaves out is listed in [spec section 1](docs/spec-v1.md#1-what-v1-is-and-what-it-isnt). The roadmap follows the maintainer's own engineering work.
 

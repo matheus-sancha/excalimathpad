@@ -24,22 +24,6 @@ import { LineSample } from './MathElementView.tsx'
 
 const ACCEPTANCE = import.meta.glob<string>('../../docs/acceptance/*.md', { query: '?raw', import: 'default', eager: true })
 
-/** Section 15's true-position sheet, until `docs/acceptance/true-position.md` holds it (#202). */
-const TRUE_POSITION: TypedSheet = {
-  name: 'true position (section 15)',
-  lines: [
-    '# True position, RFS (ASME Y14.5)',
-    'dx = 0.08 mm',
-    'dy = -0.05 mm',
-    'T_p = 0.25 mm',
-    'TP = 2 sqrt(dx^2 + dy^2) in mm',
-    'check = if(TP <= T_p, "Pass", "Fail") @text-green if result == "Pass" @text-red if result == "Fail"',
-    'used = TP / T_p * 100',
-    'margin = T_p - TP in mm',
-    'plot(dx, dy), circle T_p / 2, title "True position"',
-  ],
-}
-
 /** The CSS `katexModule.ts` imports, which both builds read (from the repository's root, where the tests run). */
 const css = readFileSync(resolve('node_modules/katex/dist/katex.min.css'), 'utf8')
 const dropped = droppedClasses(css)
@@ -71,7 +55,6 @@ const inDropped = (classes: Set<string>) => [...classes].filter((name) => droppe
 const sheets = [
   ...guideSheets(),
   ...Object.entries(ACCEPTANCE).map(([path, text]) => acceptanceSheet(path.replace(/^.*\//, ''), text)),
-  TRUE_POSITION,
 ]
 
 afterEach(cleanup)
@@ -104,6 +87,7 @@ describe("KaTeX's fonts in the plugin (section 14, M4e, Lighter plugin)", () => 
   it('typesets every guide line, the pump sheet and the true-position sheet in kept fonts only', () => {
     expect(sheets.filter(({ name }) => name.startsWith('guide: ')).length).toBeGreaterThanOrEqual(13)
     expect(sheets.find(({ name }) => name === 'pump-sizing.md')?.lines).toHaveLength(43)
+    expect(sheets.find(({ name }) => name === 'true-position.md')?.lines).toHaveLength(9)
     const drawn = new Set<string>()
     for (const sheet of sheets) {
       const classes = drawnClasses(sheet)

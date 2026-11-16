@@ -9,8 +9,7 @@ import { acceptanceSheet, guideSheets, report, sheetChecker } from './test/sheet
  * failures): a half-typed line is the sheet's own error, never the app's.
  *
  * It reads its lines from the guide and from `docs/acceptance/*.md`, so it
- * grows with them: the pump sheet today, the true-position sheet once its
- * file is there.
+ * grows with them: the pump sheet and the true-position sheet.
  */
 const ACCEPTANCE = import.meta.glob<string>('../docs/acceptance/*.md', { query: '?raw', import: 'default', eager: true })
 
@@ -19,9 +18,10 @@ it('types every guide example and acceptance sheet one character at a time', { t
     ...guideSheets(),
     ...Object.entries(ACCEPTANCE).map(([path, text]) => acceptanceSheet(path.replace(/^.*\//, ''), text)),
   ]
-  // The guide's sections with examples, and the pump sheet's 43 lines.
+  // The guide's sections with examples, the pump sheet's 43 lines and the true-position sheet's 9.
   expect(sheets.filter(({ name }) => name.startsWith('guide: ')).length).toBeGreaterThanOrEqual(13)
   expect(sheets.find(({ name }) => name === 'pump-sizing.md')?.lines).toHaveLength(43)
+  expect(sheets.find(({ name }) => name === 'true-position.md')?.lines).toHaveLength(9)
   for (const { name, lines } of sheets) expect(lines.length, name).toBeGreaterThan(0)
 
   const checker = await sheetChecker()

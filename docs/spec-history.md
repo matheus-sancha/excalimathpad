@@ -514,6 +514,11 @@ The items with a recorded result. Those still open are in
   Plot chunk from 297 to 170 KB (#200). `npm run check`, its five Playwright runs included, passes
   on the built plugin; the network-blocked run now also fails on a KaTeX class drawn in a family
   with no font. Not run in Obsidian or on a device (the beta `0.3.0`).
+- (M4e) The typing test's time in CI with the new guide examples (59 s when measured). **Measured
+  (2026-11-16, #202, with M4e's guide and both acceptance sheets):** 4,920 states, the guide's 13
+  sections with examples, the pump sheet's 43 lines and the true-position sheet's 9; 70 s alone on
+  one core of the build machine (4 cores), and 74 s inside `npm test` (the whole run 124 s), well
+  under its 900 s limit. It stays in `npm run check`. Not timed on GitHub's runner itself.
 
 ## 18. Decision index
 

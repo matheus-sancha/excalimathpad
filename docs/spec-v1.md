@@ -3079,11 +3079,10 @@ Evidence: [`obsidian-plugin.md`](research/obsidian-plugin.md).
   sheet text (`src/failure/injected.excalidraw.test.tsx` on the web,
   `plugin/test/failure.test.ts` in a vault).
 - **The typing test,** in `npm run check`: every Math guide example, the true-position sheet
-  and the pump sheet, one character at a time, through the engine and the view (4,765 states
-  and 59 s on one core when measured). It fails on any throw and on any state that reaches the
-  per-line guard. It reads its lines from the guide and the acceptance sheets
-  (`src/typing.test.tsx`: every `docs/acceptance/*.md`, so the true-position sheet is typed
-  once its file is there).
+  and the pump sheet, one character at a time, through the engine and the view (4,920 states
+  and 70 to 74 s on one core with M4e's guide, #202). It fails on any throw and on any state
+  that reaches the per-line guard. It reads its lines from the guide and the acceptance sheets
+  (`src/typing.test.tsx`: every `docs/acceptance/*.md`, the true-position sheet included).
 - **The view's boundary tells the sheet file while React still renders,** before anything is
   unmounted: Excalidraw empties its scene as it unmounts, so a copy taken later would be an
   empty sheet. From that call on the sheet file writes nothing (`fail`, on the web's session
@@ -3277,7 +3276,8 @@ plot(dx, dy), circle T_p / 2, title "True position"
 ```
 
 with `@text-green if result == "Pass" @text-red if result == "Fail"` as the `check` line's
-stored format. CI feeds its lines through `evaluateSheet` and compares: `TP` 0.1887 mm,
+stored format. CI (`src/math/true-position.test.ts`) feeds its lines, and that format as stored,
+through `evaluateSheet` and compares: `TP` 0.1887 mm,
 `check` "Pass", `used` 75.47, `margin` 0.06132 mm, and a chart with one point and one circle.
 With `dx = 0.12 mm`, `check` is "Fail". The typing test reads this file too
 ([section 14](#14-engineering-constraints)).
@@ -3477,7 +3477,6 @@ M1 to M4d, is in [`docs/spec-history.md`](spec-history.md#17-verify-first), with
   rule moves it from the line to the new row's field, which isn't the tap's own focus; whether
   the bottom sheet shows that field above a real keyboard; and Ctrl+Z between the two fields
   in WebKit and Firefox, which may not share Chromium's one text undo.
-- The typing test's time in CI with the new guide examples (59 s when measured).
 - The plugin's start-up time in Obsidian, on the work laptop and one phone.
 - That the overlay scrolling (0.2.1) is what Matheus saw as the chart "spilling out of its
   box" is not confirmed: he looks again on the beta.
