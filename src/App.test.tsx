@@ -1036,6 +1036,43 @@ describe('App', () => {
       expect(overlay().style.getPropertyValue('--math-result')).toBe('#e03131')
     })
 
+    it('Settings: the Page row sets the paper and orientation, saved in the file, dirty and outside undo (M5, #80)', async () => {
+      const { files } = renderApp({
+        initialElements: createMathAnchorElements([{ id: 'm1', x: 100, y: 100, width: 300, height: 48, source: 'p = 2 Pa' }]),
+      })
+      await ready()
+      fireEvent.click(await sheetButton())
+      fireEvent.mouseDown(await screen.findByRole('tab', { name: 'Settings' }))
+      const page = await screen.findByRole('group', { name: 'Page' })
+      // A4 portrait by default (section 11, Page).
+      expect(within(page).getByLabelText('Paper size')).toHaveValue('A4')
+      expect(within(page).getByLabelText('Orientation')).toHaveValue('portrait')
+
+      fireEvent.change(within(page).getByLabelText('Paper size'), { target: { value: 'Letter' } })
+      fireEvent.change(within(page).getByLabelText('Orientation'), { target: { value: 'landscape' } })
+      await waitFor(() => expect(document.title).toBe('● Untitled'))
+      expect(within(page).getByLabelText('Paper size')).toHaveValue('Letter')
+      expect(within(page).getByLabelText('Orientation')).toHaveValue('landscape')
+
+      // Ctrl+Z doesn't reach it.
+      act(() => {
+        document
+          .querySelector('.excalidraw')!
+          .dispatchEvent(new KeyboardEvent('keydown', { key: 'z', ctrlKey: true, bubbles: true, cancelable: true }))
+      })
+      expect(within(page).getByLabelText('Paper size')).toHaveValue('Letter')
+
+      act(() => {
+        document
+          .querySelector('.excalidraw')!
+          .dispatchEvent(new KeyboardEvent('keydown', { key: 's', ctrlKey: true, bubbles: true, cancelable: true }))
+      })
+      await waitFor(() => expect(files.saveAs).toHaveBeenCalledOnce())
+      const saved = JSON.parse(files.disk.get('Untitled.excalimathpad')!)
+      expect(saved.excalimathpad.format).toBe(2)
+      expect(saved.excalimathpad.settings.page).toEqual({ size: 'Letter', orientation: 'landscape' })
+    })
+
     it('Settings: Custom changes the unit for a chosen kind', async () => {
       renderApp({
         initialElements: createMathAnchorElements([

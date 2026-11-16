@@ -90,11 +90,14 @@ second key in `localStorage` on the web, given by `src/main.tsx`;
 told; `SheetCanvas` brings a remembered width into range. The frame the tabs
 are drawn in, the icon tabs, each tab's heading and the drag handle are the
 canvas's ([canvas](canvas.md)). `SettingsTab.tsx`
-edits the unit system, Custom's kind → unit table, Digits and the Result
+edits the unit system, Custom's kind → unit table, Digits, the Result
 colour (`settings.resultColor`, one of the six text colours; App hands it to
-`MathOverlay`, which sets `--math-result` on the overlay) through the
+`MathOverlay`, which sets `--math-result` on the overlay) and, from M5 (#80),
+the Page row (`settings.page`, spec section 11: two selects, Paper size over
+Orientation, in a group named Page, so both fit at 280 px; the panel run
+measures them) through the
 session's `setSettings` (saved with the sheet, dirty, not in undo); App
 hands the session's settings to `MathOverlay`, which evaluates with them. App does the jump
 (`jumpToAnchor` in `canvas/selection.ts`: scroll, select with `NEVER`) and
 the flash (`MathOverlay`'s `flash`, a row class). Depends on: math, overlay
-(KaTeX).
+(KaTeX), print (`PageSetting`).

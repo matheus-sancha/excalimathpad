@@ -1739,9 +1739,9 @@ Decided in: [file](https://github.com/matheus-sancha/excalimathpad/issues/12),
 
 Built in M1 (☰ file items, file name, Add math) and M2 (Math settings and the Sheet panel). From
 M4d the label is **Math settings**, in sentence case in both homes (until M4d "Math
-Settings"), and so is every UI text, for Obsidian's lint. Print…
-and the Page row arrive in M5; until then Ctrl+P is the browser's own and prints the
-screen. There is no app bar: the chrome lives inside Excalidraw's own UI slots.
+Settings"), and so is every UI text, for Obsidian's lint. The Page
+row is built in M5 (#80); Print… arrives with it (#81), and until then Ctrl+P is the browser's
+own and prints the screen. There is no app bar: the chrome lives inside Excalidraw's own UI slots.
 
 ```
 ☰  ● pump-sizing.excalimathpad      [ Excalidraw's toolbar … More tools ② ]      Library
@@ -1864,7 +1864,7 @@ As built (#198):
 |---|---|
 | **Variables** | A filter box, then every name in reading order, grouped by element, labelled by the element's position. Row: typeset name, value, unit, in the unit system and Digits. A name defined twice appears twice. A line with an error shows "error". A text shows plain, as in its result cell (M4d). A list shows its summary (`30 values, 1 … 30 L/s`). A function shows its signature, `H_s(Q)`, with `function` or `solve function` as the value and a blank unit. Comments and notes don't appear |
 | **Problems** | Errors `●` and warnings `⚠` in one list in reading order, each with its message and "element, line n · name". Comments and notes don't appear |
-| **Settings** | Unit system, and for Custom its kind → unit table. Digits, 2 to 15. Result colour, one of six (M4c). Page: A4 or Letter, portrait or landscape |
+| **Settings** | Unit system, and for Custom its kind → unit table. Digits, 2 to 15. Result colour, one of six (M4c). Page: A4 or Letter, portrait or landscape (M5, #80: one row, the paper size over the orientation, so both fit at 280 px) |
 | **Constants** | A filter box, then every [built-in constant](#constants) in its group. Row: its symbol typeset and its value in the unit system and Digits, then what it is and the names a line reads it by (`c or speedOfLight`). The filter matches names and descriptions. Nothing here is the sheet's, so a row doesn't jump. From M4d a click inserts its name at the caret ([Symbols tab](#symbols-tab)) |
 
 - **An element with a title is named by it** in Variables and Problems ("Pipe flow, line 3"),
@@ -2367,6 +2367,23 @@ rules above stand. Where these differ from the Print flow above, these win:
   there is one print path; otherwise it keeps [section 14](#14-engineering-constraints)'s
   recipe as written.
 - **The Page row** fits the Settings tab at the panel's least width, 280 px.
+
+**As built (#80):** the pages are one pure function, `printPages` (`src/print/pages.ts`), from the
+drawings' boxes, each math element's box and its measured rows, and the Page, the same in both homes.
+It draws nothing; the print view (#81) draws what it returns.
+
+- **The room on a page** is the paper less the 15 mm margins and an 8 mm band for the footer above
+  the bottom margin: 180 × 259 mm on A4 portrait. The scale is that width over the content's.
+- **The unbreakable boxes** are each drawing that fits a page, Excalidraw text included; and each
+  row of a math element as laid out: the title, a math line, a comment row, a plot line whole (its
+  line and its chart), and a table's header row and each of its rows. A box taller than a page,
+  a row too, never holds back the break. A rotated element is one box, as a drawing is.
+- **A table's line, its header row and its first row stay together,** so a page never ends on a
+  header with no row under it. When a break falls between a table's rows, the next page repeats
+  the header above them, and the page holds that much less of the sheet.
+- **A clean gap** is a height that no unbreakable box crosses by more than half a pixel. The break
+  moves up from the page's bottom to the nearest one below the top of the page's first box; a gap
+  above that would print an empty page, so it doesn't count, and the fallback cuts at the bottom.
 
 Decided in: [print](https://github.com/matheus-sancha/excalimathpad/issues/21),
 [Chromium PDF](https://github.com/matheus-sancha/excalimathpad/issues/34),
@@ -3422,7 +3439,7 @@ Everything the tickets marked untested. Check each early in its milestone, and r
 Changes line if it changes behaviour.
 
 What is listed here is still open. Every item with a recorded result (passed, changed, measured or found), from
-M1 to M4d, is in [`docs/spec-history.md`](spec-history.md#17-verify-first), with the result. When an item here gets its result, it moves there.
+M1 to M5, is in [`docs/spec-history.md`](spec-history.md#17-verify-first), with the result. When an item here gets its result, it moves there.
 
 **M4b**
 
@@ -3451,7 +3468,6 @@ M1 to M4d, is in [`docs/spec-history.md`](spec-history.md#17-verify-first), with
 **M5**
 
 - Excalidraw text in Nunito on the pump sheet's heading.
-- Staggered side-by-side elements and the no-clean-gap fallback.
 - A drawing taller than a page, dark mode, and images in drawings.
 - Taking over Ctrl+P with real keys, and a person at an open dialog.
 - KaTeX 0.16.47, which the repo resolves, against the 0.19.1 the PDF probe used.

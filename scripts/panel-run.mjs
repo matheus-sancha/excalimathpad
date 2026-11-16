@@ -37,6 +37,14 @@
 //   and no tick number, axis title or mark's label runs past the chart's box,
 //   on these, on the pump sheet's chart (its legend, grid and mark kept) and
 //   on charts made to push text out (a mark at each edge, huge tick numbers).
+// - The Page row (section 11, M5, #80) in the Settings tab, at 320 and 280 px:
+//   its two choices whole. The page breaks on boxes Chromium lays out
+//   (section 17's check for M5): the pump sheet, its heading and its 30-row
+//   table, laid out for A4 portrait and the other three pages, breaks only in
+//   clean gaps, through no row, plot, table row or drawing that fits, and a
+//   split table repeats its header; staggered side-by-side elements taller
+//   than a page are cut at the page's bottom; a rectangle taller than a page
+//   doesn't hold back a break, and a heading beside the lines does.
 //
 // Run: `node scripts/panel-run.mjs` (`npm run test:panel`), after
 // `npm run build`. PANEL_RUN_SHOTS=<folder> keeps a screenshot of each step.
@@ -61,6 +69,21 @@ const fake = await build({
   bundle: true,
   format: 'iife',
   globalName: 'FakeObsidian',
+  write: false,
+  target: ['es2022'],
+})
+
+// The print pages' pure function and the overlay's row reader, as the app builds them (section 11).
+const printCheck = await build({
+  absWorkingDir: root,
+  stdin: {
+    contents: "export { printRows } from './src/overlay/printRows.ts'\nexport { printPages } from './src/print/pages.ts'",
+    resolveDir: root,
+    loader: 'ts',
+  },
+  bundle: true,
+  format: 'iife',
+  globalName: 'PrintCheck',
   write: false,
   target: ['es2022'],
 })
@@ -600,6 +623,24 @@ try {
         if (name === 'Settings') {
           // Custom shows the kind → unit table, the widest thing in Settings.
           await tab.locator('.sheet-sidebar select').first().selectOption({ label: 'Custom' })
+          // The Page row (section 11, M5): its longest choices, whole in their boxes.
+          await tab.locator('.sheet-sidebar select[aria-label="Paper size"]').selectOption('Letter')
+          await tab.locator('.sheet-sidebar select[aria-label="Orientation"]').selectOption('landscape')
+          const fit = await tab.evaluate(() => {
+            const measure = document.createElement('canvas').getContext('2d')
+            return [...document.querySelectorAll('.sheet-sidebar .sheet-settings__page select')].map((select) => {
+              measure.font = getComputedStyle(select).font
+              const text = measure.measureText(select.selectedOptions[0].textContent).width
+              const side = select.getBoundingClientRect()
+              const panel = document.querySelector('.excalidraw .sidebar.sheet-sidebar').getBoundingClientRect()
+              return { label: select.getAttribute('aria-label'), width: select.clientWidth, text, inside: side.left >= panel.left && side.right <= panel.right }
+            })
+          })
+          row(
+            'the Page row’s two choices are whole: Letter, Landscape',
+            fit.length === 2 && fit.every((f) => f.inside && f.width >= f.text + 36),
+            fit.map((f) => `${f.label} ${px(f.width)} px for ${px(f.text)} px of text`).join(', '),
+          )
         }
         s = await read(name)
         const cut = await tab.evaluate(() => window.__cut())
@@ -768,6 +809,125 @@ try {
     }, { data: null, height: 1700 })
   }
 
+  // The page breaks on boxes Chromium lays out (section 11, Page breaks; section 17's check for M5).
+  await run('breaks', 1280, async ({ tab, row, start }) => {
+    const A4 = { size: 'A4', orientation: 'portrait' }
+    const PAGES = [A4, { size: 'A4', orientation: 'landscape' }, { size: 'Letter', orientation: 'portrait' }, { size: 'Letter', orientation: 'landscape' }]
+    /** The sheet open in the view, its boxes measured, and its pages for each Page. */
+    const measure = async (text, ids) => {
+      await start(null, text)
+      for (const id of ids) await tab.waitForSelector(`[data-anchor-id="${id}"] .katex`, { timeout: 30_000 })
+      await tab.waitForTimeout(1500)
+      await tab.addScriptTag({ content: printCheck.outputFiles[0].text })
+      return tab.evaluate((pages) => {
+        const scene = JSON.parse(window.__leaf.view.getViewData())
+        const live = scene.elements.filter((e) => !e.isDeleted)
+        const drawings = live.filter((e) => e.customData?.kind !== 'math').map(({ id, type, x, y, width, height }) => ({ id, type, x, y, width, height }))
+        const elements = live.filter((e) => e.customData?.kind === 'math').map((e) => {
+          const body = document.querySelector(`.math-overlay > [data-anchor-id="${e.id}"] .math-element__body`)
+          // The anchor's size is the body's (section 4, Size); the body is what is laid out.
+          return { id: e.id, x: e.x, y: e.y, width: body.offsetWidth, height: body.offsetHeight, angle: e.angle, rows: window.PrintCheck.printRows(body) }
+        })
+        return {
+          drawings,
+          elements,
+          charts: document.querySelectorAll('.math-element__plot-chart > svg').length,
+          layouts: pages.map((page) => window.PrintCheck.printPages({ drawings, elements, page })),
+        }
+      }, PAGES)
+    }
+    /** What a break at `y` passes through: rows, and drawings that fit a page. */
+    const through = (y, { drawings, elements }, layout) => {
+      const tall = layout.room.height / layout.scale
+      const rows = elements.flatMap((e) => e.rows.map((r) => ({ name: `${e.id} ${r.kind} ${r.line}`, top: e.y + r.top, bottom: e.y + r.top + r.height })))
+      const fits = drawings.filter((d) => d.height <= tall).map((d) => ({ name: `${d.type} ${d.id}`, top: d.y, bottom: d.y + d.height }))
+      return [...rows, ...fits].filter((b) => b.top + 0.5 < y && y < b.bottom - 0.5).map((b) => b.name)
+    }
+    const name = (page) => `${page.size} ${page.orientation}`
+    const breaksOf = (layout) => layout.pages.slice(0, -1).map((p) => px(p.bottom))
+
+    // The pump sheet (section 15): its heading, Excalidraw text, over one element with every line.
+    const PUMP_ALL = [...(await readFile(join(root, 'docs/acceptance/pump-sizing.md'), 'utf8')).matchAll(/^\| (c|\d+[a-z]?) \| `(.+?)` \|/gm)].map(([, , source]) => source)
+    const pump = await measure(JSON.stringify({
+      type: 'excalidraw',
+      version: 2,
+      elements: [
+        { id: 'heading', type: 'text', x: 40, y: 40, width: 160, height: 35, text: 'Pump sizing', originalText: 'Pump sizing', fontSize: 28, fontFamily: 6, textAlign: 'left', verticalAlign: 'top', lineHeight: 1.25 },
+        { id: 'calc', type: 'rectangle', x: 40, y: 100, width: 160, height: 60, customData: { kind: 'math', source: PUMP_ALL.join('\n') } },
+      ],
+      appState: {},
+      files: {},
+      excalimathpad: { format: 2 },
+    }), ['calc'])
+    const calc = pump.elements[0]
+    const tableRows = calc.rows.filter((r) => r.kind === 'table-row').length
+    row(
+      'the pump sheet is measured: every line, the table’s header and 30 rows, the plot',
+      calc.rows.filter((r) => r.kind === 'line' || r.kind === 'comment' || r.kind === 'plot').length === PUMP_ALL.length && tableRows === 30 && calc.rows.some((r) => r.kind === 'table-header') && calc.rows.some((r) => r.kind === 'plot') && pump.charts === 1,
+      `${calc.rows.length} rows, ${tableRows} table rows, ${px(calc.height)} units tall`,
+    )
+    for (const [i, layout] of pump.layouts.entries()) {
+      const cuts = layout.pages.slice(0, -1).map((p) => ({ y: p.bottom, through: through(p.bottom, pump, layout), end: p.end }))
+      const tall = layout.room.height / layout.scale
+      row(
+        `pump sheet, ${name(PAGES[i])}: ${layout.pages.length} pages, every break in a clean gap, through no unbreakable box`,
+        layout.pages.length >= 2 && cuts.every((c) => c.end === 'gap' && c.through.length === 0) && layout.pages.every((p) => p.bottom - p.top + p.headerRoom <= tall + 0.01) && layout.pages.at(-1).bottom === layout.content.y + layout.content.height,
+        `scale ${px(layout.scale)}, breaks at ${breaksOf(layout).join(', ')}${cuts.some((c) => c.through.length) ? `; through ${cuts.flatMap((c) => c.through).join(' | ')}` : ''}`,
+      )
+      // A break between table rows repeats the header on the next page, and only then.
+      const table = calc.rows.filter((r) => r.kind === 'table-row').map((r) => ({ top: calc.y + r.top, bottom: calc.y + r.top + r.height }))
+      const splits = layout.pages.slice(0, -1).map((p) => table.some((r) => r.bottom <= p.bottom + 0.5) && table.some((r) => r.top >= p.bottom - 0.5))
+      row(
+        `pump sheet, ${name(PAGES[i])}: a page after a break in the table repeats its header, and no other does`,
+        layout.pages.slice(1).every((p, k) => (p.headers.length === 1) === splits[k]),
+        `${splits.filter(Boolean).length} breaks in the table`,
+      )
+    }
+
+    // Staggered side-by-side elements taller than a page: no clean gap, so a cut at the page's bottom.
+    const staggered = Array.from({ length: 60 }, (_, i) => `a_${i} = ${i} m`).join('\n')
+    const stagger = await measure(JSON.stringify({
+      type: 'excalidraw',
+      version: 2,
+      elements: [
+        { id: 'calc', type: 'rectangle', x: 40, y: 40, width: 160, height: 60, customData: { kind: 'math', source: staggered } },
+        { id: 'right', type: 'rectangle', x: 300, y: 52, width: 160, height: 60, customData: { kind: 'math', source: staggered.replaceAll('a_', 'b_') } },
+      ],
+      appState: {},
+      files: {},
+      excalimathpad: { format: 2 },
+    }), ['calc', 'right'])
+    const heights = [...new Set(stagger.elements.flatMap((e) => e.rows.map((r) => px(r.height))))]
+    const a4 = stagger.layouts[0]
+    row(
+      'staggered side-by-side elements taller than a page are cut at the page’s bottom',
+      stagger.elements.every((e) => e.rows.length === 60 && e.height > a4.room.height) && a4.pages[0].end === 'cut' && Math.abs(a4.pages[0].bottom - (a4.pages[0].top + a4.room.height)) < 0.01 && a4.pages[1].top === a4.pages[0].bottom,
+      `rows ${heights.join(', ')} units tall; page 1 from ${px(a4.pages[0].top)} to ${px(a4.pages[0].bottom)}, ${a4.pages[0].end}`,
+    )
+
+    // A rectangle taller than a page doesn't hold back the break; a heading beside the lines does.
+    const framed = await measure(JSON.stringify({
+      type: 'excalidraw',
+      version: 2,
+      elements: [
+        { id: 'frame', type: 'rectangle', x: 0, y: 0, width: 600, height: 1700 },
+        { id: 'calc', type: 'rectangle', x: 20, y: 20, width: 160, height: 60, customData: { kind: 'math', source: staggered } },
+        { id: 'heading', type: 'text', x: 360, y: 960, width: 160, height: 35, text: 'Pump sizing', originalText: 'Pump sizing', fontSize: 28, fontFamily: 6, textAlign: 'left', verticalAlign: 'top', lineHeight: 1.25 },
+      ],
+      appState: {},
+      files: {},
+      excalimathpad: { format: 2 },
+    }), ['calc'])
+    const f = framed.layouts[0]
+    const heading = framed.drawings.find((d) => d.id === 'heading')
+    const first = f.pages[0].bottom
+    row(
+      'a rectangle taller than a page is cut; the break moves up above the heading beside the lines, to a gap between rows',
+      f.pages[0].end === 'gap' && first <= heading.y + 0.5 && first > heading.y - 40 && through(first, framed, f).length === 0 && f.pages.length >= 2,
+      `heading ${px(heading.y)} to ${px(heading.y + heading.height)}, break at ${px(first)}`,
+    )
+  }, { data: null, height: 1700 })
+
   // The web app: the width survives a reload, in the browser's own storage.
   await run('web', 1280, async ({ tab, row, read, drag, docked }) => {
     const open = async () => {
@@ -803,4 +963,4 @@ if (failed.length || errors.length || results.length === 0) {
   for (const error of errors) console.error(`  - ${error}`)
   process.exit(1)
 }
-console.log('Panel run passed: 320 px, icon tabs, the drag handle, docking by width, every tab usable at 280 px, the Format tab’s sample, and the charts.')
+console.log('Panel run passed: 320 px, icon tabs, the drag handle, docking by width, every tab usable at 280 px, the Format tab’s sample, the charts, the Page row and the page breaks.')

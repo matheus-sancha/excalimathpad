@@ -192,6 +192,11 @@
   font: inherit;
 }
 
+.sheet-settings__page {
+  display: grid;
+  gap: 4px;
+}
+
 .sheet-settings input[aria-invalid='true'] {
   border-color: #e03131;
 }
