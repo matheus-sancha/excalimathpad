@@ -503,6 +503,17 @@ The items with a recorded result. Those still open are in
   second; at 280 px its equation is 3.4 px narrower than the box's room, which is why the sample's side
   padding is 5 px and a problem's mark takes its column only when there is one. Not run in Obsidian or
   on a device (the beta `0.3.0`).
+- (M4e) The savings of the plugin cuts (87 KB, about 148 KB and 109 KB), probed as separate bundles or
+  read from the source. **Measured together (2026-11-16, #200 and #201, the built plugin):** `main.js`
+  went from 3,594,195 to 3,380,158 bytes and `styles.css` from 663,706 to 554,953, so the plugin is
+  322,790 bytes (7.6%) smaller, 4,258,307 to 3,935,517 with the manifest. Each cut, in its turn:
+  Observable Plot by name 126,343 bytes of `main.js` (#200; the probe's 147,625 less what the point
+  and the circle brought back), math.js's help texts 87,694 (#201, with `help` disabled; probed
+  87,188) and the four KaTeX font families 108,753 of `styles.css` (#201; read as 108,753). The web
+  app's entry chunk went from 2,295,927 to 2,211,210 bytes with the help texts (84,717 less); its
+  Plot chunk from 297 to 170 KB (#200). `npm run check`, its five Playwright runs included, passes
+  on the built plugin; the network-blocked run now also fails on a KaTeX class drawn in a family
+  with no font. Not run in Obsidian or on a device (the beta `0.3.0`).
 
 ## 18. Decision index
 

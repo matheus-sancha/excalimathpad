@@ -2621,6 +2621,7 @@ The wording of every user-facing message. `<…>` is filled in. Numbers follow
 | Recursion with no end | `loop calls itself without end` | M2 |
 | An error inside a body, on the calling line | `in k(1 s): Units do not match` | M2 |
 | `in <unit>` on a definition | `Set a function's display unit on the line that calls it` | M2 |
+| A function the app turns off, such as `help(sin)` | `help is not supported in a math element` (the same for `evaluate`, `config`, `simplify` and the others) | M4e |
 
 **Units**
 
@@ -3211,7 +3212,28 @@ Evidence: [`obsidian-plugin.md`](research/obsidian-plugin.md).
 - **Lighter plugin:** math.js's help texts are stubbed out (in `esbuild.plugin.mjs`, and by an
   alias in `vite.config.ts` for the web app); four unused KaTeX font families are dropped,
   with a test that typesets every guide line and fails on a font class that was dropped. The
-  web app isn't trimmed otherwise.
+  web app isn't trimmed otherwise. As built (#201):
+  - The help texts are `mathjs`'s `expression/embeddedDocs/embeddedDocs.js`, which both builds
+    resolve to an empty module (`src/math/noHelpTexts.ts`); the plugin's build fails if it
+    stubbed nothing. `npm run dev`'s pre-bundled math.js still carries them; nothing reads them. Only `help()` reads them, and no part of the app does: the suggestion list,
+    the Symbols tab and the Math guide are the app's own text. `help` is disabled in the engine
+    like `evaluate` and `config`, so `help(sin)` is the line's error
+    `help is not supported in a math element` (it was `evaluate is not supported…`, from
+    math.js's help formatting its examples).
+  - The families are KaTeX_Caligraphic, KaTeX_Fraktur, KaTeX_SansSerif and KaTeX_Script
+    (`src/overlay/katexFonts.ts`): their `@font-face` rules leave the plugin's `styles.css`, and
+    the build fails if one has no face to drop. The app's TeX never asks for `\mathcal`,
+    `\mathfrak`, `\mathscr` or `\mathsf`. A Unicode math letter pasted into a name or a text
+    (`𝔄`, `𝖠`, `𝒜`) is the one way a sheet reaches them: KaTeX sets it in that family's class,
+    and in the plugin it is drawn in a system font that has the letter (the browser's
+    fallback; Windows, macOS and Android carry one), not in KaTeX's face.
+  - The font test (`src/overlay/katexFonts.test.tsx`) draws every Math guide line, the pump
+    sheet and the true-position sheet as the grid does, with the plots' legends and the
+    Variables and Constants rows, and fails on any class KaTeX's CSS sets in a dropped family;
+    a pasted `𝔄` is its control. The network-blocked run fails on a KaTeX class drawn in a
+    family with no font (`--probe-font` shows it).
+  - Measured: `main.js` from 3,467,852 to 3,380,158 bytes, `styles.css` from 663,706 to
+    554,953; the web app's entry chunk from 2,295,927 to 2,211,210.
 - **Documents:** `npm run check` fails if `CONTEXT.md` is over its budget, its size after the
   split plus about 10%. A tracked `CLAUDE.md` holds the reading route (always `CONTEXT.md`;
   the spec sections an issue names; `docs/context/<module>.md` for a module the issue
@@ -3456,8 +3478,6 @@ M1 to M4d, is in [`docs/spec-history.md`](spec-history.md#17-verify-first), with
   the bottom sheet shows that field above a real keyboard; and Ctrl+Z between the two fields
   in WebKit and Firefox, which may not share Chromium's one text undo.
 - The typing test's time in CI with the new guide examples (59 s when measured).
-- The savings of the plugin cuts (87 KB, about 148 KB and 109 KB) were probed as separate
-  bundles or read from the source, not measured together.
 - The plugin's start-up time in Obsidian, on the work laptop and one phone.
 - That the overlay scrolling (0.2.1) is what Matheus saw as the chart "spilling out of its
   box" is not confirmed: he looks again on the beta.

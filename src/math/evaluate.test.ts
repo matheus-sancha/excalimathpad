@@ -409,6 +409,19 @@ describe('evaluateSheet', () => {
       }
     })
 
+    // Section 14, M4e, Lighter plugin: math.js's help texts are in neither
+    // build, so `help` is the sheet's own error, never math.js's "No
+    // documentation found" or a throw; the line below still runs.
+    it('reports help as unsupported, a line error, with the lines below running', () => {
+      expect(block('help(sin)\nhelp("sin")\nh = help\nh(cos)\n2 + 2')).toEqual([
+        error('help is not supported in a math element'),
+        error('help is not supported in a math element'),
+        { kind: 'empty' },
+        error('help is not supported in a math element'),
+        value('4'),
+      ])
+    })
+
     // Regression (PR #5 review, round 3): simplifyCore parses with the real
     // parser, and the returned Node evaluates against the shared namespace,
     // where `typed` is the real registry, not the scope's stub.

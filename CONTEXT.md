@@ -46,7 +46,9 @@ what to read for an issue and where to write.
   probe** (`src/oddValues.probe.tsx`), by hand before a release. `npm test`
   also holds the **sweep test** (`src/math/sweep.test.ts`, M4e, #194: every
   math.js function a line can call, at huge arguments, each inside 1 s, in a
-  child process that Node runs from the TypeScript as it is). CI installs Playwright's Chromium (the
+  child process that Node runs from the TypeScript as it is) and the **font
+  test** (`src/overlay/katexFonts.test.tsx`, #201: no KaTeX class the guide
+  or a sheet draws is in a family the plugin drops). CI installs Playwright's Chromium (the
   version `package.json` pins) for the last five. The network-blocked run and the pop-out
   run also open ☰ → Math guide in the built plugin (M4d, #148).
 - `docs/math-guide.md` — the **Math guide** (spec section 8, M4d, #148): every
@@ -414,13 +416,10 @@ and everything downstream recalculates. Engine: math.js, client-side.
 - **The plugin's bundle names no browser storage and reaches no host.** App
   takes the web's ports as props, so `recovery.ts`, `fileAccess.ts` and
   `localStorage` stay out of `main.js`; importing one into App at run time
-  fails the audit. `esbuild.plugin.mjs` stubs Mermaid to Excalidraw, the
-  non-English locales and font subsetting; rewrites Excalidraw's `./fonts/…`
-  strings to `data:` URLs (Xiaolai to `local:`); and in Excalidraw's own files
-  turns `localStorage` into no storage, the `esm.sh` fallback into
-  `about:blank#` and every `VITE_APP_*` value (service URLs, the Firebase key)
-  into `""`. Each depends on Excalidraw 0.18.1's text; the audit fails an
-  upgrade that moves it. The audit's allowlist (`scripts/plugin-allowlist.json`)
+  fails the audit. `esbuild.plugin.mjs`'s trims and rewrites
+  ([`docs/context/plugin.md`](docs/context/plugin.md)) each depend on the
+  text of Excalidraw 0.18.1, math.js or KaTeX; the build or the audit fails an
+  upgrade that moves one. The audit's allowlist (`scripts/plugin-allowlist.json`)
   says why each host and each library `<style>`/`<link>` site is harmless.
 - **Excalidraw's typings give some of its API as `any`** (its `.d.ts` imports
   types the package doesn't ship; `setCursor` indexes a private member).
@@ -461,7 +460,7 @@ and everything downstream recalculates. Engine: math.js, client-side.
   default; UI fonts are bundled. Fine online; self-host them if offline use
   matters (`window.EXCALIDRAW_ASSET_PATH`).
 - The production bundle is large. The entry chunk (`index-*.js`) is about
-  1.96 MB (597 kB gzip): math.js `create(all)` is about 180 kB gzip of that
+  2.21 MB (674 kB gzip): math.js `create(all)` is about 170 kB gzip of that
   (accepted for v1; trimming to fewer factories is a later follow-up) and
   nearly all the rest is Excalidraw. A separate ~1.8 MB chunk is loaded only
   by Excalidraw's font-subset worker. Vite's chunk-size warning is expected.
@@ -475,7 +474,7 @@ and everything downstream recalculates. Engine: math.js, client-side.
   names the file.
 - Where the Sheet panel floats (an editor at or below its docking width), it
   covers Excalidraw's More tools; its ✕ closes it.
-- The plugin's `main.js` is about 3.45 MB and `styles.css` 0.64 MB (#137);
+- The plugin's `main.js` is about 3.38 MB and `styles.css` 0.55 MB (#201);
   the audit fails either above 5,000,000 bytes, Obsidian Sync Standard's cap.
 - Excalidraw 0.18.1 listens on the global `document` (copy, cut, paste, `keyup`,
   pointer moves and ups, scroll and others) and `window` (resize, blur, focus,

@@ -129,8 +129,8 @@ math.import(comparisonSignatures(math, (value) => display.show(value, null, mess
 // parsed Node, which is what math.js's `evaluate(expr, scope)` does inside.
 // App code must only ever evaluate through `evaluateSheet`: after the
 // override below, math.js functions built later that depend on the disabled
-// names (`help`, `rationalize`, `symbolicEqual`, a `parser()`'s methods)
-// fail with "... is not supported" messages.
+// names (`rationalize`, `symbolicEqual`, a `parser()`'s methods) fail with
+// "... is not supported" messages.
 const parse = math.parse
 
 /** A sheet line's code, parsed, with each `name[…]` read as the app's index (ADR 0005, step 5). */
@@ -194,6 +194,8 @@ const disabled = (name: string) => () => {
  * define a unit visible to every block).
  */
 const DISABLED_IN_EXPRESSIONS = [
+  // Its texts aren't in either build (section 14, M4e, Lighter plugin: `noHelpTexts.ts`).
+  'help',
   'import',
   'createUnit',
   'config',

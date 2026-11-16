@@ -5,12 +5,14 @@
 // CJK text. It reads the ☰ stamp (the version) and opens ☰ → Math guide. It
 // fails on any attempted request, any page error, a stamp that isn't the
 // manifest's version, a guide that doesn't open, and any <style> or <link>
-// the bundle adds at run time.
+// the bundle adds at run time, and on any KaTeX class drawn in a family the
+// bundle has no font for (section 14, M4e, Lighter plugin: four are dropped).
 //
 // Run: `node scripts/blocked-run.mjs` (`npm run test:blocked`), after
 // `npm run build:plugin`. `--probe-request` makes the page try one request
-// and `--probe-style` add a <style>, to show the run fails on each (the
-// deliberate failing cases). `--screenshot
+// and `--probe-style` add a <style>, and `--probe-font` draws a KaTeX class
+// whose font was dropped, to show the run fails on each (the deliberate
+// failing cases). `--screenshot
 // <file>` saves what the run saw.
 //
 // The page also carries a stand-in for Obsidian's global rules for buttons,
@@ -31,6 +33,7 @@ const args = process.argv.slice(2)
 const probe = args.includes('--probe-request')
 const probeStyle = args.includes('--probe-style')
 const probeGuard = args.includes('--probe-guard')
+const probeFont = args.includes('--probe-font')
 const screenshotAt = args.indexOf('--screenshot')
 const screenshot = screenshotAt >= 0 ? args[screenshotAt + 1] : null
 const SHEET = 'Calcs/pump-sizing.excalimathpad'
@@ -140,7 +143,23 @@ try {
     { timeout: 30_000 },
   )
   await tab.waitForSelector('.math-element__plot svg', { timeout: 30_000 })
+  if (probeFont) {
+    await tab.evaluate(() => {
+      const math = document.querySelector('.math-element .katex')
+      math.insertAdjacentHTML('beforeend', '<span class="mathcal">L</span>')
+    })
+  }
   await tab.evaluate(() => document.fonts.ready)
+  // Every family KaTeX draws the sheet in has its font in the bundle: one
+  // without would show in a fallback font, with no error and no request.
+  const unfonted = await tab.evaluate(() => {
+    const faces = new Set([...document.fonts].map((face) => face.family.replaceAll('"', '')))
+    const drawn = [...document.querySelectorAll('.katex, .katex *')]
+      .filter((element) => element.childElementCount === 0 && element.textContent.trim() !== '')
+      .map((element) => getComputedStyle(element).fontFamily.split(',')[0].replaceAll('"', '').trim())
+    return [...new Set(drawn)].filter((family) => family.startsWith('KaTeX_') && !faces.has(family)).sort()
+  })
+  for (const family of unfonted) failures.push(`KaTeX draws in ${family}, which has no font in styles.css`)
   // Excalidraw draws the image on its static canvas: the fixture's gradient
   // (red 30, green and blue above 100) has to be in its pixels.
   await tab.waitForFunction(

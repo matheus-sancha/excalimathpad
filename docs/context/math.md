@@ -81,8 +81,8 @@ share one scope, fresh for every call (ADR 0003). Each line is parsed once
 (captured `parse`) to know what it defines, which turns "Undefined symbol"
 into "defined below" / "has an error above". Every known route for an
 expression to change the shared math.js instance is closed, each with a
-test: `createUnit`, `config`, `import` and the parser functions are
-disabled in the namespace (scope-only stubs are bypassed via `parser()`),
+test: `createUnit`, `config`, `import`, `help` (its texts are in neither
+build, `noHelpTexts.ts`) and the parser functions are disabled in the namespace (scope-only stubs are bypassed via `parser()`),
 and `typed` is shadowed in each run's scope (it cannot be overridden in
 the namespace without breaking math.js). Parsed Nodes from `simplifyCore`
 / `simplifyConstant` evaluate against the namespace, where `typed` is the

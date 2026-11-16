@@ -11,7 +11,10 @@ of one grid per element (gutter, equation, result after a rule, note), each
 with its own box for the line hit. The equation is one cell holding the
 line's name, `≔` and expression inline, flush left, so `≔` doesn't line up
 between lines (#62). Cells hold KaTeX's HTML,
-loaded lazily by `katex.ts`; until it loads, a line shows as its source. Rows
+loaded lazily by `katex.ts`; until it loads, a line shows as its source.
+`texToHtml` is the one place the app's KaTeX is drawn; the plugin has no font
+for four of its families, and `katexFonts.test.tsx` holds the grid, the
+legends and the panel's rows out of them (section 14, Lighter plugin). Rows
 are named by their source (`aria-label`) and result cells carry their text
 (`data-text`). `useAnchorSizes` measures each body after every render and on
 a `ResizeObserver` (fonts), waits while `sizeWritesWait`, and writes the

@@ -7,8 +7,10 @@
 // - No splitting: the KaTeX and Plot `import()`s fold into `main.js`.
 // - Fonts are `data:` URLs: KaTeX's through its CSS (woff2 only), Excalidraw's
 //   by rewriting the `./fonts/…` strings it resolves at run time.
-// - Trims: Mermaid to Excalidraw, the non-English locales and font subsetting
-//   are stubbed; Xiaolai's paths become `local:`, so CJK text uses system fonts.
+// - Trims: Mermaid to Excalidraw, the non-English locales, font subsetting and
+//   math.js's help texts are stubbed; Xiaolai's paths become `local:`, so CJK
+//   text uses system fonts; four KaTeX font families are dropped
+//   (`src/overlay/katexFonts.ts`).
 // - Network: the `esm.sh` fallback, excalidraw.com's service URLs and its
 //   Firebase config (`AIza…`) are blanked; its `EditorLocalStorage` gets no
 //   storage. `scripts/audit-plugin.mjs` then checks the result.
@@ -20,14 +22,26 @@ import { copyFile, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { GUIDE_QUERY, guideModule } from './src/guide/markdown.ts'
+import { trimKatexCss } from './src/overlay/katexFonts.ts'
 
 const root = dirname(fileURLToPath(import.meta.url))
 const out = join(root, 'dist-plugin')
 const excalidrawDist = join(root, 'node_modules/@excalidraw/excalidraw/dist/prod')
 const pkg = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'))
 
+/**
+ * math.js's help texts (`embeddedDocs.js`), read only by `help()`, which the
+ * engine disables: the module both builds put in their place
+ * (docs/spec-v1.md section 14, M4e, Lighter plugin; `vite.config.ts` aliases it).
+ */
+const HELP_TEXTS = /[\\/]expression[\\/]embeddedDocs[\\/]embeddedDocs\.js$/
+const NO_HELP_TEXTS = join(root, 'src/math/noHelpTexts.ts')
+
 /** A path inside Excalidraw's production build. */
 const inExcalidraw = (path) => path.replaceAll('\\', '/').includes('/@excalidraw/excalidraw/dist/prod/')
+
+/** How many imports of math.js's help texts the build stubbed: none means math.js moved them. */
+let helpTextsStubbed = 0
 
 /** The plugin-only trims, as one esbuild plugin. */
 const trims = {
@@ -66,13 +80,18 @@ const trims = {
       return { contents: neutralise(await readFile(args.path, 'utf8')), loader: 'js' }
     })
 
+    // math.js's help texts: one empty module, from wherever math.js imports them.
+    b.onResolve({ filter: /embeddedDocs\.js$/ }, (args) => {
+      if (!HELP_TEXTS.test(join(args.resolveDir, args.path))) return undefined
+      helpTextsStubbed++
+      return { path: NO_HELP_TEXTS }
+    })
+
     // KaTeX's CSS lists woff2, woff and ttf for each face; browsers that run
-    // Obsidian read woff2, so only it is kept (and inlined).
+    // Obsidian read woff2, so only it is kept (and inlined), and the four
+    // families the app never asks for have no face at all.
     b.onLoad({ filter: /katex(\.min)?\.css$/ }, async (args) => ({
-      contents: (await readFile(args.path, 'utf8')).replace(
-        /,\s*url\([^)]*\.(woff|ttf)\)\s*format\("(woff|truetype)"\)/g,
-        '',
-      ),
+      contents: trimKatexCss(await readFile(args.path, 'utf8')),
       loader: 'css',
     }))
   },
@@ -139,6 +158,7 @@ async function inlineFonts(code) {
 export async function buildPlugin({ outDir = out, log = console.log } = {}) {
   await rm(outDir, { recursive: true, force: true })
   await mkdir(outDir, { recursive: true })
+  helpTextsStubbed = 0
   const result = await build({
     absWorkingDir: root,
     entryPoints: ['plugin/main.ts'],
@@ -169,6 +189,8 @@ export async function buildPlugin({ outDir = out, log = console.log } = {}) {
     metafile: true,
     logLevel: 'warning',
   })
+
+  if (helpTextsStubbed === 0) throw new Error("math.js's help texts weren't stubbed: embeddedDocs.js has moved")
 
   const mainPath = join(outDir, 'main.js')
   const fonts = await inlineFonts(await readFile(mainPath, 'utf8'))
