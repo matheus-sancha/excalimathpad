@@ -35,6 +35,12 @@ declare global {
     createDiv(info?: DomElementInfo | string): HTMLDivElement
     onWindowMigrated(listener: (win: Window) => unknown): () => void
   }
+  interface Node {
+    /** Obsidian's: the document the node is in now (a pop-out's, after a move). */
+    doc: Document
+    /** Obsidian's: that document's window. */
+    win: Window
+  }
 }
 
 /** Each element's window-migration listeners: \`migrateWindow\` calls them, as Obsidian does on a move. */
@@ -67,6 +73,20 @@ function applyInfo(el: HTMLElement, info?: DomElementInfo | string) {
 export function installDomHelpers(win: Window & typeof globalThis = window) {
   const proto = win.HTMLElement.prototype
   if ('createDiv' in proto) return
+  Object.defineProperties(win.Node.prototype, {
+    doc: {
+      configurable: true,
+      get(this: Node) {
+        return this.ownerDocument ?? (this as Document)
+      },
+    },
+    win: {
+      configurable: true,
+      get(this: Node) {
+        return (this.ownerDocument ?? (this as Document)).defaultView
+      },
+    },
+  })
   Object.assign(proto, {
     empty(this: HTMLElement) {
       while (this.firstChild) this.removeChild(this.firstChild)
@@ -193,12 +213,18 @@ export const Platform = {
 }
 
 export const notices: string[] = []
+/** Every notice hidden by code, as `hide()` does (a duration of 0 stays until then). */
+export const hiddenNotices: string[] = []
 
 export class Notice {
-  constructor(message: string) {
+  private readonly message: string
+  constructor(message: string, _duration?: number) {
+    this.message = message
     notices.push(message)
   }
-  hide() {}
+  hide() {
+    hiddenNotices.push(this.message)
+  }
 }
 
 // ---------------------------------------------------------------------------

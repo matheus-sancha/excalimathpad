@@ -1,4 +1,4 @@
-import { Notice, Plugin, TFolder, type TAbstractFile } from 'obsidian'
+import { Notice, Platform, Plugin, TFolder, type TAbstractFile } from 'obsidian'
 import { emptyScene } from '../src/canvas/sceneFile.ts'
 import { DEFAULT_SETTINGS, writeSheet } from '../src/file/sheetFormat.ts'
 import { isSheetTheme, type SheetTheme } from '../src/canvas/theme.ts'
@@ -32,12 +32,14 @@ export const NEW_SHEET_ICON = 'calculator'
 /**
  * The commands that act on the active sheet tab, and are offered only while
  * one is active (docs/spec-v1.md section 8, Inside an Obsidian tab). None has
- * a default hotkey. Print… arrives with M5.
+ * a default hotkey. Print… (M5, section 11) is registered on a computer only:
+ * on a phone or tablet there is no such command.
  */
-export const SHEET_COMMANDS: readonly { id: string; name: string; run: keyof SheetCommands }[] = [
+export const SHEET_COMMANDS: readonly { id: string; name: string; run: keyof SheetCommands; computer?: true }[] = [
   { id: 'add-math', name: 'Add math', run: 'addMath' },
   { id: 'toggle-math-settings', name: 'Toggle Math settings', run: 'toggleMathSettings' },
   { id: 'open-math-guide', name: 'Open Math guide', run: 'openMathGuide' },
+  { id: 'print', name: 'Print…', run: 'print', computer: true },
 ]
 
 /**
@@ -69,13 +71,14 @@ export default class ExcalimathpadPlugin extends Plugin {
 
     this.addCommand({ id: 'new-sheet', name: NEW_SHEET, callback: () => void this.newSheet() })
     for (const command of SHEET_COMMANDS) {
+      if (command.computer && Platform.isMobile) continue
       this.addCommand({
         id: command.id,
         name: command.name,
         checkCallback: (checking) => {
-          const commands = this.app.workspace.getActiveViewOfType(SheetView)?.commands
-          if (!commands) return false
-          if (!checking) commands[command.run]()
+          const run = this.app.workspace.getActiveViewOfType(SheetView)?.commands?.[command.run]
+          if (!run) return false
+          if (!checking) run()
           return true
         },
       })

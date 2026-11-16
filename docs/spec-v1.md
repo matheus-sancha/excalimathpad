@@ -1740,8 +1740,8 @@ Decided in: [file](https://github.com/matheus-sancha/excalimathpad/issues/12),
 Built in M1 (☰ file items, file name, Add math) and M2 (Math settings and the Sheet panel). From
 M4d the label is **Math settings**, in sentence case in both homes (until M4d "Math
 Settings"), and so is every UI text, for Obsidian's lint. The Page
-row is built in M5 (#80), and Print… on the web with it (#81); the plugin's "Print…" command and ☰ item are
-still to come (#81). There is no app bar: the chrome lives inside Excalidraw's own UI slots.
+row is built in M5 (#80), and Print… with it (#81): on the web, and in the plugin on a computer the "Print…"
+command and first ☰ item. There is no app bar: the chrome lives inside Excalidraw's own UI slots.
 
 ```
 ☰  ● pump-sizing.excalimathpad      [ Excalidraw's toolbar … More tools ② ]      Library
@@ -1902,7 +1902,9 @@ From M4d, in the plugin. The web app's chrome above is unchanged.
 
 - **☰ menu:** Math guide, Find on canvas (Ctrl+F), Help (`?`), Reset the canvas, a separator,
   Dark mode (Alt+Shift+D), Canvas background, then the version stamp (`0.1.0`) as text. The
-  file items are gone ([A sheet in a vault](#a-sheet-in-a-vault)).
+  file items are gone ([A sheet in a vault](#a-sheet-in-a-vault)). From M5, on a computer,
+  **Print…** is the first item, with no key, and a separator follows it; on a phone or tablet
+  there is none ([section 11](#11-print)).
 - **No file name** beside ☰ and no `document.title`: Obsidian's tab header names the sheet.
 - **The welcome screen** keeps the name and the hint, without Open…. On touch the hint reads
   "Tap More tools, then Add math, then tap the sheet".
@@ -1929,6 +1931,8 @@ From M4d, in the plugin. The web app's chrome above is unchanged.
   settings** and **Open Math guide** (only while a sheet tab is active), with no default
   hotkeys; the ribbon icon (New sheet); no settings tab. Add math and Toggle Math settings do
   what their More tools items do, in the active tab, and Open Math guide what ☰ → Math guide does.
+  From M5 **Print…** joins them on a computer only, and does what ☰ → Print… does; on a phone
+  or tablet it isn't registered ([section 11](#11-print)).
 - **Side by side and in a pop-out window** each sheet tab keeps its own keys, panel and
   dialogs. In a pop-out (desktop) the tab works as in the main window: drag, place, draw,
   Help and the other dialogs, copy and paste. Excalidraw listens on the main window there, so
@@ -2386,7 +2390,7 @@ It draws nothing; the print view (#81) draws what it returns.
   above that would print an empty page, so it doesn't count, and the fallback cuts at the bottom.
 
 **As built (#81, the web's half and the shared view):** Print… on the web and the print view both homes
-draw; the plugin's route is still to come.
+draw; the plugin's route is below.
 
 - **The print view** (`src/print/printView.ts`) is plain DOM, built into whatever document it is given: the
   page's own on the web, a frame's in the plugin. Each page is the paper (`@page` at its size with no margin,
@@ -2419,11 +2423,40 @@ draw; the plugin's route is still to come.
 - **The browser's own Print** is a print rule in the web's `src/index.css`: the page's content hidden and the one
   line in its place. The plugin never loads that file.
 - **A point's label prints without its halo** (see Changes since agreed, 2026-11-16).
-- **Still to come, the plugin's route:** the "Print…" command and first ☰ item, on a computer only; a hidden
-  frame in the view's own window (`view.containerEl.doc`), given the app's style sheets as text (`styles`) and
-  Excalidraw's fonts inside the SVG (`drawingsSvg`'s `inlineFonts`); `printSheet` with that frame's document,
-  its `contentWindow.print()`, the window's title and Obsidian's `Notice`; and the Obsidian items of
-  [section 17](#17-verify-first).
+
+**Changed on 2026-11-16, after Verify first** (#81; see Changes since agreed, 2026-11-16). In Obsidian the
+system's print dialog prints on the paper and orientation chosen in it, not on `@page size`: when they match the
+sheet's Page, the app's pages are the paper's pages; when they don't, each page is still whole on one sheet,
+rotated or scaled ([the result](spec-history.md#17-verify-first)). The route stays the hidden frame and the
+system's dialog, and:
+
+- **Before the dialog opens, the plugin shows a notice naming the paper to choose there,** from the sheet's
+  Page setting: `Choose A4, portrait in the print dialog.` ([section 13](#13-messages), In a vault). It stays
+  until the dialog closes.
+- The "Page" rule above holds in both homes: the paper is set in Settings, and in Obsidian the dialog's paper is
+  chosen to match it.
+
+**As built (#81, the plugin's route):**
+
+- **"Print…" is a command with no key and the first ☰ item, then a separator,** registered and drawn only where
+  `Platform.isMobile` is false. It is offered only while a sheet tab is active, as the other sheet commands are.
+- **Print… in the plugin** (`plugin/print.ts`, `printInFrame`) ends an open line as on the web, then makes a hidden
+  frame in the view's own window (`view.containerEl.doc`, so a pop-out window prints its own sheet): a blank page in
+  standards mode from `srcdoc`, which makes no request, in the window's viewport but transparent and taking no
+  pointer, so the browser draws it and its fonts load. `printSheet` builds the pages in that frame's document. The
+  frame gets the app's own style sheets as text, the ones that hold its `excalimathpad` cascade layer (the
+  plugin's `styles.css`), as constructed style sheets, so Obsidian's and a theme's rules, their print rules
+  included, never reach it and no `<style>` is made (section 14, M4e, Print in the plugin: the audit is
+  unchanged). The drawings' SVG carries Excalidraw's fonts inside it (`drawingsSvg`'s `inlineFonts`); with font
+  subsetting trimmed from the plugin, Excalidraw logs that it can't subset and embeds each font whole.
+- **Then the notice, two frames so it is drawn, the frame's fonts awaited again, and the frame's
+  `contentWindow.print()`.** The view window's `document.title` is the plain name (`pump-sizing`) while the dialog
+  is open and is put back after, since the dialog's Save As names the PDF from it, not from the frame's title.
+  When the dialog closes the notice is hidden and the frame removed. A failure before the dialog is the notice
+  `The pages couldn't be built, so nothing was printed.`, shown with Obsidian's `Notice`, and leaves nothing behind.
+- The print run (`scripts/print-run.mjs`) holds it in the built plugin against the fake `obsidian`, offline:
+  Chromium can't print a frame by itself, so it prints the frame's document, as it is while the dialog waits, from
+  a page of its own. The pop-out run prints from each window, and the touch run finds no Print… on a phone or tablet.
 
 Decided in: [print](https://github.com/matheus-sancha/excalimathpad/issues/21),
 [Chromium PDF](https://github.com/matheus-sancha/excalimathpad/issues/34),
@@ -2827,6 +2860,7 @@ The wording of every user-facing message. `<…>` is filled in. Numbers follow
 | The vault image picker's field | `Pick an image from the vault to place on the sheet` | M4d |
 | A picked image over 4 MB (Excalidraw's own toast) | `File is too big. Maximum allowed size is 4MB.` | M4d |
 | A newer or unreadable file | The two file messages above, in the view; it never writes the file | M4d |
+| Print…, on a computer, before the system's print dialog opens (notice, until it closes) | `Choose A4, portrait in the print dialog.`, with the sheet's Page: `Choose Letter, landscape in the print dialog.` | M5 |
 | No regex lookbehind (iOS below 16.4) | `Excalimathpad needs iOS 16.4 or later.` | M4d |
 | Welcome hint, on touch | `Tap More tools, then Add math, then tap the sheet` | M4d |
 
@@ -3511,17 +3545,12 @@ M1 to M5, is in [`docs/spec-history.md`](spec-history.md#17-verify-first), with 
 - In Chrome itself, by hand (Matheus, step 4): Ctrl+P from a person's keyboard, which a headless run
   doesn't send through the browser's own shortcuts; a person at the open dialog (the print run's dialog is
   a stand-in); a Scale set in the real dialog; other systems and real printers.
-- **In Obsidian on a computer, before the print view is built** (a throwaway two-page frame
-  answers all of it in minutes; none of it was run):
-  - The system dialog honours `@page { size; margin: 0 }`, so the app's pages are the paper's
-    pages. This decides the route. If it fails, the question comes back to Matheus before
-    anything is built on it; the known fallback is Electron's own PDF export, a desktop-only
-    API with a review risk.
-  - Obsidian's own print styles don't reach the frame; KaTeX's fonts load inside the frame
-    before it prints.
-  - Printing from a pop-out window prints the sheet in that window.
-  - Whether the saved PDF can be named `pump-sizing.pdf`. If the system dialog doesn't take
-    the name, the file is named by hand there.
+- **In Obsidian on a computer** (the throwaway frame's result is in
+  [the history](spec-history.md#17-verify-first); the plugin's route is built on it, #81):
+  - Whether the dialog's untouched default follows `@page size`: the probe's paper was chosen by hand.
+  - KaTeX's fonts inside the frame, in Obsidian itself (the print run sees them in Chromium).
+  - Printing from a pop-out window (the pop-out run sees it against the fake `obsidian`).
+  - The plugin's Print… on the work laptop, and real printers (Matheus, step 4).
 
 **M4e**
 
@@ -4196,3 +4225,9 @@ Each section above ends with its own tickets.
   halo's stroke and the text's fill), so the true-position label came up twice in the PDF's search, which #81's
   acceptance forbids. The page is white, so only a curve or circle under the label shows through. The screen
   keeps the halo.
+- 2026-11-16, [sections 11](#11-print) and [13](#13-messages) ([#81](https://github.com/matheus-sancha/excalimathpad/issues/81), decided by Matheus after
+  Verify first): **in Obsidian, before the system's print dialog opens, a notice names the paper to choose
+  there** (`Choose A4, portrait in the print dialog.`, from the sheet's Page setting). His probe in Obsidian
+  1.15.1 found that the dialog prints on the paper chosen in it, not on `@page size`, so "the app's pages are
+  the paper's pages" holds only when the two match. The route stays the hidden frame and the system's dialog;
+  an area export as an image is a separate issue after 1.0.0 (#221).

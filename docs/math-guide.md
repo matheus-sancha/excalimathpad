@@ -477,7 +477,8 @@ The Sheet panel's Symbols tab is a set of buttons that type, at the caret of the
 - Copy, rename and move a sheet with Obsidian's own file tools. Obsidian's File recovery and your sync history keep older versions.
 - If sync or another tab changes a sheet while you have unsaved work in it, your version is saved beside it as `<name> (conflict <date> <time>)`, and a notice says so. Nothing is overwritten.
 - Obsidian Sync carries `.excalimathpad` files only with **Sync all other types** turned on.
-- The commands **Add math**, **Toggle Math settings** and **Open Math guide** act on the active sheet. They have no hotkeys until you set some.
+- The commands **Add math**, **Toggle Math settings**, **Open Math guide** and, on a computer, **Print…** act on the active sheet. They have no hotkeys until you set some.
+- **Print is for a computer.** There, the **Print…** command, or **Print…** at the top of the ☰ menu, prints the whole sheet through the system's print dialog, with nothing of Obsidian's on the paper. A notice first names the paper to choose in the dialog, such as "Choose A4, portrait in the print dialog.": the dialog prints on the paper chosen there, not on the sheet's Page. For a PDF, choose the system's PDF printer, such as Microsoft Print to PDF. To move a break, look at the PDF, move something on the sheet and print again. On a phone or tablet there is no Print….
 
 **Undo** is Excalidraw's own and covers the math: one step per line you edit, one per press in the Format tab, and one per change of an element's width. While a line is open, **Ctrl+Z** undoes typing inside that line only.
 

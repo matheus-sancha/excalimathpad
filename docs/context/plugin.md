@@ -10,8 +10,9 @@ only code that imports `obsidian`. `main.ts` (the `Plugin`) registers the
 view for `.excalimathpad` only and keeps the panel's open state, its width
 (`sheetPanelWidth`, M4e, #198) and light or dark in `data.json` (`loadData`/`saveData`; `SheetMemory`, anything else
 read there dropped). It registers New sheet and `SHEET_COMMANDS` (Add math,
-Toggle Math settings, Open Math guide), whose `checkCallback` offers them only while
-`getActiveViewOfType(SheetView)` has `commands`; none has a hotkey. `SheetView.ts` is the `TextFileView`:
+Toggle Math settings, Open Math guide, and Print…, marked `computer` and skipped where
+`Platform.isMobile`), whose `checkCallback` offers each only while
+`getActiveViewOfType(SheetView)` has that command in `commands`; none has a hotkey. `SheetView.ts` is the `TextFileView`:
 `setViewData` runs the **lookbehind check** (`hasLookbehind`; without it,
 "Excalimathpad needs iOS 16.4 or later."), then `readSheet`; a newer or
 unreadable file shows section 13's message in the view and nothing mounts;
@@ -22,7 +23,9 @@ getter that reads the view's `data` at each mount, so a sheet reloaded after
 a failure that kept nothing opens the file as last written, not as first
 read. A failed view (spec section 4, Unexpected failures) hands the view no
 sheet (`connect(null)` as the app unmounts), so its `save` writes nothing. It holds the tab's `commands` while the app is up and
-passes `contentEl.onWindowMigrated` for the bridge. **Autosave** (section 7, A sheet in a vault): the
+passes `contentEl.onWindowMigrated` for the bridge, and, unless `Platform.isMobile`,
+`print`: `printInFrame` (`print.ts`, spec section 11, M5, #81; [print](print.md)) with the view's
+`containerEl.doc` at that moment, so a pop-out prints its own sheet, and the file's name and basename. **Autosave** (section 7, A sheet in a vault): the
 vault sheet calls `onUnwritten` when its `saveKey` (plus the settings)
 leaves the key the file holds, and the view calls `requestSave`; `save` is
 the view's own and writes only `unwritten()` (an open line committed
@@ -42,7 +45,8 @@ sheet** (the command, the ribbon icon, a folder's `file-menu`), placed by
 `ImagePicker.ts` is the **vault image picker**, a `FuzzySuggestModal` over
 the vault's image files that reads only the one picked (`readBinary`).
 `styles.css`
-is the view's own CSS (no padding, a full-height box) and the **guard**: the
+is the view's own CSS (no padding, a full-height box), Print…'s hidden frame (transparent,
+in the viewport) and the **guard**: the
 build wraps the app's and Excalidraw's CSS in `@layer excalimathpad`
 (`APP_LAYER` in `esbuild.plugin.mjs`), and one rule gives every element in
 the view `all: revert-layer` with an id's weight, so Obsidian's and a theme's
@@ -50,7 +54,8 @@ global rules (buttons, inputs, selects) never reach the app. `src/index.css`,
 the web's `html` and `body` rules, never ships. `plugin/test/obsidian.ts` is a
 hand-written **fake `obsidian`** (Plugin, the view classes, WorkspaceLeaf,
 Workspace, Vault, FileManager, TFile, TFolder, Menu, FuzzySuggestModal,
-Scope, Platform, Notice, Obsidian's DOM helpers with `onWindowMigrated`;
+Scope, Platform, Notice (and `hiddenNotices`), Obsidian's DOM helpers with `onWindowMigrated`,
+and `doc` and `win` on every node;
 `setActiveLeaf`, `runCommand` and `isOffered` as the palette does, and
 `migrateWindow` as a move to a pop-out does) that records
 registrations, writes, creates, binary reads, notices and modals, and acts

@@ -36,8 +36,8 @@ chrome, no file keys and no ☰ file items, loads the sheet through
 view's container, and turns Excalidraw's embeds off. It also confines the
 keys to the view (`confineKeys`), bridges the view when it is in a pop-out
 window (`bridgeWindow`, again after `vault.onWindowMigrated`), hands the
-view its `SheetCommands` (Add math, Toggle Math settings, Open Math guide) through
-`vault.commands`, and passes the canvas `vault` and `vault.theme` (where
+view its `SheetCommands` (Add math, Toggle Math settings, Open Math guide, and
+Print… where `vault.print` is set) through `vault.commands`, and passes the canvas `vault` and `vault.theme` (where
 light or dark is remembered). `panelMemory` is where the panel's open state and its width live
 (a port: `storagePanelMemory` on the web, `data.json` in the plugin, this
 page only if unset); App hands it to the canvas as the slot's `width`, and
@@ -73,7 +73,11 @@ item (`FileMenu.print`) and Ctrl+P (`FileChrome`'s `print`) run `printOnTheWeb`:
 the open line leaves, a frame passes, and `printSheet` builds the pages on the
 page itself from `sheetToPrint` (the scene's drawings and anchors, the overlay's
 views), with the window's title, `window.print()` and Excalidraw's toast for the
-notice; one print at a time. In a vault there is no Print… yet.
+notice; one print at a time. In a vault `vault.print` is the view's route, set
+on a computer only: the command and the canvas's `print` (the first ☰ item) run
+`printInVault`, which leaves the line the same way and hands the route
+`sheetToPrint` with `inlineFonts` and the Page. Unset (a phone or tablet), there
+is neither.
 App imports none of the browser ports at run time, so
 the plugin's bundle holds none. `initialElements` gives tests a sheet.
 Depends on: shell, canvas, overlay, file.

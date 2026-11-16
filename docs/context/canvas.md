@@ -70,7 +70,8 @@ so no embed loads an iframe (the plugin's no-network rule).
 the ☰ menu with the app's file items and, as its last line, the build stamp
 (`__BUILD_STAMP__`, plain text); its handle carries `root`, the box it
 shares with the overlay; its ☰ file items end with Print… (Ctrl+P) on the
-web (M5, #81). `fileRoutes.ts` takes the file keys, Ctrl+P (Print…) and scene-file
+web (M5, #81), and in a vault its `print` prop is the first ☰ item, Print… with
+no key, then a separator. `fileRoutes.ts` takes the file keys, Ctrl+P (Print…) and scene-file
 drops from Excalidraw (in a vault, `ignoreSceneDrops` only stops the drops),
 and measures the space beside the ☰ button (`useBesideMenu`). `imageTool.ts`
 takes over Excalidraw's image tool in a vault (`takeOverImageTool`: the

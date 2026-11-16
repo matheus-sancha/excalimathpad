@@ -561,6 +561,31 @@ The items with a recorded result. Those still open are in
   - Also found: a point's label with its halo came up twice in the PDF's text (spec, Changes since
     agreed, 2026-11-16), and the system font's figures in a chart can be private-use glyphs in the PDF's
     text, so a chart's tick numbers may not be searchable in the PDF (seen with Inter on Linux).
+- In Obsidian on a computer, with a throwaway two-page frame: the system dialog honours `@page`; Obsidian's
+  print styles don't reach the frame; the saved PDF's name. **Run (2026-11-16, by Matheus):** a two-page
+  frame (A4 portrait, `@page { size: A4; margin: 0 }`, built in an off-screen iframe appended to the main
+  document, styles through `adoptedStyleSheets`, printed with `frame.contentWindow.print()`) in Obsidian
+  1.15.1 on a Windows laptop of his own (not the work laptop), through the system dialog to "Microsoft Print
+  to PDF"; the PDF read back.
+  - **Passed:** the dialog opened and only the frame's document was printed: nothing of Obsidian's is on the
+    paper.
+  - **Passed:** exactly 2 pages; one app page is one sheet of paper, and no margin was added (the pages
+    reach the paper's edges on the long side).
+  - **Found:** the paper is the dialog's, not `@page size`. Letter, landscape had been chosen in the dialog
+    by hand, and the PDF is 792 × 612 pt: Chromium turned each A4 portrait page sideways and shrank it to
+    about 94% to fit, leaving a white band on the other two sides. So the app's pages are the paper's pages
+    when the paper and orientation chosen in the dialog match the sheet's Page setting; when they don't, each
+    page is still whole on one sheet, rotated or scaled. Whether the dialog's untouched default follows
+    `@page size` was not seen.
+  - **Found:** the PDF's title, which Save As offers as the name, was the main window's title
+    ("Pump-Sizing - Obsidian-Vault - Obsidian 1.15.1"), not the frame document's title (`print-probe`). So
+    the name comes from the window's `document.title` while the dialog is open.
+  - **Decided (Matheus, the same day):** the route stays the hidden frame and the system dialog, and before
+    the dialog opens the plugin shows a notice naming the paper to choose, from the sheet's Page setting
+    ([section 11](spec-v1.md#11-print), Changed on 2026-11-16). An area export as an image is a separate
+    issue after 1.0.0 (#221).
+  - Not checked by that probe, so still in section 17: KaTeX's fonts inside the frame, printing from a
+    pop-out window, the work laptop.
 
 ## 18. Decision index
 

@@ -9,7 +9,9 @@
 //
 // In each tab it drags the math element, places math with M and a click,
 // opens and closes Excalidraw's Help and the Math guide, pastes text and
-// copies the element. The
+// copies the element, and prints from the "Print…" command (M5, #81): the
+// hidden frame is made in that tab's window and prints its sheet there, the
+// system's dialog stood in for by the frame's own `print()`. The
 // main window's tab is the control; the pop-out's work only through the
 // bridge (`src/canvas/popoutBridge.ts`). It fails on any check that doesn't
 // hold, and on any page error.
@@ -44,7 +46,7 @@ const frame = `<style>html,body{margin:0;height:100%}.workspace,.workspace-leaf,
 .view-content{height:100%}</style>`
 
 const page = `<!doctype html>
-<html lang="en"><head><meta charset="utf-8">
+<html lang="en"><head><meta charset="utf-8"><title>Main - Obsidian</title>
 <link rel="stylesheet" href="/styles.css">${frame}
 </head><body>
 <script src="/fake-obsidian.js"></script>
@@ -64,6 +66,7 @@ const page = `<!doctype html>
     app.vault.add(${JSON.stringify(MOVED)}, sheet)
     const plugin = new module.exports.default(app, manifest)
     await plugin.onload()
+    window.__plugin = plugin
     // The main window's tab.
     const main = app.workspace.getLeaf()
     await main.openFile(new FakeObsidian.TFile(${JSON.stringify(MAIN)}))
@@ -99,7 +102,7 @@ const page = `<!doctype html>
 </script>
 </body></html>`
 
-const popoutPage = `<!doctype html><html lang="en"><head><meta charset="utf-8">
+const popoutPage = `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Pop-out - Obsidian</title>
 <link rel="stylesheet" href="/styles.css">${frame}</head><body></body></html>`
 
 const sheet = JSON.stringify({
@@ -136,6 +139,16 @@ const server = createServer(async (request, response) => {
 await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
 const origin = `http://127.0.0.1:${server.address().port}`
 
+/**
+ * Excalidraw's own two messages as Print… puts its fonts inside the drawings'
+ * SVG in the plugin, where font subsetting is trimmed (section 12a): no
+ * worker, then the whole font as its fallback. Any other console error fails
+ * the run (the print run checks the fallback's font on paper).
+ */
+const excalidrawsFontFallback = (text) =>
+  (text.startsWith('Failed to use workers for subsetting') && text.includes('WorkerUrlNotDefinedError')) ||
+  (text.startsWith('Failed to fetch font family') && text.includes('is not in the plugin'))
+
 const { chromium } = createRequire(import.meta.url)('playwright')
 const browser = await chromium.launch()
 const results = []
@@ -143,6 +156,16 @@ const errors = []
 try {
   const context = await browser.newContext({ viewport: { width: 1400, height: 900 } })
   await context.grantPermissions(['clipboard-read', 'clipboard-write'], { origin })
+  // The system's print dialog, stood in for: the print frame's `print()` waits, recorded in its window.
+  await context.addInitScript(() => {
+    if (!window.frameElement?.matches('iframe.excalimathpad-print-frame')) return
+    const host = window.parent
+    window.print = () =>
+      new Promise((resolve) => {
+        host.__framePrints = host.__framePrints ?? []
+        host.__framePrints.push({ title: host.document.title, resolve })
+      })
+  })
   const mainPage = await context.newPage()
   mainPage.on('pageerror', (error) => errors.push(`main: ${error.message}`))
   await mainPage.goto(`${origin}/`)
@@ -153,7 +176,8 @@ try {
   popoutPageHandle.on('pageerror', (error) => errors.push(`popout: ${error.message}`))
   for (const [name, p] of [['main', mainPage], ['popout', popoutPageHandle]]) {
     p.on('console', (message) => {
-      if (message.type() === 'error') errors.push(`${name} console: ${message.text().slice(0, 300)}`)
+      if (message.type() !== 'error' || excalidrawsFontFallback(message.text())) return
+      errors.push(`${name} console: ${message.text().slice(0, 300)}`)
     })
   }
   console.log(`pop-out view's DOM is in the pop-out's document: ${moved}`)
@@ -272,6 +296,38 @@ try {
     const copied = await tab.evaluate(() => navigator.clipboard.readText())
     row('a copy writes the selected element', copied.includes('excalidraw/clipboard'), copied ? `${copied.length} characters` : 'nothing')
     await tab.keyboard.press('Escape')
+
+    // Print… (section 11, M5): the frame is made in this tab's own window and prints this tab's sheet.
+    const FRAME = 'iframe.excalimathpad-print-frame'
+    const titleBefore = await tab.evaluate(() => document.title)
+    const printsBefore = await tab.evaluate(() => window.__framePrints?.length ?? 0)
+    const offered = await mainPage.evaluate((w) => {
+      window.__app.workspace.setActiveLeaf(window.__leaves[w])
+      return FakeObsidian.runCommand(window.__plugin.commands.find((command) => command.id === 'print'))
+    }, which)
+    await tab.waitForFunction((n) => (window.__framePrints?.length ?? 0) > n, printsBefore, { timeout: 30_000 })
+    const printing = await tab.evaluate((selector) => {
+      const doc = document.querySelector(selector)?.contentDocument
+      return {
+        frames: document.querySelectorAll(selector).length,
+        title: window.__framePrints.at(-1).title,
+        pages: doc?.querySelectorAll('.print-view__page').length ?? 0,
+        lines: doc ? [...doc.querySelectorAll('.print-view .math-element [data-line]')].map((line) => line.getAttribute('aria-label')) : [],
+        katex: doc ? [...doc.fonts].some((face) => face.family.replaceAll('"', '') === 'KaTeX_Main' && face.status === 'loaded') : false,
+      }
+    }, FRAME)
+    const framesInMain = which === 'main' ? 0 : await mainPage.locator(FRAME).count()
+    const plain = which === 'main' ? 'main' : which === 'popout' ? 'popout' : 'moved'
+    row(
+      'Print… builds the pages in a frame in this window, from this tab’s sheet, its fonts loaded',
+      offered && printing.frames === 1 && framesInMain === 0 && printing.pages === 1 && printing.lines.includes('b = a * 3') && printing.katex,
+      `frames here: ${printing.frames}, in the main window: ${framesInMain}, pages: ${printing.pages}, KaTeX_Main: ${printing.katex}`,
+    )
+    row('this window’s title is the plain name while its dialog is open', printing.title === plain, `${titleBefore} → ${printing.title}`)
+    await tab.evaluate(() => window.__framePrints.at(-1).resolve())
+    await tab.waitForTimeout(400)
+    const printed = await tab.evaluate((selector) => ({ frames: document.querySelectorAll(selector).length, title: document.title }), FRAME)
+    row('afterwards the frame is gone and the title is back', printed.frames === 0 && printed.title === titleBefore, `${printed.frames} frames, ${printed.title}`)
   }
 } catch (error) {
   errors.push(`the run didn't finish: ${error.message.split('\n')[0]}`)
@@ -290,4 +346,4 @@ if (failed.length || errors.length || results.length === 0) {
   for (const error of errors) console.error(`  - ${error}`)
   process.exit(1)
 }
-console.log('Pop-out run passed: a sheet tab in a pop-out window drags, places, opens Help and the Math guide, pastes and copies.')
+console.log('Pop-out run passed: a sheet tab in a pop-out window drags, places, opens Help and the Math guide, pastes, copies and prints its own sheet.')
