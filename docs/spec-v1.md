@@ -3088,6 +3088,7 @@ Evidence: [`obsidian-plugin.md`](research/obsidian-plugin.md).
     | `cosh`, `sinh`, `tanh`, `coth`, `csch`, `sech` | a BigNumber at most 10,000 (a plain number answers `∞` at once) |
     | `fft`, `ifft` | 4,096 values |
     | `qr`, `schur`, `mad` | 2,500 values |
+    | `median`, `quantileSeq` | 5,000 values (math.js takes quadratic time where many values are equal: `median` of 10,000 zeros took 0.3 s, and over 1 s in CI) |
     | `lyap` | 900 values |
     | `setUnion`, `setIntersect`, `setDifference`, `setSymDifference`, `setIsSubset` | the two sets' sizes multiplied, at most 1,000,000 |
     | `freqz`, `zpk2tf` | the two arguments' sizes multiplied, at most 10,000; `freqz`'s number of points at most 10,000 |

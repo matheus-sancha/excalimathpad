@@ -142,6 +142,10 @@ describe('slow calls (section 14: the bounds)', () => {
     expect(last('format(pi, 3)')).toEqual({ kind: 'value', text: '3.14' })
     expect(last('setUnion([1, 2], [2, 3])')).toEqual({ kind: 'value', text: '[1, 3, 2]' })
     expect(last('quantileSeq([1, 2, 3, 4], 0.5)')).toEqual({ kind: 'value', text: '2.5' })
+    // At their bound, and with every value equal, the slow case.
+    expect(last('median(zeros(5000))')).toEqual({ kind: 'value', text: '0' })
+    expect(last('median(1:5000)')).toEqual({ kind: 'value', text: '2501' })
+    expect(last('quantileSeq(zeros(5000), 0.5)')).toEqual({ kind: 'value', text: '0' })
   })
 
   it.each([
@@ -152,6 +156,9 @@ describe('slow calls (section 14: the bounds)', () => {
     ['setUnion(v, v)', 'setUnion(v, v) is too large to compute'],
     ['fft(v)', 'fft(v) is too large to compute'],
     ['quantileSeq(v, 3000)', 'quantileSeq(v, 3000) is too large to compute'],
+    ['median(v)', 'median(v) is too large to compute'],
+    ['median(zeros(5001))', 'median(zeros(5001)) is too large to compute'],
+    ['quantileSeq(v, 0.5)', 'quantileSeq(v, 0.5) is too large to compute'],
   ])('refuses %s', (line, message) => {
     expect(errorOf('v = 1:10000', line)).toBe(message)
   })
