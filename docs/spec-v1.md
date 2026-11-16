@@ -2232,7 +2232,11 @@ plot(dx, dy), circle T_p / 2, title "True position"
 - **A point's label** is plain text: `(0.08, −0.05) mm`, each number to the sheet's Digits, the
   unit once when both share it and after each number when they differ. It sits right of its
   dot, or left of it when the right has no room, with a halo in the chart's background colour
-  so a line under it doesn't cut through the text. It stays inside the chart.
+  so a line under it doesn't cut through the text. It stays inside the chart, up or down too: a
+  point at the frame's top or bottom keeps its label inside the frame.
+- **A single value's axis** (the two-value form) takes the one unit the value carries, as it was
+  typed (`dx = 0.08 mm` gives `dx [mm]`, where the unit system would show µm); an argument's own
+  `in` still wins, and a value with no single unit (`kg m/s^2`) takes the unit system.
 - **Equal scales:** the ranges are worked out from what is drawn (curves, points, circles),
   padded, then the shorter axis is widened around its middle. With a typed `x a .. b` or
   `y a .. b`, the typed range is kept and only the other axis is widened; with both typed it
@@ -2243,11 +2247,18 @@ plot(dx, dy), circle T_p / 2, title "True position"
 - **The legend:** a point's row shows a dot and the point as written (`dy against dx` for
   `plot(dx, dy)`, `(dx, dy)` for a `point` clause); a circle's row shows a line and
   `circle T_p / 2`. Colours follow the fixed order: curves first, then points, then circles.
-  No pass or fail colour.
+  No pass or fail colour. With `labels direct` the curves are named at their ends and the legend
+  keeps the points' and circles' rows.
 - **Nothing drawn runs past the chart,** on any plot. The app sets all four margins, sized for
   the tick numbers, the titles and a mark's label (before M4e they could run up to about
-  40 px past it).
-- **The popover** gains Point, Circle and Equal scales.
+  40 px past it). A mark's label is centred on its guide and slides in from an edge that would cut
+  it. Curves, a curve's points and circles are cut at the frame where a typed range leaves them
+  out. Each linear axis shows at least three tick numbers.
+- **Equal scales on a log axis** don't apply: the ranges fit as they would without them.
+- **The popover** gains Point, Circle and Equal scales. Point and Circle are text boxes that
+  take several entries split at `;`, as Mark does, and a point typed without its brackets gets
+  them; Equal scales is a checkbox, ticked and greyed while a circle is on the line. The Size
+  options show the square sizes when the chart has equal scales.
 - A chart is still a fixed block that sets the element's least width and ignores a chosen
   width.
 
@@ -3195,7 +3206,8 @@ Evidence: [`obsidian-plugin.md`](research/obsidian-plugin.md).
     after a write.
 - **Plot:** `aspectRatio` is ignored at fixed sizes, so equal scales are made by setting both
   axis ranges; all four margins are set by the app. Observable Plot is imported by name once
-  the new clauses are built.
+  the new clauses are built (#200: `main.js` from 3,594,195 to 3,467,852 bytes, and the web
+  app's Plot chunk from 297 to 170 KB).
 - **Lighter plugin:** math.js's help texts are stubbed out (in `esbuild.plugin.mjs`, and by an
   alias in `vite.config.ts` for the web app); four unused KaTeX font families are dropped,
   with a test that typesets every guide line and fails on a font class that was dropped. The
@@ -4095,3 +4107,13 @@ Each section above ends with its own tickets.
   field's rows don't jump at each keystroke; the field is never narrower than about 20 characters, as before;
   the wrap width is in the sheet's px (240 px at 100 % zoom); a caret at a row's end counts as on the next row
   for ↑ and ↓; the suggestion list opens under the caret's row.
+- 2026-11-16, [section 10](#plots) ([#200](https://github.com/matheus-sancha/excalimathpad/issues/200), found while building, for Matheus to confirm on
+  the PR): **a single value's axis takes the unit it was typed in.** "Each axis uses its arguments' display
+  units, else the unit system" would title the true-position chart `dx [µm]` and label its point
+  `(80, −50) µm`, since the unit system shows 0.08 mm as 80 µm; the agreed example is `dx [mm]` and
+  `(0.08, −0.05) mm`. So in the two-value form an argument with no `in` takes the one unit its value carries.
+  Lists and curves keep the agreed rule. Written into the section as the build read it, not changes to an
+  agreed rule, and also for him to confirm: the point's label uses a true minus sign (−), as the tick numbers
+  do; with `labels direct` the legend keeps its point and circle rows; a curve and a circle are cut at the
+  frame; each linear axis shows at least three tick numbers; equal scales leave a log axis alone; the
+  popover's Point and Circle take several entries split at `;`.

@@ -654,6 +654,13 @@
   border-radius: 1px;
 }
 
+/* A point's row shows a dot (section 10, M4e). */
+.math-element__plot-swatch.is-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+
 /* Until Observable Plot loads, the chart's own size holds the box (section 10). */
 .math-element__plot-chart.is-loading {
   border-radius: 4px;

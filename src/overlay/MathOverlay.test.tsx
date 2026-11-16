@@ -555,6 +555,26 @@ describe('MathOverlay', () => {
       expect(chart.textContent).toContain('2 = 2')
     })
 
+    it('draws the true-position chart: a square, a framed point with its label and haloed, one circle, legend rows (M4e)', async () => {
+      renderOverlay([anchorWith('dx = 0.08 mm\ndy = -0.05 mm\nT_p = 0.25 mm\nplot(dx, dy), circle T_p / 2, title "True position"')])
+
+      const chart = rowOf('m1', 4).querySelector<HTMLElement>('.math-element__plot-chart')!
+      expect([chart.style.width, chart.style.height]).toEqual(['280px', '280px'])
+      const keys = rowOf('m1', 4).querySelectorAll('.math-element__plot-key')
+      expect(keys).toHaveLength(2)
+      expect(keys[0].querySelector('.math-element__plot-swatch')).toHaveClass('is-dot')
+      expect(keys[1].querySelector('.math-element__plot-swatch')).not.toHaveClass('is-dot')
+      await waitFor(() => expect(chart.querySelector('svg')).not.toBeNull(), { timeout: 5000 })
+      const svg = chart.querySelector('svg')!
+      expect(svg.querySelectorAll('ellipse')).toHaveLength(1)
+      expect(svg.querySelector('[aria-label="frame"]')).not.toBeNull()
+      expect(svg.querySelector('[aria-label="y-grid"]')).toBeNull()
+      const label = svg.querySelector('.plot-point-label')!
+      expect(label.textContent).toBe('(0.08, \u22120.05) mm')
+      expect(label.getAttribute('stroke')).toBe('#ffffff')
+      expect(svg.textContent).toContain('dx [mm]')
+    })
+
     it('marks a list with failed points in the gutter, with the message on hover', () => {
       renderOverlay([anchorWith('x = -1 .. 1\nr(t) = t < 0 ? nope : t\ny = r(x)')])
 

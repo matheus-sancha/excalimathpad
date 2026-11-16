@@ -290,7 +290,7 @@ A **range** is `from .. to step s`, and makes a **list**. A list shows as one su
 
 ## 10. Plots
 
-`plot(x, y1, y2, …)` draws a chart **under its line**. `x` must be a list, and every `y` is of one kind. Settings are clauses after it, separated by commas.
+`plot(x, y1, y2, …)` draws a chart **under its line**. `x` must be a list (two single values, `plot(dx, dy)`, draw one point), and every `y` is of one kind. Settings are clauses after it, separated by commas.
 
 | Write | Shows | Note |
 |---|---|---|
@@ -314,7 +314,7 @@ A **range** is `from .. to step s`, and makes a **list**. A list shows as one su
 | `size S`, `size L` | 360 × 220 or 640 × 360 | M, 480 × 280 |
 | `title "…"` | A title above the chart | None |
 
-Hover a chart and click its **⚙** to set the same clauses without typing: Mark, Series names, Points, x axis, y axis, Size and Title. Each change is written into the line. Charts are static: there is no zoom or pan. Double-click a chart to open its line.
+Hover a chart and click its **⚙** to set the same clauses without typing: Mark, Point, Circle, Series names, Points, x axis, y axis, Equal scales, Size and Title. Each change is written into the line. Charts are static: there is no zoom or pan. Double-click a chart to open its line.
 
 ## 11. Comments and notes
 

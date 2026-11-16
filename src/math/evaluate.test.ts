@@ -1587,6 +1587,60 @@ describe('plots (docs/spec-v1.md section 10, #77)', () => {
     expect(line.plot).toBeNull()
   })
 
+  it('draws two single values as one labelled dot, its axes in the units they were typed in (M4e)', () => {
+    const line = plotOf('dx = 0.08 mm\ndy = -0.05 mm\nT_p = 0.25 mm\nplot(dx, dy), circle T_p / 2, title "True position"')
+    expect(line.result).toEqual(empty)
+    expect(line.plot).toMatchObject({
+      x: { label: 'dx [mm]', values: [] },
+      y: { label: 'dy [mm]' },
+      series: [],
+      dots: [{ x: 0.08, y: -0.05, label: '(0.08, \u22120.05) mm', name: 'dy against dx' }],
+      circles: [{ cx: 0, cy: 0, rx: 0.125, ry: 0.125, name: 'circle T_p / 2' }],
+      equal: 1,
+      width: 280,
+      height: 280,
+      title: 'True position',
+    })
+  })
+
+  it('reads point, circle with a centre, and equal; equal scales make the chart square at each size', () => {
+    const line = plotOf(`${base}plot(x, sq(x)), point (2 m, 3 m), circle (1 m, 1 m) 50 cm, equal, size L`)
+    expect(line.plot).toMatchObject({
+      series: [{ name: 'sq(x)' }],
+      dots: [{ x: 2, y: 3, label: '(2, 3) m', name: '(2 m, 3 m)' }],
+      circles: [{ cx: 1, cy: 1, rx: 0.5, ry: 0.5, name: 'circle (1 m, 1 m) 50 cm' }],
+      equal: 1,
+      width: 360,
+      height: 360,
+    })
+    expect(plotOf(`${base}plot(x, sq(x)), equal, size S`).plot).toMatchObject({ width: 220, height: 220 })
+    expect(plotOf(`${base}plot(x, sq(x)), point (2 m, 3 m)`).plot).toMatchObject({ equal: null, width: 480, height: 280 })
+  })
+
+  it('labels a point with a unit after each number when the axes differ, and keeps equal scales across units', () => {
+    const line = plotOf('a = 0.08 mm\nb = 2 s\nplot(a, b)')
+    expect(line.plot?.dots[0].label).toBe('(0.08 mm, 2 s)')
+    const mixed = plotOf('a = 80 um\nb = 0.05 mm\nplot(a, b), equal')
+    // One µm of x is a thousandth of y's mm.
+    expect(mixed.plot?.equal).toBeCloseTo(0.001)
+  })
+
+  it.each([
+    [`${base}plot(2 m, x)`, 'x must be a list: 2 m is a single value'],
+    [`${base}plot(x, sq(x)), point (x, 2 m)`, 'point (x, 2 m): a point is two single values, (x, y)'],
+    [`${base}plot(x, sq(x)), point 2 m`, 'point 2 m: a point is two single values, (x, y)'],
+    [`${base}plot(x, sq(x)), circle 2 s`, "circle 2 s: the radius is one positive value of the axes' kind"],
+    [`${base}plot(x, sq(x)), circle -1 m`, "circle -1 m: the radius is one positive value of the axes' kind"],
+    [`${base}plot(x, sq(x)), circle (x, 0 m) 1 m`, 'circle (x, 0 m) 1 m: the centre is two single values, (x0, y0)'],
+    [`${base}plot(x, 2 s), equal`, 'equal scales need x and y of the same kind'],
+    [`${base}plot(x, 2 s), circle 1 m`, 'equal scales need x and y of the same kind'],
+    [`${base}plot(x, sq(x)), equal, x 0 m .. 4 m, y 0 m .. 9 m`, 'equal with both x and y ranges typed: leave one out'],
+  ])('is an error on the line, section 13’s M4e rows: %s', (source, message) => {
+    const line = plotOf(source)
+    expect(line.result).toEqual(error(message))
+    expect(line.plot).toBeNull()
+  })
+
   it('typesets the line as its call, clauses hidden', () => {
     expect(plotOf(`${base}plot(x, sq(x)), mark 2 m`).typeset).toMatchObject({
       kind: 'math',
