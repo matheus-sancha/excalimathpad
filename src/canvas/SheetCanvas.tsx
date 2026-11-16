@@ -66,6 +66,8 @@ export interface FileMenu {
   open: () => void
   save: () => void
   saveAs: () => void
+  /** Print… (M5, section 11): the pages, through the browser's dialog. */
+  print: () => void
 }
 
 export { SHEET_SIDEBAR_CLASS } from './panelPresses.ts'
@@ -658,7 +660,8 @@ export const WELCOME_HINT = 'Press M, or choose Add math under More tools, then 
 /**
  * The ☰ menu: the app's file items first, then the Excalidraw items v1 keeps,
  * with Math guide just above Excalidraw's Help (M4d). Excalidraw's Open, Save
- * to… and Export image… are left out. Print… arrives in M5.
+ * to… and Export image… are left out. Print… (M5, #81) is the web's: in a
+ * vault it is Obsidian's command and ☰ item, with the plugin's route.
  */
 function SheetMenu({ fileMenu, onMathGuide }: { fileMenu?: FileMenu; onMathGuide: () => void }) {
   return (
@@ -673,6 +676,9 @@ function SheetMenu({ fileMenu, onMathGuide }: { fileMenu?: FileMenu; onMathGuide
           </MainMenu.Item>
           <MainMenu.Item onSelect={fileMenu.saveAs} shortcut="Ctrl+Shift+S">
             Save as…
+          </MainMenu.Item>
+          <MainMenu.Item onSelect={fileMenu.print} shortcut="Ctrl+P" data-testid="print-item">
+            Print…
           </MainMenu.Item>
           <MainMenu.Separator />
         </>

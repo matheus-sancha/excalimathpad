@@ -51,5 +51,5 @@ before reading the code.
 
 ## Checks
 
-`npm run check` is what CI runs: lint, the tests, both builds, the bundle audit and the five
+`npm run check` is what CI runs: lint, the tests, both builds, the bundle audit and the six
 Playwright runs. `npm test` alone is the quick loop.

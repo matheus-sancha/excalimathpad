@@ -23,7 +23,7 @@ what to read for an issue and where to write.
   `esbuild.plugin.mjs` into `dist-plugin/` (`main.js`, `styles.css`, a copy of
   the root `manifest.json`). `tsconfig.plugin.json` type-checks `plugin/`.
 - `npm run dev | build | build:web | build:plugin | preview | test | lint |
-  audit:plugin | test:blocked | check` — see `package.json`. `build` runs
+  audit:plugin | test:blocked | test:print | check` — see `package.json`. `build` runs
   `tsc -b` and both builds; `lint` is oxlint, then Obsidian's ESLint rules
   (`eslint.config.mjs`) at `--max-warnings 0`; `check` is lint, the tests, the
   build, the **bundle audit** (`scripts/audit-plugin.mjs`) and the
@@ -38,7 +38,8 @@ what to read for an issue and where to write.
   **panel run** (`scripts/panel-run.mjs`,
   M4e, #198: the Sheet panel's widths, docking, drag handle and 280 px, in
   the built plugin and web app; the sample, #199; the charts, #200; the Page
-  row and the page breaks, M5, #80). `npm test` holds the **typing test**
+  row and the page breaks, M5, #80), and the **print run** (`scripts/print-run.mjs`, M5, #81:
+  the built web app's Print… in real Chromium PDFs, read by `scripts/pdf-read.mjs`). `npm test` holds the **typing test**
   (`src/typing.test.tsx`, M4e, #193: the guide's examples and the acceptance
   sheets, a character at a time); `npm run test:probe` is the **odd-values
   probe** (`src/oddValues.probe.tsx`), by hand before a release. `npm test`
@@ -47,7 +48,7 @@ what to read for an issue and where to write.
   child process that Node runs from the TypeScript as it is) and the **font
   test** (`src/overlay/katexFonts.test.tsx`, #201: no KaTeX class the guide
   or a sheet draws is in a family the plugin drops). CI installs Playwright's Chromium (the
-  version `package.json` pins) for the last five. The network-blocked run and the pop-out
+  version `package.json` pins) for the last six. The network-blocked run and the pop-out
   run also open ☰ → Math guide in the built plugin (M4d, #148).
 - `docs/math-guide.md` — the **Math guide** (spec section 8, M4d, #148): every
   form, key and setting, for users, in 17 sections. Both builds turn it into
@@ -121,7 +122,7 @@ an issue touches that module ([`CLAUDE.md`](CLAUDE.md) has the reading route).
   Depends on: math, overlay (KaTeX), print. [`docs/context/panel.md`](docs/context/panel.md)
 - **print** (`src/print/`) — the print pages (spec section 11): `printPages`, one pure function
   from the scene's boxes, the overlay's measured rows (`printRows`) and the Page to the pages and
-  their breaks. Depends on: nothing. [`docs/context/print.md`](docs/context/print.md)
+  their breaks; the print view, drawn in any document; and Print… (`printSheet`). Depends on: nothing. [`docs/context/print.md`](docs/context/print.md)
 - **failure** (`src/failure/`) — unexpected failures (spec section 4): the boundary, the
   failure screen, Copy details and Report this error. `App` wraps the sheet in the view's
   boundary. Depends on: nothing. [`docs/context/failure.md`](docs/context/failure.md)
@@ -391,7 +392,7 @@ and everything downstream recalculates. Engine: math.js, client-side.
   (M4e, #196): the copy gives the cell its size and the field lies over it, so
   the two must break at the same places (spec section 14); check it in Chromium.
 - **The app takes the file keys and drops before Excalidraw**
-  (`src/canvas/fileRoutes.ts`): Ctrl+S, Ctrl+Shift+S, Ctrl+O, Ctrl+Shift+E and
+  (`src/canvas/fileRoutes.ts`): Ctrl+S, Ctrl+Shift+S, Ctrl+O, Ctrl+Shift+E, Ctrl+P and
   dropped scene files, on the window in the capture phase. In Excalidraw 0.18,
   Ctrl+Shift+S and Ctrl+Shift+E ignore `canvasActions`, and a dropped scene
   replaces the sheet; each would drop the block (ADR 0004).
@@ -475,17 +476,13 @@ and everything downstream recalculates. Engine: math.js, client-side.
   names the file.
 - Where the Sheet panel floats (an editor at or below its docking width), it
   covers Excalidraw's More tools; its ✕ closes it.
-- The plugin's `main.js` is about 3.38 MB and `styles.css` 0.55 MB (#201);
+- The plugin's `main.js` is about 3.40 MB and `styles.css` 0.55 MB (#81);
   the audit fails either above 5,000,000 bytes, Obsidian Sync Standard's cap.
 - Excalidraw 0.18.1 listens on the global `document` (copy, cut, paste, `keyup`,
   pointer moves and ups, scroll and others) and `window` (resize, blur, focus,
   message, unload) by itself. The plugin's own code adds none
   (`plugin/test/SheetView.test.ts`, against Excalidraw alone). In a pop-out
   window the bridge carries them across (#137).
-- Excalidraw 0.18.1 doesn't render its command palette unless the host does,
-  so Ctrl+/ and Ctrl+Shift+P open nothing even before the view swallows them.
-- After an Open, Excalidraw's Undo button can stay lit: `history.clear()`
-  doesn't notify it. Pressing it undoes nothing and puts it right.
 - KaTeX shares the lazy `katex-*.js` chunk with Mermaid (about 77 kB gzip) and
   brings its CSS and 59 font files, fetched only as a page uses them. The first
   frame of a sheet shows plain source; it typesets once the chunk loads.

@@ -192,6 +192,10 @@ open text as it is set, before the render that draws it.
 11, M5, #80; [print](print.md)): the title, a failed element's notice, each
 line and comment, a plot line whole, a table line as its line, header row and
 rows, from the body's top in scene units, the canvas's zoom taken out.
+`printRowNodes(body)` gives the same rows' nodes in the same order, which the
+print view reads in its copies; `printViews(stage)` gives each drawn element's
+view, laid-out size and rows, by anchor id, and the overlay's `--math-*` colours
+(#81).
 `caretRow.ts` gives the follow rule its row (0.2.1, #191): the open
 field's box and, in a wrapped field, the row the caret is on; narrowed to
 the caret, measured on the field's hidden copy, when the row is wider than

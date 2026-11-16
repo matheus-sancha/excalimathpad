@@ -68,6 +68,12 @@ resizes. When the panel the edit itself opened is drawn, App also has the
 overlay measure the line's wrap width again (`rewrap`). Only while
 the open field has the keyboard. The launch and a jump open and close the panel through the
 handle, so they work on the bottom sheet too.
+**Print…** (spec section 11, M5, #81; [print](print.md)): on the web, the ☰
+item (`FileMenu.print`) and Ctrl+P (`FileChrome`'s `print`) run `printOnTheWeb`:
+the open line leaves, a frame passes, and `printSheet` builds the pages on the
+page itself from `sheetToPrint` (the scene's drawings and anchors, the overlay's
+views), with the window's title, `window.print()` and Excalidraw's toast for the
+notice; one print at a time. In a vault there is no Print… yet.
 App imports none of the browser ports at run time, so
 the plugin's bundle holds none. `initialElements` gives tests a sheet.
 Depends on: shell, canvas, overlay, file.

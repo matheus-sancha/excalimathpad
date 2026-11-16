@@ -31,6 +31,7 @@ async function mount({ takeOver }: { takeOver: boolean }) {
     save: vi.fn(),
     saveAs: vi.fn(),
     open: vi.fn(),
+    print: vi.fn(),
     openDropped: vi.fn<FileRouteHandlers['openDropped']>(),
   }
   render(
@@ -120,6 +121,34 @@ describe('useFileRoutes on the real Excalidraw', () => {
     expect(heard).not.toHaveBeenCalled()
   })
 
+  it('takes Ctrl+P from the browser for Print…, and Excalidraw never hears it (section 11)', async () => {
+    const { handlers, press, handle } = await mount({ takeOver: true })
+    const heard = vi.fn()
+    handle.root.querySelector('.excalidraw')!.addEventListener('keydown', heard)
+
+    expect(press('p').defaultPrevented).toBe(true)
+
+    expect(handlers.print).toHaveBeenCalledOnce()
+    expect(heard).not.toHaveBeenCalled()
+  })
+
+  it('without the takeover, Excalidraw takes Ctrl+P itself for its palette hint (the control)', async () => {
+    const { api, press } = await mount({ takeOver: false })
+
+    // Excalidraw 0.18 stops the browser's print and shows a toast naming its command palette.
+    expect(press('p').defaultPrevented).toBe(true)
+    await waitFor(() => expect(api.getAppState().toast).not.toBeNull())
+  })
+
+  it('with the takeover, Excalidraw shows no palette hint for Ctrl+P', async () => {
+    const { api, press } = await mount({ takeOver: true })
+
+    press('p')
+
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    expect(api.getAppState().toast).toBeNull()
+  })
+
   it('swallows Ctrl+Shift+E, so the image export never opens', async () => {
     const { api, press } = await mount({ takeOver: true })
 
@@ -158,6 +187,7 @@ describe('fileKeyRoute', () => {
     ['S', { shiftKey: true }, 'saveAs'],
     ['o', {}, 'open'],
     ['E', { shiftKey: true }, 'swallow'],
+    ['p', {}, 'print'],
     ['s', { metaKey: true, ctrlKey: false }, 'save'],
   ] as const)('%s %o is %s', (k, mods, route) => {
     expect(key(k, mods)).toBe(route)
@@ -168,6 +198,7 @@ describe('fileKeyRoute', () => {
     ['s', { altKey: true }],
     ['O', { shiftKey: true }],
     ['e', {}],
+    ['P', { shiftKey: true }],
     ['z', {}],
   ] as const)('%s %o is none of them', (k, mods) => {
     expect(key(k, mods)).toBeNull()

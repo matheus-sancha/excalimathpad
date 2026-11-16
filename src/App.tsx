@@ -32,7 +32,7 @@ import { createDialogHost } from './file/dialogs.ts'
 import type { FileAccess } from './file/fileAccess.ts'
 import { FileChrome } from './file/FileChrome.tsx'
 import type { RecoveryStore } from './file/recovery.ts'
-import { createLineRelay, createSheetSession, type KeptSheet } from './file/sheetSession.ts'
+import { createLineRelay, createSheetSession, displayName, type KeptSheet } from './file/sheetSession.ts'
 import { createVaultSheet, type VaultSheet, type VaultSheetData } from './file/vaultSheet.ts'
 import { ignoreSceneDrops } from './canvas/fileRoutes.ts'
 import type { PickedImage } from './canvas/imageTool.ts'
@@ -45,6 +45,10 @@ import { FAILURE_MESSAGES, sheetWords } from './failure/details.ts'
 import { FailureContext, type FailureReport } from './failure/context.ts'
 import { createFailureBox, type FailureBox } from './failure/failureBox.ts'
 import { FailureScreen } from './failure/FailureScreen.tsx'
+import { anchorPlaces, drawingBoxes, drawingsSvg } from './canvas/printScene.ts'
+import { printRowNodes, printViews } from './overlay/printRows.ts'
+import type { PageSetting } from './print/pages.ts'
+import { printSheet, type SheetToPrint } from './print/printSheet.ts'
 
 /**
  * What Obsidian's commands do in a sheet tab (docs/spec-v1.md section 8,
@@ -516,14 +520,26 @@ function Sheet({
   )
 
   const web = file?.web
+  // Print… on the web (section 11, Print flow): Ctrl+P and the ☰ item, through
+  // the browser's dialog on the page itself (section 14, Print). One at a time.
+  const printing = useRef(false)
+  const page = settings.page
+  const print = useCallback(() => {
+    if (!canvas || !web || printing.current) return
+    printing.current = true
+    void printOnTheWeb(canvas, web.session, page, line).finally(() => {
+      printing.current = false
+    })
+  }, [canvas, web, page, line])
   const fileMenu = useMemo(
     () =>
       web && {
         open: () => void web.session.open(),
         save: () => void web.session.save(),
         saveAs: () => void web.session.saveAs(),
+        print,
       },
-    [web],
+    [web, print],
   )
 
   return (
@@ -602,7 +618,7 @@ function Sheet({
               onCaretRow={() => followCaret(canvas, phone)}
               flash={flash}
             />
-            {web && <FileChrome session={web.session} dialogs={web.dialogs} canvasRoot={canvas.root} />}
+            {web && <FileChrome session={web.session} dialogs={web.dialogs} canvasRoot={canvas.root} print={print} />}
           </>
         )
       }
@@ -624,5 +640,62 @@ function followCaret(canvas: SheetCanvasHandle, phone: boolean) {
     if (!field || document.activeElement !== field) return
     const area = visibleArea(canvas.root, phone)
     scrollIntoArea(canvas.api, caretRow(field, area.right - area.left - 2 * FOLLOW_MARGIN), area)
+  })
+}
+
+/**
+ * The sheet as it is drawn, for the print view (section 11, Print): the
+ * drawings from the scene, each math element at its anchor's place with its
+ * laid-out body's size and rows, and the overlay's view to copy. Both homes
+ * read it the same way.
+ */
+function sheetToPrint(canvas: SheetCanvasHandle, page: PageSetting): SheetToPrint {
+  const stage = canvas.root.closest('.app-shell__stage') ?? canvas.root
+  const { views, colors } = printViews(stage)
+  const elements = anchorPlaces(canvas.api).flatMap((anchor) => {
+    const view = views.get(anchor.id)
+    return view ? [{ ...anchor, width: view.width, height: view.height, rows: view.rows, view: view.view }] : []
+  })
+  return {
+    drawings: drawingBoxes(canvas.api),
+    elements,
+    page,
+    colors,
+    drawingsOn: (top, bottom) => drawingsSvg(canvas.api, top, bottom),
+    rowNodes: printRowNodes,
+  }
+}
+
+/**
+ * Print… on the web (section 11, Print flow; section 14, Print): an open line
+ * ends first and is drawn closed, then the pages are built on the page itself
+ * and the browser's dialog opens, the window's title the plain name while it
+ * is open (section 8). `window.print()` returns when the dialog closes.
+ */
+async function printOnTheWeb(
+  canvas: SheetCanvasHandle,
+  session: { getState: () => { name: string | null } },
+  page: PageSetting,
+  line: { current: LineEditControl | null },
+): Promise<void> {
+  const doc = canvas.root.ownerDocument
+  const view = doc.defaultView
+  line.current?.leaveLine()
+  // The overlay draws the line closed before it is copied.
+  await new Promise<void>((resolve) => (view ? view.requestAnimationFrame(() => resolve()) : resolve()))
+  const { name } = session.getState()
+  await printSheet({
+    doc,
+    sheet: () => sheetToPrint(canvas, page),
+    name: name ?? 'Untitled',
+    title: {
+      get: () => doc.title,
+      set: (title) => {
+        doc.title = title
+      },
+      plain: displayName(name),
+    },
+    print: () => view?.print(),
+    notify: (message) => canvas.api.setToast({ message, closable: true, duration: 6000 }),
   })
 }

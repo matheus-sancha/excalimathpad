@@ -11,6 +11,8 @@ import { useEffect, useState } from 'react'
  * - Ctrl+Shift+S (`saveFileToDisk`) isn't in `canvasActions`, so it always runs.
  * - Ctrl+Shift+E opens the image export dialog outside the action manager.
  * - A dropped scene file replaces the scene, as an undo step.
+ * Ctrl+P is taken from the browser for the app's Print… (docs/spec-v1.md
+ * section 11, Print flow), which prints the pages, not the screen.
  * Listeners on the window in the capture phase run before Excalidraw's
  * container hears a key or a drop, and before the line field does.
  */
@@ -18,6 +20,8 @@ export interface FileRouteHandlers {
   save: () => void
   saveAs: () => void
   open: () => void
+  /** Print… (M5): the browser's own Ctrl+P would print the screen. */
+  print: () => void
   /** A dropped file Excalidraw would load as its scene. `handle` may be null. */
   openDropped: (file: File, handle: Promise<unknown>) => void
 }
@@ -37,6 +41,9 @@ export function fileKeyRoute(event: KeyboardEvent): KeyRoute | null {
       return event.shiftKey ? 'saveAs' : 'save'
     case 'o':
       return event.shiftKey ? null : 'open'
+    case 'p':
+      // Ctrl+Shift+P is Excalidraw's command palette, which it doesn't draw (CONTEXT.md, Incidental).
+      return event.shiftKey ? null : 'print'
     case 'e':
       // Excalidraw's image export: nothing in the app answers it in M1.
       return event.shiftKey ? 'swallow' : null

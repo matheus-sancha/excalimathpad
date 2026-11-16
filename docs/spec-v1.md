@@ -1740,8 +1740,8 @@ Decided in: [file](https://github.com/matheus-sancha/excalimathpad/issues/12),
 Built in M1 (☰ file items, file name, Add math) and M2 (Math settings and the Sheet panel). From
 M4d the label is **Math settings**, in sentence case in both homes (until M4d "Math
 Settings"), and so is every UI text, for Obsidian's lint. The Page
-row is built in M5 (#80); Print… arrives with it (#81), and until then Ctrl+P is the browser's
-own and prints the screen. There is no app bar: the chrome lives inside Excalidraw's own UI slots.
+row is built in M5 (#80), and Print… on the web with it (#81); the plugin's "Print…" command and ☰ item are
+still to come (#81). There is no app bar: the chrome lives inside Excalidraw's own UI slots.
 
 ```
 ☰  ● pump-sizing.excalimathpad      [ Excalidraw's toolbar … More tools ② ]      Library
@@ -2384,6 +2384,46 @@ It draws nothing; the print view (#81) draws what it returns.
 - **A clean gap** is a height that no unbreakable box crosses by more than half a pixel. The break
   moves up from the page's bottom to the nearest one below the top of the page's first box; a gap
   above that would print an empty page, so it doesn't count, and the fallback cuts at the bottom.
+
+**As built (#81, the web's half and the shared view):** Print… on the web and the print view both homes
+draw; the plugin's route is still to come.
+
+- **The print view** (`src/print/printView.ts`) is plain DOM, built into whatever document it is given: the
+  page's own on the web, a frame's in the plugin. Each page is the paper (`@page` at its size with no margin,
+  `height: 100vh`, `contain: strict`) holding a frame at the 15 mm margins (`overflow: hidden`), and the footer
+  drawn inside it. In the frame the scene's slice, from the page's `top` to its `bottom`, is scaled with
+  `transform` from the content's left. Each math element on it is a copy of the overlay's own view at its scene
+  place, its laid-out size, so stored formats, rules, results, tables, plots, a point and a circle, a large
+  matrix's summary and an unexpected failure print as they show; hover and the flash are taken off the copy,
+  and a warning's `⚠` isn't drawn since the line has ended. Each row shows only on the page whose slice holds
+  it; elsewhere it is `visibility: hidden`. A page's drawings are one SVG of the drawings that cross it, from
+  Excalidraw's `exportToSvg` (no anchors, light, no background, the scene's images), placed by
+  `getCommonBounds`. A split table's header row is a copy of its element with only that row shown, in a band
+  above the slice, which moves down by `headerRoom`.
+- **The view's styles** are constructed style sheets (`adoptedStyleSheets`), added for the print and taken off
+  after, never a `<style>` element (section 14, M4e, Print in the plugin). In print they show the view alone;
+  on screen it lies off the page, laid out, so its fonts load.
+- **The footer** is one line of 9 px grey text along the band's foot: the file's name as shown beside ☰
+  (`pump-sizing.excalimathpad`, "Untitled" unsaved), the date, and `2 of 3` at the right.
+- **Print…** (`printSheet`, `src/print/printSheet.ts`) leaves an open line as Esc does, reads the sheet as drawn,
+  lays out the pages, exports each page's drawings, builds the pages, awaits `document.fonts.ready` and two
+  frames, sets the title, then calls the route's print and takes everything away when it returns. A failure
+  before the dialog shows the notice and leaves nothing behind. It writes nothing to the scene: printing adds
+  no undo step and keeps the `●` as it was.
+- **The web prints on the page itself, with section 14's recipe,** not in the frame: the Chromium PDF test
+  (`page.pdf`) prints a page and can't print a frame, so the frame couldn't pass it on the web. The view and
+  `printSheet` take the document, so the plugin's frame needs no second view.
+- **Ctrl+P** is taken in `src/canvas/fileRoutes.ts` with the file keys. Without it, Excalidraw 0.18.1 takes
+  Ctrl+P itself inside its container (a toast naming its command palette), and the browser's own Print
+  printed the screen elsewhere.
+- **The browser's own Print** is a print rule in the web's `src/index.css`: the page's content hidden and the one
+  line in its place. The plugin never loads that file.
+- **A point's label prints without its halo** (see Changes since agreed, 2026-11-16).
+- **Still to come, the plugin's route:** the "Print…" command and first ☰ item, on a computer only; a hidden
+  frame in the view's own window (`view.containerEl.doc`), given the app's style sheets as text (`styles`) and
+  Excalidraw's fonts inside the SVG (`drawingsSvg`'s `inlineFonts`); `printSheet` with that frame's document,
+  its `contentWindow.print()`, the window's title and Obsidian's `Notice`; and the Obsidian items of
+  [section 17](#17-verify-first).
 
 Decided in: [print](https://github.com/matheus-sancha/excalimathpad/issues/21),
 [Chromium PDF](https://github.com/matheus-sancha/excalimathpad/issues/34),
@@ -3058,7 +3098,8 @@ scene itself rather than wait for `onChange`.
   `window.print()`. **Printing before fonts load gives no math at all.**
 
 Evidence: [Chromium PDF](https://github.com/matheus-sancha/excalimathpad/issues/34) and `docs/research/print-pdf.md`
-(lands with [its PR](https://github.com/matheus-sancha/excalimathpad/pull/35)).
+(lands with [its PR](https://github.com/matheus-sancha/excalimathpad/pull/35)). The print run
+(`scripts/print-run.mjs`, #81) holds the web's Print… to it in a real Chromium PDF on every check.
 
 **PWA**
 
@@ -3467,11 +3508,9 @@ M1 to M5, is in [`docs/spec-history.md`](spec-history.md#17-verify-first), with 
 
 **M5**
 
-- Excalidraw text in Nunito on the pump sheet's heading.
-- A drawing taller than a page, dark mode, and images in drawings.
-- Taking over Ctrl+P with real keys, and a person at an open dialog.
-- KaTeX 0.16.47, which the repo resolves, against the 0.19.1 the PDF probe used.
-- A hand-set Scale in the dialog, other systems and real printers.
+- In Chrome itself, by hand (Matheus, step 4): Ctrl+P from a person's keyboard, which a headless run
+  doesn't send through the browser's own shortcuts; a person at the open dialog (the print run's dialog is
+  a stand-in); a Scale set in the real dialog; other systems and real printers.
 - **In Obsidian on a computer, before the print view is built** (a throwaway two-page frame
   answers all of it in minutes; none of it was run):
   - The system dialog honours `@page { size; margin: 0 }`, so the app's pages are the paper's
@@ -4152,3 +4191,8 @@ Each section above ends with its own tickets.
   do; with `labels direct` the legend keeps its point and circle rows; a curve and a circle are cut at the
   frame; each linear axis shows at least three tick numbers; equal scales leave a log axis alone; the
   popover's Point and Circle take several entries split at `;`.
+- 2026-11-16, [sections 10](#plots) and [11](#11-print) ([#81](https://github.com/matheus-sancha/excalimathpad/issues/81), found while building, for Matheus to confirm on
+  the PR): **a point's label prints without its halo.** Chromium writes haloed SVG text into a PDF twice (the
+  halo's stroke and the text's fill), so the true-position label came up twice in the PDF's search, which #81's
+  acceptance forbids. The page is white, so only a curve or circle under the label shows through. The screen
+  keeps the halo.

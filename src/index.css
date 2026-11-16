@@ -10,3 +10,21 @@ body,
 body {
   overflow: hidden;
 }
+
+/* The browser's own Print (docs/spec-v1.md section 11, Changed on 2026-11-15):
+   the one line, never the screen. Print… shows its pages instead, with styles
+   of its own while its dialog is open (`src/print/printView.ts`). Web only:
+   the plugin never loads this file. */
+@media print {
+  body > * {
+    display: none;
+  }
+
+  body::before {
+    content: "Use Print… from the app's menu";
+    display: block;
+    padding: 20mm;
+    font: 14px/1.4 system-ui, 'Segoe UI', sans-serif;
+    color: #1e1e1e;
+  }
+}

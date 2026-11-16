@@ -16,7 +16,12 @@ bottom sheet is, and gives the canvas the keyboard back when it closes. With `va
 in `vaultItems.ts`), under which `SheetCanvas.css` hides the items
 `VAULT_HIDDEN` names (Web Embed and Mermaid, one test id; the Generate
 heading; Browse libraries; Copy to clipboard as SVG), and turns off
-Excalidraw's AI items. With `theme` (a `ThemeMemory`, `theme.ts`) it opens
+Excalidraw's AI items. Excalidraw 0.18.1 doesn't render its command palette
+unless the host does, so Ctrl+/ and Ctrl+Shift+P open nothing even before a
+vault view swallows them; its own Ctrl+P only shows a toast naming the palette,
+and on the web the app takes Ctrl+P first (Print…). After an Open, Excalidraw's
+Undo button can stay lit: `history.clear()` (`sceneFile.ts`) doesn't notify it;
+pressing it undoes nothing and puts it right. With `theme` (a `ThemeMemory`, `theme.ts`) it opens
 in the mode last chosen, light until one is, and tells the memory each
 change of `appState.theme`. `vaultKeys.ts` is the keys of a vault tab:
 `PASS_THROUGH_KEYS` and `SWALLOWED_KEYS` (tested constants), `vaultKeyRoute`,
@@ -64,7 +69,8 @@ so no embed loads an iframe (the plugin's no-network rule).
 `SheetCanvas` also turns off Excalidraw's own open, save and export and draws
 the ☰ menu with the app's file items and, as its last line, the build stamp
 (`__BUILD_STAMP__`, plain text); its handle carries `root`, the box it
-shares with the overlay. `fileRoutes.ts` takes the file keys and scene-file
+shares with the overlay; its ☰ file items end with Print… (Ctrl+P) on the
+web (M5, #81). `fileRoutes.ts` takes the file keys, Ctrl+P (Print…) and scene-file
 drops from Excalidraw (in a vault, `ignoreSceneDrops` only stops the drops),
 and measures the space beside the ☰ button (`useBesideMenu`). `imageTool.ts`
 takes over Excalidraw's image tool in a vault (`takeOverImageTool`: the
@@ -138,7 +144,13 @@ at or above the element's floor becomes its **chosen width**
 (`customData.width`, `MathAnchor.chosenWidth`), with Excalidraw's `x` kept
 and the top and height put back, written `NEVER` so it lands in the resize's
 own undo step; below the floor it goes back to automatic; a height-only drag
-snaps back. It also says when a size write waits (`sizeWritesWait`). The only module that imports
+snaps back. It also says when a size write waits (`sizeWritesWait`).
+`printScene.ts` is the scene's half of the print view (spec section 11, M5, #81;
+[print](print.md)): `drawingBoxes` (each drawing's box from `getCommonBounds`,
+Excalidraw text included, never an anchor), `anchorPlaces`, and `drawingsSvg(api,
+top, bottom)`, the drawings that cross a page as one SVG from `exportToSvg` (no
+anchors, light, no background, the scene's images; `inlineFonts` for a frame), with
+its scene top-left. It writes nothing. The only module that imports
 Excalidraw at runtime; tests may too, and other modules may import its
 types. This is ADR 0001's engineering rule as amended in ADR 0002. Depends
 on: `@excalidraw/excalidraw`, guide (the Math guide's dialog).

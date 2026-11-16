@@ -26,7 +26,32 @@ zoom. jsdom lays nothing out, so `scripts/panel-run.mjs` bundles both and checks
 boxes Chromium lays out: the pump sheet on all four pages, staggered elements, a tall rectangle
 and a heading (spec section 17, M5, in [the history](../spec-history.md#17-verify-first)).
 
-Nothing draws the pages yet: the print view, the footer, Print… and the frame it prints in are
-#81 (spec section 11, Print flow, and section 14, Print). The drawings' boxes are to come from
-the scene in `src/canvas/`, the only code that knows Excalidraw (0.18.1 exports
-`getCommonBounds`). Depends on: nothing.
+**The print view** (`printView.ts`, M5, #81; spec section 11, As built (#81), and section 14,
+Print) is plain DOM built into any document (`doc.importNode` of each copy), so the web's page and
+the plugin's frame share it. `buildPrintView(doc, PrintParts)` takes the layout, the elements
+(`PrintElementView`: place, laid-out size, rows and the overlay's `.math-element` to copy), each
+page's drawings (`PageDrawings`: one SVG and its scene top-left, or null), the footer's name and date
+(`printDate`), the overlay's `--math-*` colours and `rowNodes` (`printRowNodes`, so the Nth node of a
+copy is its Nth measured row). It returns an unattached root (`PRINT_VIEW_CLASS`); each row is marked
+shown or hidden for its page, and a split table's header is a copy with only that row shown.
+`printCss(layout)` is the `@page` rule and section 14's recipe, and in print shows the view alone.
+
+**Print…** (`printSheet.ts`): `printSheet(PrintRoute)` reads `SheetToPrint` (the drawings' boxes, the
+elements, the Page, the colours, `drawingsOn(top, bottom)` and `rowNodes`), lays out with
+`printPages`, exports each page's drawings, builds the view, adds its styles with `adoptStyles`
+(constructed style sheets, never a `<style>`), awaits `doc.fonts.ready` and two frames, sets the
+route's `title` to its plain name, calls `print()` and, when it returns, takes everything off and puts
+the title back. A throw before the dialog calls `notify(PRINT_FAILED)` and leaves nothing behind.
+`styles` is CSS the document lacks, for a frame. `printView.test.ts` and `printSheet.test.ts` hold it
+in jsdom; the **print run** (`scripts/print-run.mjs`, read back by `scripts/pdf-read.mjs`) holds the
+web's Print… in real Chromium PDFs.
+
+The parts it is given come from the modules that know them: the drawings from `src/canvas/printScene.ts`
+(`drawingBoxes`, `anchorPlaces`, `drawingsSvg`), the views and rows from `src/overlay/printRows.ts`
+(`printViews`, `printRowNodes`), put together in App (`sheetToPrint`). The web's route is App's
+`printOnTheWeb`: the page's own document, `window.print()`, `document.title` and Excalidraw's toast.
+
+**Still to come, the plugin's route** (spec section 11, As built (#81)): a hidden frame in the view's
+window, `printSheet` with its document, `styles` copied from the view's document,
+`drawingsSvg(…, { inlineFonts: true })` and the frame's `contentWindow.print()`, from a "Print…"
+command and ☰ item on a computer. Depends on: nothing.
