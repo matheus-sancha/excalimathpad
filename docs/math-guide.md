@@ -469,6 +469,7 @@ The Sheet panel's Symbols tab is a set of buttons that type, at the caret of the
 - A plain `.excalidraw` drawing opens too; its first save asks for a new `.excalimathpad` file, so the drawing keeps its own format.
 - **The recovery copy:** while there are unsaved changes, the browser keeps a copy of the whole sheet. If the tab closes before you save, the next launch asks "Restore unsaved changes to …?" with Restore and Discard.
 - A file from a newer Excalimathpad is refused rather than overwritten: update the app.
+- **Ctrl+P**, or **Print…** in the ☰ menu, prints the whole sheet on pages of the size in Settings → Page, with the file name, the date and the page number at the foot of each. The browser's dialog shows the pages; choose Save as PDF there for a PDF. To move a break, close the dialog, move something on the sheet and print again.
 
 **In an Obsidian vault,** a sheet is a `.excalimathpad` file in the vault and saves itself, as notes do.
 
@@ -522,6 +523,7 @@ Excalidraw's own keys for drawing are listed in its **Help** (press `?`, or ☰ 
 | **Ctrl+Z** / **Ctrl+Shift+Z** | Undo / redo, one line at a time |
 | **Ctrl+D** | Duplicates the selected element |
 | **Ctrl+S** / **Ctrl+Shift+S** / **Ctrl+O** | Save / Save as / Open, in the browser |
+| **Ctrl+P** | Print…, in the browser |
 
 **By touch,** in Obsidian on a phone or tablet:
 

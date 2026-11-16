@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import { describe, expect, it, onTestFinished } from 'vitest'
+import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import App from '../App.tsx'
 import { fakeFileAccess, fakeRecovery } from '../test/files.ts'
 import { doubleClickLine } from '../test/gestures.ts'
@@ -63,8 +63,78 @@ const sheetText = (sources: string[]) =>
 const linesOnScreen = () =>
   screen.getAllByRole('list', { name: 'Lines' }).map((list) => linesOf(list).join(''))
 
+/**
+ * Print… on the web (docs/spec-v1.md section 11, Print flow; section 8, the
+ * window title). jsdom has no constructed style sheets and lays nothing out:
+ * the document gets an `adoptedStyleSheets` list and the bodies a size, and
+ * `window.print` stands in for the dialog. The print run holds the PDFs.
+ */
+function standInForPrint() {
+  Object.defineProperty(document, 'adoptedStyleSheets', { value: [], writable: true, configurable: true })
+  onTestFinished(() => {
+    delete (document as { adoptedStyleSheets?: unknown }).adoptedStyleSheets
+  })
+  onTestFinished(layOutBodies(() => ({ width: 300, height: 96 })))
+  const seen: { title: string; pages: number; copies: number; field: boolean }[] = []
+  const print = vi.spyOn(window, 'print').mockImplementation(() => {
+    seen.push({
+      title: document.title,
+      pages: document.querySelectorAll('.print-view__page').length,
+      copies: document.querySelectorAll('.print-view .math-element').length,
+      field: document.querySelector('.math-element__field') !== null,
+    })
+  })
+  onTestFinished(() => print.mockRestore())
+  return { print, seen }
+}
+
+describe('Print…', () => {
+  it('prints the pages from ☰, the title the plain name while the dialog is open, then puts it back', async () => {
+    const { print, seen } = standInForPrint()
+    await mount()
+    commitLine(1, 'x = 5')
+    await waitFor(() => expect(document.title).toBe('● Untitled'))
+
+    fireEvent.click(screen.getByTestId('main-menu-trigger'))
+    fireEvent.click(screen.getByText('Print…'))
+
+    await waitFor(() => expect(print).toHaveBeenCalledOnce())
+    expect(seen[0]).toMatchObject({ title: 'Untitled', pages: 1, field: false })
+    expect(seen[0].copies).toBeGreaterThan(0)
+    await waitFor(() => expect(document.querySelector('.print-view')).toBeNull())
+    expect(document.title).toBe('● Untitled')
+    expect(await screen.findByTestId('file-name')).toHaveTextContent('● Untitled')
+  })
+
+  it('Ctrl+P prints too, ending an open line first', async () => {
+    const { print, seen } = standInForPrint()
+    await mount()
+    const field = typeLine(1, 'x = 7')
+
+    fireEvent.keyDown(field, { key: 'p', ctrlKey: true })
+
+    await waitFor(() => expect(print).toHaveBeenCalledOnce())
+    expect(seen[0].field).toBe(false)
+    expect(linesOnScreen()[0]).toContain('7')
+  })
+
+  it("shows the notice when the pages can't be built, and opens no dialog", async () => {
+    const { print } = standInForPrint()
+    delete (document as { adoptedStyleSheets?: unknown }).adoptedStyleSheets
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    onTestFinished(() => error.mockRestore())
+    await mount()
+
+    fireEvent.keyDown(canvasRoot(), { key: 'p', ctrlKey: true })
+
+    expect(await screen.findByText("The pages couldn't be built, so nothing was printed.")).toBeInTheDocument()
+    expect(print).not.toHaveBeenCalled()
+    expect(document.title).toBe('Untitled')
+  })
+})
+
 describe('the ☰ menu', () => {
-  it("has Open…, Save and Save as… first, and none of Excalidraw's own file items", async () => {
+  it("has Open…, Save, Save as… and Print… first, and none of Excalidraw's own file items", async () => {
     await mount()
 
     fireEvent.click(screen.getByTestId('main-menu-trigger'))
@@ -73,7 +143,7 @@ describe('the ☰ menu', () => {
       document.querySelectorAll('.dropdown-menu .dropdown-menu-item__text'),
       (item) => item.textContent?.trim(),
     )
-    expect(items.slice(0, 3)).toEqual(['Open…', 'Save', 'Save as…'])
+    expect(items.slice(0, 4)).toEqual(['Open…', 'Save', 'Save as…', 'Print…'])
     expect(items).toEqual(expect.arrayContaining(['Find on canvas', 'Help', 'Reset the canvas']))
     expect(items).not.toContain('Open')
     expect(items.some((item) => /Save to|Export image/.test(item ?? ''))).toBe(false)

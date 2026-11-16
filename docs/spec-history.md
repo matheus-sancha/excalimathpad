@@ -534,6 +534,33 @@ The items with a recorded result. Those still open are in
   give 4, 2 and 4 pages, every break in a gap. A rectangle taller than a page is cut, and a heading
   beside the lines moves the break up to the gap between rows above it. Not run on paper: the print
   view is #81.
+- The web's items, each in a real Chromium PDF. **Run (2026-11-16, #81, the print run: the built web app
+  in headless Chromium 1243, Print… with the dialog stood in for by `page.pdf` at the page's own `@page`
+  size, read back from the PDF):**
+  - Excalidraw text in Nunito on the pump sheet's heading. **Passed:** the heading, Excalidraw text exported
+    by `exportToSvg`, is in the PDF as text in Nunito (embedded as `NunitoExtraLight-Medium`, its variable
+    font), not as a picture.
+  - A drawing taller than a page, dark mode, and images in drawings. **Passed:** a rectangle 2,600 units
+    tall beside 70 lines prints across 3 pages, the lines whole; a PNG in the drawing is the PDF's one
+    image; with Excalidraw in dark mode no page or copy takes a filter and the drawings export light, so
+    the pages are white with light-theme colours.
+  - Taking over Ctrl+P with real keys. **Found:** Excalidraw 0.18.1 takes Ctrl+P itself inside its
+    container (it stops the browser's print and shows a toast naming its command palette), so before #81
+    Ctrl+P on the canvas printed nothing. The app's listener on the window, in the capture phase, runs
+    first: Ctrl+P from Playwright's keyboard (Chromium's input events, not the browser's own menu) opens
+    Print…, with a line open too, and Excalidraw shows no toast (`fileRoutes.excalidraw.test.tsx` holds
+    both). Whether the browser's own shortcut handling sees a prevented Ctrl+P is the hand check of step 4.
+  - KaTeX 0.16.47, which the repo resolves, against the 0.19.1 the PDF probe used. **Passed:** the pump
+    sheet's PDF holds KaTeX's Main, Math and Size fonts, and every letter each page paints, KaTeX's
+    included, is in its PDF text exactly as often: no math missing, nothing twice.
+  - A hand-set Scale. **Found, with Chromium's own scale (`page.pdf`'s `scale`, the setting the dialog
+    sets):** at 50 % each app page is still one sheet of paper with everything on it, the content half
+    size at the top left and the footer still at the paper's foot, since a page is `100vh` tall. The
+    app's breaks assume 100 %, the dialog's default. The real dialog's Scale, other systems and real
+    printers stay in section 17.
+  - Also found: a point's label with its halo came up twice in the PDF's text (spec, Changes since
+    agreed, 2026-11-16), and the system font's figures in a chart can be private-use glyphs in the PDF's
+    text, so a chart's tick numbers may not be searchable in the PDF (seen with Inter on Linux).
 
 ## 18. Decision index
 

@@ -36,6 +36,6 @@ given `resume` loads it in `start` in place of the recovery offer; a vault
 sheet given `unwrittenAtStart` asks for a save once loaded.
 `FileChrome.tsx` shows the name and title, asks the two questions
 and asks before leaving while dirty; it answers the keys and drops that
-`canvas/fileRoutes.ts` takes. Opening picks the file before it asks about
+`canvas/fileRoutes.ts` takes, Ctrl+P through its `print` prop (App's Print…). Opening picks the file before it asks about
 unsaved changes: Chromium allows one picker per gesture. Depends on: canvas
 (file routes, layers).
