@@ -100,6 +100,21 @@ describe('Problems (docs/spec-v1.md section 8)', () => {
     expect(errorCount(sheetOf({ source: 'K = 5.4\nm = 2 * 3' }))).toBe(0)
   })
 
+  it('carries the failure of a line the app itself failed on, for the row’s actions (M4e)', () => {
+    const [element] = sheetOf({ source: 'x = 2\ny = x + 1' })
+    const unexpected = { text: 'TypeError: boom', stack: 'TypeError: boom\n    at somewhere' }
+    const failed: PanelElement = {
+      ...element,
+      lines: [element.lines[0], { ...element.lines[1], result: { kind: 'error', message: 'this line hit an unexpected error in Excalimathpad', unexpected } }],
+    }
+
+    expect(problemRows([failed])).toEqual([
+      expect.objectContaining({ severity: 'error', message: 'this line hit an unexpected error in Excalimathpad', line: 1, unexpected }),
+    ])
+    // A sheet's own error has none.
+    expect(problemRows(sheetOf({ source: 'q = nope' }))[0]).not.toHaveProperty('unexpected')
+  })
+
   it('keeps a line’s error before its warnings', () => {
     expect(problemRows(sheetOf({ source: 'K = 1 m + 1 s' })).map((row) => row.severity)).toEqual([
       'error',

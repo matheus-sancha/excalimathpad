@@ -34,9 +34,11 @@ export default defineConfig([
     '*.mjs',
     'scripts',
     'vite.config.ts',
+    'vitest.probe.config.ts',
     'buildStamp.ts',
     // Tests and their helpers, as the community scanner leaves them out.
     '**/*.test.*',
+    '**/*.probe.*',
     '**/test/**',
   ]),
   ...obsidianmd.configs.recommended,

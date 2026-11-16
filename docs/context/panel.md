@@ -11,7 +11,10 @@ the badge's `errors`, the tabs' content, `onChange`). `sheetPanel.ts` (pure)
 turns the evaluated sheet (`EvaluatedElement`s, which `MathOverlay` hands
 out through `onEvaluated`) into Variables groups and Problems rows (every
 error and warning), and `errorCount`, the Problems badge (errors only, M4d);
-`SheetPanel.tsx` renders them, and a click asks App to jump. **The Symbols
+`SheetPanel.tsx` renders them, and a click asks App to jump. A row of a
+line the app itself failed on (`ProblemRow.unexpected`, spec section 4,
+Unexpected failures) shows the failure's raw text under its message, and
+`FailureActions` after its button. **The Symbols
 tab** (#146, `SymbolsTab.tsx`): a filter box (`filterSymbols`), then the
 catalogue's groups, Greek in its three rows, each entry an `InsertButton`
 showing its label, its hover `symbolHover`, a dot on a letter that is also

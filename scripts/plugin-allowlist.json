@@ -3,7 +3,7 @@
   "hosts": {
     "www.w3.org": "XML namespaces (SVG, XHTML, XLink, MathML): names, never fetched",
     "react.dev": "React's error messages name their help page in the thrown text; never fetched",
-    "github.com": "Licence comments, Excalidraw's Help and dialog links, and jotai's and zustand's warning texts; a link opens the browser only when clicked",
+    "github.com": "Licence comments, Excalidraw's Help and dialog links, jotai's and zustand's warning texts, and the app's Report this error link (the new-issue page, nothing filled in); a link opens the browser only when clicked",
     "docs.excalidraw.com": "Excalidraw's Help dialog link; opens the browser only when clicked",
     "plus.excalidraw.com": "Excalidraw's Help dialog link (blog); opens the browser only when clicked",
     "www.youtube.com": "Excalidraw's Help link, and its embed patterns, which never load: the plugin passes validateEmbeddable false",

@@ -8,9 +8,12 @@ touches this module, and keep it true in the pull request that changes the modul
 **math** (`src/math/`) — the engine. Interface: `evaluateSheet(blocks)`,
 with blocks `{ id, source }` already in reading order → one `SheetLine` per
 line, keyed by block id; never throws: each line is read inside one guard,
-so a throw from outside a line's own handling is that line's error (its
-message, the raw source as its typeset form) and the lines below still run
-(#179; the full rule is #180's). A `SheetLine` is the line's
+its parse included (a parse that threw is rethrown there; `statementNames`
+still gives the names it assigns), so a throw from outside a line's own
+handling is that line's error and the lines below still run (spec section 4,
+Unexpected failures, #193): the message is `UNEXPECTED_LINE`, the result's
+`unexpected` holds the failure's raw text and stack, and the typeset form is
+the raw source. A `SheetLine` is the line's
 `LineResult` (value | error | empty) and its `TypesetLine`, from the same
 parse: blank, comment, math (name, expression and note, as TeX) or unparsed
 (raw source). `lineForm.ts` (pure) reads a line's comment and its format clause

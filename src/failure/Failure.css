@@ -1,0 +1,71 @@
+/* Unexpected failures (docs/spec-v1.md section 4): the failure screen, and the
+   actions a failed element and a failed line's Problems row share. */
+
+.failure-screen {
+  box-sizing: border-box;
+  height: 100%;
+  padding: 48px 32px;
+  overflow: auto;
+  color-scheme: light dark;
+  background: Canvas;
+  color: CanvasText;
+  font: 15px/1.5 system-ui, sans-serif;
+}
+
+.failure-screen p {
+  margin: 0 0 16px;
+  max-width: 640px;
+}
+
+.failure-screen__what {
+  font-weight: 600;
+}
+
+.failure-screen__typing {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding-left: 16px;
+}
+
+.failure-screen__typing code {
+  font: 14px/1.5 ui-monospace, monospace;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+
+.failure-screen__actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.failure-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.failure-actions__button {
+  padding: 4px 10px;
+  border: 1px solid currentColor;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.failure-actions__report {
+  color: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.failure-actions__text {
+  flex-basis: 100%;
+  font: 12px/1.4 ui-monospace, monospace;
+}

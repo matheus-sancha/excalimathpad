@@ -274,11 +274,19 @@ function forget(scope: Map<string, unknown>, name: string) {
   else scope.delete(name)
 }
 
+/** What a line reads when the app itself failed on it (section 13, Unexpected failures). */
+export const UNEXPECTED_LINE = 'this line hit an unexpected error in Excalimathpad'
+
 /** The outcome of evaluating one line of a math element. */
 export type LineResult =
   | { kind: 'empty' }
   | { kind: 'value'; text: string }
-  | { kind: 'error'; message: string }
+  /**
+   * `unexpected` is set when the app itself failed on the line (section 4,
+   * Unexpected failures): the failure's raw text and its stack, under the
+   * message `UNEXPECTED_LINE`. A sheet's own error has none.
+   */
+  | { kind: 'error'; message: string; unexpected?: { text: string; stack: string } }
   /**
    * A list (section 10): its one-row summary, `30 values, 12.04 … 33.18 m`.
    * `failed` is the line's problem when points failed, `1 of 30 points
@@ -565,9 +573,27 @@ export function evaluateSheet(
   settings: DisplaySettings = DEFAULT_DISPLAY,
 ): ReadonlyMap<string, SheetLine[]> {
   messageSettings = settings
+  // A parse that threw (section 4, Unexpected failures): the line stands in as
+  // one that defines what its text assigns, and its guard below rethrows this.
+  const parseFailures = new Map<ParsedLine, unknown>()
+  const parse = (text: string): ParsedLine => {
+    try {
+      return parseLine(text)
+    } catch (error) {
+      let defines: string[] = []
+      try {
+        defines = statementNames(text)
+      } catch {
+        // The names are lost with the parse.
+      }
+      const line: ParsedLine = { kind: 'syntax-error', message: UNEXPECTED_LINE, defines, source: text }
+      parseFailures.set(line, error)
+      return line
+    }
+  }
   const sheet = blocks.map(({ id, source }) => {
     const sources = splitLines(source)
-    return { id, sources, lines: sources.map(parseLine) }
+    return { id, sources, lines: sources.map(parse) }
   })
 
   // Where each name is assigned, as positions in reading order.
@@ -620,17 +646,25 @@ export function evaluateSheet(
       lines.map((line, index): SheetLine => {
         const here = position
         try {
+          if (parseFailures.has(line)) throw parseFailures.get(line)
           return readLine(line)
         } catch (error) {
-          // #179: a throw from outside a line's own handling is that line's
-          // error, not the sheet's, and the lines below still run. The full
-          // rule for an unexpected failure is #180's to set.
+          // Section 4, Unexpected failures: a throw from outside a line's own
+          // handling, its parse included, is that line's error and the app's
+          // fault, not the sheet's. The lines below still run.
           position = here + 1
           if (line.kind !== 'blank') {
             for (const name of line.defines) if (!scope.holds(name)) failed.add(name)
           }
           return {
-            result: { kind: 'error', message: error instanceof Error ? error.message : String(error) },
+            result: {
+              kind: 'error',
+              message: UNEXPECTED_LINE,
+              unexpected: {
+                text: error instanceof Error ? `${error.name}: ${error.message}` : String(error),
+                stack: error instanceof Error ? (error.stack ?? '') : '',
+              },
+            },
             typeset: { kind: 'unparsed', source: sources[index] },
             warnings: [],
             variables: line.kind === 'blank' ? [] : line.defines.map((name): SheetVariable => ({ name, kind: 'error' })),

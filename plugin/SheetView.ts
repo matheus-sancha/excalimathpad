@@ -268,12 +268,20 @@ export class SheetView extends TextFileView {
     const read = readSheet(data)
     if (read.kind !== 'sheet') return this.say(read.kind === 'newer' ? MESSAGES.newer : MESSAGES.notASheet)
     const host = content.createDiv({ cls: 'excalimathpad-view__app' })
+    const first = { scene: read.scene, settings: read.settings }
+    // Read at each mount: after Reload the sheet, the file as this view last wrote it.
+    const sheetNow = () => {
+      const now = readSheet(this.data)
+      return now.kind === 'sheet' ? { scene: now.scene, settings: now.settings } : first
+    }
     this.root = createRoot(host)
     this.root.render(
       createElement(App, {
         vault: {
           container: content,
-          sheet: { scene: read.scene, settings: read.settings },
+          get sheet() {
+            return sheetNow()
+          },
           connect: (sheet) => {
             this.sheet = sheet
           },
@@ -286,6 +294,7 @@ export class SheetView extends TextFileView {
           onWindowMigrated: (listener) => content.onWindowMigrated(listener),
           // On a phone the Sheet panel is a bottom sheet (section 8, On a phone).
           phone: Platform.isPhone,
+          device: Platform.isPhone ? 'phone' : Platform.isTablet ? 'tablet' : 'desktop',
         },
         panelMemory: this.memory.panel,
       }),

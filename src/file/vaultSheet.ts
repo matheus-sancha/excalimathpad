@@ -1,4 +1,4 @@
-import type { LineControl, SceneFile } from './sheetSession.ts'
+import type { KeptSheet, LineControl, SceneFile } from './sheetSession.ts'
 import { writeSheet, type SheetData, type SheetSettings } from './sheetFormat.ts'
 
 /**
@@ -36,6 +36,13 @@ export interface VaultSheet {
    * undo step, the history cleared, scroll and zoom kept, any open line closed.
    */
   reload: (sheet: VaultSheetData) => void
+  /**
+   * The view failed (section 4, Unexpected failures). Returns what the tab
+   * holds, the sheet as of the last line commit or scene change, for Reload
+   * the sheet (null before the sheet has loaded, or if the scene can't be
+   * read). From then on `unwritten` is null: a failed view never writes.
+   */
+  fail: () => KeptSheet | null
 }
 
 /** What the view read: Excalidraw's part and the block's settings (`readSheet`). */
@@ -62,9 +69,14 @@ export interface VaultSheetPorts {
   sheet: VaultSheetData
   /** The sheet now differs from its file: the view asks Obsidian to save. */
   onUnwritten: () => void
+  /**
+   * `sheet` is what a failed view kept and holds changes the file doesn't
+   * (Reload the sheet): it is unwritten from the start.
+   */
+  unwrittenAtStart?: boolean
 }
 
-export function createVaultSheet({ scene, line, sheet, onUnwritten }: VaultSheetPorts): VaultSheet {
+export function createVaultSheet({ scene, line, sheet, onUnwritten, unwrittenAtStart = false }: VaultSheetPorts): VaultSheet {
   /** What `start` loads: the file as read, or a newer version that came before Excalidraw was ready. */
   let first = sheet.scene
   let settings = sheet.settings
@@ -75,6 +87,8 @@ export function createVaultSheet({ scene, line, sheet, onUnwritten }: VaultSheet
   let started = false
   /** Set while a `keepClean` write runs on a written sheet: its change isn't work. */
   let quiet = false
+  /** Set once the view has failed: nothing is handed to the view to write after. */
+  let failed = false
   let starting: Promise<void> | null = null
   const listeners = new Set<() => void>()
 
@@ -94,7 +108,7 @@ export function createVaultSheet({ scene, line, sheet, onUnwritten }: VaultSheet
    * so a flow that has just written the line reads the key itself.
    */
   const onSceneChange = () => {
-    if (!started || quiet) return
+    if (!started || quiet || failed) return
     const key = currentKey()
     if (key === lastKey) return
     lastKey = key
@@ -112,6 +126,10 @@ export function createVaultSheet({ scene, line, sheet, onUnwritten }: VaultSheet
         scene.load(first)
         markWritten()
         started = true
+        if (unwrittenAtStart) {
+          writtenKey = ''
+          onUnwritten()
+        }
       })
       return starting
     },
@@ -134,7 +152,7 @@ export function createVaultSheet({ scene, line, sheet, onUnwritten }: VaultSheet
       if (wasWritten) markWritten()
     },
     unwritten: () => {
-      if (!started) return null
+      if (!started || failed) return null
       line.commitLine()
       onSceneChange()
       const key = currentKey()
@@ -143,6 +161,19 @@ export function createVaultSheet({ scene, line, sheet, onUnwritten }: VaultSheet
     },
     written: (write) => {
       writtenKey = write.key
+    },
+    fail: () => {
+      if (failed) return null
+      let kept: KeptSheet | null = null
+      if (started) {
+        try {
+          kept = { text: writeSheet(scene.serialize(), settings), dirty: currentKey() !== writtenKey, name: null, handle: null }
+        } catch {
+          // A scene that can't be read is kept nowhere: the file stands.
+        }
+      }
+      failed = true
+      return kept
     },
     busy: () => line.isOpen() || (started && currentKey() !== writtenKey),
     reload: (next) => {

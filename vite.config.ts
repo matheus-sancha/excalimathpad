@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import react from '@vitejs/plugin-react'
@@ -22,6 +23,8 @@ const mathGuide: Plugin = {
   },
 }
 
+const { version } = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')) as { version: string }
+
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [mathGuide, react()],
@@ -31,6 +34,8 @@ export default defineConfig({
   // GitHub Actions sets GITHUB_SHA; a local build has none and reads `dev`.
   define: {
     __BUILD_STAMP__: JSON.stringify(buildStamp(process.env.GITHUB_SHA, new Date())),
+    // Section 4, Unexpected failures: Copy details names the version.
+    __APP_VERSION__: JSON.stringify(version),
   },
   test: {
     environment: 'jsdom',

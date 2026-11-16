@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import type { PlotView } from '../math/evaluate.ts'
 import { texToHtml } from './katex.ts'
+import { Boundary } from '../failure/Boundary.tsx'
+import { FAILURE_MESSAGES } from '../failure/details.ts'
 import { drawChart, loadPlot, SERIES_COLORS, type PlotModule } from './plotDrawing.ts'
 
 /**
@@ -13,9 +15,32 @@ import { drawChart, loadPlot, SERIES_COLORS, type PlotModule } from './plotDrawi
  * It takes no pointer events, like the rest of the overlay, so a drag from it
  * moves the element and a double-click opens its line. A failed point's × on
  * the x axis carries its message as `data-tip`, which the gestures show.
+ *
+ * A chart that fails to draw (section 4, Unexpected failures) says so in its
+ * box, the failure's raw text on hover; its line and the element stay. It is
+ * tried again when the plot changes.
  */
-
 export function PlotChart({ plot }: { plot: PlotView }) {
+  return (
+    <Boundary
+      resetKeys={[JSON.stringify(plot)]}
+      fallback={(failure) => (
+        <div
+          className="math-element__plot is-failed"
+          role="alert"
+          style={{ width: plot.width, height: plot.height }}
+          data-tip={failure.text}
+        >
+          {FAILURE_MESSAGES.chart}
+        </div>
+      )}
+    >
+      <Chart plot={plot} />
+    </Boundary>
+  )
+}
+
+function Chart({ plot }: { plot: PlotView }) {
   const [module, setModule] = useState<PlotModule | null>(null)
   const host = useRef<HTMLDivElement>(null)
 

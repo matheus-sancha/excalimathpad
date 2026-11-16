@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
 import type { ExcalidrawElement } from '@excalidraw/excalidraw/element/types'
 import { AppShell } from './shell/AppShell.tsx'
 import {
@@ -26,13 +26,13 @@ import type { SymbolInsert } from './math/symbols.ts'
 import { FormatTab, type FormatActions } from './panel/FormatTab.tsx'
 import { QuickKeys } from './panel/QuickKeys.tsx'
 import { SettingsTab } from './panel/SettingsTab.tsx'
-import { DEFAULT_SETTINGS, type SheetSettings } from './file/sheetFormat.ts'
+import { DEFAULT_SETTINGS, readSheet, type SheetSettings } from './file/sheetFormat.ts'
 import { errorCount, type PanelTarget } from './panel/sheetPanel.ts'
 import { createDialogHost } from './file/dialogs.ts'
 import type { FileAccess } from './file/fileAccess.ts'
 import { FileChrome } from './file/FileChrome.tsx'
 import type { RecoveryStore } from './file/recovery.ts'
-import { createLineRelay, createSheetSession } from './file/sheetSession.ts'
+import { createLineRelay, createSheetSession, type KeptSheet } from './file/sheetSession.ts'
 import { createVaultSheet, type VaultSheet, type VaultSheetData } from './file/vaultSheet.ts'
 import { ignoreSceneDrops } from './canvas/fileRoutes.ts'
 import type { PickedImage } from './canvas/imageTool.ts'
@@ -40,6 +40,11 @@ import type { ThemeMemory } from './canvas/theme.ts'
 import { confineKeys } from './canvas/vaultKeys.ts'
 import { bridgeWindow } from './canvas/popoutBridge.ts'
 import { isInSheetPanel, keepPanelPresses } from './canvas/panelPresses.ts'
+import { Boundary } from './failure/Boundary.tsx'
+import { FAILURE_MESSAGES, sheetWords } from './failure/details.ts'
+import { FailureContext, type FailureReport } from './failure/context.ts'
+import { createFailureBox, type FailureBox } from './failure/failureBox.ts'
+import { FailureScreen } from './failure/FailureScreen.tsx'
 
 /**
  * What Obsidian's commands do in a sheet tab (docs/spec-v1.md section 8,
@@ -64,7 +69,11 @@ export interface VaultHome {
    * itself and a pop-out window works.
    */
   container: HTMLElement
-  /** The file as the view read it; the view shows a refusal itself. */
+  /**
+   * The file as the view holds it, read at each mount: as the view read it,
+   * and after Reload the sheet as the view last wrote it. The view shows a
+   * refusal itself.
+   */
   sheet: VaultSheetData
   /**
    * Hands the view the sheet it writes back, once the canvas is up, and null
@@ -89,6 +98,8 @@ export interface VaultHome {
    * sheet (docs/spec-v1.md section 8, On a phone, M4d).
    */
   phone?: boolean
+  /** What Obsidian runs on, for Copy details (section 4, Unexpected failures). */
+  device?: 'desktop' | 'phone' | 'tablet'
 }
 
 export interface AppProps {
@@ -118,10 +129,58 @@ interface SheetFile {
     setSettings: (next: SheetSettings) => void
     keepClean: (write: () => void) => void
     start: () => Promise<void>
+    fail: () => KeptSheet | null
   }
   web: { session: ReturnType<typeof createSheetSession>; dialogs: ReturnType<typeof createDialogHost> } | null
   /** In a vault: the same sheet, as the view writes it back. */
   vault: VaultSheet | null
+}
+
+/** What passes from the sheet to the view's boundary (`createFailureBox`). */
+type SheetBox = FailureBox<KeptSheet, readonly EvaluatedElement[]>
+
+/**
+ * The app, inside the view's boundary (docs/spec-v1.md section 4, Unexpected
+ * failures). A failure outside every smaller boundary replaces the view with
+ * the failure screen: the sheet file is told first, while the scene can still
+ * be read, so it keeps the sheet and never writes again; Reload the sheet
+ * mounts the sheet anew from what was kept.
+ */
+export default function App(props: AppProps) {
+  const [box] = useState((): SheetBox => createFailureBox<KeptSheet, readonly EvaluatedElement[]>([]))
+  const [attempt, setAttempt] = useState<{ count: number; resume: KeptSheet | null }>({ count: 0, resume: null })
+  const inVault = props.vault !== undefined
+  const device = props.vault?.device ?? null
+  const report = useMemo(
+    (): FailureReport => ({
+      home: {
+        version: __APP_VERSION__,
+        stamp: __BUILD_STAMP__,
+        home: inVault ? 'Obsidian plugin' : 'web',
+        device: inVault ? device : null,
+      },
+      words: () => sheetWords(box.sheet(), box.open()),
+    }),
+    [box, inVault, device],
+  )
+  return (
+    <FailureContext.Provider value={report}>
+      <Boundary
+        resetKeys={[attempt]}
+        onFail={box.failed}
+        fallback={(failure) => (
+          <FailureScreen
+            failure={failure}
+            typing={box.typed()}
+            // Kept nothing this time (it failed before the sheet loaded): the copy before it stands.
+            onReload={() => setAttempt(({ count, resume }) => ({ count: count + 1, resume: box.kept() ?? resume }))}
+          />
+        )}
+      >
+        <Sheet key={attempt.count} {...props} box={box} resume={attempt.resume} />
+      </Boundary>
+    </FailureContext.Provider>
+  )
 }
 
 /**
@@ -130,7 +189,15 @@ interface SheetFile {
  * Sheet panel, which lives in Excalidraw's sidebar (docs/spec-v1.md section 8).
  * The shell's own side-panel slot is left empty.
  */
-export default function App({ files, recovery, panelMemory, vault, initialElements }: AppProps) {
+function Sheet({
+  files,
+  recovery,
+  panelMemory,
+  vault,
+  initialElements,
+  box,
+  resume,
+}: AppProps & { box: SheetBox; resume: KeptSheet | null }) {
   const [canvas, setCanvas] = useState<SheetCanvasHandle | null>(null)
   const [line] = useState(() => createLineRelay<LineEditControl>())
   const [memory] = useState(() => panelMemory ?? sessionPanelMemory())
@@ -138,11 +205,14 @@ export default function App({ files, recovery, panelMemory, vault, initialElemen
   const file = useMemo((): SheetFile | null => {
     if (!canvas) return null
     if (vault) {
+      // Reload the sheet: what the failed view kept, in place of the file.
+      const kept = resume && readSheet(resume.text)
       const sheet = createVaultSheet({
         scene: sceneFileFor(canvas.api),
         line,
-        sheet: vault.sheet,
+        sheet: kept && kept.kind === 'sheet' ? { scene: kept.scene, settings: kept.settings } : vault.sheet,
         onUnwritten: vault.onUnwritten,
+        unwrittenAtStart: (kept && kept.kind === 'sheet' && resume?.dirty) || false,
       })
       return { sheet, web: null, vault: sheet }
     }
@@ -156,9 +226,15 @@ export default function App({ files, recovery, panelMemory, vault, initialElemen
       recovery,
       dialogs,
       line,
+      resume,
     })
     return { sheet: session, web: { session, dialogs }, vault: null }
-  }, [canvas, files, recovery, vault, line])
+  }, [canvas, files, recovery, vault, line, resume])
+
+  // The view's boundary tells the sheet file of a failure (section 4, Unexpected failures).
+  useLayoutEffect(() => {
+    box.file(file ? file.sheet.fail : null)
+  }, [box, file])
 
   // In a vault the sheet loads once Excalidraw is ready and the view writes it
   // back; the web's file chrome starts its own.
@@ -228,6 +304,13 @@ export default function App({ files, recovery, panelMemory, vault, initialElemen
 
   // The sheet as last evaluated, for the Sheet panel; null until the first run.
   const [sheet, setSheet] = useState<readonly EvaluatedElement[] | null>(null)
+  const onEvaluated = useCallback(
+    (next: readonly EvaluatedElement[]) => {
+      box.evaluated(next)
+      setSheet(next)
+    },
+    [box],
+  )
   const [flash, setFlash] = useState<FlashLine | null>(null)
   const errors = sheet ? errorCount(sheet) : 0
   const wide = () => (canvas ? wideRoot(canvas.root) : false)
@@ -412,6 +495,21 @@ export default function App({ files, recovery, panelMemory, vault, initialElemen
     }
   }, [flash, clickScope])
 
+  // Each panel tab has its own boundary (section 4, Unexpected failures),
+  // tried again when what the tabs draw from changes.
+  const tab = (content: ReactNode) => (
+    <Boundary
+      resetKeys={[sheet, editTarget, selectedMath, settings]}
+      fallback={(failure) => (
+        <p className="sheet-panel__failed" role="alert" title={failure.text}>
+          {FAILURE_MESSAGES.tab}
+        </p>
+      )}
+    >
+      {content}
+    </Boundary>
+  )
+
   const web = file?.web
   const fileMenu = useMemo(
     () =>
@@ -438,7 +536,7 @@ export default function App({ files, recovery, panelMemory, vault, initialElemen
           fileMenu={fileMenu ?? undefined}
           sheetPanel={{
             errors,
-            format: (
+            format: tab(
               <FormatTab
                 sheet={sheet ?? []}
                 target={editTarget}
@@ -446,16 +544,16 @@ export default function App({ files, recovery, panelMemory, vault, initialElemen
                 resultColor={settings.resultColor}
                 touch={touch}
                 actions={formatActions}
-              />
+              />,
             ),
             // On touch, while a line or the title is open (section 4, Touch).
             quickKeys: touch && editing ? <QuickKeys onInsert={insert} /> : undefined,
             compact: editing,
-            symbols: <SymbolsTab canInsert={canInsert} onInsert={insert} />,
-            variables: <VariablesTab sheet={sheet ?? []} onJump={jump} />,
-            problemsTab: <ProblemsTab sheet={sheet ?? []} onJump={jump} />,
-            settings: file && <SettingsTab settings={settings} onChange={file.sheet.setSettings} />,
-            constants: <ConstantsTab settings={settings} canInsert={canInsert} onInsert={insert} />,
+            symbols: tab(<SymbolsTab canInsert={canInsert} onInsert={insert} />),
+            variables: tab(<VariablesTab sheet={sheet ?? []} onJump={jump} />),
+            problemsTab: tab(<ProblemsTab sheet={sheet ?? []} onJump={jump} />),
+            settings: file && tab(<SettingsTab settings={settings} onChange={file.sheet.setSettings} />),
+            constants: tab(<ConstantsTab settings={settings} canInsert={canInsert} onInsert={insert} />),
             // Remembered per home; a floating panel closes by itself, so
             // only a wide window's choice counts.
             onChange: (open, tab) => {
@@ -484,8 +582,9 @@ export default function App({ files, recovery, panelMemory, vault, initialElemen
               focusCanvas={canvas.focusCanvas}
               control={line}
               keepClean={file.sheet.keepClean}
-              onEvaluated={setSheet}
+              onEvaluated={onEvaluated}
               onEdit={onEdit}
+              onTyped={box.typing}
               settings={settings}
               resultColor={settings.resultColor}
               touch={touch}

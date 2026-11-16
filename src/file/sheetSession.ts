@@ -47,6 +47,20 @@ export interface SessionDialogs {
   message(text: string): void
 }
 
+/**
+ * The sheet a failed view kept (docs/spec-v1.md section 4, Unexpected
+ * failures): what Reload the sheet mounts again, as an open does. It is the
+ * sheet as of the last line commit or scene change, without the line that
+ * was being typed.
+ */
+export interface KeptSheet {
+  text: string
+  /** Whether it holds changes its file doesn't. */
+  dirty: boolean
+  name: string | null
+  handle: SheetFileHandle | null
+}
+
 export interface SessionState {
   /** The file name, extension included, or null while untitled. */
   name: string | null
@@ -82,6 +96,13 @@ export interface SheetSession {
    * sheet, so the sheet turns dirty; not part of undo.
    */
   setSettings: (next: SheetSettings) => void
+  /**
+   * The view failed (section 4, Unexpected failures). Returns the sheet as it
+   * is, for Reload the sheet (null before the sheet has started, or if the
+   * scene can't be read), writing it as the recovery copy if it is dirty. From
+   * then on this session writes nothing: no file, no copy.
+   */
+  fail: () => KeptSheet | null
 }
 
 export interface SessionPorts {
@@ -92,6 +113,8 @@ export interface SessionPorts {
   line: LineControl
   /** How long after the last change the recovery copy is written. */
   recoveryDelayMs?: number
+  /** A sheet a failed view kept: `start` loads it without asking, in place of the recovery offer. */
+  resume?: KeptSheet | null
 }
 
 export const MESSAGES = {
@@ -108,6 +131,7 @@ export function createSheetSession({
   dialogs,
   line,
   recoveryDelayMs = 500,
+  resume = null,
 }: SessionPorts): SheetSession {
   let name: string | null = null
   let handle: SheetFileHandle | null = null
@@ -121,6 +145,8 @@ export function createSheetSession({
   let started = false
   let starting: Promise<void> | null = null
   let busy = false
+  /** Set once the view has failed: nothing is written after. */
+  let failed = false
   let pendingCopy: number | null = null
   let recoveryQueue: Promise<unknown> = Promise.resolve()
 
@@ -151,7 +177,7 @@ export function createSheetSession({
   }
   const writeCopyNow = () => {
     cancelPendingCopy()
-    if (!started || !isDirty()) return
+    if (failed || !started || !isDirty()) return
     const copy = { text: sheetText(), name, handle }
     void queueRecovery(() => recovery.write(copy))
   }
@@ -165,6 +191,7 @@ export function createSheetSession({
    * so a flow that has just written the line reads the key itself.
    */
   const onSceneChange = () => {
+    if (failed) return
     const key = currentKey()
     if (key === lastKey) return
     lastKey = key
@@ -174,6 +201,8 @@ export function createSheetSession({
 
   /** The sheet as it is now is what the file holds. */
   const markClean = (key: string) => {
+    // A save that finishes after the view failed: the kept copy stays.
+    if (failed) return
     cleanKey = key
     lastKey = currentKey()
     cancelPendingCopy()
@@ -195,7 +224,7 @@ export function createSheetSession({
 
   /** One flow at a time: a key pressed during a dialog or a picker does nothing. */
   const exclusive = async <T>(flow: () => Promise<T>, idle: T): Promise<T> => {
-    if (busy || !started) return idle
+    if (busy || !started || failed) return idle
     busy = true
     try {
       return await flow()
@@ -272,6 +301,18 @@ export function createSheetSession({
     start() {
       starting ??= (async () => {
         await scene.ready()
+        const kept = resume && readSheet(resume.text)
+        if (resume && kept && kept.kind === 'sheet') {
+          // Reload the sheet (section 4, Unexpected failures): as an open, and
+          // dirty if it was. Its recovery copy, if any, is already written.
+          scene.load(kept.scene)
+          adopt(resume, kept.settings)
+          lastKey = currentKey()
+          cleanKey = resume.dirty ? null : lastKey
+          started = true
+          publish()
+          return
+        }
         // Nothing writes the copy before `started`, so this read needs no queue.
         const copy = await recovery.read().catch(() => null)
         let restored = false
@@ -339,7 +380,7 @@ export function createSheetSession({
       }, undefined),
 
     commitPending() {
-      if (!started) return
+      if (!started || failed) return
       line.commitLine()
       onSceneChange()
     },
@@ -348,7 +389,7 @@ export function createSheetSession({
       onSceneChange()
       const wasClean = !isDirty()
       write()
-      if (wasClean) {
+      if (wasClean && !failed) {
         cleanKey = currentKey()
         lastKey = cleanKey
         publish()
@@ -357,6 +398,27 @@ export function createSheetSession({
 
     flushRecovery: () => {
       if (pendingCopy !== null) writeCopyNow()
+    },
+
+    fail: () => {
+      if (failed) return null
+      let kept: KeptSheet | null = null
+      if (started) {
+        try {
+          const text = sheetText()
+          lastKey = currentKey()
+          kept = { text, dirty: isDirty(), name, handle }
+        } catch {
+          // A scene that can't be read is kept nowhere: the last copy stands.
+        }
+      }
+      cancelPendingCopy()
+      failed = true
+      if (kept?.dirty) {
+        const copy = { text: kept.text, name, handle }
+        void queueRecovery(() => recovery.write(copy))
+      }
+      return kept
     },
   }
 }

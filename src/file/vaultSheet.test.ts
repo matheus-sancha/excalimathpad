@@ -109,4 +109,65 @@ describe('createVaultSheet', () => {
     expect(scene.loaded).toEqual([{ scene: { outside: true }, keepView: undefined }])
     expect(sheet.unwritten()).toBeNull()
   })
+
+  describe('a failed view (docs/spec-v1.md section 4, Unexpected failures)', () => {
+    it('fail keeps what the tab holds without committing the open line, and nothing is written after', async () => {
+      const { sheet, edit, start, line, onUnwritten } = setUp()
+      await start()
+      edit()
+      line.open = true
+
+      const kept = sheet.fail()
+
+      expect(line.commitLine).not.toHaveBeenCalled()
+      expect(kept).toMatchObject({ dirty: true, name: null, handle: null })
+      expect(readSheet(kept!.text)).toMatchObject({ kind: 'sheet', settings: DEFAULT_SETTINGS })
+      expect(sheet.unwritten()).toBeNull()
+      // The scene as Excalidraw leaves it when it unmounts asks for no save.
+      onUnwritten.mockClear()
+      edit()
+      expect(onUnwritten).not.toHaveBeenCalled()
+      expect(sheet.unwritten()).toBeNull()
+      expect(sheet.fail()).toBeNull()
+    })
+
+    it('keeps a sheet the file already holds as not dirty, and nothing before the load', async () => {
+      const early = setUp()
+      expect(early.sheet.fail()).toBeNull()
+
+      const { sheet, start } = setUp()
+      await start()
+      expect(sheet.fail()).toMatchObject({ dirty: false })
+    })
+
+    it('a sheet started from a kept copy the file doesn’t hold is unwritten at once', async () => {
+      const first = setUp()
+      await first.start()
+      expect(first.onUnwritten).not.toHaveBeenCalled()
+
+      const onUnwritten = vi.fn()
+      const scene = {
+        serialize: () => JSON.stringify({ type: 'excalidraw', elements: [] }),
+        load: vi.fn(),
+        saveKey: () => 'v1',
+        onChange: () => () => {},
+        ready: () => Promise.resolve(),
+      }
+      const sheet = createVaultSheet({
+        scene,
+        line: { commitLine: vi.fn(), leaveLine: vi.fn(), isOpen: () => false },
+        sheet: { scene: { type: 'excalidraw', elements: [] }, settings: DEFAULT_SETTINGS },
+        onUnwritten,
+        unwrittenAtStart: true,
+      })
+      await sheet.start()
+
+      expect(onUnwritten).toHaveBeenCalledTimes(1)
+      expect(sheet.busy()).toBe(true)
+      const write = sheet.unwritten()
+      expect(write).not.toBeNull()
+      sheet.written(write!)
+      expect(sheet.unwritten()).toBeNull()
+    })
+  })
 })
