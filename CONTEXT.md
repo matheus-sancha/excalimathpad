@@ -6,10 +6,13 @@ a Vite + React + TypeScript app that builds to static files; there is no
 server. v1 target: for anyone, built around Matheus's own engineering work;
 free and best effort. M4d adds an Obsidian community plugin built from this
 source (`docs/spec-v1.md` section 12a, ADR 0006): **one source, two builds**.
-Built so far (#135–#138): the plugin bundle, a view that opens a sheet and
-saves it in the vault, New sheet, the tab's chrome (keys, theme, hidden
-items, commands, pop-out windows) and releases; the rest of M4d is still to
-come, and their terms move in here as each M4d issue makes them true.
+M4d is built; M4e and M5 lead to 1.0.0 (spec section 16).
+
+This file holds the model, the terms, the load-bearing rules and where things
+are. It is read by every build session, so it has a budget
+(`scripts/docs.test.mjs`). Behaviour belongs in the spec, and a module's
+description in `docs/context/<module>.md`; [`CLAUDE.md`](CLAUDE.md) says
+what to read for an issue and where to write.
 
 ## Entry points
 
@@ -61,56 +64,52 @@ come, and their terms move in here as each M4d issue makes them true.
   and on pull requests. On a push to `main` its `deploy` job then publishes
   that run's `dist/` to Cloudflare Pages (spec section 12, Hosted build); it
   is skipped while the repository variable `CLOUDFLARE_PAGES_PROJECT` is unset.
+- `CLAUDE.md` — the **reading route** and the **writing rule** for a build
+  session (spec section 14, M4e, Documents, #192). `scripts/docs.test.mjs`,
+  part of `npm test`, holds the documents to it: this file's budget
+  (`CONTEXT_BUDGET`), a file under `docs/context/` for each module linked
+  below, the spec's section numbers, and every link between these documents
+  landing on a file and a heading.
+- `docs/spec-history.md` — the built milestones' issue orders, the results
+  of Verify first and the decision index, moved out of spec sections 16 to
+  18, which keep their numbers. Read on demand only.
 - `buildStamp.ts` (repo root, pure) — the build stamp's text, short commit and
   date or `dev`. `vite.config.ts` runs it at build time from `GITHUB_SHA` and
   defines `__BUILD_STAMP__` (typed in `src/buildStamp.d.ts`).
 
 ## Modules
 
-- **App** (`src/App.tsx`) — composition root. Decides what fills each shell
-  slot and wires the sheet file to the canvas and the line edit, and the
-  sheet's evaluation to the Sheet panel (opened at launch on a wide window,
-  on Problems only for an error: once the sheet's `start` has resolved and an
-  evaluation covers every math anchor in the scene, since the first runs
-  before the scene loads). The untitled
-  sheet starts empty, on the welcome screen. It runs in one of two **homes**.
-  On the web it takes `files` and `recovery` (required; tests pass fakes) and
-  mounts the session with `FileChrome`. With `vault` (a `VaultHome`: the
-  view's container and the sheet as the view read it) it mounts no file
-  chrome, no file keys and no ☰ file items, loads the sheet through
-  `createVaultSheet` (`src/file/vaultSheet.ts`) and hands it to the view
-  (`vault.connect`), which writes it back; it ignores a dropped sheet file
-  (`ignoreSceneDrops`), routes Excalidraw's image tool to the vault's picker
-  (`vault.pickImage`), binds the gestures' keys and the flash's click to the
-  view's container, and turns Excalidraw's embeds off. It also confines the
-  keys to the view (`confineKeys`), bridges the view when it is in a pop-out
-  window (`bridgeWindow`, again after `vault.onWindowMigrated`), hands the
-  view its `SheetCommands` (Add math, Toggle Math settings, Open Math guide) through
-  `vault.commands`, and passes the canvas `vault` and `vault.theme` (where
-  light or dark is remembered). `panelMemory` is where the panel's open state lives
-  (a port: `storagePanelMemory` on the web, `data.json` in the plugin, this
-  page only if unset). **An edit opens the panel on Format** (M4d, #143):
-  from `MathOverlay`'s `onEdit`, App notes the panel's state when an edit
-  starts and opens it on Format (on a small window, scrolling the line clear
-  of the floating panel), and puts it back when the edit ends, unless it was
-  closed meanwhile or the edit ended from a press in the panel. What it opens
-  or restores itself (`automatic`) is never remembered as the user's choice.
-  **Touch** (M4d, #147): App holds `touch`, whether the last press in the
-  view was a touch (`pointerType`, so a mouse or a pen that hovers turns it
-  back), and hands it to the overlay and the Format tab's hint; on touch, while
-  a line or the title is open, it fills the panel's `quickKeys` (`QuickKeys`,
-  inserting through the line relay as the Symbols tab does). With
-  `vault.phone` the canvas draws the panel as the bottom sheet (`compact`
-  while something is open). **The view follows the caret** (0.2.1, #191):
-  on each `onEdit` with a target, `followCaret` waits a frame, then scrolls
-  the canvas by `scrollIntoArea` so the open field's `caretRow` is inside
-  `visibleArea` less 48 px; again when the panel reports it opened during an
-  edit, and on a phone as `visualViewport` or the window resizes. Only while
-  the open field has the keyboard. The launch and a jump open and close the panel through the
-  handle, so they work on the bottom sheet too.
-  App imports none of the browser ports at run time, so
-  the plugin's bundle holds none. `initialElements` gives tests a sheet.
-  Depends on: shell, canvas, overlay, file.
+One line each: what the module is and what it depends on. Each module's description, its
+files, interfaces and how they work together, is in `docs/context/<module>.md`: read it when
+an issue touches that module ([`CLAUDE.md`](CLAUDE.md) has the reading route).
+
+- **App** (`src/App.tsx`) — the composition root: fills the shell's slots, wires the sheet
+  file to the canvas, the line edit and the Sheet panel, and runs in one of two **homes**,
+  the web or a vault. Depends on: shell, canvas, overlay, file.
+  [`docs/context/app.md`](docs/context/app.md)
+- **canvas** (`src/canvas/`) — everything that knows Excalidraw: the unforked component and
+  its handle, the anchor and the only writes into the scene, gestures, sizes, layers, the
+  keys of a vault tab and the pop-out bridge.
+  [`docs/context/canvas.md`](docs/context/canvas.md)
+- **math** (`src/math/`) — the engine: `evaluateSheet(blocks)` gives each line its result
+  and its typeset form, and never throws. Reads the app's line forms before math.js
+  (ADR 0005). Depends on: `mathjs`. [`docs/context/math.md`](docs/context/math.md)
+- **overlay** (`src/overlay/`) — draws math elements over the canvas as typeset grids, and
+  holds the line edit, the unit slot, tables and plots. Depends on: canvas, math, `katex`
+  (lazily). [`docs/context/overlay.md`](docs/context/overlay.md)
+- **file** (`src/file/`) — the sheet file (ADR 0004): the format and its migrations, the
+  session (save, open, the clean mark, the recovery copy) over ports, and the vault's
+  sheet. Depends on: canvas (file routes, layers).
+  [`docs/context/file.md`](docs/context/file.md)
+- **plugin** (`plugin/`) — the Obsidian plugin (ADR 0006), the only code that imports
+  `obsidian`: the `Plugin`, the `TextFileView`, and their tests against a fake `obsidian`.
+  Depends on: App, file, panel memory. [`docs/context/plugin.md`](docs/context/plugin.md)
+- **guide** (`src/guide/`) — the Math guide in the app: `docs/math-guide.md` turned into
+  elements at build time, and its dialog. Depends on: nothing.
+  [`docs/context/guide.md`](docs/context/guide.md)
+- **panel** (`src/panel/`) — the Sheet panel's tabs, drawn inside Excalidraw's sidebar:
+  Variables, Problems, Format with its Rules list, Symbols, Constants and Settings.
+  Depends on: math, overlay (KaTeX). [`docs/context/panel.md`](docs/context/panel.md)
 - **shell** (`src/shell/`) — full-viewport layout with three slots: `canvas`,
   `overlay` (stacked exactly over the canvas, pointer-transparent by default)
   and `sidePanel` (docked right). Empty (falsy) slots render nothing. The
@@ -119,567 +118,11 @@ come, and their terms move in here as each M4d issue makes them true.
   away from its box); only the canvas's pan and zoom move its content. Neither
   slot sets a z-index (see Load-bearing). Interface: the `AppShell` props.
   Depends on: nothing.
-- **canvas** (`src/canvas/`) — everything that knows Excalidraw. `SheetCanvas`
-  is the official, unforked component; its `onReady` hands out a
-  `SheetCanvasHandle`: Excalidraw's imperative API plus `forwardWheel`,
-  `focusCanvas`, and `addMath` and `toggleSheetPanel`, what the two More tools
-  items do, and `openMathGuide`, what ☰ → Math guide does (M4d, #148). The ☰
-  menu holds Math guide just above Excalidraw's Help; its dialog
-  (`MathGuide`, in `src/guide/`) is portalled into `.excalidraw`, as the
-  bottom sheet is, and gives the canvas the keyboard back when it closes. With `vault` it marks its box `sheet-canvas--vault` (`VAULT_CLASS`
-  in `vaultItems.ts`), under which `SheetCanvas.css` hides the items
-  `VAULT_HIDDEN` names (Web Embed and Mermaid, one test id; the Generate
-  heading; Browse libraries; Copy to clipboard as SVG), and turns off
-  Excalidraw's AI items. With `theme` (a `ThemeMemory`, `theme.ts`) it opens
-  in the mode last chosen, light until one is, and tells the memory each
-  change of `appState.theme`. `vaultKeys.ts` is the keys of a vault tab:
-  `PASS_THROUGH_KEYS` and `SWALLOWED_KEYS` (tested constants), `vaultKeyRoute`,
-  and `confineKeys`, a capture listener on the view's container that stops a
-  core key Obsidian took (`defaultPrevented`) and every swallowed key.
-  `popoutBridge.ts` is the **pop-out bridge** (`bridgeWindow`, see
-  Load-bearing). `mathAnchor.ts` defines a math element's anchor (a rectangle
-  with `customData.kind === "math"` and `customData.source`, ADR 0002; a solid
-  `#ffffff01` fill, so clicks inside it select and drag it) and
-  `writeAnchorSource`, the only way source enters the scene, and
-  `writeAnchorTitle`, the same for the optional `customData.title`. `selection.ts`
-  holds `deselectAll`, the second Esc's write (`NEVER`, no undo step).
-  `anchorStyle.ts` keeps anchors in the fixed style (`ANCHOR_STYLE`, in
-  `mathAnchor.ts`): `restoreAnchorStyles` writes it back with `NEVER`.
-  `mathSelection.ts` marks the box Excalidraw fills with
-  `data-math-selection` (`one`, `several`) while only math is selected, and
-  with `data-math-touch` (`markTouch`) while the `touch` App passes
-  `SheetCanvas` is set; `SheetCanvas.css` uses the marks for the reduced panel
-  and the hint (`MATH_HINT`, or `MATH_HINT_TOUCH` under the touch mark).
-  `SheetCanvas` starts new text in the Normal font (Nunito).
-  `canvasEvents.ts` (`listenToCanvas`) hands the canvas's double-clicks, presses,
-  clicks, pointer moves and keys to the gestures before Excalidraw hears them,
-  and stops the ones they take. On touch (M4d, #147) it follows Excalidraw's
-  own double tap (`TAP_TWICE_MS`, a second one-finger `touchstart` on the
-  canvas) and offers the second touch as a double-click (`PointAt`), stopping
-  and cancelling one the app takes; a touch's click is its `pointerup`, a task
-  later, and the browser's click after a touch is skipped; `anyPress` hears
-  every press under `root`, the panel's too. Keys are heard on a target it is given: the
-  page's document on the web, the view's container in a vault (`keyScope`,
-  through `MathOverlay` and `useSheetGestures`). `isCanvasElement` tells
-  Excalidraw's canvas by node name, so it holds in a pop-out window. `sceneFile.ts` is
-  the Excalidraw half of the sheet file: `serializeScene`, `loadScene` (no undo
-  step, clears history; `keepView` keeps scroll and zoom, for a vault's
-  outside change), `saveKey`, the key dirty is measured by, and `emptyScene`,
-  a New sheet's scene.
-  `SheetCanvas`'s `embeds={false}` passes Excalidraw `validateEmbeddable={false}`,
-  so no embed loads an iframe (the plugin's no-network rule).
-  `SheetCanvas` also turns off Excalidraw's own open, save and export and draws
-  the ☰ menu with the app's file items and, as its last line, the build stamp
-  (`__BUILD_STAMP__`, plain text); its handle carries `root`, the box it
-  shares with the overlay. `fileRoutes.ts` takes the file keys and scene-file
-  drops from Excalidraw (in a vault, `ignoreSceneDrops` only stops the drops),
-  and measures the space beside the ☰ button (`useBesideMenu`). `imageTool.ts`
-  takes over Excalidraw's image tool in a vault (`takeOverImageTool`: the
-  `toolbar-image` press and the key 9, stopped in capture, so the operating
-  system's picker never opens) and copies a picked image in with the public
-  API (`insertImage`: a `files` entry named by the bytes' SHA-1 and an image
-  element sized as Excalidraw sizes a click-placed one, one undo step;
-  Excalidraw's own 4 MB cap). `layers.ts` records where overlay
-  content sits among Excalidraw's DOM layers, and the dark theme's filter.
-  `addMath.ts` is Add math: a public custom tool (`startPlacing`,
-  `cancelPlacing`, `isPlacing`) and `watchPlacing`, which turns the placing
-  click into a new anchor, selected in the same write, and holds the crosshair.
-  `mathAnchor.ts` also has `removeAnchor`, the one-step removal of an element
-  left empty. `SheetCanvas` draws the welcome screen, and the app's two
-  items in Excalidraw's More tools dropdown: Add math and Math settings, which
-  opens the Sheet panel. `panelPresses.ts` holds `SHEET_SIDEBAR_CLASS`,
-  `isInSheetPanel` and `keepPanelPresses` (see Load-bearing). The Sheet panel
-  (M4d, #143) has six icon tabs, `SHEET_PANEL_TABS`: Format, Symbols,
-  Variables, Problems, Constants, Settings, each named by a label span (shown
-  on the active tab, read on all) and its `title`, the error badge on
-  Problems. The handle's `sheetPanel()` reads whether it is open and its tab,
-  and `showSheetPanel(state)` opens it on a tab or closes it with that tab as
-  the one Math settings opens next. `selection.ts`'s `scrollIntoArea` is
-  the follow rule (0.2.1, #191): it scrolls the canvas the least distance
-  that puts a row inside an area less `FOLLOW_MARGIN` (48 px), centring a row
-  the area has no room for, with `NEVER`; `visibleArea` is the canvas less
-  the Sheet panel where it covers it (floating or docked), a phone's bottom
-  sheet and the keyboard (`visualViewport`).
-  **The bottom sheet** (`BottomSheet.tsx`, M4d, #147): with `phone`,
-  `SheetCanvas` draws the panel there instead of Excalidraw's `Sidebar`,
-  portalled into `.excalidraw` (Excalidraw's theme, above the overlay), with
-  the same tabs (`TabFace`) and contents, a ✕, and the slot's `quickKeys`
-  above the tab icons; it carries `SHEET_SIDEBAR_CLASS` and
-  `BOTTOM_SHEET_CLASS`, so presses there are the panel's. Its state is held in
-  `SheetCanvas`; the handle's `sheetPanel`, `showSheetPanel` and
-  `toggleSheetPanel`, and the Math settings item, act on it, and it reports
-  each change through the slot's `onChange`, as the sidebar does. It sits
-  above the on-screen keyboard (how far the visual viewport's bottom falls
-  short of its box) at about half the visible height, short while `compact`.
-  The sidebar takes `quickKeys` too, above its tab triggers. `moreTools.ts` finds the open dropdown
-  (`useMoreToolsSlot`, a box of the app's own appended to it; Math settings
-  sits in a `display: contents` wrapper carrying `sidebar-trigger`, so a
-  floating panel's outside click ignores it without Excalidraw's square-button
-  style, whose `line-height: 0` hid its label, #102), closes it
-  (`closeMoreTools`) and marks its button while it is closed (`markMoreTools`:
-  `data-math-placing`, `data-math-problems` and `--math-problems`). Excalidraw
-  has no slot for it, so `moreTools.excalidraw.test.tsx` pins the class names.
-  `anchorSize.ts` writes an anchor's size (`writeAnchorSizes`: `NEVER`, top-left
-  kept, the rotated top-left for a rotated anchor) and settles a resize on
-  release (`settleResizes`, from `onPointerUp`'s `originalElements`): a width
-  at or above the element's floor becomes its **chosen width**
-  (`customData.width`, `MathAnchor.chosenWidth`), with Excalidraw's `x` kept
-  and the top and height put back, written `NEVER` so it lands in the resize's
-  own undo step; below the floor it goes back to automatic; a height-only drag
-  snaps back. It also says when a size write waits (`sizeWritesWait`). The only module that imports
-  Excalidraw at runtime; tests may too, and other modules may import its
-  types. This is ADR 0001's engineering rule as amended in ADR 0002. Depends
-  on: `@excalidraw/excalidraw`, guide (the Math guide's dialog).
-- **math** (`src/math/`) — the engine. Interface: `evaluateSheet(blocks)`,
-  with blocks `{ id, source }` already in reading order → one `SheetLine` per
-  line, keyed by block id; never throws: each line is read inside one guard,
-  so a throw from outside a line's own handling is that line's error (its
-  message, the raw source as its typeset form) and the lines below still run
-  (#179; the full rule is #180's). A `SheetLine` is the line's
-  `LineResult` (value | error | empty) and its `TypesetLine`, from the same
-  parse: blank, comment, math (name, expression and note, as TeX) or unparsed
-  (raw source). `lineForm.ts` (pure) reads a line's comment and its format clause
-  (`@bold @text-red @yellow`, from the first `@` outside a string) before math.js
-  sees it (ADR 0005), so a note or a format never reaches math.js. A word with
-  `if <condition>` is a rule (`FormatRule`: its `words`, condition, exact
-  `text` and its `start`/`end` in the line). From M4d (#145) a word can be
-  **joined**, `@text-red+red+bold`: one word, one rule with an `if`; a part
-  that isn't a format is `Unknown format @blod in @text-red+blod`. `writeRules`
-  writes a Rules list's `RuleRow`s (a row with its `text` is kept exactly; one
-  without is `ruleText`, one joined word and one condition) and
-  `writeNewRule` + Add rule's ` @text-red if <name> `; `writeFormat`
-  composes the plain words back for the Format tab in a fixed order and keeps
-  every rule, and `writeCommentFormat` a comment line's (`@bold @upright
-  @underline @<size> @text-<name> @<highlight>`, M4d, #144); `caretAfterFormat`
-  says where a press leaves the caret (in the code; in a comment's text, with
-  its `#`). A math line carries its `LineFormat` (bold, underline, highlight, text
-  colour); an unknown clause word is the line's error, reported after the line
-  ran. A clause's first problem is the form's `formatError`, in section 13's
-  words (`Unknown format @blod`, and a comment word on a math line, `@L is for
-  comment lines`). Code that is only a clause is a **formatted comment line**
-  (M4d, #142): the clause is the comment's `CommentFormat` (a line's words,
-  `@upright` and a size, `@S`, `@L` or `@XL`; M is the size without one), a
-  rule there is its error (`rules need a math line`), and with no text after
-  the `#` the line is blank. A comment line's error is its result; it defines
-  nothing, so nothing below fails. After a line runs, `runRules` (in `evaluate.ts`) tests its rules in a
-  `LayeredScope` over the scope with `result` bound, so a condition never
-  reaches the next line; the first true rule wins per property over the plain
-  format (`resolveRules`), and the typeset format is the result;
-  `SheetLine.ruleTruth` says which rules were true for the line's own row (on a
-  list, at every point; never on a table), so the Format tab names the rule
-  that sets a property (#144), and `SheetLine.ruleStates` is each rule's
-  live state for the Rules list (#145): true, false, overridden, a count of
-  points or rows, or the warning that skipped it. A condition
-  that can't be decided is one warning per rule. On a list it runs per point
-  (the summary takes the format only if all are true; the hover counts them);
-  on a table, per row (`TableView.rowFormats`). `typeset.ts` is the
-  `toTex` handler of spec section 4, Typesetting names; a name counts as the
-  sheet's from the line that assigns it down. It also draws **Conditionals and
-  text, typeset** (#141): `? :` and a three-argument `if()` are one `cases`
-  brace (`casesTex`), a conditional in the last branch (bracketed or not)
-  adding rows to it, one in an earlier branch its own brace in its row, and
-  a brace that is an operator's operand (not a fraction's) in brackets; a
-  text constant is `\text{“…”}` and `true` / `false` are `\mathrm`. `typesetResult` sets a result's
-  `math.format` text as number and unit. A plain
-  input and any line whose value is a function are empty, and their value still
-  reaches the lines below. All lines
-  share one scope, fresh for every call (ADR 0003). Each line is parsed once
-  (captured `parse`) to know what it defines, which turns "Undefined symbol"
-  into "defined below" / "has an error above". Every known route for an
-  expression to change the shared math.js instance is closed, each with a
-  test: `createUnit`, `config`, `import` and the parser functions are
-  disabled in the namespace (scope-only stubs are bypassed via `parser()`),
-  and `typed` is shadowed in each run's scope (it cannot be overridden in
-  the namespace without breaking math.js). Parsed Nodes from `simplifyCore`
-  / `simplifyConstant` evaluate against the namespace, where `typed` is the
-  real registry, so its mutators (`clear`, `addConversion`, ...) are also
-  disabled in place on `math.typed`. The app units (`appUnits.ts`: `cP`,
-  `gpm`, ...) are registered once at setup, before `createUnit` is disabled,
-  and every unit system is then put back as it was, so they show only where
-  written (spec section 14; a test compares with an engine without them).
-  A result's `text` is its plain form at 4 significant digits
-  (`numbers.ts`, pure: `math.format` with `formatOptions`, then `1.235·10⁴`,
-  `∞`); `resultTex` typesets it (`1.235 \cdot 10^{4}`). Source numbers are
-  never reformatted. `pump-sizing.test.ts` runs the acceptance sheet's lines,
-  read from `docs/acceptance/pump-sizing.md`, against the reference at 4 s.f.
-  (spec section 16). math.js's own unit system stays fixed at SI, so
-  units read elsewhere never change a result (#25, ADR 0003). How a result
-  shows is the app's formatter, `display.ts` (`createDisplay`, given the
-  instance and the captured `parse`, spec section 5): a trailing `in <unit>`
-  (`lineForm.ts` takes it off the text, the formatter checks it is a pure
-  unit, read outside the sheet's scope) shows the value in that unit,
-  balanced if the kind differs; else the kind's unit in the sheet's system
-  (`unitSystems.ts`: SI with prefixes by default, SI base, USCS, Custom),
-  else a named SI unit (`V`, `ohm`), else composed base units.
-  `evaluateSheet(blocks, settings)` takes the system and Digits. An unknown
-  display unit is the line's error after it ran. Each `SheetLine` also
-  carries its `warnings` (`warnings.ts`, pure, read before the line runs).
-  Each function the sheet defines is wrapped once its line has run
-  (`functions.ts`, `createCalls`): the wrapper checks the argument count,
-  stops recursion at a fixed depth, prefixes an error from its body with
-  `in k(1 s): `, and carries `sheetFunction` (name, parameters); `messageOf`
-  rewords math.js's errors (a value called, a function used as a number) in
-  section 13's words. `table`, `plot` and `solve` can't be assigned, nor
-  `if` (a function, with its own message).
-  **One statement** (spec section 3, ADR 0005 step 6): `hasTopLevelSemicolon`
-  (`lineForm.ts`, pure) finds a `;` outside brackets and strings, and
-  `parseLine` makes it the line's error before any line form is read; every
-  name the line assigns fails. A `;` in a matrix (`[1, 2; 3, 4]`) is
-  math.js's.
-  **Conditionals and text** (spec section 3, M4d; `conditionals.ts`, given
-  the instance at setup, before `import` is disabled): `if(cond, a, b)` is a
-  raw-args function in the namespace (`IF_FN`), so only the branch taken
-  runs. `testCondition` takes only `true` or `false` (a matrix or a list is
-  its own message), for `if()` and for `? :`, whose `_compile` on this
-  instance's `ConditionalNode` class `strictConditionals` replaces, so the
-  node and its text are math.js's own (its TeX is `typeset.ts`'s). `comparisonSignatures` merges
-  signatures into `equal`, `unequal`, `larger`, `largerEq`, `smaller` and
-  `smallerEq` (`math.import` merges typed functions): two texts compare
-  exactly with `==` / `!=`; `<` on text, text against a number or a unit, and a
-  unit against a bare number are the app's errors, the last naming both values
-  in the run's settings (`messageSettings`, set by each `evaluateSheet`). A text
-  shows plain (`display.ts`); `in <unit>` on a text is the line's error after
-  it ran; a list whose points are all texts summarises as each text counted,
-  most frequent first (`3 OK, 1 NOT OK`, failed points last).
-  **Constants** (spec section 5, `constants.ts`, pure data): every math.js
-  constant in groups, some with a short name (`c`, `k`, `R`, `h`), which
-  `registerShortConstants` adds to the namespace once at setup. `h` is the
-  Planck constant, so the hour is `hr`. A short name the sheet also assigns is
-  the sheet's on every line: `SheetScope` (the run's scope) answers math.js
-  "Undefined symbol" for it until its line has run, which `explain` words;
-  the engine's own reads use `holds` and `peek`. `listConstants` gives the
-  Constants tab its rows.
-  **The Symbols catalogue** (spec section 4, Symbols tab, M4d; `symbols.ts`,
-  pure data, no math.js): `SYMBOLS`, every button of the Symbols tab in its
-  group (`SYMBOL_GROUPS`: Greek, Operators, Functions, Logic, Sheet forms) and
-  order, each a `SymbolEntry`: its `label` (ρ, √), its `spelling` (`rho`,
-  `sqrt`), its `hint`, its Greek `row`, the `constant` a Greek letter also is
-  (read from `CONSTANT_GROUPS`), a sheet form's runnable `example`, and its
-  `insert`, a `SymbolInsert`: `mode` (`name`, `word`, `prefix`, `spaced`,
-  `tight`, `wrap`), `text` and `close`. `guess` is `hidden`: a typing
-  suggestion, not a button. `filterSymbols` and `symbolHover` are the tab's
-  filter and hovers. It adds no grammar: a test types every entry into a
-  minimal line and runs it.
-  A **solve line** (spec section 9) is read as text before math.js sees it
-  (`solveLine.ts`, pure): a **solved value** is `<name> = solve <lhs> = <rhs>,
-  for <unknown> = <from> .. <to>` and a **solve function** is
-  `<name>(<params>) = solve …, guess <unknown> = <expr>`; either one with the
-  other's clause, or none, is the line's error. Its sides and clause are
-  parsed with the captured `parse` and compiled once (`solve.ts`,
-  `createSolver`). Each run evaluates the guess or the range's ends in the
-  scope at that point with the unknown hidden, then the residual `lhs - rhs`
-  in a `LayeredScope` where the unknown wins, reduced to SI numbers, so a
-  dimension mismatch is the app's message. `solver.ts` (pure numbers) has two
-  searches. `solveNear` steps out from a guess for a sign change, skipping
-  points with no value (NaN), then runs Brent to 1e-12 relative, 100
-  iterations at most. `solveRange` samples 200 points of the range, runs Brent
-  on each sign change, keeps a crossing only if its residual is at most 1e-6
-  of its samples' (a pole or a jump isn't a root), and runs a dip pass (golden
-  section) for double roots; more than 100 roots is an error. The solved value
-  runs once at its line and holds its roots, ascending: one root is a single
-  value, several a `SheetList`. It refuses a list in its equation or range
-  (an index on one is fine). The solve function defines a wrapped function
-  (`sheetFunction.solve`) that solves at each call over the scope as it is
-  then. A failure throws a `SheetError`; a guess solve's no root and no
-  convergence are marked `outsideDomain`, which the `in f(…):` wrapper keeps,
-  so an outer solve counts a trial point where an inner one failed as having
-  no value there; every other error fails the outer line at once. A solve's
-  details ride on its line's `solveDetails` (and on a line that is just one
-  call to a solve function): a guess solve's method, iterations, residual in
-  SI and bracket; a range solve's range, points, each root with its residual
-  and touching mark, and the crossings rejected.
-  **Lists** (spec section 10, `lists.ts`): a `SheetList` holds point results
-  (a value or an error) and the first list its line ran over, to name a failed
-  point. A range line is read as text (`rangeLine.ts`, `[name =] a .. b [step
-  s]`) and `createRanges` steps it in SI numbers, in the start's unit. A line
-  whose names include a list runs once per point (`iterate` in `evaluate.ts`):
-  each list name bound to its i-th value in a `LayeredScope`, lists paired,
-  one compiled expression, no math.js matrices; a point that throws fails
-  alone. An aggregate (`min`, `max`, `sum`, `mean`, `count`) over a list is
-  worked out first and stands in the node as a bound name (`foldAggregates`).
-  A function body that names an outside list fails at its definition. An
-  **index** (`indexes.ts`, spec section 3) is the app's: after the parse
-  (`parseSheet`), each `name[i]` becomes a call to `__index`, a raw-args
-  function in the namespace that reads the name whole and takes its `i`-th
-  point, counting from 1 (a single value is a list of one). A name inside an
-  index never makes a line iterate (`withoutIndexes`), and `iterate` works out
-  an index on a whole list first (`foldIndexes`), so `Q_s[2] + Q_s` reads the
-  list. The typesetter shows it as `x_r[2]`, brackets at the baseline. A list
-  result is `{ kind: 'list', text, failed }`: its summary, and the line's
-  error when points failed. A **table line** (`tableLine.ts`, `table(arg, …)`,
-  each argument with its own `in <unit>`) gives `SheetLine.table`: columns
-  (header TeX, unit, a header unit slot) and every row's cells in the table
-  number form (`tableColumn` in `numbers.ts`: zeros kept, whole columns whole).
-  The overlay draws it as a second grid row inside the line's row; a header
-  slot is `data-unit-slot="line:column"`, and choosing a unit writes it onto
-  that argument (`writeArgumentUnit`). A **plot line** (`plotLine.ts`:
-  `plot(x, y1, …)`, then clauses) gives `SheetLine.plot`, a `PlotView` of plain
-  numbers in each axis's unit (null for a failed point), marks, failed points
-  and settings. `PlotChart.tsx` draws it under the line with Observable Plot,
-  loaded once behind `import()` (`plotDrawing.ts`), rebuilt only when the view
-  changes; legend and title are HTML, typeset; each failed point's × carries
-  its message as `data-tip`. Its ⚙ (`data-unit-slot="line:gear"`, the slot
-  target's column `GEAR`) opens `PlotSettings.tsx` on the canvas's click, as a
-  unit slot does; each change hands back the clause list, which the overlay
-  writes with `writePlotClauses` as one line commit.
-  App code must evaluate only
-  through `evaluateSheet`: math.js functions that depend on the disabled
-  names (`help`, `rationalize`, a `parser()`'s methods) no longer work. The
-  only module that imports `mathjs`. Depends on: `mathjs`.
-- **overlay** (`src/overlay/`) — renders math elements over the canvas, each
-  as a typeset grid (`MathElementView`, spec section 4): rows are CSS subgrids
-  of one grid per element (gutter, equation, result after a rule, note), each
-  with its own box for the line hit. The equation is one cell holding the
-  line's name, `≔` and expression inline, flush left, so `≔` doesn't line up
-  between lines (#62). Cells hold KaTeX's HTML,
-  loaded lazily by `katex.ts`; until it loads, a line shows as its source. Rows
-  are named by their source (`aria-label`) and result cells carry their text
-  (`data-text`). `useAnchorSizes` measures each body after every render and on
-  a `ResizeObserver` (fonts), waits while `sizeWritesWait`, and writes the
-  sizes through the session's `keepClean`. The same hook restores the fixed
-  anchor style at every scene change that broke it, also through `keepClean`.
-  Each row is drawn at its anchor's opacity (`--math-opacity`), the edited row
-  at full. In Excalidraw's dark theme the
-  overlay takes its canvas filter.
-  The **unit slot** (spec section 5): a result's unit is drawn in its own
-  `[data-unit-slot]` span, outlined on its hovered row (a chosen unit has no
-  mark, from M4c) (an empty one for a plain input or a dimensionless value).
-  The gestures find a slot from the slots' screen boxes (`slotAt`), open its
-  field on the canvas's click when the element hasn't moved, and follow hover
-  from `pointerMove`; `suggest.ts` (pure) is the suggestions while a line is
-  typed (spec section 4): `wordAt`, `suggest` and `accept` over the sheet's
-  names above the line (`sheetNames`), the constants, the functions and line
-  forms (`FUNCTION_SUGGESTIONS`, built from the Symbols catalogue's entries
-  spelled as names, Greek left out) and the units; `MathOverlay` builds the sources for the open line and
-  `LineField` draws the list and takes its keys (Tab, ↓ ↑, Enter, Esc), and
-  opens it above the field (`listGoesAbove`, M4d) when below it the on-screen
-  keyboard (`visualViewport`) or a phone's bottom sheet would cover it; after
-  `@` it holds the format words, and on a clause at the start of a line, a
-  comment's, the comment words and never `if` (M4d);
-  `UnitField` (the field and list, one of the overlay's
-  controls that take pointer events) hands back a unit, and `MathOverlay`
-  writes it with `writeDisplayUnit` as one line commit. The engine gives each
-  line its `unitSlot` (kind, chosen unit, value in the system and in each
-  unit of the kind).
-  A **comment line's row** (spec section 4, Typeset grid, M4d) carries its
-  format as classes, a math line's (`is-bold`, `is-underline`, the band, the
-  text colour) and `is-upright` and `is-size-S|L|XL`; `MathOverlay.css` sets
-  the size, a line height 1.6 times it, and the width the comment asks for,
-  scaled by its size (`--math-comment-request`). Its gutter shows only for its
-  clause's error, so a comment row is laid out as before.
-  A **warning at rest** (spec section 4, Problems, M4d): an element's `⚠`
-  marks show only while one of its lines or its title is open (`edit` in
-  that element; being selected is not), or on its line while a jump flashes
-  it (`flash`). Otherwise `TypesetRow` hands the gutter no warnings: the cell
-  keeps its fixed 10 px column, empty and with no `data-tip`, so rows don't
-  shift when an edit opens. An error's `●` always shows.
-  A **problem's message on hover** (spec section 4, Problems): the gutter mark
-  and an error's result cell carry it as `data-tip`, never a `title` (the
-  overlay takes no pointer events, so a title never shows). The gestures find
-  the mark under the pointer from its screen box (`tipAt`, the error cell only
-  while it is cut short) on each `pointerMove` over the canvas, and `HoverTip`
-  shows it after a rest, short of the Sheet panel; a press, a drag, leaving the
-  canvas or a scene or viewport change hides it. **On touch** (M4d, #147) a
-  tap shows the same tip at once (`showNow`), until the next press anywhere
-  (`anyPress`), above a phone's bottom sheet; with `touch` set, every selected
-  math element (the scene snapshot's `selected`) shows its rows as hovered
-  (`UnitSlots.revealed`): slots outlined, each plot's ⚙. On touch a slot opens
-  its field only on a tap on an element selected before the press. Screen only. A **solve's
-  details** (spec section 4) use the same tip: a value with `solveDetails`
-  sits in a `math-element__detailed` span, dotted underline, whose `data-tip`
-  reads `Brent, 5 iterations`, the residual and the bracket; a range solve's
-  reads `Scan + Brent, roots found in 1 .. 30 L / s`, the 200 points and each
-  root with its residual. A solved value with several roots is a `roots`
-  result: up to five written out (`RootsContent`, the unit once in the last
-  root's slot), else a count summary (`13 roots, …`), with the details on
-  hover. A solve line's range or guess and a range's step are their own TeX
-  (`TypesetLine.aside`), set small and grey after the expression. A list's summary (`math-element__summary`)
-  typesets its first and last values after the count, and its `data-tip` is
-  the line's `listPreview`: three points from each end with their index.
-  `MathOverlay` subscribes to the scene (`onChange`, `onScrollChange`) and
-  places each element from its anchor's scene position via `viewport.ts`
-  (`sceneToStage`, pure). It reads source from the anchors and holds the sheet's
-  one **line edit**; `lineEdit.ts` (pure) decides what each way of leaving a
-  line writes. It owns the sheet's evaluation: it sorts anchors with
-  `readingOrder.ts` (pure) and runs `evaluateSheet` on every keystroke,
-  every source change and every change of order, then hands each
-  `MathElementView` its lines. The overlay takes no pointer events except the open field:
-  Excalidraw gets every click and drag. There is no bar beside the open line
-  or title (M4d, #144): the Format tab formats them, and the field's Ctrl+B,
-  Ctrl+U and Ctrl+I (italic on a comment line and the title; nothing on a math
-  line) write the clause into the open line's text; `MathOverlay` commits it
-  at once and mounts a new field on the rewritten text (`LineEdit.revision`).
-  `MathElementView` exports `LineSample` and `TitleSample`, one row or a
-  header drawn as the sheet draws it, for the tab's sample. `useSheetGestures` opens, moves and
-  leaves the line edit from the events `listenToCanvas` hands it, starts and
-  cancels placing (M, Esc) and opens the first line of a placed element.
-  `PlacingGhost` draws the new element's box at the pointer while placing. A
-  leave that finds the element with no text (`hasText`, in `lineEdit.ts`)
-  removes it instead of writing the line. The open line
-  is a field over the equation's cells, beside its live result as
-  plain text; a hidden copy of its text widens the cell. `gestures.ts`
-  (pure) decides when a double-click, a click, Enter or Esc is math's, and
-  `lineHit.ts` (pure) finds the
-  element and line under a point from geometry and the rows' `offsetTop` and
-  `offsetHeight` (spec section 4, Gestures, section 14). Its `control` lets the
-  sheet file commit the line (Ctrl+S keeps it open) or leave it (Open). From M4d (#143) the Sheet
-  panel acts on it too: `setFormat`, `setCommentFormat` (#144),
-  `setTitleFormat`, `moveTo('title' | 'first')`, `move('up' | 'down')` and
-  `openLast(anchorId)` (#144), `setRules(rows)`, `caretToRule(index)` and
-  `addRule(name)` (#145: a caret inside a rule follows it to its condition's
-  end, by each row's `from`) and `insert(symbol, anchorId)` (#146: a Symbols
-  or Constants button; `symbolInsert.ts`'s pure `planInsert` gives the range,
-  the text and the caret by the insert's mode, typed by
-  `execCommand('insertText')`, which keeps the field's Ctrl+Z, then
-  `setSelectionRange`; a title, a comment line or a note (`isPlainAt`) takes
-  it as plain text; with nothing open, `anchorId` opens that element's last
-  line, and a layout effect types the insert once its field has mounted),
-  through the line relay (`createLineRelay<LineEditControl>`). `onEdit` reports what is
-  open (`EditTarget`: anchor, line or `'title'`, text) on each change, and
-  null when the edit ends. The line and title fields carry
-  `data-prevent-outside-click`, so a press in them keeps a floating panel, and
-  turn off spelling, capitals and corrections.
-  `caretRow.ts` gives the follow rule its row (0.2.1, #191): the open
-  field's box, narrowed to the caret, measured on the field's hidden copy,
-  when the field is wider than the room. Depends on: canvas (anchor, size, selection and layer contracts, API types),
-  math, `katex` (lazily).
-- **file** (`src/file/`) — the sheet file (ADR 0004, spec section 7).
-  `sheetFormat.ts` (pure) reads and writes the `excalimathpad` block, settings
-  and migrations. The session's state carries the settings, and
-  `setSettings` changes them. `sheetSession.ts` is the deep module: save, save as, open,
-  startup with the recovery offer, the clean mark and the recovery copy, over
-  ports (scene, file access, recovery store, dialogs, line), so it knows no
-  Excalidraw, React or DOM. `fileAccess.ts` wraps the File System Access API,
-  with a download and file-input fallback. `recovery.ts` keeps the one copy in
-  IndexedDB. `vaultSheet.ts` is the vault's counterpart (M4d): the same
-  clean-key rule and `keepClean` over the scene and line ports, but it never
-  writes itself; the view asks it what is `unwritten()` (an open line
-  committed first), tells it what was `written`, asks if it is `busy()`, and
-  `reload`s it after an outside change. The line relay's `isOpen` is how it
-  knows a line is open. `FileChrome.tsx` shows the name and title, asks the two questions
-  and asks before leaving while dirty; it answers the keys and drops that
-  `canvas/fileRoutes.ts` takes. Opening picks the file before it asks about
-  unsaved changes: Chromium allows one picker per gesture. Depends on: canvas
-  (file routes, layers).
-- **plugin** (`plugin/`, section 12a, ADR 0006) — the Obsidian plugin, and the
-  only code that imports `obsidian`. `main.ts` (the `Plugin`) registers the
-  view for `.excalimathpad` only and keeps the panel's open state and light
-  or dark in `data.json` (`loadData`/`saveData`; `SheetMemory`, anything else
-  read there dropped). It registers New sheet and `SHEET_COMMANDS` (Add math,
-  Toggle Math settings, Open Math guide), whose `checkCallback` offers them only while
-  `getActiveViewOfType(SheetView)` has `commands`; none has a hotkey. `SheetView.ts` is the `TextFileView`:
-  `setViewData` runs the **lookbehind check** (`hasLookbehind`; without it,
-  "Excalimathpad needs iOS 16.4 or later."), then `readSheet`; a newer or
-  unreadable file shows section 13's message in the view and nothing mounts;
-  otherwise it mounts `<App vault=…>` on `contentEl` with React's `createRoot`
-  and unmounts on close, with `phone: Platform.isPhone` (the bottom sheet). It holds the tab's `commands` while the app is up and
-  passes `contentEl.onWindowMigrated` for the bridge. **Autosave** (section 7, A sheet in a vault): the
-  vault sheet calls `onUnwritten` when its `saveKey` (plus the settings)
-  leaves the key the file holds, and the view calls `requestSave`; `save` is
-  the view's own and writes only `unwritten()` (an open line committed
-  first), so viewing never writes; close, quit (`workspace.on('quit')`) and
-  Obsidian's Save current file write at once; a failed write is a Notice and
-  stays unwritten; saves run one at a time (`saving`). **Outside changes:**
-  `vault.on('modify')` for its file and `setViewData(data, false)` are only
-  word of a change: `checkOutside` waits for the view's own save, reads the
-  file afresh (Obsidian's text can predate the last write, or catch it
-  half-done: 0.1.0's beta), ignores its own text (`known`), reloads an idle tab in place (`VaultSheet.reload`: no undo step,
-  scroll and zoom kept), and for a busy one (`busy()`: unwritten work or a
-  line open) writes the tab's version beside the sheet with `vault.create`
-  under `names.ts`'s `conflictBase` and `freeSheetPath` (never over a file),
-  then reloads; no save runs meanwhile (`reconciling`). `main.ts` adds **New
-  sheet** (the command, the ribbon icon, a folder's `file-menu`), placed by
-  `fileManager.getNewFileParent` and named `Untitled`, `Untitled 1`…
-  `ImagePicker.ts` is the **vault image picker**, a `FuzzySuggestModal` over
-  the vault's image files that reads only the one picked (`readBinary`).
-  `styles.css`
-  is the view's own CSS (no padding, a full-height box) and the **guard**: the
-  build wraps the app's and Excalidraw's CSS in `@layer excalimathpad`
-  (`APP_LAYER` in `esbuild.plugin.mjs`), and one rule gives every element in
-  the view `all: revert-layer` with an id's weight, so Obsidian's and a theme's
-  global rules (buttons, inputs, selects) never reach the app. `src/index.css`,
-  the web's `html` and `body` rules, never ships. `plugin/test/obsidian.ts` is a
-  hand-written **fake `obsidian`** (Plugin, the view classes, WorkspaceLeaf,
-  Workspace, Vault, FileManager, TFile, TFolder, Menu, FuzzySuggestModal,
-  Scope, Platform, Notice, Obsidian's DOM helpers with `onWindowMigrated`;
-  `setActiveLeaf`, `runCommand` and `isOffered` as the palette does, and
-  `migrateWindow` as a move to a pop-out does) that records
-  registrations, writes, creates, binary reads, notices and modals, and acts
-  as the world outside the view (`changeOutside`, `rename`, `failNext`,
-  `fileMenu`, `quit`, a pick in a modal); Vitest aliases `obsidian` to it, and the
-  blocked run bundles the same file for the browser.
-  `plugin/test/pump-sizing.excalimathpad` is the pump sheet with an image and
-  CJK text. Depends on: App, file (`readSheet`, the messages), panel memory.
-- **guide** (`src/guide/`, spec section 8, Math guide, M4d, #148) — the Math
-  guide in the app. `markdown.ts` (pure, no DOM and no Node) turns
-  `docs/math-guide.md` into a tree of elements (`guideTree`, `GuideNode`):
-  `#`–`###` headings with GitHub's anchors (`slug`) behind `math-guide-`,
-  paragraphs, lists, tables (`\|` for a pipe), fenced code with an info string,
-  inline code, bold, italic and links to the guide's own headings. It refuses
-  anything else, so a link to a file or a site, or a construct the dialog
-  can't draw, fails the build. `guideModule` is the module both builds hand
-  the app for `?guide` (typed in `mathGuide.d.ts`): the tree as JSON, so the
-  bundle holds no Markdown code and nothing sets `innerHTML`. `MathGuide.tsx`
-  is the dialog: React draws the tree in a box that scrolls and starts at
-  the top (the contents list) with the keyboard; it closes on Esc, ✕ or a
-  click outside that also started outside; its links scroll within it; its
-  keys stop at its box. `guideBox.ts` holds `MATH_GUIDE_CLASS` and
-  `isInMathGuide`, which `listenToCanvas` reads. Depends on: nothing.
 - **test setup** (`src/test/`) — jsdom stubs for browser APIs Excalidraw
   touches on mount (canvas, fonts, matchMedia, ResizeObserver, which tests can
   fire), helpers for tests against the real Excalidraw, body sizes for the
   size tests (`layout.ts`) and readers for the grid (`sheetView.ts`). KaTeX is
   loaded before the tests run. Not app code.
-
-- **panel** (`src/panel/`) — the Sheet panel's tabs (spec section 8), drawn
-  inside Excalidraw's sidebar, which `SheetCanvas` frames (`SheetPanelSlot`:
-  the badge's `errors`, the tabs' content, `onChange`). `sheetPanel.ts` (pure)
-  turns the evaluated sheet (`EvaluatedElement`s, which `MathOverlay` hands
-  out through `onEvaluated`) into Variables groups and Problems rows (every
-  error and warning), and `errorCount`, the Problems badge (errors only, M4d);
-  `SheetPanel.tsx` renders them, and a click asks App to jump. **The Symbols
-  tab** (#146, `SymbolsTab.tsx`): a filter box (`filterSymbols`), then the
-  catalogue's groups, Greek in its three rows, each entry an `InsertButton`
-  showing its label, its hover `symbolHover`, a dot on a letter that is also
-  a constant. An `InsertButton` is a no-focus button that stays hoverable when
-  dimmed (`aria-disabled`, not `disabled`). The Constants tab's rows are
-  `InsertButton`s too, inserting the short name, else math.js's, as a `name`
-  insert ("Insert c"). Both take `InsertProps`: `canInsert` (a line or the
-  title open, or one math element selected; otherwise the buttons are dimmed
-  under "Open a line to insert") and `onInsert`, which App maps onto the line
-  relay's `insert`, with the selected element when nothing is open. **The Format tab**
-  (#144): `formatTab.ts` (pure) turns the evaluated sheet (`FormatElement`:
-  the panel's element and its `titleFormat`, which `EvaluatedElement` carries)
-  and what is open (`FormatTarget`, the overlay's `EditTarget`) into a
-  `FormatView`: none, a title, a math line (its plain format and the
-  "A rule sets …" notes), a comment line, or a blank one; with its caption
-  ("Math line — Pipe flow, line 3", shown in capitals) and its link (Edit or
-  Add title ↑, First line ↓). `FormatTab.tsx` renders it: the sample in a
-  light box (the dark theme's filter on it), the link, Done, ↑ and ↓, then a
-  labelled row per property, every control a no-focus button; with nothing
-  open, the hint, and Edit while one math element is selected. Its presses are
-  `FormatActions`, which App maps onto the line relay; App holds what is open
-  (from `onEdit`) and the one selected math element (`mathSelection`). Its
-  rows are `formatControls.tsx` (`Row`, `Toggle`, `SizeRow`, `TextRow`,
-  `HighlightRow`, `PanelButton`; `locked` keeps a rule's last property).
-  **The Rules list** (#145, `RulesList.tsx`) sits under a math line's rows:
-  one row per rule (a chip in its format that opens its Text, Highlight and
-  Style rows, its condition, which puts the caret at its end, ↑ ↓ ✕ and its
-  live state), and + Add rule, whose new rule's controls open at once.
-  **The quick keys** (M4d, #147): `quickKeys.ts` is `QUICK_KEYS`, the pinned
-  row's keys in order, each a `SymbolInsert` (`(` with `alone`: it wraps a
-  selection, else types only itself); `QuickKeys.tsx` draws them as no-focus
-  `InsertButton`s.
-  `panelMemory.ts` is the `PanelMemory` port for the open/closed state
-  (`localStorage` on the web, given by `src/main.tsx`). `SettingsTab.tsx`
-  edits the unit system, Custom's kind → unit table, Digits and the Result
-  colour (`settings.resultColor`, one of the six text colours; App hands it to
-  `MathOverlay`, which sets `--math-result` on the overlay) through the
-  session's `setSettings` (saved with the sheet, dirty, not in undo); App
-  hands the session's settings to `MathOverlay`, which evaluates with them. App does the jump
-  (`jumpToAnchor` in `canvas/selection.ts`: scroll, select with `NEVER`) and
-  the flash (`MathOverlay`'s `flash`, a row class). Depends on: math, overlay
-  (KaTeX).
 
 ## Domain
 
