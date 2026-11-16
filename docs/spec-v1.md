@@ -1044,12 +1044,15 @@ its format.
   expression. The **result** moves to a row of its own, keeping its rule on the left, when it
   doesn't fit beside the expression. A note, a comment, a line shown as source and an error's
   message wrap as text.
+  A note and a comment are 12 px (the sheet's are 15), and a sized comment keeps its
+  proportion: 10.5, 16 and 21 px at S, L and XL. A problem's mark keeps its place at the row's
+  left, and takes its column only when there is one.
 - A part that can't break (a long square root, a fraction, a call's arguments) **scrolls
   sideways** inside the box. Nothing is scaled down to fit.
 - The box is as tall as its line, up to about **150 px (six rows)**; past that it scrolls
   inside. A table line may take up to about 300 px.
-- **A plot line shows its line only,** with the note "Its chart is drawn on the sheet." A
-  format doesn't change the chart.
+- **A plot line shows its line only,** with the note "Its chart is drawn on the sheet." under
+  the box. A format doesn't change the chart.
 - **A table line shows its line and the whole table, scaled down to the box's width,** because
   a rule colours its rows. The scale has no floor.
 - **On a phone** the bottom sheet shows the same sample, **72 px (about three rows) at most**,
@@ -3440,7 +3443,6 @@ M1 to M4d, is in [`docs/spec-history.md`](spec-history.md#17-verify-first), with
   rule moves it from the line to the new row's field, which isn't the tap's own focus; whether
   the bottom sheet shows that field above a real keyboard; and Ctrl+Z between the two fields
   in WebKit and Firefox, which may not share Chromium's one text undo.
-- A table of more than three columns in the sample, scaled with no floor.
 - The typing test's time in CI with the new guide examples (59 s when measured).
 - The savings of the plugin cuts (87 KB, about 148 KB and 109 KB) were probed as separate
   bundles or read from the source, not measured together.

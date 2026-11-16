@@ -373,6 +373,37 @@ li + li > .sheet-panel__constant {
   position: static;
 }
 
+/* A line's sample (section 4, Format tab, M4e): as tall as its line, up to
+   about six rows of 20 px, then it scrolls inside; sideways too, for a part
+   of the math that can't break. The box takes the wheel and a finger for
+   that, and nothing else. A table line may take about twice the height. On a
+   phone's bottom sheet it is 72 px at most, about three rows. The line's own
+   layout is `is-line-sample` in `MathOverlay.css`. */
+.sheet-format__drawing.is-line {
+  box-sizing: border-box;
+  min-height: 38px;
+  max-height: 150px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  pointer-events: auto;
+}
+
+.sheet-format__drawing.is-line.has-table {
+  max-height: 300px;
+}
+
+.sheet-format__drawing.is-line.is-phone {
+  max-height: 72px;
+}
+
+/* Under a plot line's sample: "Its chart is drawn on the sheet." */
+.sheet-format__chart-note {
+  margin: 0 4px;
+  color: var(--color-gray-50, #868e96);
+  font-size: 12px;
+  font-style: italic;
+}
+
 /* The link that moves the edit, then Done, ↑ and ↓. */
 .sheet-format__nav {
   display: flex;

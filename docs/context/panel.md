@@ -35,7 +35,7 @@ M4e, #195: as a condition being typed has it; a rule typed in the text comes
 before the stored ones); with its caption
 ("Math line — Pipe flow, line 3", shown in capitals) and its link (Edit or
 Add title ↑, First line ↓). `FormatTab.tsx` renders it: the sample in a
-light box (the dark theme's filter on it), the link, Done, ↑ and ↓, then a
+light box (the dark theme's filter on it; see The sample, below), the link, Done, ↑ and ↓, then a
 labelled row per property, every control a no-focus button but a rule's
 condition; with nothing
 open, the hint, and Edit while one math element is selected. Its presses are
@@ -62,6 +62,18 @@ the keyboard went anywhere else. A field is a new element each time it loses
 the keyboard, which keeps what was typed in it out of the browser's text
 undo (spec section 14). An empty condition's row reads
 `FORMAT_HINTS.noCondition`.
+**The sample** (spec section 4, Format tab, M4e, #199): the tab draws the
+overlay's `TitleSample` or `LineSample` in `.sheet-format__drawing`. A
+title's is as before. A line's box is `is-line`: as tall as its line up to
+150 px, then it scrolls inside, and sideways for math that can't break, so it
+is the one part of the sample that takes pointer events; `has-table` raises
+the height to 300 px, and `is-phone` (the `phone` prop, which App passes from
+the vault's) lowers it to 72 px. The line's own layout, 13 px and wrapped, is
+the overlay's ([overlay](overlay.md)). Under the box of a plot line (a line
+with a `plot`), `FORMAT_HINTS.chartOnSheet`, left out on a phone. jsdom lays
+nothing out: `scripts/panel-run.mjs` holds the sizes, the wrapping, the
+sideways scroll and the scaled table at 320 px and 280 px, and
+`scripts/touch-run.mjs` the bottom sheet's 72 px with no chart or table.
 **The quick keys** (M4d, #147): `quickKeys.ts` is `QUICK_KEYS`, the pinned
 row's keys in order, each a `SymbolInsert` (`(` with `alone`: it wraps a
 selection, else types only itself); `QuickKeys.tsx` draws them as no-focus

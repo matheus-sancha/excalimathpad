@@ -12,7 +12,9 @@
 // Done, ↑ ↓ and Edit, the canvas hint by tap and by click, a tap's tips and the slots and ⚙ a touch selection
 // shows, the quick keys and their undo, the panel's open and restore, the
 // suggestions opening above the field, and a rule's condition typed in the
-// Rules list with the line still open (M4e, #197); on the tablet, a mouse keeps hover.
+// Rules list with the line still open (M4e, #197), and the Format tab's sample
+// (M4e, #199: on the phone's bottom sheet 72 px at most, scrolling inside, and
+// never a chart or a table); on the tablet, a mouse keeps hover.
 // The tablet lies on its side (1180 px), where the panel docks; held upright
 // (820 px) it is too narrow to dock, so an edit opens no panel and Math
 // settings opens it floating, with the quick keys (M4e, #198). It
@@ -438,6 +440,70 @@ try {
         (await field().count()) === 0 && stored?.formats === '@text-red if x >= 0\n' && stored.source.startsWith(`${LIST}\n`),
         JSON.stringify(stored?.formats),
       )
+
+      // The Format tab's sample (section 4, Format tab, M4e, #199). On a phone's
+      // bottom sheet it is 72 px at most and scrolls inside, and never holds a
+      // chart, a table or the chart's note; a tablet's panel shows the note and
+      // the table, as a computer's does.
+      // With no line open the bottom sheet is tall, and covers the element.
+      if (device.phone && (await panelOpen())) await closePanel()
+      await tap(empty)
+      await doubleTap(await pointOf(lineOf('plot', 0)))
+      await tab.keyboard.press('ArrowDown')
+      await pause()
+      const sample = () =>
+        tab.evaluate(() => {
+          const side = document.querySelector('.sheet-sidebar')
+          const box = side?.querySelector('.sheet-format__drawing')
+          if (!box) return null
+          const before = box.scrollTop
+          box.scrollTop = 100000
+          const scrolled = box.scrollTop
+          box.scrollTop = before
+          return {
+            height: box.getBoundingClientRect().height,
+            width: box.getBoundingClientRect().width,
+            line: box.querySelector('.math-element__row')?.getAttribute('aria-label') ?? null,
+            font: box.querySelector('.is-line-sample') ? getComputedStyle(box.querySelector('.is-line-sample')).fontSize : null,
+            charts: box.querySelectorAll('.math-element__plot-cell, .math-element__plot, .math-element__plot-chart').length,
+            tables: box.querySelectorAll('table').length,
+            note: side.querySelector('.sheet-format__chart-note')?.textContent ?? null,
+            content: box.scrollHeight,
+            scrolled,
+          }
+        })
+      const retype = async (text) => {
+        await tab.keyboard.press('ControlOrMeta+a')
+        await tab.keyboard.type(text)
+        await pause()
+      }
+      const most = device.phone ? 72 : 150
+      const told = (s) => (s ? `${s.line.slice(0, 24)}: ${Math.round(s.height * 10) / 10} px high, content ${s.content} px, ${s.charts} chart(s), ${s.tables} table(s), note ${JSON.stringify(s.note)}` : 'no sample')
+      let drawn = await sample()
+      row(
+        device.phone ? 'the bottom sheet’s sample of a plot line is its line only: no chart, no note' : 'the sample of a plot line is its line and the note, with no chart',
+        !!drawn && drawn.line === 'plot(x, x^2)' && drawn.font === '13px' && drawn.charts === 0 && drawn.height <= most + 0.5 && (device.phone ? drawn.note === null : drawn.note === 'Its chart is drawn on the sheet.'),
+        told(drawn),
+      )
+      await retype('table(x, x^2, x^3)')
+      drawn = await sample()
+      row(
+        device.phone ? 'the bottom sheet’s sample of a table line is its line only: no table' : 'the sample of a table line holds the whole table',
+        !!drawn && drawn.line === 'table(x, x^2, x^3)' && drawn.charts === 0 && drawn.note === null && (device.phone ? drawn.tables === 0 && drawn.height <= 72.5 : drawn.tables === 1 && drawn.height <= 300.5 && drawn.scrolled === 0),
+        told(drawn),
+      )
+      const LONG = 'r = 1 + sqrt(2/3) + 11 + 12 + 13 + 14 + 15 + 16 + 17 + 18 + 19 + 20 + 21 + 22 + 23 + 24 + 25 + 26 + 27 + 28 + 29 + 30 + 31 + 32 + 33 + 34 + 35 + 36 + 37 + 38 + 39 + 40 + 41 + 42 + 43 + 44 + 45 + 46 + 47 + 48 + 49 + 50 + 51 + 52 + 53 + 54 + 55 + 56 + 57 + 58 + 59 + 60 + 61 + 62 + 63 + 64 + 65 + 66 + 67 + 68 + 69 + 70 + 71 + 72 + 73 + 74 + 75 + 76 + 77 + 78 + 79'
+      await retype(LONG)
+      drawn = await sample()
+      row(
+        `a long line’s sample is ${most} px at most, and scrolls inside`,
+        !!drawn && drawn.line === LONG && drawn.height <= most + 0.5 && drawn.height > most - 12 && drawn.content > drawn.height && drawn.scrolled > 0 && (await fieldFocused()),
+        told(drawn),
+      )
+      await retype('plot(x, x^2)')
+      await tab.locator('.sheet-sidebar [aria-label="Done (Esc)"]').scrollIntoViewIfNeeded()
+      await pressPanel('Done (Esc)')
+      await pause()
 
       if (device.upright) {
         // Held upright the tablet is too narrow for the panel to dock (section 8, M4e, #198).

@@ -40,7 +40,7 @@ what to read for an issue and where to write.
   caret is outside the visible area; and, M4e, the wrapping field, #196, and a
   rule's condition, #197), and the **panel run** (`scripts/panel-run.mjs`,
   M4e, #198: the Sheet panel's widths, docking, drag handle and 280 px, in
-  the built plugin and web app). `npm test` holds the **typing test**
+  the built plugin and web app; the sample, #199). `npm test` holds the **typing test**
   (`src/typing.test.tsx`, M4e, #193: the guide's examples and the acceptance
   sheets, a character at a time); `npm run test:probe` is the **odd-values
   probe** (`src/oddValues.probe.tsx`), by hand before a release. `npm test`

@@ -274,13 +274,21 @@ export function MathElementView({
   )
 }
 
+/** Where a line's sample is drawn: the Sheet panel, or a phone's bottom sheet. */
+export type SampleKind = 'panel' | 'phone'
+
 /**
- * The open line drawn as the sheet draws it, for the Format tab's sample
- * (section 4, Format tab, M4d): one typeset row, with its result and note and
- * its rules applied, live from the evaluation of the typed text. Its ⚠ show,
- * since its element is being edited. Screen only; it takes no pointer events.
+ * The open line for the Format tab's sample (section 4, Format tab): one
+ * typeset row, with its result and note and its rules applied, live from the
+ * evaluation of the typed text. Its ⚠ show, since its element is being edited.
+ *
+ * From M4e it is smaller than the sheet and wraps (`is-line-sample` in
+ * `MathOverlay.css`): 13 px with 20 px rows, as wide as its box, the equation
+ * breaking where KaTeX allows and the result on a row of its own when it
+ * doesn't fit beside it. It never holds a chart; a table is scaled down to
+ * the box's width (`ScaledTable`), and left out on a phone. Screen only.
  */
-export function LineSample({ text, line }: { text: string; line: SheetLine }) {
+export function LineSample({ text, line, phone = false }: { text: string; line: SheetLine; phone?: boolean }) {
   const katexReady = useKatexReady()
   const { typeset } = line
   const classes =
@@ -289,13 +297,62 @@ export function LineSample({ text, line }: { text: string; line: SheetLine }) {
       : typeset.kind === 'comment'
         ? commentClasses(typeset.format)
         : ''
+  // A problem's mark takes its column only when there is one: the box is narrow.
+  const { result } = line
+  const marked =
+    result.kind === 'error' || (result.kind === 'list' && result.failed !== null) || line.warnings.length > 0
   return (
-    <div className="math-element__body is-sample">
+    <div className="math-element__body is-sample is-line-sample">
       <ol className="math-element__grid" aria-label="Sample">
-        <li className={`math-element__row is-${typeset.kind}${classes}`} aria-label={text}>
-          <TypesetRow text={text} line={line} index={0} katexReady={katexReady} showWarnings />
+        <li
+          className={`math-element__row is-${typeset.kind}${classes}${marked ? ' has-mark' : ''}`}
+          aria-label={text}
+        >
+          <TypesetRow
+            text={text}
+            line={line}
+            index={0}
+            katexReady={katexReady}
+            showWarnings
+            sample={phone ? 'phone' : 'panel'}
+          />
         </li>
       </ol>
+    </div>
+  )
+}
+
+/**
+ * A table in the sample, scaled down to the box's width (section 4, Format
+ * tab, M4e): the whole table shows, since a rule colours its rows, and the
+ * scale has no floor. The table is laid out at its own width and drawn
+ * smaller by a transform, which `offsetWidth` ignores; the box takes the
+ * scaled height. Measured again whenever the box or the table changes size
+ * (the panel's drag handle, a typed line, KaTeX's fonts). jsdom lays nothing
+ * out: there the table keeps its size.
+ */
+function ScaledTable({ children }: { children: ReactNode }) {
+  const boxRef = useRef<HTMLDivElement>(null)
+  useLayoutEffect(() => {
+    const box = boxRef.current
+    const table = box?.firstElementChild
+    if (!box || !(table instanceof box.ownerDocument.defaultView!.HTMLElement)) return
+    const fit = () => {
+      const room = box.clientWidth
+      const width = table.offsetWidth
+      const scale = room > 0 && width > room ? room / width : 1
+      table.style.transform = scale < 1 ? `scale(${scale})` : ''
+      box.style.height = scale < 1 ? `${table.offsetHeight * scale}px` : ''
+    }
+    fit()
+    const observer = new ResizeObserver(fit)
+    observer.observe(box)
+    observer.observe(table)
+    return () => observer.disconnect()
+  }, [])
+  return (
+    <div ref={boxRef} className="math-element__sample-table">
+      {children}
     </div>
   )
 }
@@ -431,6 +488,7 @@ function TypesetRow({
   index,
   katexReady,
   showWarnings,
+  sample,
 }: {
   text: string
   line: SheetLine
@@ -438,6 +496,8 @@ function TypesetRow({
   katexReady: boolean
   /** Whether the row's ⚠ shows (section 4, A warning at rest). */
   showWarnings: boolean
+  /** Set in the Format tab's sample, which draws no chart, and no table on a phone. */
+  sample?: SampleKind
 }) {
   const { typeset, result } = line
   const warnings = showWarnings ? line.warnings : NO_WARNINGS
@@ -473,7 +533,15 @@ function TypesetRow({
         )
       }
       return (
-        <MathCells typeset={typeset} result={result} warnings={warnings} fallback={text} line={line} index={index} />
+        <MathCells
+          typeset={typeset}
+          result={result}
+          warnings={warnings}
+          fallback={text}
+          line={line}
+          index={index}
+          sample={sample}
+        />
       )
   }
 }
@@ -485,6 +553,7 @@ function MathCells({
   fallback,
   line,
   index,
+  sample,
 }: {
   typeset: Extract<TypesetLine, { kind: 'math' }>
   result: LineResult
@@ -492,11 +561,25 @@ function MathCells({
   fallback: string
   line: SheetLine
   index: number
+  sample?: SampleKind
 }) {
   const name = typeset.name === null ? null : texToHtml(typeset.name)
   const defines = texToHtml(DEFINES)
   const expression = texToHtml(typeset.expression)
   const aside = typeset.aside === undefined ? null : texToHtml(typeset.aside)
+  const lhs =
+    name === null ? null : (
+      <>
+        <span className="math-element__name">
+          <Html html={name} />
+        </span>
+        {defines !== null && (
+          <span className="math-element__defines">
+            <Html html={defines} />
+          </span>
+        )}
+      </>
+    )
   // TeX KaTeX couldn't render: the line's source, as text, rather than nothing.
   const cells =
     expression === null || (typeset.name !== null && name === null) ? (
@@ -505,18 +588,9 @@ function MathCells({
       // One display, flush left: name, ≔ and expression together (section 4,
       // Typeset grid). A bare expression has no name or ≔ to indent it.
       <span className="math-element__equation">
-        {name !== null && (
-          <>
-            <span className="math-element__name">
-              <Html html={name} />
-            </span>
-            {defines !== null && (
-              <span className="math-element__defines">
-                <Html html={defines} />
-              </span>
-            )}
-          </>
-        )}
+        {lhs !== null &&
+          // In the sample no row breaks between the name and its ≔: one box holds them.
+          (sample === undefined ? lhs : <span className="math-element__lhs">{lhs}</span>)}
         <span className="math-element__expression">
           <Html html={expression} />
         </span>
@@ -539,8 +613,19 @@ function MathCells({
         preview={line.listPreview}
       />
       {typeset.note !== null && <span className="math-element__note">{typeset.note}</span>}
-      {line.table !== null && <TableBlock table={line.table} index={index} />}
-      {line.plot !== null && <PlotCell plot={line.plot} source={fallback} index={index} />}
+      {line.table !== null &&
+        (sample === undefined ? (
+          <TableBlock table={line.table} index={index} />
+        ) : (
+          sample === 'panel' && (
+            <ScaledTable>
+              <TableBlock table={line.table} index={index} />
+            </ScaledTable>
+          )
+        ))}
+      {line.plot !== null && sample === undefined && (
+        <PlotCell plot={line.plot} source={fallback} index={index} />
+      )}
     </>
   )
 }

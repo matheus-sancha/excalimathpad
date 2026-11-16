@@ -30,19 +30,25 @@ export interface FormatTabProps {
   resultColor?: TextColor
   /** On touch the hint names the taps (section 4, Touch, #147). */
   touch?: boolean
+  /**
+   * On a phone the tab is in the bottom sheet (section 8, On a phone), where
+   * a line's sample is 72 px at most and holds no table and no chart note.
+   */
+  phone?: boolean
   actions: FormatActions
 }
 
 /**
  * The Format tab (docs/spec-v1.md section 4, Format tab, M4d): the only place
  * to format a line or a title, acting on the open one. At the top, a live
- * sample in a light box under a caption naming what is open; beside it the
+ * sample in a light box under a caption naming what is open (a line's is
+ * smaller than the sheet and wraps, and never holds a chart, M4e); beside it the
  * link that moves the edit, and Done, ↑ and ↓. Then one labelled row of large
  * buttons per property the open thing takes. Every control is a no-focus
  * button (section 14): a blur would leave the line. The one field is a rule's
  * condition, in the Rules list, which keeps the line open (M4e).
  */
-export function FormatTab({ sheet, target, selected, resultColor = 'blue', touch = false, actions }: FormatTabProps) {
+export function FormatTab({ sheet, target, selected, resultColor = 'blue', touch = false, phone = false, actions }: FormatTabProps) {
   const view = formatView(sheet, target)
 
   if (view.kind === 'none') {
@@ -64,19 +70,24 @@ export function FormatTab({ sheet, target, selected, resultColor = 'blue', touch
     view.kind === 'title' ? (
       <TitleSample title={view.text} format={view.format} />
     ) : (
-      view.line && <LineSample text={view.text} line={view.line} />
+      view.line && <LineSample text={view.text} line={view.line} phone={phone} />
     )
+  const line = view.kind === 'title' ? null : view.line
 
   return (
     <div className="sheet-panel sheet-format">
       <section className="sheet-format__sample" aria-label="Sample">
         <p className="sheet-format__caption">{view.caption}</p>
         <div
-          className="sheet-format__drawing"
+          // A line's box scrolls inside, and may be taller for a table (section 4, Format tab, M4e).
+          className={`sheet-format__drawing${
+            view.kind === 'title' ? '' : ` is-line${line?.table && !phone ? ' has-table' : ''}${phone ? ' is-phone' : ''}`
+          }`}
           style={{ '--math-result': TEXT_COLOR_VALUES[resultColor] } as CSSProperties}
         >
           {sample}
         </div>
+        {line?.plot && !phone && <p className="sheet-format__chart-note">{FORMAT_HINTS.chartOnSheet}</p>}
       </section>
       <div className="sheet-format__nav" role="toolbar" aria-label="Move the edit">
         <PanelButton
