@@ -18,7 +18,7 @@ what to read for an issue and where to write.
 
 - `index.html` → `src/main.tsx` — the web app's entry; mounts `App` with the
   browser's ports: the file pickers, the IndexedDB recovery copy and the
-  per-browser panel memory (`localStorage`).
+  per-browser panel memory (`localStorage`: open or closed, and its width).
 - `plugin/main.ts` — the plugin's entry (section 12a), built by
   `esbuild.plugin.mjs` into `dist-plugin/` (`main.js`, `styles.css`, a copy of
   the root `manifest.json`). `tsconfig.plugin.json` type-checks `plugin/`.
@@ -31,22 +31,23 @@ what to read for an issue and where to write.
   (`scripts/popout-run.mjs`: the built plugin with sheet tabs in a second,
   same-origin window, as an Obsidian pop-out), and the **touch run**
   (`scripts/touch-run.mjs`, M4d, #147: the built plugin by touch, Playwright's
-  `hasTouch`, at a phone and a tablet viewport, each as Android and as iOS,
-  `navigator.platform` being what Excalidraw reads; the phone with
-  `Platform.isPhone`), and the **follow run** (`scripts/follow-run.mjs`,
+  `hasTouch`, at a phone and a tablet viewport, each as Android and as iOS;
+  the phone with `Platform.isPhone`), and the **follow run** (`scripts/follow-run.mjs`,
   0.2.1, #191: the built plugin with real keys at 1366 × 768 and 1000 × 800;
   it types the true-position plot line near the window's bottom, presses
   Enter and Esc, and fails if any box around the math was scrolled by the
   browser, if the content isn't drawn where the overlay put it, or if the
-  caret is outside the visible area; and, M4e, #196, the wrapping field at
-  1280 and 880 px, and #197, a rule's condition typed with the line open). `npm test` holds the **typing test**
+  caret is outside the visible area; and, M4e, the wrapping field, #196, and a
+  rule's condition, #197), and the **panel run** (`scripts/panel-run.mjs`,
+  M4e, #198: the Sheet panel's widths, docking, drag handle and 280 px, in
+  the built plugin and web app). `npm test` holds the **typing test**
   (`src/typing.test.tsx`, M4e, #193: the guide's examples and the acceptance
   sheets, a character at a time); `npm run test:probe` is the **odd-values
   probe** (`src/oddValues.probe.tsx`), by hand before a release. `npm test`
   also holds the **sweep test** (`src/math/sweep.test.ts`, M4e, #194: every
   math.js function a line can call, at huge arguments, each inside 1 s, in a
   child process that Node runs from the TypeScript as it is). CI installs Playwright's Chromium (the
-  version `package.json` pins) for the last four. The network-blocked run and the pop-out
+  version `package.json` pins) for the last five. The network-blocked run and the pop-out
   run also open ☰ → Math guide in the built plugin (M4d, #148).
 - `docs/math-guide.md` — the **Math guide** (spec section 8, M4d, #148): every
   form, key and setting, for users, in 17 sections. Both builds turn it into
@@ -139,9 +140,6 @@ an issue touches that module ([`CLAUDE.md`](CLAUDE.md) has the reading route).
 
 The core loop: define variables with units, see results inline, edit an input
 and everything downstream recalculates. Engine: math.js, client-side.
- `ConstantsTab` lists
-  `listConstants(settings)`: every built-in constant with its value in the
-  sheet's system.
 - **Math element** — a block of math.js source, one statement per line
   (assignment is plain `=`), anchored at a scene position, plus one
   **result** per line: a value with unit (`20 V`), an error (message), or
@@ -351,7 +349,14 @@ and everything downstream recalculates. Engine: math.js, client-side.
   tabs stopped switching (`panelPresses.excalidraw.test.tsx`, with the
   control). A field in the panel (a filter) takes focus, and so leaves the
   line; a rule's condition field doesn't (M4e, #197): it shares `LINE_FIELD`
-  with the line's field, and a blur from one to the other keeps the line.
+  with the line's field, and a blur from one to the other keeps the line. The
+  panel's drag handle (M4e, #198) is the one control in the tab order.
+- **The Sheet panel's docking width is one value** (spec section 14, M4e,
+  #198): `docksAbove(width)` (`src/canvas/panelWidth.ts`), 640 px plus the
+  panel's width. `SheetCanvas` passes it to Excalidraw
+  (`UIOptions.dockedSidebarBreakpoint`) and answers `panelDocks()` from it;
+  App asks only that. A second copy docks the panel where the app thinks it
+  floats; the panel run holds it.
 - **A field inside Excalidraw's container is `type="text"`.** Excalidraw
   runs its letter shortcuts on a key from any input that isn't text, number
   or password, so a `type="search"` filter in the Sheet panel lost the
@@ -468,8 +473,8 @@ and everything downstream recalculates. Engine: math.js, client-side.
   the file name, placed beside it, sits under that bar, so it doesn't show. The
   web app targets desktop Chrome and Edge; in the plugin Obsidian's tab title
   names the file.
-- On a tablet narrower than 1229 px the floating Sheet panel covers
-  Excalidraw's More tools, as on a small desktop window; its ✕ closes it.
+- Where the Sheet panel floats (an editor at or below its docking width), it
+  covers Excalidraw's More tools; its ✕ closes it.
 - The plugin's `main.js` is about 3.45 MB and `styles.css` 0.64 MB (#137);
   the audit fails either above 5,000,000 bytes, Obsidian Sync Standard's cap.
 - Excalidraw 0.18.1 listens on the global `document` (copy, cut, paste, `keyup`,

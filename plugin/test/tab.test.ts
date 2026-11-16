@@ -94,6 +94,47 @@ describe('the panel at launch (section 8: on Problems only for an error, M4d)', 
   })
 })
 
+describe('the panel’s width (section 8, M4e, #198: per device, in data.json, never in the file)', () => {
+  const widthIn = (leaf: WorkspaceLeaf) => excalidrawIn(leaf).parentElement!.style.getPropertyValue('--sheet-panel-width')
+  const handleIn = (leaf: WorkspaceLeaf) => leaf.containerEl.querySelector<HTMLElement>('.sheet-sidebar__resize')!
+  const openPanel = async (vault: Vault, leaf: WorkspaceLeaf) => {
+    vault.app.workspace.setActiveLeaf(leaf)
+    await act(() => runCommand(command(vault, 'toggle-math-settings')))
+    await waitFor(() => expect(panelIn(leaf)).not.toBeNull())
+  }
+
+  it('remembers a dragged width in data.json, beside the rest, and never writes the file', async () => {
+    const vault = await setUp({ theme: 'dark', sheetPanel: false })
+    const leaf = await openTab(vault, A)
+    expect(widthIn(leaf)).toBe('320px')
+    await openPanel(vault, leaf)
+    fireEvent.pointerDown(handleIn(leaf), { pointerId: 1, button: 0, clientX: 900 })
+    fireEvent.pointerMove(handleIn(leaf), { pointerId: 1, clientX: 820 })
+    expect(vault.recorded.dataJson).toEqual({ theme: 'dark', sheetPanel: false })
+    fireEvent.pointerUp(handleIn(leaf), { pointerId: 1, clientX: 820 })
+
+    expect(widthIn(leaf)).toBe('400px')
+    expect(vault.recorded.dataJson).toEqual({ theme: 'dark', sheetPanel: false, sheetPanelWidth: 400 })
+    await act(() => (leaf.view as unknown as { save: () => Promise<void> }).save())
+    expect(vault.app.vault.writes).toEqual([])
+    // A tab opened after it opens at that width.
+    expect(widthIn(await openTab(vault, B))).toBe('400px')
+  })
+
+  it('opens at the remembered width after a restart, and drops one that isn’t a number', async () => {
+    const vault = await setUp({ sheetPanelWidth: 296 })
+    expect(widthIn(await openTab(vault, A))).toBe('296px')
+    await act(() => open.splice(0)[0].detach())
+
+    const odd = await setUp({ sheetPanelWidth: 'wide', sheetPanel: false })
+    const leaf = await openTab(odd, A)
+    expect(widthIn(leaf)).toBe('320px')
+    await openPanel(odd, leaf)
+    fireEvent.keyDown(handleIn(leaf), { key: 'ArrowLeft' })
+    expect(odd.recorded.dataJson).toEqual({ sheetPanel: false, sheetPanelWidth: 336 })
+  })
+})
+
 describe('the theme (section 8: Excalimathpad’s own light or dark, remembered)', () => {
   it('opens light until a mode is chosen, whatever Obsidian’s', async () => {
     document.body.classList.add('theme-dark')

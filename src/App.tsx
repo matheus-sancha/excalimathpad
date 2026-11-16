@@ -10,7 +10,7 @@ import {
 import { isMathAnchor } from './canvas/mathAnchor.ts'
 import { mathSelection } from './canvas/mathSelection.ts'
 import { sceneFileFor } from './canvas/sceneFile.ts'
-import { FOLLOW_MARGIN, jumpToAnchor, scrollIntoArea, SIDEBAR_DOCKS_ABOVE, visibleArea } from './canvas/selection.ts'
+import { FOLLOW_MARGIN, jumpToAnchor, scrollIntoArea, visibleArea } from './canvas/selection.ts'
 import { caretRow } from './overlay/caretRow.ts'
 import {
   MathOverlay,
@@ -313,7 +313,6 @@ function Sheet({
   )
   const [flash, setFlash] = useState<FlashLine | null>(null)
   const errors = sheet ? errorCount(sheet) : 0
-  const wide = () => (canvas ? wideRoot(canvas.root) : false)
 
   // The opened sheet: its start has loaded it (the vault's file, or on the web
   // the recovery copy once answered). `start` is the sheet's own, run once.
@@ -327,7 +326,7 @@ function Sheet({
     }
   }, [file])
 
-  // At launch, on a wide window, the panel opens unless it was last closed:
+  // At launch, where the panel docks, it opens unless it was last closed:
   // on Problems if the opened sheet has an error, else on Variables (M4d:
   // warnings alone don't open Problems). It waits for the opened sheet and for
   // an evaluation of all its math, since the first runs before the scene loads.
@@ -336,13 +335,16 @@ function Sheet({
     if (!canvas || !sheet || !opened || launched.current) return
     if (sheet.length !== canvas.api.getSceneElements().filter(isMathAnchor).length) return
     launched.current = true
-    if (memory.rememberedOpen() === false || canvas.root.clientWidth <= SIDEBAR_DOCKS_ABOVE) return
+    if (memory.rememberedOpen() === false || !canvas.panelDocks()) return
     const tab: SheetPanelTab = errorCount(sheet) > 0 ? 'problems' : 'variables'
     canvas.showSheetPanel({ open: true, tab })
   }, [canvas, sheet, opened, memory])
 
   // An edit opens the panel on Format, and its end puts the panel back as it
-  // was (section 8, M4d): closed if it was, else on its tab. A tab picked
+  // was (section 8, M4d): closed if it was, else on its tab. From M4e it opens
+  // the panel only where it docks (or on a phone, whose bottom sheet it stays):
+  // on an editor too narrow to dock, an edit switches an open panel to Format
+  // and opens nothing. A tab picked
   // during the edit stays while it lasts; closed during the edit, the panel
   // stays closed. What the app opens or restores itself is never remembered as
   // the user's choice: `automatic` is the state it asked for, until the panel
@@ -397,8 +399,9 @@ function Sheet({
       // on ↑ and ↓ and while typing (section 4, While editing a line, 0.2.1).
       if (target) followCaret(canvas, phone)
       if (target && !beforeEdit.current) {
-        beforeEdit.current = canvas.sheetPanel()
-        showAutomatically({ open: true, tab: 'format' })
+        const before = canvas.sheetPanel()
+        beforeEdit.current = before
+        showAutomatically({ open: before.open || phone || canvas.panelDocks(), tab: 'format' })
       } else if (!target && beforeEdit.current) {
         const before = beforeEdit.current
         beforeEdit.current = null
@@ -471,7 +474,7 @@ function Sheet({
       jumpToAnchor(canvas.api, target.anchorId)
       setFlash({ ...target, key: Date.now() })
       // Floating over a small window, or a sheet on a phone, the panel gets out of the way.
-      if (canvas.root.clientWidth <= SIDEBAR_DOCKS_ABOVE) {
+      if (!canvas.panelDocks()) {
         canvas.showSheetPanel({ open: false, tab: canvas.sheetPanel().tab })
       }
       canvas.focusCanvas()
@@ -556,8 +559,10 @@ function Sheet({
             problemsTab: tab(<ProblemsTab sheet={sheet ?? []} onJump={jump} />),
             settings: file && tab(<SettingsTab settings={settings} onChange={file.sheet.setSettings} />),
             constants: tab(<ConstantsTab settings={settings} canInsert={canInsert} onInsert={insert} />),
+            // Per device, never in the file (section 8, M4e).
+            width: memory,
             // Remembered per home; a floating panel closes by itself, so
-            // only a wide window's choice counts.
+            // only a docked panel's choice counts.
             onChange: (open, tab) => {
               // The panel an edit opens covers part of the canvas once it is
               // drawn: the caret is followed again in what is left.
@@ -569,7 +574,7 @@ function Sheet({
                 automatic.current = null
                 return
               }
-              if (wide()) memory.rememberOpen(open)
+              if (canvas?.panelDocks()) memory.rememberOpen(open)
             },
           }}
         />
@@ -619,9 +624,4 @@ function followCaret(canvas: SheetCanvasHandle, phone: boolean) {
     const area = visibleArea(canvas.root, phone)
     scrollIntoArea(canvas.api, caretRow(field, area.right - area.left - 2 * FOLLOW_MARGIN), area)
   })
-}
-
-/** A window wide enough for the panel to dock beside the canvas (section 8). */
-function wideRoot(root: HTMLElement): boolean {
-  return root.clientWidth > SIDEBAR_DOCKS_ABOVE
 }

@@ -1822,6 +1822,25 @@ The Problems badge sits on its icon. Format is the [Format tab](#format-tab) and
   editor too narrow to dock, an edit opens nothing: the user opens the panel from Math
   settings to format.
 
+As built (#198):
+
+- **The handle** is the panel's left 8 px (16 px after a touch press), named "Resize the
+  panel". A drag is remembered once, at its release; each key and the double-click at once.
+  ← widens the panel, since it moves the handle left. A remembered width outside 280 to
+  480 px is brought inside it.
+- **"Docks" is by width alone,** for the launch, an edit and a jump: an editor wider than the
+  docking width, whatever "Keep sidebar open" is set to, as it was at 1229 px.
+- **With the panel open on an editor too narrow to dock,** an edit switches it to Format and
+  its end puts its tab back, by the rule below. That is how a line is formatted there: select
+  the element, open Math settings, and press the Format tab's Edit. On a tablet held upright
+  the [quick keys](#touch) show with the panel, so only once it is open.
+- **The bottom sheet on a phone is unchanged:** its active tab still shows its name, and it
+  has no heading and no handle. An edit opens it as before.
+- **Room at 280 px:** a rule's ↑ ↓ ✕ sit under its condition, beside its state, so the
+  condition's field has the row; a constant's value too long for its row goes under its
+  symbol. Checked in Chromium at 280 px, tab by tab
+  ([spec history](spec-history.md#17-verify-first)).
+
 - **An edit opens the panel on Format.** When a line or the title opens and none was open,
   the panel opens on Format, or switches to it. Moving within the edit keeps whichever tab
   shows, so a tab picked during the edit stays. When the edit ends, the panel returns to how
@@ -3106,8 +3125,8 @@ Evidence: [`obsidian-plugin.md`](research/obsidian-plugin.md).
   word, comment lines, rules, titles and the pump sheet in `src/file/sheetFormat.test.ts`;
   Open…, a dropped file and the recovery copy in `src/file/sheetSession.test.ts` and, on the
   real Excalidraw, `src/file/FileChrome.excalidraw.test.tsx`; a vault file and an outside
-  change in `plugin/test/vault.test.ts`. The three Playwright runs that open a sheet
-  (`scripts/popout-run.mjs`, `touch-run.mjs`, `follow-run.mjs`) open a format 1 file, so they
+  change in `plugin/test/vault.test.ts`. The four Playwright runs that open a sheet
+  (`scripts/popout-run.mjs`, `touch-run.mjs`, `follow-run.mjs`, `panel-run.mjs`) open a format 1 file, so they
   run the migration in the built plugin.
 - **`source` and `formats` in one write:** a nested object in `customData` adds an empty undo
   step, so `formats` is a string, as `titleFormat` is (`writeAnchorSource`,
@@ -3118,7 +3137,25 @@ Evidence: [`obsidian-plugin.md`](research/obsidian-plugin.md).
   as it would have been typed (`withFormat`, `src/math/lineForm.ts`) before anything reads
   it, so every form, error and rule is read by the code that read format 1.
 - **The docking width** passed to Excalidraw (`UIOptions.dockedSidebarBreakpoint`) and the
-  app's own must be one value, or the panel docks where the app thinks it floats.
+  app's own must be one value, or the panel docks where the app thinks it floats. As built
+  (#198): `docksAbove(width)` in `src/canvas/panelWidth.ts` is that value. `SheetCanvas`
+  holds the width, passes the value to Excalidraw and answers the app from it
+  (`SheetCanvasHandle.panelDocks()`); App asks only that, for the launch, an edit's open, a
+  jump and the remembered open state, and holds no width of its own.
+  - The width reaches Excalidraw as CSS: `SheetCanvas` sets `--sheet-panel-width` on its own
+    box, and `SheetCanvas.css` gives it to Excalidraw's `--right-sidebar-width`.
+  - Excalidraw reads a changed docking width after its render and draws nothing again, so the
+    panel would dock or float one render late: the app calls its public `refresh()` after
+    each change of width.
+  - The drag handle (`PanelResizeHandle.tsx`) is drawn inside the sidebar, so its presses are
+    the panel's and never leave the line; it holds the pointer (`setPointerCapture`) and
+    listens on nothing but itself. It is the one panel control in the tab order: focus
+    reaches it by Tab, never by a press.
+  - jsdom lays nothing out, so the **panel run** (`scripts/panel-run.mjs`,
+    `npm run test:panel`, in CI) holds this in Chromium, in the built plugin and the built
+    web app: the four widths, the drag and its keys, the docking width following the drag to
+    Excalidraw and to the app at the same px, the remembered width after a restart and a
+    reload, and every tab at 280 px.
 - **The overlay never scrolls** (`overflow: clip`, 0.2.1): the canvas's pan is the only thing
   that moves the math. `overflow: hidden` isn't enough: the browser still scrolls a hidden box to
   show a focused field's caret. The follow run (`scripts/follow-run.mjs`, `npm run test:follow`)
@@ -3399,8 +3436,6 @@ M1 to M4d, is in [`docs/spec-history.md`](spec-history.md#17-verify-first), with
 - Nothing of M4e's was run inside Obsidian or on a device: the panel's widths stood in for a
   14-inch laptop, the sample's phone was a 390 px window with no keyboard, and the new chart
   was drawn outside the app. Each is seen in the beta `0.3.0`.
-- The panel at 280 px: 28 px tabs, the Format tab's colour rows wrapping, a rule's condition
-  field, and the Settings tab.
 - A rule's condition on a device (#197): whether the on-screen keyboard stays up when + Add
   rule moves it from the line to the new row's field, which isn't the tap's own focus; whether
   the bottom sheet shows that field above a real keyboard; and Ctrl+Z between the two fields

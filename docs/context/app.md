@@ -38,12 +38,18 @@ keys to the view (`confineKeys`), bridges the view when it is in a pop-out
 window (`bridgeWindow`, again after `vault.onWindowMigrated`), hands the
 view its `SheetCommands` (Add math, Toggle Math settings, Open Math guide) through
 `vault.commands`, and passes the canvas `vault` and `vault.theme` (where
-light or dark is remembered). `panelMemory` is where the panel's open state lives
+light or dark is remembered). `panelMemory` is where the panel's open state and its width live
 (a port: `storagePanelMemory` on the web, `data.json` in the plugin, this
-page only if unset). **An edit opens the panel on Format** (M4d, #143):
+page only if unset); App hands it to the canvas as the slot's `width`, and
+holds no width itself. Whether the panel docks is the canvas's answer
+(`panelDocks()`, spec section 8, M4e, #198): the launch opens the panel only
+where it docks, a jump closes it where it doesn't, and only a docked panel's
+open state is remembered. **An edit opens the panel on Format** (M4d, #143):
 from `MathOverlay`'s `onEdit`, App notes the panel's state when an edit
-starts and opens it on Format (on a small window, scrolling the line clear
-of the floating panel), and puts it back when the edit ends, unless it was
+starts and opens it on Format where it docks, on a phone, or when it is
+already open (M4e, #198: on an editor too narrow to dock an edit opens
+nothing; scrolling the line clear of the panel by the follow rule), and puts
+it back when the edit ends, unless it was
 closed meanwhile or the edit ended from a press in the panel. What it opens
 or restores itself (`automatic`) is never remembered as the user's choice.
 **Touch** (M4d, #147): App holds `touch`, whether the last press in the

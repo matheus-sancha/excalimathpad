@@ -11,11 +11,13 @@
 // where the overlay put it, on its box, and that the caret is inside the
 // visible area less the 48 px margin. Then: a pan by hand is left alone until
 // the next keystroke, and ↑ from a line above the window brings it back. On a
-// small window (1000 × 800) the panel floats, and a line opened under it
-// moves clear by the same rule.
+// small window (1000 × 800) the panel the edit opens covers the canvas's right
+// (from M4e, #198, it docks there; it floated until then), and a line opened
+// under it moves clear by the same rule.
 //
-// The field wraps (M4e, #196): at 1280 px and at 880 px wide the plot line
-// continues on the field's next rows short of the panel, the element grows
+// The field wraps (M4e, #196): at 1280 px and at 880 px wide (where, from
+// #198, an edit opens no panel) the plot line continues on the field's next
+// rows short of the panel or the window's edge, the element grows
 // taller and its anchor with it, the field and the hidden copy that sizes it
 // break at the same places, ↑ and ↓ move between the field's rows and leave
 // the line only from the first or the last, the suggestions open under the
@@ -319,12 +321,12 @@ try {
     await step('Esc after ↑', { open: false })
   })
 
-  // A small window: the panel floats over the canvas's right, and a line opened under it moves clear.
+  // A small window: the panel the edit opens covers the canvas's right, and a line opened under it moves clear.
   await run('small window', { width: 1000, height: 800 }, sheetAt(700, 200, 'a = 2 m\nb = a * 3'), async ({ tab, row, step, lineBox, px }) => {
     const line = await lineBox(1)
     await tab.mouse.dblclick(line.x + 20, line.y + line.height / 2)
-    const s = await step('a line under the floating panel opens')
-    row('the panel floats over the canvas', s.panel !== null && s.panel.left > 0 && s.panel.left < 1000, s.panel ? `panel from x ${px(s.panel.left)}` : 'no panel')
+    const s = await step('a line under the panel opens')
+    row('the panel covers the canvas’s right', s.panel !== null && s.panel.left > 0 && s.panel.left < 1000, s.panel ? `panel from x ${px(s.panel.left)}` : 'no panel')
     row('the line moved the least distance, not to the middle', s.panel !== null && Math.abs(s.field.right - (s.panel.left - MARGIN)) < 2, `row’s right at ${px(s.field.right)}`)
   })
 

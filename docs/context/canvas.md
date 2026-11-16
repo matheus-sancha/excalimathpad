@@ -85,16 +85,33 @@ opens the Sheet panel. `panelPresses.ts` holds `SHEET_SIDEBAR_CLASS`,
 with `isLineField`, the mark the line's field shares with a rule's condition
 field so the keyboard can pass between them (M4e, #197). The Sheet panel
 (M4d, #143) has six icon tabs, `SHEET_PANEL_TABS`: Format, Symbols,
-Variables, Problems, Constants, Settings, each named by a label span (shown
-on the active tab, read on all) and its `title`, the error badge on
-Problems. The handle's `sheetPanel()` reads whether it is open and its tab,
+Variables, Problems, Constants, Settings, each named by a label span (read
+on all; shown only on the bottom sheet's active tab) and its `title`, the
+error badge on Problems; in the sidebar the shown tab's name is a heading
+over its content (`.sheet-sidebar__heading`, M4e, #198). **The panel's
+width** (spec section 8, M4e, #198): `panelWidth.ts` (pure) holds
+`PANEL_WIDTH` (320), the range (280 to 480), the key step (16),
+`clampPanelWidth` and `docksAbove(width)`, the docking width (640 px plus
+the width), and the `PanelWidthMemory` port, which the slot's `width` takes
+(`PanelMemory` is one). `SheetCanvas` holds the width as state, from the
+memory once: it sets `--sheet-panel-width` on its own box, which
+`SheetCanvas.css` hands to Excalidraw's `--right-sidebar-width`; it passes
+`UIOptions.dockedSidebarBreakpoint` as `docksAbove(width)`, calls
+Excalidraw's `refresh()` after each change (Excalidraw reads the prop after
+its render and draws nothing again by itself), and the handle's
+`panelDocks()` answers from the same value (never on a phone).
+`PanelResizeHandle.tsx` is the drag handle, a `role="separator"` on the
+sidebar's left edge inside `.sheet-sidebar__keys`: pointer capture on
+itself, `onWidth` on each move, `onSettle` at the release, a double-click or
+a key (← → by the step, Home), which is when the memory is told. It is the
+one panel control with `tabIndex={0}`. The handle's `sheetPanel()` reads whether it is open and its tab,
 and `showSheetPanel(state)` opens it on a tab or closes it with that tab as
 the one Math settings opens next. `selection.ts`'s `scrollIntoArea` is
 the follow rule (0.2.1, #191): it scrolls the canvas the least distance
 that puts a row inside an area less `FOLLOW_MARGIN` (48 px), centring a row
 the area has no room for, with `NEVER`; `visibleArea` is the canvas less
-the Sheet panel where it covers it (floating or docked), a phone's bottom
-sheet and the keyboard (`visualViewport`).
+the Sheet panel where it covers it (floating or docked, at whatever width),
+a phone's bottom sheet and the keyboard (`visualViewport`).
 **The bottom sheet** (`BottomSheet.tsx`, M4d, #147): with `phone`,
 `SheetCanvas` draws the panel there instead of Excalidraw's `Sidebar`,
 portalled into `.excalidraw` (Excalidraw's theme, above the overlay), with

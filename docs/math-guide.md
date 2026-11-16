@@ -349,7 +349,7 @@ dP = f_d * (L_p/D) rho v^2 / 2 in kPa @bold @text-red if dP > 50 kPa # friction 
 
 ## 12. Formatting
 
-A line's **format** is a clause of `@` words after its code and its `in <unit>`, before its note. It never changes a value. The easy way to write one is the **Format tab** of the [Sheet panel](#14-the-sheet-panel), which opens when you edit a line.
+A line's **format** is a clause of `@` words after its code and its `in <unit>`, before its note. It never changes a value. The easy way to write one is the **Format tab** of the [Sheet panel](#14-the-sheet-panel), which opens when you edit a line where the panel docks.
 
 **A format is kept beside its line, not in its text.** You can still type the words at the end of a line (in front of the `#` on a comment line): they show as you type, and when you leave the line they move out of its text. The next time you open the line it shows the math and the note alone, and the Format tab shows and changes the format. Copying a line's text copies the math; copying or duplicating the element carries every line's format. A sheet saved by version 0.2 opens with its formats as they were; once saved again it no longer opens in 0.2.
 
@@ -411,11 +411,11 @@ The Sheet panel's Symbols tab is a set of buttons that type, at the caret of the
 
 ## 14. The Sheet panel
 
-**Math settings**, under More tools, opens and closes the Sheet panel. A red badge on it counts the sheet's errors. The panel has six tabs, each an icon with a tooltip:
+**Math settings**, under More tools, opens and closes the Sheet panel. A red badge on it counts the sheet's errors. The panel has six tabs, each an icon with a tooltip; the shown tab's name is the heading over its content:
 
 | Tab | Holds |
 |---|---|
-| **Format** | Formats the open line or title: see [Formatting](#12-formatting). It opens when you start editing, and the panel goes back as it was when you stop |
+| **Format** | Formats the open line or title: see [Formatting](#12-formatting). Where the panel docks, it opens when you start editing, and the panel goes back as it was when you stop |
 | **Symbols** | Buttons that type at the caret: see [The Symbols tab](#13-the-symbols-tab) |
 | **Variables** | Every name in reading order, grouped by element, with its value and unit. A click jumps to its line |
 | **Problems** | Every error `●` and warning `⚠`, with its element and line. A click jumps to it. The badge counts errors only |
@@ -426,7 +426,8 @@ The Sheet panel's Symbols tab is a set of buttons that type, at the caret of the
 - An element with a title is named by its title in Variables and Problems; otherwise by its position on the sheet.
 - A press in the panel never leaves the line you are editing; only a press in a filter box does.
 - Settings are saved in the sheet's file and are not part of undo.
-- On a narrow window the panel floats over the sheet. On a phone, in Obsidian, it is a sheet along the bottom, above the keyboard.
+- The panel is 320 px wide. Drag its left edge to make it anything from 280 to 480 px; a double-click on the edge puts 320 px back. With the edge focused, **←** and **→** move it 16 px and **Home** puts it back. The width is remembered on this device, not in the sheet.
+- The panel docks beside the sheet when the window, or the Obsidian tab, is wider than 640 px plus the panel's width (960 px at 320 px). On a narrower one it floats over the sheet, closes on a press outside it, and an edit doesn't open it: select the element, open Math settings, and press **Edit** in the Format tab. On a phone, in Obsidian, it is a sheet along the bottom, above the keyboard.
 
 ## 15. Files and recovery
 

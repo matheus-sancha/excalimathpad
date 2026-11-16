@@ -17,6 +17,8 @@ import {
 interface PluginData {
   /** The Sheet panel's open state, as `PanelMemory` remembers it. */
   sheetPanel?: boolean
+  /** The Sheet panel's width in px, as last dragged (section 8, Sheet panel, M4e). */
+  sheetPanelWidth?: number
   /** Light or dark, as last chosen with ☰ Dark mode (section 8, Inside an Obsidian tab). */
   theme?: SheetTheme
 }
@@ -54,6 +56,8 @@ export default class ExcalimathpadPlugin extends Plugin {
       panel: {
         rememberedOpen: () => this.stored.sheetPanel ?? null,
         rememberOpen: (open) => this.remember({ sheetPanel: open }),
+        rememberedWidth: () => this.stored.sheetPanelWidth ?? null,
+        rememberWidth: (width) => this.remember({ sheetPanelWidth: width }),
       },
       theme: {
         rememberedTheme: () => this.stored.theme ?? null,
@@ -93,7 +97,13 @@ export default class ExcalimathpadPlugin extends Plugin {
   /** Writes `change` into `data.json`, if it changes anything. */
   private remember(change: PluginData) {
     const next = { ...this.stored, ...change }
-    if (next.sheetPanel === this.stored.sheetPanel && next.theme === this.stored.theme) return
+    if (
+      next.sheetPanel === this.stored.sheetPanel &&
+      next.sheetPanelWidth === this.stored.sheetPanelWidth &&
+      next.theme === this.stored.theme
+    ) {
+      return
+    }
     this.stored = next
     void this.saveData(this.stored)
   }
@@ -122,9 +132,10 @@ export default class ExcalimathpadPlugin extends Plugin {
 /** `data.json` as read: anything that isn't ours is dropped. */
 function readData(value: unknown): PluginData {
   if (typeof value !== 'object' || value === null) return {}
-  const { sheetPanel, theme } = value as Record<string, unknown>
+  const { sheetPanel, sheetPanelWidth, theme } = value as Record<string, unknown>
   return {
     ...(typeof sheetPanel === 'boolean' && { sheetPanel }),
+    ...(typeof sheetPanelWidth === 'number' && Number.isFinite(sheetPanelWidth) && { sheetPanelWidth }),
     ...(isSheetTheme(theme) && { theme }),
   }
 }

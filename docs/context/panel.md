@@ -66,8 +66,18 @@ undo (spec section 14). An empty condition's row reads
 row's keys in order, each a `SymbolInsert` (`(` with `alone`: it wraps a
 selection, else types only itself); `QuickKeys.tsx` draws them as no-focus
 `InsertButton`s.
-`panelMemory.ts` is the `PanelMemory` port for the open/closed state
-(`localStorage` on the web, given by `src/main.tsx`). `SettingsTab.tsx`
+`ConstantsTab` lists `listConstants(settings)`: every built-in constant with
+its value in the sheet's system; a value too long for its row at a narrow
+panel goes under its symbol (`SheetPanel.css`, flex wrap). A rule's ↑ ↓ ✕ sit
+under its condition for the same reason (M4e, #198: every tab is usable at
+280 px, which `scripts/panel-run.mjs` holds in Chromium).
+`panelMemory.ts` is the `PanelMemory` port for the open/closed state and,
+from M4e (#198), the panel's width (`rememberedWidth`, `rememberWidth`; a
+second key in `localStorage` on the web, given by `src/main.tsx`;
+`sheetPanelWidth` in the plugin's `data.json`). The memory keeps what it is
+told; `SheetCanvas` brings a remembered width into range. The frame the tabs
+are drawn in, the icon tabs, each tab's heading and the drag handle are the
+canvas's ([canvas](canvas.md)). `SettingsTab.tsx`
 edits the unit system, Custom's kind → unit table, Digits and the Result
 colour (`settings.resultColor`, one of the six text colours; App hands it to
 `MathOverlay`, which sets `--math-result` on the overlay) through the

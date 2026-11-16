@@ -36,6 +36,29 @@ async function ready() {
   await waitFor(() => expect(document.title).toBe('Untitled'))
 }
 
+/** The canvas's box is `width` px wide (jsdom's is 0): what the panel's docking is read from. */
+function editorWidth(width: number) {
+  const client = Object.getOwnPropertyDescriptor(Element.prototype, 'clientWidth')!
+  Object.defineProperty(Element.prototype, 'clientWidth', { configurable: true, get: () => width })
+  onTestFinished(() => {
+    Object.defineProperty(Element.prototype, 'clientWidth', client)
+  })
+}
+
+/** A panel memory: last closed unless `open` says otherwise, at `width` if given; it lists what it is told. */
+function fakePanelMemory({ open = false as boolean | null, width = null as number | null } = {}) {
+  const remembered: boolean[] = []
+  const widths: number[] = []
+  return {
+    remembered,
+    widths,
+    rememberedOpen: () => open,
+    rememberOpen: (next: boolean) => void remembered.push(next),
+    rememberedWidth: () => width,
+    rememberWidth: (next: number) => void widths.push(next),
+  }
+}
+
 describe('App', () => {
   it('mounts the Excalidraw editor as the sheet canvas', async () => {
     const { container } = render(<App files={fakeFileAccess()} recovery={fakeRecovery()} />)
@@ -376,8 +399,11 @@ describe('App', () => {
         await waitFor(() => expect(lineField()).not.toBeNull())
       }
       const leave = () => act(() => lineField()!.blur())
-      const start = async () => {
-        renderApp({ initialElements: problemSheet() })
+      // From M4e an edit opens the panel only where it docks: the editor is 1440 px
+      // wide, and the panel was last closed, so the launch leaves it closed.
+      const start = async (width = 1440, panelMemory = fakePanelMemory()) => {
+        editorWidth(width)
+        renderApp({ initialElements: problemSheet(), panelMemory })
         await ready()
         await screen.findAllByRole('list', { name: 'Lines' })
       }
@@ -602,37 +628,146 @@ describe('App', () => {
       })
 
       it('never remembers the automatic open or restore as the user’s choice', async () => {
-        const client = Object.getOwnPropertyDescriptor(Element.prototype, 'clientWidth')!
-        Object.defineProperty(Element.prototype, 'clientWidth', { configurable: true, get: () => 1440 })
-        onTestFinished(() => {
-          Object.defineProperty(Element.prototype, 'clientWidth', client)
-        })
-        const remembered: boolean[] = []
-        const panelMemory = { rememberedOpen: () => false, rememberOpen: (open: boolean) => void remembered.push(open) }
-        renderApp({ initialElements: problemSheet(), panelMemory })
-        await ready()
-        await screen.findAllByRole('list', { name: 'Lines' })
+        const panelMemory = fakePanelMemory()
+        await start(1440, panelMemory)
 
         await editLine()
         await waitFor(() => expect(panel()).not.toBeNull())
         leave()
         await waitFor(() => expect(panel()).toBeNull())
-        expect(remembered).toEqual([])
+        expect(panelMemory.remembered).toEqual([])
         // The user's own choice still is.
         fireEvent.click(await sheetButton())
-        await waitFor(() => expect(remembered).toEqual([true]))
+        await waitFor(() => expect(panelMemory.remembered).toEqual([true]))
+      })
+
+      // Section 8, M4e (#198): 640 px plus the panel's width, 960 px at the default.
+      it('opens nothing on an editor too narrow to dock, and switches a panel that is open to Format', async () => {
+        const panelMemory = fakePanelMemory()
+        await start(960, panelMemory)
+
+        await editLine()
+        // The Format tab's state follows the edit a render later: by then the panel would be up.
+        await act(() => new Promise((resolve) => setTimeout(resolve, 50)))
+        expect(panel()).toBeNull()
+        leave()
+        await waitFor(() => expect(lineField()).toBeNull())
+        expect(panel()).toBeNull()
+
+        // Opened from Math settings, it is the user's: an edit switches it to Format and back.
+        fireEvent.click(await sheetButton())
+        await waitFor(() => expect(selected()).toBe('Variables'))
+        await editLine()
+        await waitFor(() => expect(selected()).toBe('Format'))
+        leave()
+        await waitFor(() => expect(selected()).toBe('Variables'))
+        // A floating panel's open state is never remembered.
+        expect(panelMemory.remembered).toEqual([])
+      })
+
+      it('opens it one px wider, where the panel docks', async () => {
+        await start(961)
+        await editLine()
+        await waitFor(() => expect(selected()).toBe('Format'))
+      })
+
+      it('docks by the panel’s own width: at 480 px an editor of 1120 px is too narrow', async () => {
+        await start(1120, fakePanelMemory({ width: 480 }))
+        await editLine()
+        await act(() => new Promise((resolve) => setTimeout(resolve, 50)))
+        expect(panel()).toBeNull()
+      })
+    })
+
+    describe('the panel’s width (section 8, M4e, #198)', () => {
+      const widthOf = () => document.querySelector<HTMLElement>('.excalidraw')!.parentElement!.style.getPropertyValue('--sheet-panel-width')
+      const handle = () => screen.getByRole('separator', { name: 'Resize the panel' })
+      const open = async (panelMemory = fakePanelMemory()) => {
+        renderApp({ initialElements: sampleSheet(), panelMemory })
+        await ready()
+        await screen.findAllByRole('list', { name: 'Lines' })
+        fireEvent.click(await sheetButton())
+        await waitFor(() => expect(document.querySelector('.sheet-sidebar')).not.toBeNull())
+        return panelMemory
+      }
+
+      it('is 320 px until one is remembered, between 280 and 480 px', async () => {
+        await open()
+        expect(widthOf()).toBe('320px')
+        expect(handle()).toHaveAttribute('aria-valuenow', '320')
+        expect(handle()).toHaveAttribute('aria-valuemin', '280')
+        expect(handle()).toHaveAttribute('aria-valuemax', '480')
+      })
+
+      it('opens at the remembered width', async () => {
+        await open(fakePanelMemory({ width: 400 }))
+        expect(widthOf()).toBe('400px')
+      })
+
+      it('keeps a remembered width in range', async () => {
+        await open(fakePanelMemory({ width: 2000 }))
+        expect(widthOf()).toBe('480px')
+      })
+
+      it('← and → move the focused handle 16 px and Home puts 320 px back, each remembered', async () => {
+        const memory = await open()
+        const key = (name: string) => {
+          const down = createEvent.keyDown(handle(), { key: name, code: name })
+          fireEvent(handle(), down)
+          return down
+        }
+        expect(handle()).toHaveAttribute('tabindex', '0')
+
+        expect(key('ArrowLeft').defaultPrevented).toBe(true)
+        expect(widthOf()).toBe('336px')
+        key('ArrowRight')
+        key('ArrowRight')
+        expect(widthOf()).toBe('304px')
+        key('ArrowRight')
+        key('ArrowRight')
+        // 280 px is the least.
+        expect(widthOf()).toBe('280px')
+        key('Home')
+        expect(widthOf()).toBe('320px')
+        expect(memory.widths).toEqual([336, 320, 304, 288, 280, 320])
+      })
+
+      it('a drag moves the width with the pointer, remembered once at the release; a double-click puts 320 px back', async () => {
+        const memory = await open()
+        fireEvent.pointerDown(handle(), { pointerId: 1, button: 0, clientX: 1000 })
+        fireEvent.pointerMove(handle(), { pointerId: 1, clientX: 960 })
+        expect(widthOf()).toBe('360px')
+        fireEvent.pointerMove(handle(), { pointerId: 1, clientX: 500 })
+        expect(widthOf()).toBe('480px')
+        fireEvent.pointerMove(handle(), { pointerId: 1, clientX: 950 })
+        expect(memory.widths).toEqual([])
+        fireEvent.pointerUp(handle(), { pointerId: 1, clientX: 950 })
+        expect(widthOf()).toBe('370px')
+        expect(memory.widths).toEqual([370])
+        // A move with no press is no drag.
+        fireEvent.pointerMove(handle(), { pointerId: 1, clientX: 100 })
+        expect(widthOf()).toBe('370px')
+
+        fireEvent.doubleClick(handle())
+        expect(widthOf()).toBe('320px')
+        expect(memory.widths).toEqual([370, 320])
+        expect(document.title).toBe('Untitled')
+      })
+
+      it('shows the tabs as icons, the shown tab’s name a heading over its content', async () => {
+        await open()
+        expect(screen.getByRole('heading', { name: 'Variables' })).toBeInTheDocument()
+        fireEvent.mouseDown(screen.getByRole('tab', { name: 'Settings' }))
+        expect(await screen.findByRole('heading', { name: 'Settings' })).toBeInTheDocument()
+        expect(screen.queryByRole('heading', { name: 'Variables' })).toBeNull()
+        // Each tab keeps its name as its tooltip and its accessible name.
+        expect(screen.getAllByRole('tab').map((tab) => tab.getAttribute('title'))).toEqual(['Format', 'Symbols', 'Variables', 'Problems', 'Constants', 'Settings'])
       })
     })
 
     describe('at launch on a wide window', () => {
       /** The canvas's box is 1440 px wide: the panel docks, so it opens at launch. */
-      const wideWindow = () => {
-        const client = Object.getOwnPropertyDescriptor(Element.prototype, 'clientWidth')!
-        Object.defineProperty(Element.prototype, 'clientWidth', { configurable: true, get: () => 1440 })
-        onTestFinished(() => {
-          Object.defineProperty(Element.prototype, 'clientWidth', client)
-        })
-      }
+      const wideWindow = () => editorWidth(1440)
       const selectedTab = async () => {
         await waitFor(() => expect(document.querySelector('.sheet-sidebar')).not.toBeNull())
         return screen.getByRole('tab', { selected: true })
@@ -652,6 +787,23 @@ describe('App', () => {
         await ready()
 
         expect(await selectedTab()).toHaveTextContent('Variables')
+      })
+
+      // Section 8, M4e (#198): the launch follows the docking width, 960 px at the default.
+      it('opens it from 961 px, where the panel docks, and not at 960 px', async () => {
+        editorWidth(961)
+        renderApp({ initialElements: warningSheet() })
+        await ready()
+        expect(await selectedTab()).toHaveTextContent('Variables')
+      })
+
+      it('stays closed at 960 px', async () => {
+        editorWidth(960)
+        renderApp({ initialElements: warningSheet() })
+        await ready()
+        await screen.findAllByRole('list', { name: 'Lines' })
+        await act(() => new Promise((resolve) => setTimeout(resolve, 50)))
+        expect(document.querySelector('.sheet-sidebar')).toBeNull()
       })
     })
 

@@ -7,8 +7,8 @@ touches this module, and keep it true in the pull request that changes the modul
 
 **plugin** (`plugin/`, section 12a, ADR 0006) — the Obsidian plugin, and the
 only code that imports `obsidian`. `main.ts` (the `Plugin`) registers the
-view for `.excalimathpad` only and keeps the panel's open state and light
-or dark in `data.json` (`loadData`/`saveData`; `SheetMemory`, anything else
+view for `.excalimathpad` only and keeps the panel's open state, its width
+(`sheetPanelWidth`, M4e, #198) and light or dark in `data.json` (`loadData`/`saveData`; `SheetMemory`, anything else
 read there dropped). It registers New sheet and `SHEET_COMMANDS` (Add math,
 Toggle Math settings, Open Math guide), whose `checkCallback` offers them only while
 `getActiveViewOfType(SheetView)` has `commands`; none has a hotkey. `SheetView.ts` is the `TextFileView`:

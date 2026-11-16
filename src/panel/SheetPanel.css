@@ -214,15 +214,21 @@
 }
 
 /* The Constants tab (section 8): the symbol and its value on one line, as
-   Mathcad lists a constant, then what it is and the names to type. */
+   Mathcad lists a constant, then what it is and the names to type. A value
+   too long for that line at a narrow panel (280 px, M4e, #198) goes under
+   the symbol, still at the right. */
 .sheet-panel__constant {
-  display: grid;
-  grid-template-columns: minmax(2.5rem, auto) 1fr;
+  display: flex;
+  flex-wrap: wrap;
   column-gap: 8px;
   row-gap: 1px;
   align-items: baseline;
   padding: 5px 6px;
   border-radius: 6px;
+}
+
+.sheet-panel__constant-symbol {
+  min-width: 2.5rem;
 }
 
 li + li > .sheet-panel__constant {
@@ -231,19 +237,21 @@ li + li > .sheet-panel__constant {
 }
 
 .sheet-panel__constant-value {
+  max-width: 100%;
+  margin-left: auto;
   text-align: right;
   overflow-x: auto;
   white-space: nowrap;
 }
 
 .sheet-panel__constant-label {
-  grid-column: 1 / -1;
+  flex: 0 0 100%;
   color: var(--color-gray-60, #495057);
   font-size: 12px;
 }
 
 .sheet-panel__constant-names {
-  grid-column: 1 / -1;
+  flex: 0 0 100%;
   color: var(--color-gray-50, #868e96);
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 11px;
@@ -522,11 +530,14 @@ li + li > .sheet-panel__constant {
   list-style: none;
 }
 
+/* The condition has the row to itself beside the chip, and ↑ ↓ ✕ sit under
+   it beside the state, so the field keeps its room at the panel's least
+   width, 280 px (section 8, M4e, #198). */
 .sheet-rules__row {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   grid-template-areas:
-    'chip condition keys'
+    'chip condition condition'
     'chip state keys';
   align-items: center;
   column-gap: 8px;
