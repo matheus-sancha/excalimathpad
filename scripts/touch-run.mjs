@@ -175,7 +175,7 @@ try {
         await tab.touchscreen.tap(point.x, point.y)
         await pause()
       }
-      const field = () => tab.locator('input.math-element__field')
+      const field = () => tab.locator('textarea.math-element__field')
       const fieldText = async () => ((await field().count()) ? field().inputValue() : null)
       const fieldFocused = () => tab.evaluate(() => document.activeElement?.classList.contains('math-element__field') ?? false)
       const wysiwyg = () => tab.locator('textarea.excalidraw-wysiwyg').count()

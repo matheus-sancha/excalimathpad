@@ -6,14 +6,23 @@
 // On a 14-inch laptop's window (1366 × 768) it opens the last line of the
 // true-position sheet, placed so the element ends near the window's bottom,
 // types the 146-character plot line, presses Enter and then Esc. At each step
-// it checks that nothing has been scrolled by the browser (the overlay or any
-// box around it), that the element's content is drawn where the overlay put
-// it, on its box, and that the caret is inside the visible area less the
-// 48 px margin. Then: a pan by hand is left alone until the next keystroke,
-// and ↑ from a line above the window brings it back. On a small window
-// (1000 × 800) the panel floats, and a line opened under it moves clear by
-// the same rule. It fails on any check that doesn't hold, and on any page
-// error.
+// it checks that nothing has been scrolled by the browser (the overlay, any
+// box around it, or the field itself), that the element's content is drawn
+// where the overlay put it, on its box, and that the caret is inside the
+// visible area less the 48 px margin. Then: a pan by hand is left alone until
+// the next keystroke, and ↑ from a line above the window brings it back. On a
+// small window (1000 × 800) the panel floats, and a line opened under it
+// moves clear by the same rule.
+//
+// The field wraps (M4e, #196): at 1280 px and at 880 px wide the plot line
+// continues on the field's next rows short of the panel, the element grows
+// taller and its anchor with it, the field and the hidden copy that sizes it
+// break at the same places, ↑ and ↓ move between the field's rows and leave
+// the line only from the first or the last, the suggestions open under the
+// caret's row, a pasted newline becomes a space, the field's Ctrl+Z takes
+// typing back, and a pan during the edit doesn't re-wrap. An element with a
+// chosen width wraps at that width. It fails on any check that doesn't hold,
+// and on any page error.
 //
 // Run: `node scripts/follow-run.mjs` (`npm run test:follow`), after
 // `npm run build:plugin`. FOLLOW_RUN_SHOTS=<folder> keeps a screenshot of each step.
@@ -75,7 +84,7 @@ const page = `<!doctype html>
     const body = element.querySelector('.math-element__body')
     // Every box the browser has scrolled, from the content up to the page.
     const scrolled = []
-    for (let e = body; e; e = e.parentElement) {
+    for (let e = document.querySelector('.math-element__field') ?? body; e; e = e.parentElement) {
       if (e.scrollLeft || e.scrollTop) scrolled.push((String(e.className) || e.tagName) + ' ' + e.scrollLeft + ',' + e.scrollTop)
     }
     if (window.scrollX || window.scrollY) scrolled.push('window ' + window.scrollX + ',' + window.scrollY)
@@ -84,18 +93,41 @@ const page = `<!doctype html>
     const stage = box(document.querySelector('.app-shell__stage'))
     const field = document.querySelector('.math-element__field')
     let caret = null
+    let wrapped = null
     if (field) {
-      const copy = field.parentElement.querySelector('.math-element__field-text').firstChild
+      const copyBox = field.parentElement.querySelector('.math-element__field-text')
+      const copy = copyBox.firstChild
       const fieldBox = box(field)
+      // The caret: the left of the character it stands before, or the right of the last one.
       let x = fieldBox.left
-      if (copy && field.selectionStart > 0) {
+      let top = fieldBox.top
+      let bottom = fieldBox.bottom
+      const at = field.selectionStart
+      if (copy && copy.length > 0) {
         const range = document.createRange()
-        range.setStart(copy, 0)
-        range.setEnd(copy, field.selectionStart)
-        x = range.getBoundingClientRect().right
+        const end = at >= copy.length
+        range.setStart(copy, end ? copy.length - 1 : at)
+        range.setEnd(copy, end ? copy.length : at + 1)
+        const rects = range.getClientRects()
+        const rect = end ? rects[rects.length - 1] : rects[0]
+        x = end ? rect.right : rect.left
+        // In a field of several rows, the caret's own row.
+        if (field.offsetHeight > 36) {
+          top = rect.top
+          bottom = rect.bottom
+        }
       }
-      caret = { x, top: fieldBox.top, bottom: fieldBox.bottom, focused: document.activeElement === field }
+      caret = { x, top, bottom, at, focused: document.activeElement === field }
+      wrapped = {
+        rows: Math.round(field.offsetHeight / 24),
+        // The field breaks where the copy does when its own text is as tall as the copy.
+        fieldText: field.scrollHeight,
+        copyText: copyBox.offsetHeight,
+        line: Number(field.closest('[data-line]')?.dataset.line ?? -1),
+        value: field.value,
+      }
     }
+    const list = document.querySelector('.math-suggest')
     const canvas = document.querySelector('.excalidraw')
     const panel = document.querySelector('.sheet-sidebar')
     return {
@@ -104,6 +136,11 @@ const page = `<!doctype html>
       put: at && { left: stage.left + Number(at[1]), top: stage.top + Number(at[2]) },
       field: box(field),
       caret,
+      wrapped,
+      list: box(list),
+      // The anchor's size, as the overlay last read it, and the content's.
+      anchor: { width: parseFloat(element.style.width), height: parseFloat(element.style.height) },
+      content: { width: body.offsetWidth, height: body.offsetHeight },
       canvas: box(canvas),
       panel: box(panel),
     }
@@ -150,11 +187,11 @@ const PLOT = SOURCE.split('\n').at(-1)
 const LAST = SOURCE.split('\n').length - 1
 // The same sheet with a short last line, as it is before the plot line is typed.
 const SHORT = `${SOURCE.split('\n').slice(0, -1).join('\n')}\nplot(zone_x, zone(theta))`
-const sheetAt = (x, y, source) =>
+const sheetAt = (x, y, source, more = {}) =>
   JSON.stringify({
     type: 'excalidraw',
     version: 2,
-    elements: [{ id: 'calc', type: 'rectangle', x, y, width: 160, height: 60, customData: { kind: 'math', source } }],
+    elements: [{ id: 'calc', type: 'rectangle', x, y, width: 160, height: 60, customData: { kind: 'math', source, ...more } }],
     appState: {},
     files: {},
     excalimathpad: { format: 1 },
@@ -235,11 +272,12 @@ try {
     // Its row holds a chart, which runs past the window: the press is on the row's first 24 px.
     row('the last line starts near the window’s bottom', last.y > 768 - 150 && last.y + 12 < 768, `at y ${px(last.y)}`)
     await tab.mouse.dblclick(last.x + 30, last.y + 10)
-    await step('the line opens')
+    const opened = await step('the line opens')
     await tab.keyboard.press('ControlOrMeta+a')
     await tab.keyboard.type(PLOT, { delay: 5 })
     const typed = await step('the plot line is typed')
-    row('the field is wider than the window, so the view moved sideways', typed.field.right - typed.field.left > 1366, `field ${px(typed.field.right - typed.field.left)} px wide`)
+    // From M4e the field wraps, so the long line grows down and the view follows it up, not sideways.
+    row('the field wrapped, and the view followed the caret’s row up as the field grew', typed.wrapped.rows > 1 && typed.body.top < opened.body.top - 20 && Math.abs(typed.body.left - opened.body.left) < 1, `${typed.wrapped.rows} rows; content moved from y ${px(opened.body.top)} to ${px(typed.body.top)}`)
     await tab.keyboard.press('Enter')
     const entered = await step('Enter')
     await tab.keyboard.press('Escape')
@@ -279,6 +317,146 @@ try {
     const s = await step('a line under the floating panel opens')
     row('the panel floats over the canvas', s.panel !== null && s.panel.left > 0 && s.panel.left < 1000, s.panel ? `panel from x ${px(s.panel.left)}` : 'no panel')
     row('the line moved the least distance, not to the middle', s.panel !== null && Math.abs(s.field.right - (s.panel.left - MARGIN)) < 2, `row’s right at ${px(s.field.right)}`)
+  })
+
+  // The field wraps (M4e, #196): the true-position sheet's longest line, at two window widths.
+  for (const width of [1280, 880]) {
+    await run(`wrap, ${width} px`, { width, height: 800 }, sheetAt(40, 60, SHORT), async ({ tab, row, step, state, lineBox, px }) => {
+      // The sheet opens centred: pan it so the element starts near the window's
+      // left edge, its last line clear of Excalidraw's own controls.
+      await tab.mouse.move(600, 300)
+      await tab.mouse.wheel((await state()).body.left - 40, (await lineBox(LAST)).y - 400)
+      await tab.waitForTimeout(400)
+      const last = await lineBox(LAST)
+      await tab.mouse.dblclick(last.x + 30, last.y + 10)
+      await tab.waitForTimeout(600)
+      const opened = await state()
+      await tab.keyboard.press('ControlOrMeta+a')
+      await tab.keyboard.type(PLOT, { delay: 5 })
+      const typed = await step('the plot line is typed')
+      const area = { ...typed.canvas }
+      if (typed.panel && typed.panel.left > area.left) area.right = Math.min(area.right, typed.panel.left)
+      row(
+        'the longest line wraps inside the window, short of the panel',
+        typed.wrapped.rows > 1 && typed.wrapped.value === PLOT && typed.field.right <= area.right - MARGIN + 1 && typed.field.left >= area.left,
+        `${typed.wrapped.rows} rows, field ${px(typed.field.left)}–${px(typed.field.right)}; visible to ${px(area.right)}`,
+      )
+      // At 880 px the other lines already need more than the wrap width: there the field wraps at their equations' width.
+      if (width === 1280) row('the whole element is inside the visible area less the margin', typed.body.right <= area.right - MARGIN + 1, `element’s right at ${px(typed.body.right)}`)
+      row('the view didn’t move sideways', Math.abs(opened.body.left - 40) < 2 && Math.abs(typed.body.left - opened.body.left) < 1, `element’s left at ${px(opened.body.left)}, then ${px(typed.body.left)}`)
+      row(
+        'the field and its copy break at the same places',
+        typed.wrapped.fieldText === typed.wrapped.copyText && typed.wrapped.copyText === typed.wrapped.rows * 24,
+        `field’s text ${typed.wrapped.fieldText} px tall, copy ${typed.wrapped.copyText} px`,
+      )
+      row(
+        'the element grew taller, and its anchor with it',
+        Math.abs(typed.anchor.height - typed.content.height) <= 0.5 && Math.abs(typed.anchor.width - typed.content.width) <= 0.5,
+        `anchor ${px(typed.anchor.width)} × ${px(typed.anchor.height)}, content ${px(typed.content.width)} × ${px(typed.content.height)}`,
+      )
+
+      // ↑ moves between the field's rows, and leaves the line only from the first.
+      const rows = typed.wrapped.rows
+      let ups = 0
+      let s = typed
+      while (ups < rows + 2 && s.wrapped?.line === LAST) {
+        const before = s.caret
+        await tab.keyboard.press('ArrowUp')
+        await tab.waitForTimeout(80)
+        s = await state()
+        ups += 1
+        // At a row's end the caret counts as on the next row's start: it has still moved back in the text.
+        if (s.wrapped?.line === LAST && !(s.caret.at < before.at)) {
+          row('↑ moves the caret up a row', false, `press ${ups}: caret at ${before.at} then ${s.caret.at}`)
+        }
+      }
+      row('↑ leaves the line only from its first row', ups === rows && s.wrapped?.line === LAST - 1, `${ups} presses for ${rows} rows; now on line ${s.wrapped?.line}`)
+      // ↓ goes back, and moves down the rows; from the last row it has nowhere to go and stays.
+      await tab.keyboard.press('ArrowDown')
+      await tab.waitForTimeout(300)
+      await tab.keyboard.press('ControlOrMeta+Home')
+      s = await state()
+      row('↓ opens the long line again, wrapped as before', s.wrapped?.line === LAST && s.wrapped.rows === rows && s.caret.at === 0, `line ${s.wrapped?.line}, ${s.wrapped?.rows} rows`)
+      for (let down = 1; down < rows; down += 1) {
+        const before = s.caret
+        await tab.keyboard.press('ArrowDown')
+        await tab.waitForTimeout(80)
+        s = await state()
+        if (s.wrapped?.line !== LAST || !(s.caret.top > before.top + 12)) {
+          row('↓ moves the caret down a row', false, `press ${down}: row top ${px(before.top)} then ${px(s.caret.top)}`)
+        }
+      }
+      row('↓ stays in the line until its last row', s.wrapped?.line === LAST && s.caret.top > s.field.bottom - 30, `caret’s row at ${px(s.caret.top)}, field’s bottom ${px(s.field.bottom)}`)
+      await step('after ↑ and ↓')
+
+      // The suggestions hang under the caret's row, not under the whole field.
+      // `mark dx` is on a middle row: with its `x` taken out, `d` offers the sheet's names.
+      await tab.keyboard.press('ControlOrMeta+Home')
+      for (let i = 0; i < PLOT.indexOf('mark dx') + 'mark dx'.length; i += 1) await tab.keyboard.press('ArrowRight')
+      await tab.keyboard.press('Backspace')
+      await tab.waitForTimeout(300)
+      s = await state()
+      row(
+        'the suggestions open under the caret’s row',
+        s.list !== null && s.list.top >= s.caret.bottom && s.list.top <= s.caret.bottom + 12 && s.list.top < s.field.bottom - 20 && s.caret.top > s.field.top + 20,
+        s.list ? `list’s top ${px(s.list.top)}, caret’s row ${px(s.caret.top)}–${px(s.caret.bottom)}, field’s bottom ${px(s.field.bottom)}` : 'no list',
+      )
+      await tab.keyboard.press('Escape')
+      s = await state()
+      row('Esc closes the list and keeps the line', s.list === null && s.wrapped?.line === LAST)
+      // The field's own Ctrl+Z takes the typing back.
+      await tab.keyboard.press('ControlOrMeta+z')
+      await tab.waitForTimeout(200)
+      s = await state()
+      row('the field’s own Ctrl+Z takes the typing back', s.wrapped?.value === PLOT, `field: ${s.wrapped?.value.slice(0, 24)}…`)
+
+      // A pasted newline becomes a space; the field stays one line.
+      await tab.keyboard.press('ControlOrMeta+End')
+      await tab.evaluate(() => {
+        const data = new DataTransfer()
+        data.setData('text/plain', ' # two\nlines\r\nhere')
+        document.activeElement.dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true }))
+      })
+      await tab.waitForTimeout(200)
+      s = await state()
+      row('a pasted newline becomes a space', s.wrapped?.value === `${PLOT} # two lines here`, `field ends: ${s.wrapped?.value.slice(-24)}`)
+      row('after the paste the field and its copy still break at the same places', s.wrapped.fieldText === s.wrapped.copyText)
+      await tab.keyboard.press('ControlOrMeta+z')
+      await tab.waitForTimeout(200)
+      s = await state()
+      row('the field’s own Ctrl+Z takes the paste back', s.wrapped?.value === PLOT)
+
+      // A pan during the edit doesn't re-wrap: the wrap width was measured when the line opened.
+      await tab.mouse.move(600, 300)
+      await tab.keyboard.down('Shift')
+      await tab.mouse.wheel(0, 200)
+      await tab.keyboard.up('Shift')
+      await tab.waitForTimeout(400)
+      s = await state()
+      row('a pan during the edit doesn’t re-wrap', Math.abs(s.body.left - opened.body.left) > 50 && s.wrapped.rows === rows, `element’s left at ${px(s.body.left)}, ${s.wrapped.rows} rows`)
+      await tab.keyboard.press('Escape')
+      await step('Esc', { open: false })
+    })
+  }
+
+  // A chosen width is the wrap width: the field wraps at the element's own width.
+  await run('wrap, chosen width', { width: 1280, height: 800 }, sheetAt(40, 60, 'a = 2 m\nb = a * 3', { width: 320 }), async ({ tab, row, step, lineBox, px }) => {
+    const line = await lineBox(1)
+    await tab.mouse.dblclick(line.x + 20, line.y + line.height / 2)
+    await tab.waitForTimeout(600)
+    // A note is the field's text and leaves the result as it was when the line opened.
+    await tab.keyboard.type(' # three times a, with a note long enough to need more rows', { delay: 5 })
+    const s = await step('a long line is typed')
+    row('the line wraps at the chosen width', s.wrapped.rows > 1 && Math.abs(s.content.width - 320) <= 1, `${s.wrapped.rows} rows, element ${px(s.content.width)} px wide`)
+    row('the field and its copy break at the same places', s.wrapped.fieldText === s.wrapped.copyText)
+    // Spaces at a row's end, and a word longer than a row, break alike in both.
+    await tab.keyboard.type(' '.repeat(60) + 'x'.repeat(90), { delay: 2 })
+    const odd = await step('spaces and a long word are typed')
+    row(
+      'spaces and a long word break at the same places in the field and its copy',
+      odd.wrapped.fieldText === odd.wrapped.copyText && odd.wrapped.rows > s.wrapped.rows && Math.abs(odd.content.width - 320) <= 1,
+      `${odd.wrapped.rows} rows; field’s text ${odd.wrapped.fieldText} px tall, copy ${odd.wrapped.copyText} px; element ${px(odd.content.width)} px wide`,
+    )
   })
 } finally {
   await browser.close()

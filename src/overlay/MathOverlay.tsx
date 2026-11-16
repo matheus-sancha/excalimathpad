@@ -73,6 +73,9 @@ import { PlacingGhost } from './PlacingGhost.tsx'
 import { readingOrder } from './readingOrder.ts'
 import { constantSuggestions, FUNCTION_SUGGESTIONS, sheetNames, suggest, unitSuggestions } from './suggest.ts'
 import { isPlainAt, planInsert } from './symbolInsert.ts'
+import { fieldRoom, wrapWidthTo } from './wrapRoom.ts'
+import type { OpenField } from './caretRow.ts'
+import { FOLLOW_MARGIN, visibleArea } from '../canvas/selection.ts'
 
 /** The unit names offered while typing: fixed, so made once. */
 const UNIT_NAMES = unitSuggestions()
@@ -134,6 +137,12 @@ export interface LineEditControl {
    * and a caret inside it goes back to its condition's end.
    */
   setRules(rows: readonly RuleEdit[]): void
+  /**
+   * Measures the open line's wrap width again (section 4, While editing a
+   * line, The field wraps, M4e): the panel the edit opened has been drawn,
+   * and covers part of what was the visible area when the line opened.
+   */
+  rewrap(): void
   /** Puts the caret at the end of the `index`th rule's condition, when that rule is typed in the open line. */
   caretToRule(index: number): void
   /**
@@ -203,6 +212,10 @@ export interface MathOverlayProps {
    * element shows what hover reveals, its unit slots outlined and each plot's ⚙.
    */
   touch?: boolean
+  /** A phone's layout (section 8, On a phone): the Sheet panel is a bottom sheet, which takes none of the width. */
+  phone?: boolean
+  /** ↑ or ↓ moved the caret between the rows of the open, wrapped field (section 4): the view follows it. */
+  onCaretRow?: () => void
 }
 
 /** One math element as evaluated: what the Sheet panel lists. */
@@ -272,6 +285,8 @@ export function MathOverlay({
   settings = DEFAULT_DISPLAY,
   resultColor = 'blue',
   touch = false,
+  phone = false,
+  onCaretRow,
 }: MathOverlayProps) {
   const overlayRef = useRef<HTMLDivElement>(null)
   const store = useMemo(() => createSceneStore(api), [api])
@@ -350,6 +365,34 @@ export function MathOverlay({
       },
     )
   }, [editKey, store])
+
+  // The field wraps (section 4, While editing a line, M4e): the room the open
+  // line's field has, measured when the line opens and kept until it closes,
+  // so a pan or a resize during the edit doesn't re-wrap. The line is drawn
+  // once without it, measured, and drawn again before the browser paints.
+  const [wrap, setWrap] = useState<{ anchorId: string; lineIndex: number; room: number | null } | null>(null)
+  const measureWrap = () => {
+    const current = editRef.current
+    const cell = overlayRef.current?.querySelector<HTMLElement>('.math-element__field-cell:not(.is-title)')
+    const element = cell?.closest<HTMLElement>('.math-element')
+    const anchor = current && findAnchor(current.anchorId)
+    if (!current || !cell || !element || !anchor) return setWrap(null)
+    const wrapWidth =
+      anchor.chosenWidth ??
+      wrapWidthTo(
+        element.getBoundingClientRect().left,
+        visibleArea(canvasRoot, phone).right,
+        FOLLOW_MARGIN,
+        store.getSnapshot().viewport.zoom,
+      )
+    setWrap({ anchorId: current.anchorId, lineIndex: current.lineIndex, room: fieldRoom(cell, wrapWidth) })
+  }
+  const openAnchorId = edit?.anchorId
+  const openLineIndex = edit?.lineIndex
+  // oxlint-disable-next-line react-hooks/exhaustive-deps -- measured once, as the line opens.
+  useLayoutEffect(measureWrap, [openAnchorId, openLineIndex])
+  const wrapRoom =
+    wrap && edit && wrap.anchorId === edit.anchorId && wrap.lineIndex === edit.lineIndex ? wrap.room : null
 
   // The unit slots (section 5): the hovered row, and the slot whose field is open.
   const [slotHover, setSlotHover] = useState<SlotTarget | null>(null)
@@ -534,6 +577,7 @@ export function MathOverlay({
         },
       )
     },
+    rewrap: measureWrap,
     caretToRule(index) {
       const current = editRef.current
       const rule = current && current.lineIndex !== TITLE_LINE ? rulesOf(current.text)[index] : undefined
@@ -688,6 +732,8 @@ export function MathOverlay({
           forwardWheel={forwardWheel}
           flash={flash?.anchorId === anchor.id ? flash : null}
           suggest={edit?.anchorId === anchor.id ? suggestForEdit : null}
+          wrapRoom={own ? wrapRoom : null}
+          onCaretRow={onCaretRow}
           unitSlots={{
             hovered: slotHover?.anchorId === anchor.id ? slotHover.line : null,
             revealed: revealed.has(anchor.id),
@@ -718,8 +764,8 @@ function storedFormat(anchors: readonly MathAnchor[], edit: LineEdit | null): st
 }
 
 /** The open line's or title's field: the overlay holds at most one. */
-function openField(overlay: HTMLElement | null): HTMLInputElement | null {
-  return overlay?.querySelector<HTMLInputElement>('.math-element__field') ?? null
+function openField(overlay: HTMLElement | null): OpenField | null {
+  return overlay?.querySelector<HTMLTextAreaElement>('.math-element__field') ?? null
 }
 
 /**

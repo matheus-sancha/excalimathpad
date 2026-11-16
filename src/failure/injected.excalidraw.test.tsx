@@ -130,7 +130,7 @@ async function renderApp(elements: ReturnType<typeof sheet>) {
 }
 
 const element = (id: string) => document.querySelector<HTMLElement>(`[data-anchor-id="${id}"]`)!
-const lineField = () => screen.queryByRole<HTMLInputElement>('textbox', { name: 'Line source' })
+const lineField = () => screen.queryByRole<HTMLTextAreaElement>('textbox', { name: 'Line source' })
 const row = (id: string, n: number) => element(id).querySelector<HTMLElement>(`[data-line="${n - 1}"]`)!
 
 /** Opens line `n` (1-based) and types over it, leaving it open. */

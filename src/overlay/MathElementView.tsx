@@ -5,6 +5,7 @@ import {
   useLayoutEffect,
   useRef,
   useState,
+  type CSSProperties,
   type KeyboardEvent,
   type MouseEvent,
   type ReactNode,
@@ -41,6 +42,7 @@ import { hasText, TITLE_LINE, type LineEdit, type LineMove } from './lineEdit.ts
 import { listGoesAbove, type Suggested, type Suggestion } from './suggest.ts'
 import { BOTTOM_SHEET_CLASS } from '../canvas/panelPresses.ts'
 import { sceneToStage, type Viewport } from './viewport.ts'
+import { caretPlace, caretRow } from './caretRow.ts'
 
 export interface MathElementViewProps {
   anchor: MathAnchor
@@ -66,6 +68,14 @@ export interface MathElementViewProps {
   flash?: { line: number; key: number } | null
   /** The unit slots (section 5): which row is hovered, which slot's field is open. */
   unitSlots?: UnitSlots
+  /**
+   * The room the open line's field has before it wraps (section 4, While
+   * editing a line, The field wraps, M4e), in scene units; null before it is
+   * measured, and where nothing is laid out.
+   */
+  wrapRoom?: number | null
+  /** ↑ or ↓ moved the caret between the rows of the wrapped field. */
+  onCaretRow?: () => void
   /** The suggestions for the open line's text and caret (section 4); none on the title. */
   suggest?: Suggest | null
   /** A title format key: the title's new format, one undo step (section 4, Title format). */
@@ -145,6 +155,8 @@ export function MathElementView({
   flash = null,
   unitSlots = NO_SLOTS,
   suggest = null,
+  wrapRoom = null,
+  onCaretRow = () => {},
   onTitleFormat = () => {},
 }: MathElementViewProps) {
   const rootRef = useRef<HTMLDivElement>(null)
@@ -231,6 +243,8 @@ export function MathElementView({
                       result={line.result}
                       warnings={line.warnings}
                       isEmpty={isEmpty}
+                      wrapRoom={wrapRoom}
+                      onCaretRow={onCaretRow}
                       onType={onType}
                       stored={stored}
                       onFormat={onFormat}
@@ -319,7 +333,7 @@ function Header({
   onEscape: () => void
   onBlur: () => void
 }) {
-  const fieldRef = useRef<HTMLInputElement>(null)
+  const fieldRef = useRef<HTMLTextAreaElement>(null)
   const toggle = (key: FormatKey) =>
     onFormat(
       key === 'b'
@@ -902,6 +916,9 @@ interface EditingRowProps {
   result: LineResult
   warnings: readonly string[]
   isEmpty: boolean
+  /** The room the field has before it wraps, in scene units; null before it is measured. */
+  wrapRoom: number | null
+  onCaretRow: () => void
   onType: (text: string) => void
   stored: string
   onFormat: (format: LineFormat) => void
@@ -916,10 +933,22 @@ interface EditingRowProps {
  * the name, `≔` and expression cells, the live result as plain text, and an
  * empty note cell, since the note is in the field. A hidden copy of the typed
  * text shares the field's cell, so the column widens as you type, and the
- * element with it, without the field's value ever being set from code.
+ * element with it, without the field's value ever being set from code. Past
+ * `wrapRoom` the copy continues on the next row, and the field with it (The
+ * field wraps, M4e): the element grows taller, not wider.
  */
-function EditingRow({ edit, result, warnings, isEmpty, stored, onFormat, onCommentFormat, ...field }: EditingRowProps) {
-  const fieldRef = useRef<HTMLInputElement>(null)
+function EditingRow({
+  edit,
+  result,
+  warnings,
+  isEmpty,
+  wrapRoom,
+  stored,
+  onFormat,
+  onCommentFormat,
+  ...field
+}: EditingRowProps) {
+  const fieldRef = useRef<HTMLTextAreaElement>(null)
   // The line's format is its stored one, behind any clause typed in the text.
   const form = readLine(withFormat(edit.text, stored))
 
@@ -947,7 +976,10 @@ function EditingRow({ edit, result, warnings, isEmpty, stored, onFormat, onComme
   return (
     <>
       <Gutter result={result} warnings={warnings} />
-      <span className={`math-element__field-cell${isEmpty ? ' is-empty-element' : ''}`}>
+      <span
+        className={`math-element__field-cell${isEmpty ? ' is-empty-element' : ''}`}
+        style={wrapRoom === null ? undefined : { maxWidth: wrapRoom }}
+      >
         <span className="math-element__field-text" aria-hidden="true">
           {edit.text}
         </span>
@@ -965,7 +997,7 @@ function EditingRow({ edit, result, warnings, isEmpty, stored, onFormat, onComme
 }
 
 interface LineFieldProps {
-  fieldRef: RefObject<HTMLInputElement | null>
+  fieldRef: RefObject<HTMLTextAreaElement | null>
   /** What the field is, for assistive tech: a line's source, or the title. */
   label?: string
   edit: LineEdit
@@ -975,11 +1007,16 @@ interface LineFieldProps {
    * a blank line, which takes no format.
    */
   onFormatKey: ((key: FormatKey) => void) | null
+  /** ↑ or ↓ moved the caret to another row of a wrapped field: the view follows it. */
+  onCaretRow?: () => void
   onType: (text: string) => void
   onMove: (move: LineMove) => void
   onEscape: () => void
   onBlur: () => void
 }
+
+/** A line is one row of text: a newline that reaches the field becomes a space (section 4, The field wraps). */
+const oneLine = (text: string) => text.replace(/\r\n?|\n/g, ' ')
 
 /**
  * The line being edited. It takes only what the user types: setting the value
@@ -989,12 +1026,19 @@ interface LineFieldProps {
  * and mounts a new one only when it moved a typed clause out of the text. Its
  * Ctrl+Z never reaches the sheet's undo, because Excalidraw only hears keys
  * inside its own container.
+ *
+ * It is a textarea, so a line's field wraps (section 4, While editing a line,
+ * M4e) where its cell ends; it still holds one line: Enter splits it, and a
+ * pasted newline becomes a space. ↑ and ↓ are the browser's between its rows
+ * and leave the line only from the first or the last (`caretPlace`). The
+ * title's field is the same element on one row, which never wraps.
  */
 function LineField({
   fieldRef,
   label = 'Line source',
   edit,
   onFormatKey,
+  onCaretRow,
   onType,
   onMove,
   onEscape,
@@ -1016,15 +1060,20 @@ function LineField({
   // as the list opens and again as the keyboard moves.
   const listRef = useRef<HTMLUListElement>(null)
   const [listAbove, setListAbove] = useState(false)
-  const listOpen = list !== null
+  // Under the caret's row of a wrapped field, or above it (M4e): the row's
+  // top and bottom in the cell. Null for the field's own, where nothing is laid out.
+  const [listRow, setListRow] = useState<{ top: number; bottom: number } | null>(null)
   useLayoutEffect(() => {
     const field = fieldRef.current
     const view = field?.ownerDocument.defaultView
-    if (!listOpen || !field || !view) return
+    if (!list || !field || !view) return
     const place = () => {
       const shown = listRef.current
       if (!shown) return
-      const box = field.getBoundingClientRect()
+      const caret = field.selectionStart ?? field.value.length
+      const row = caretPlace(field, caret)
+      setListRow((now) => (now?.top === row?.top && now?.bottom === row?.bottom ? now : row && { top: row.top, bottom: row.bottom }))
+      const box = caretRow(field, Infinity)
       const viewport = view.visualViewport
       const sheet = field.closest('.app-shell__stage')?.querySelector(`.${BOTTOM_SHEET_CLASS}`)
       const visibleTop = viewport ? viewport.offsetTop : 0
@@ -1043,8 +1092,8 @@ function LineField({
     place()
     view.visualViewport?.addEventListener('resize', place)
     return () => view.visualViewport?.removeEventListener('resize', place)
-  }, [listOpen, fieldRef])
-  const refresh = (field: HTMLInputElement) => {
+  }, [list, fieldRef])
+  const refresh = (field: HTMLTextAreaElement) => {
     if (accepting.current || !offers) return setList(null)
     const suggested = offers(field.value, field.selectionStart ?? field.value.length)
     setList(suggested && { suggested, highlight: null })
@@ -1071,18 +1120,37 @@ function LineField({
     field?.setSelectionRange(opening.caret, opening.caret)
   }, [opening, fieldRef])
 
+  // An on-screen keyboard's Enter can reach a textarea as a line break with no
+  // key: it splits the line, as the key does.
+  const split = useRef(onMove)
+  useLayoutEffect(() => {
+    split.current = onMove
+  })
+  useEffect(() => {
+    const field = fieldRef.current
+    if (!field) return
+    const onBeforeInput = (event: InputEvent) => {
+      if (event.inputType !== 'insertLineBreak' && event.inputType !== 'insertParagraph') return
+      event.preventDefault()
+      const from = field.selectionStart
+      split.current({ kind: 'split', from, to: field.selectionEnd })
+    }
+    field.addEventListener('beforeinput', onBeforeInput)
+    return () => field.removeEventListener('beforeinput', onBeforeInput)
+  }, [fieldRef])
+
   // A double-click on another line while editing: its first click moved the
   // edit here, and its second lands in this field, where the browser would
   // select the word under the pointer. The line opens with the caret at the end
   // (docs/spec-v1.md section 4), so a press that continues a click begun
   // elsewhere is ignored. A double-click made inside the field selects as usual.
   const pressedHere = useRef(false)
-  const onMouseDown = (event: MouseEvent<HTMLInputElement>) => {
+  const onMouseDown = (event: MouseEvent<HTMLTextAreaElement>) => {
     if (event.detail >= 2 && !pressedHere.current) event.preventDefault()
     pressedHere.current = true
   }
 
-  const onKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+  const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.nativeEvent.isComposing) return
     const field = event.currentTarget
     const from = field.selectionStart ?? 0
@@ -1124,10 +1192,14 @@ function LineField({
       if (key === 'b' || key === 'i' || key === 'u') return take(() => onFormatKey(key))
     }
     switch (event.key) {
+      // Between the rows of a wrapped field ↑ and ↓ are the browser's; they
+      // leave the line only from its first or last row (section 4, The field wraps).
       case 'ArrowUp':
-        return take(() => onMove({ kind: 'up' }))
+        if (caretPlace(field, from)?.first ?? true) return take(() => onMove({ kind: 'up' }))
+        return onCaretRow?.()
       case 'ArrowDown':
-        return take(() => onMove({ kind: 'down' }))
+        if (caretPlace(field, to)?.last ?? true) return take(() => onMove({ kind: 'down' }))
+        return onCaretRow?.()
       case 'Enter':
         return take(() => onMove({ kind: 'split', from, to }))
       case 'Escape':
@@ -1141,9 +1213,10 @@ function LineField({
 
   return (
     <>
-      <input
+      <textarea
         ref={fieldRef}
         className="math-element__field"
+        rows={1}
         aria-label={label}
         aria-autocomplete={offers ? 'list' : undefined}
         aria-expanded={offers ? list !== null : undefined}
@@ -1160,8 +1233,27 @@ function LineField({
         // API (`panelPresses.excalidraw.test.tsx`).
         data-prevent-outside-click
         onInput={(event) => {
-          onType(event.currentTarget.value)
-          refresh(event.currentTarget)
+          const field = event.currentTarget
+          // A newline that got in another way (a drop): the field holds one line.
+          if (field.value !== oneLine(field.value)) {
+            const caret = field.selectionStart
+            field.value = oneLine(field.value)
+            field.setSelectionRange(caret, caret)
+          }
+          onType(field.value)
+          refresh(field)
+        }}
+        onPaste={(event) => {
+          // A pasted newline becomes a space (section 4, The field wraps): typed
+          // in, as a suggestion is, so the field's own Ctrl+Z takes it back.
+          const pasted = event.clipboardData.getData('text/plain')
+          if (pasted === oneLine(pasted)) return
+          event.preventDefault()
+          const field = event.currentTarget
+          if (!field.ownerDocument.execCommand?.('insertText', false, oneLine(pasted))) {
+            field.setRangeText(oneLine(pasted), field.selectionStart, field.selectionEnd, 'end')
+            field.dispatchEvent(new Event('input', { bubbles: true }))
+          }
         }}
         onKeyDown={onKeyDown}
         onMouseDown={(event) => {
@@ -1178,6 +1270,14 @@ function LineField({
         <ul
           ref={listRef}
           className={`math-suggest${listAbove ? ' is-above' : ''}`}
+          style={
+            listRow
+              ? ({
+                  '--math-suggest-below': `${listRow.bottom}px`,
+                  '--math-suggest-above': `calc(100% - ${listRow.top}px)`,
+                } as CSSProperties)
+              : undefined
+          }
           id={SUGGEST_LIST_ID}
           role="listbox"
           aria-label="Suggestions"

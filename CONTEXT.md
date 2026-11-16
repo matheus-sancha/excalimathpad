@@ -38,7 +38,8 @@ what to read for an issue and where to write.
   it types the true-position plot line near the window's bottom, presses
   Enter and Esc, and fails if any box around the math was scrolled by the
   browser, if the content isn't drawn where the overlay put it, or if the
-  caret is outside the visible area). `npm test` holds the **typing test**
+  caret is outside the visible area; and, M4e, #196, the wrapping field at
+  1280 and 880 px). `npm test` holds the **typing test**
   (`src/typing.test.tsx`, M4e, #193: the guide's examples and the acceptance
   sheets, a character at a time); `npm run test:probe` is the **odd-values
   probe** (`src/oddValues.probe.tsx`), by hand before a release. `npm test`
@@ -377,7 +378,9 @@ and everything downstream recalculates. Engine: math.js, client-side.
   itself, because KaTeX sets its own font there.
 - **The line field is uncontrolled and remounts per line.** Setting its value
   from code clears the browser's text undo, which is what Ctrl+Z means while
-  editing (spec section 6).
+  editing (spec section 6). It is a textarea over a hidden copy of its text
+  (M4e, #196): the copy gives the cell its size and the field lies over it, so
+  the two must break at the same places (spec section 14); check it in Chromium.
 - **The app takes the file keys and drops before Excalidraw**
   (`src/canvas/fileRoutes.ts`): Ctrl+S, Ctrl+Shift+S, Ctrl+O, Ctrl+Shift+E and
   dropped scene files, on the window in the capture phase. In Excalidraw 0.18,

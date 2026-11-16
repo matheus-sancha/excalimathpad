@@ -56,7 +56,10 @@ while something is open). **The view follows the caret** (0.2.1, #191):
 on each `onEdit` with a target, `followCaret` waits a frame, then scrolls
 the canvas by `scrollIntoArea` so the open field's `caretRow` is inside
 `visibleArea` less 48 px; again when the panel reports it opened during an
-edit, and on a phone as `visualViewport` or the window resizes. Only while
+edit, when ↑ or ↓ moves the caret between a wrapped field's rows
+(`onCaretRow`, M4e, #196), and on a phone as `visualViewport` or the window
+resizes. When the panel the edit itself opened is drawn, App also has the
+overlay measure the line's wrap width again (`rewrap`). Only while
 the open field has the keyboard. The launch and a jump open and close the panel through the
 handle, so they work on the bottom sheet too.
 App imports none of the browser ports at run time, so

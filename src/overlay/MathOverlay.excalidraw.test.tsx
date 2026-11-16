@@ -92,7 +92,7 @@ function openLine(n: number, id = 'm1') {
   return field()
 }
 
-const field = () => screen.getByRole<HTMLInputElement>('textbox', { name: 'Line source' })
+const field = () => screen.getByRole<HTMLTextAreaElement>('textbox', { name: 'Line source' })
 const type = (text: string) => fireEvent.input(field(), { target: { value: text } })
 const press = (key: string, more = {}) => fireEvent.keyDown(field(), { key, ...more })
 const atStart = () => field().setSelectionRange(0, 0)
@@ -436,7 +436,7 @@ describe('a line format on real Excalidraw', () => {
 
 // docs/spec-v1.md section 6: a title change is one undo step.
 describe('a title on real Excalidraw', () => {
-  const titleField = () => screen.getByRole<HTMLInputElement>('textbox', { name: 'Title' })
+  const titleField = () => screen.getByRole<HTMLTextAreaElement>('textbox', { name: 'Title' })
   const titleOf = (id = 'm1') =>
     api.getSceneElements().find((e) => e.id === id)?.customData?.title as string | undefined
 
