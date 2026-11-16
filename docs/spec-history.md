@@ -492,6 +492,17 @@ The items with a recorded result. Those still open are in
   beside the rule’s state, and the field is 181 px at 280 px (221 px at 320 px); a long condition still scrolls inside
   it. **Changed:** a long constant's value (`3.99·10⁻¹⁰ (kg m²)/(s mol)`) scrolled inside its cell, at
   320 px too; it goes under its symbol now. Not run in Obsidian or on a device (the beta `0.3.0`).
+- (M4e) A table of more than three columns in the sample, scaled with no floor. **Passed (2026-11-16,
+  #199, in Chromium, the built plugin at 1280 px; `scripts/panel-run.mjs` holds it in CI):** a table of
+  8 columns and 9 rows, 631 px wide at the sample's size, is drawn whole at 44% in a 320 px panel
+  (279 × 82 px) and at 38% at 280 px (239 × 70 px), inside the box, with nothing cut. Its numbers are
+  then about 5 px tall: the table shows which rows a rule coloured, and isn't read there. Its line,
+  `table(…)` with eight arguments, is a call that can't break, so at 280 px the line scrolls sideways
+  above the table. The table of 3 columns and 9 rows needs no scaling at either width (114 px). **Also
+  measured:** the true-position sheet's `check` line is two rows at both widths, its result on the
+  second; at 280 px its equation is 3.4 px narrower than the box's room, which is why the sample's side
+  padding is 5 px and a problem's mark takes its column only when there is one. Not run in Obsidian or
+  on a device (the beta `0.3.0`).
 
 ## 18. Decision index
 

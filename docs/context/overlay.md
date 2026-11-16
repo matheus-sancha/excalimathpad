@@ -99,7 +99,22 @@ the lower's. `commitLine` (a save with the line open) writes the typed text
 as it is, clause and all; the clause moves out when the edit leaves the
 line. `EditTarget.stored` is the open line's stored clause, for the panel.
 `MathElementView` exports `LineSample` and `TitleSample`, one row or a
-header drawn as the sheet draws it, for the tab's sample. `useSheetGestures` opens, moves and
+header, for the tab's sample. **A line's sample is smaller and wraps** (spec
+section 4, Format tab, M4e, #199): `LineSample` draws the sheet's own row
+(`TypesetRow` with `sample` set: `'panel'` or `'phone'`), so its format
+classes, its result, its note and its ⚠ are the sheet's, and
+`.math-element__body.is-line-sample` (`MathOverlay.css`) lays it out anew at
+13 px with 20 px rows: the row a wrapping flex line of equation, result and
+note, so the result drops to a row of its own with its rule; the equation
+inline content, where KaTeX's top-level `.base` boxes break, the name and its
+`≔` held together in `.math-element__lhs`, a box only the sample has; text
+(a note, a comment, source, an error's message) wrapping; a mark's column
+only on a row that `has-mark`. What can't break sticks out of the row, and
+the panel's box scrolls. With `sample` set a row never draws `PlotCell`, and
+a table is drawn in `ScaledTable` (`'panel'` only): laid out at its own
+width, then a `transform: scale` to its box's `clientWidth` with the box's
+height set to match, measured again on a `ResizeObserver` of both; no floor.
+The sheet's rows are untouched by any of it. `useSheetGestures` opens, moves and
 leaves the line edit from the events `listenToCanvas` hands it, starts and
 cancels placing (M, Esc) and opens the first line of a placed element.
 `PlacingGhost` draws the new element's box at the pointer while placing. A

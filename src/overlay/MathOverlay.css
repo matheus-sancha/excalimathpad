@@ -878,3 +878,158 @@
   text-align: center;
   white-space: normal;
 }
+
+/* The Format tab's sample of a line (section 4, Format tab, M4e): the row the
+   sheet draws, smaller and wrapped. 13 px with 20 px rows (the sheet's are 16
+   and 24), as wide as its box. The row is a wrapping flex line of equation,
+   result and note, so the result moves to a row of its own, with its rule,
+   when it doesn't fit beside the equation. The equation is inline content:
+   KaTeX's top-level boxes (`.base`) break after an operator or a relation,
+   and the name stays with its ≔. A box that can't break (a root, a fraction,
+   a call's arguments) sticks out, and the sample's box scrolls sideways;
+   nothing is scaled but a table. jsdom lays nothing out: check a change here
+   in Chromium (the panel run). */
+.math-element__body.is-line-sample {
+  position: static;
+  width: auto;
+  /* Little at the sides: at a 280 px panel every px is the line's. */
+  padding: 8px 5px;
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.is-line-sample .math-element__grid {
+  display: block;
+}
+
+.is-line-sample .math-element__row {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: 10px;
+  min-height: 20px;
+  opacity: 1;
+}
+
+/* The gutter has a column only for a mark (`has-mark`), which is out of the
+   flow, so it never takes a row of its own. */
+.is-line-sample .math-element__row.has-mark {
+  padding-left: 12px;
+}
+
+.is-line-sample .math-element__gutter {
+  position: absolute;
+  top: 0;
+  left: 0;
+  margin: 0;
+  line-height: 20px;
+}
+
+.is-line-sample .math-element__gutter:empty {
+  display: none;
+}
+
+.is-line-sample .math-element__equation {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+  white-space: normal;
+}
+
+/* The name with its ≔, which only the sample boxes together. */
+.math-element__lhs {
+  white-space: nowrap;
+}
+
+.is-line-sample .math-element__defines {
+  padding: 0 4px;
+}
+
+/* The underline, under each wrapped row of the equation. */
+.is-line-sample .math-element__row.is-underline .math-element__equation {
+  background: none;
+}
+
+.is-line-sample .math-element__row.is-underline .math-element__equation .math-element__tex {
+  background: linear-gradient(currentColor, currentColor) no-repeat 0 calc(100% - 1px) / 100% 1px;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
+/* A note and a line shown as source are text, which wraps: a plain decoration. */
+.is-line-sample .math-element__row.is-underline .math-element__note,
+.is-line-sample .math-element__row.is-underline .math-element__source {
+  background: none;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* The rule stays on the result's left, beside the equation or under it. */
+.is-line-sample .math-element__result {
+  flex-wrap: wrap;
+  box-sizing: border-box;
+  margin-left: 0;
+}
+
+.is-line-sample .math-element__result.is-empty {
+  display: none;
+}
+
+/* Text wraps: an error's whole message, a note, a comment, a line shown as source. */
+.is-line-sample .math-element__result.is-error,
+.is-line-sample .math-element__note,
+.is-line-sample .math-element__comment,
+.is-line-sample .math-element__source,
+.is-line-sample .math-element__raw {
+  min-width: 0;
+  max-width: 100%;
+  overflow: visible;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.is-line-sample .math-element__note,
+.is-line-sample .math-element__comment {
+  font-size: 12px;
+  line-height: 20px;
+}
+
+.is-line-sample .math-element__note {
+  padding-left: 0;
+}
+
+/* A comment keeps its sizes in proportion: 13, 15, 20 and 26 px on the sheet. */
+.is-line-sample .math-element__comment {
+  width: auto;
+}
+.is-line-sample .math-element__row.is-size-S .math-element__comment { font-size: 10.5px; }
+.is-line-sample .math-element__row.is-size-L .math-element__comment { font-size: 16px; }
+.is-line-sample .math-element__row.is-size-XL .math-element__comment { font-size: 21px; }
+
+.is-line-sample .math-element__unit {
+  min-height: 15px;
+}
+
+/* A table line's table, whole, scaled down to the box's width by
+   `ScaledTable`: laid out at its own width, drawn smaller from its top left. */
+.math-element__sample-table {
+  flex: 0 0 100%;
+  min-width: 0;
+  margin: 2px 0 4px;
+}
+
+.is-line-sample .math-element__table-cell {
+  width: max-content;
+  margin: 0;
+  transform-origin: 0 0;
+}
+
+.is-line-sample .math-element__table {
+  line-height: 18px;
+}
+
+.is-line-sample .math-element__table th { padding: 0 11px 2px; }
+.is-line-sample .math-element__table td.is-whole { padding-left: 11px; }
+.is-line-sample .math-element__table td.is-rest { padding-right: 11px; }
+.is-line-sample .math-element__table td.is-failed { padding: 0 11px; }

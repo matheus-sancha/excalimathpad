@@ -548,6 +548,7 @@ function Sheet({
                 selected={selectedMath}
                 resultColor={settings.resultColor}
                 touch={touch}
+                phone={phone}
                 actions={formatActions}
               />,
             ),

@@ -21,6 +21,14 @@
 //   web it survives a reload (`localStorage`).
 // - At 280 px every tab's content is usable: no control is cut by the panel's
 //   edge and nothing scrolls sideways (section 17's check for M4e).
+// - The Format tab's sample (section 4, Format tab, M4e, #199), at 320 and at
+//   280 px: 13 px with 20 px rows in a box as wide as the panel; the `check`
+//   line on two rows, its result on the second with its rule; a line with two
+//   roots and three fractions wrapped, its unbreakable root scrolling
+//   sideways, nothing scaled; a `size L` plot line as its line and the note,
+//   with no chart; a table of 3 columns and 9 rows whole, and one of 8
+//   columns scaled down to the box (section 17's check); and the sample live
+//   as the line is typed, with its stored format, a true rule and its note.
 //
 // Run: `node scripts/panel-run.mjs` (`npm run test:panel`), after
 // `npm run build`. PANEL_RUN_SHOTS=<folder> keeps a screenshot of each step.
@@ -111,6 +119,65 @@ const READ = `
     const sideways = [side, ...side.querySelectorAll('*')].filter((e) => e.offsetParent && e.scrollWidth > e.clientWidth + 1 && !e.matches('input, textarea, select, .sheet-tab, .sheet-tab__label, svg, svg *, .katex *') && getComputedStyle(e).overflowX !== 'visible')
     return { controls: shown.length, cut: cut.map(name), sideways: sideways.map(name) }
   }
+  // The Format tab's sample as it is laid out (section 4, Format tab, M4e).
+  window.__sample = () => {
+    const box = (element) => {
+      if (!element) return null
+      const { left, top, right, bottom, width, height } = element.getBoundingClientRect()
+      return { left, top, right, bottom, width, height }
+    }
+    const side = document.querySelector('.excalidraw .sidebar.sheet-sidebar')
+    const drawing = side.querySelector('.sheet-format__drawing')
+    const body = drawing.querySelector('.math-element__body.is-line-sample')
+    if (!body) return null
+    const row = body.querySelector('.math-element__row')
+    const equation = body.querySelector('.math-element__equation')
+    const result = body.querySelector('.math-element__result:not(.is-empty)')
+    const table = body.querySelector('.math-element__table')
+    const scaled = body.querySelector('.math-element__table-cell')
+    // The equation's rows: KaTeX's top-level boxes, grouped where one starts under the row before it.
+    const bases = [...(equation?.querySelectorAll('.katex-html > .base') ?? [])].map((b) => b.getBoundingClientRect()).sort((a, b) => a.top - b.top)
+    const rows = []
+    for (const b of bases) {
+      const last = rows[rows.length - 1]
+      if (last && b.top < last.bottom - 2) {
+        last.bottom = Math.max(last.bottom, b.bottom)
+        last.right = Math.max(last.right, b.right)
+        last.left = Math.min(last.left, b.left)
+      } else rows.push({ top: b.top, bottom: b.bottom, left: b.left, right: b.right })
+    }
+    const text = body.querySelector('.math-element__note, .math-element__raw, .math-element__comment')
+    return {
+      panel: box(side),
+      tab: box(side.querySelector('.sheet-format')),
+      drawing: box(drawing),
+      client: { width: drawing.clientWidth, height: drawing.clientHeight },
+      scroll: { width: drawing.scrollWidth, height: drawing.scrollHeight },
+      overflow: getComputedStyle(drawing).overflowX + ' ' + getComputedStyle(drawing).overflowY,
+      font: getComputedStyle(body).fontSize + '/' + getComputedStyle(body).lineHeight,
+      rowMin: getComputedStyle(row).minHeight,
+      rowBox: box(row),
+      classes: row.className,
+      rows,
+      katex: equation ? getComputedStyle(equation.querySelector('.katex')).fontSize : null,
+      transformed: equation ? getComputedStyle(equation).transform + ' ' + getComputedStyle(body).transform + ' ' + getComputedStyle(body).zoom : null,
+      result: box(result),
+      resultText: result?.getAttribute('data-text') ?? null,
+      resultRule: result ? getComputedStyle(result).borderLeftWidth + ' ' + getComputedStyle(result).borderLeftStyle : null,
+      note: body.querySelector('.math-element__note')?.textContent ?? null,
+      text: box(text),
+      charts: drawing.querySelectorAll('.math-element__plot-cell, .math-element__plot, .math-element__plot-chart').length,
+      chartNote: side.querySelector('.sheet-format__chart-note')?.textContent ?? null,
+      chartNoteBox: box(side.querySelector('.sheet-format__chart-note')),
+      table: box(table),
+      tableRows: table ? table.querySelectorAll('tbody tr').length : 0,
+      tableColumns: table ? table.querySelectorAll('thead th').length : 0,
+      tableWidth: table ? table.offsetWidth : 0,
+      scale: scaled ? (getComputedStyle(scaled).transform === 'none' ? 1 : new DOMMatrix(getComputedStyle(scaled).transform).a) : null,
+      overrides: [...side.querySelectorAll('.sheet-format__override')].map((p) => p.textContent),
+      caption: side.querySelector('.sheet-format__caption')?.textContent ?? null,
+    }
+  }
 `
 
 const page = `<!doctype html>
@@ -172,6 +239,34 @@ await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
 const origin = `http://127.0.0.1:${server.address().port}`
 
 const SOURCE = 'v_max = 3 m/s\nv = 4 m/s\nw = v'
+
+// The sample's sheet: the lines the Format tab's sample is checked on, by index.
+const SAMPLE_LINES = [
+  // The true-position sheet's lines (section 15), down to its `check`.
+  'dx = 0.08 mm',
+  'dy = -0.05 mm',
+  'T_p = 0.25 mm',
+  'TP = 2 sqrt(dx^2 + dy^2) in mm',
+  // Format 1: a clause moves to the line's stored format as the sheet opens.
+  'check = if(TP <= T_p, "Pass", "Fail") @text-green if result == "Pass" @text-red if result == "Fail"',
+  // Two roots and three fractions; the second root is longer than the box and can't break.
+  'r = sqrt(2/3 + 4/5) + 11 + 12 + 13 + 14 + 15 + 16 + 17 + 18 + sqrt(6/7 + 12345678 * 23456789 * 34567891 * 45678912 * 56789123) + 19',
+  'u = 2 m/s * 2 @bold @text-blue @text-red if u > 3 m/s # speed',
+  'x = 1 .. 9',
+  'plot(x, x^2), size L',
+  'table(x, x^2, x^3)',
+  'table(x, x^2, x^3, x^4, x^5, x^6, x^7, x^8)',
+  'sqrt(',
+]
+const SAMPLE = { check: 4, roots: 5, rule: 6, plot: 8, table: 9, wide: 10, broken: 11 }
+const sampleSheet = JSON.stringify({
+  type: 'excalidraw',
+  version: 2,
+  elements: [{ id: 'calc', type: 'rectangle', x: 40, y: 120, width: 160, height: 60, customData: { kind: 'math', source: SAMPLE_LINES.join('\n') } }],
+  appState: {},
+  files: {},
+  excalimathpad: { format: 1 },
+})
 const sheet = JSON.stringify({
   type: 'excalidraw',
   version: 2,
@@ -207,9 +302,9 @@ async function run(where, width, act, { data = null, url = '/' } = {}) {
     row,
     read,
     /** The plugin's page, started (again) with `data` as its data.json. */
-    start: async (withData = data) => {
+    start: async (withData = data, text = sheet) => {
       await tab.goto(`${origin}${url}`)
-      await tab.evaluate(([text, m, d]) => window.__start(text, m, d), [sheet, manifest, withData])
+      await tab.evaluate(([file, m, d]) => window.__start(file, m, d), [text, manifest, withData])
       await tab.waitForSelector('[data-anchor-id="calc"] .katex', { timeout: 30_000 })
       await tab.waitForTimeout(800)
     },
@@ -448,6 +543,120 @@ try {
     }, { data: null })
   }
 
+  // The Format tab's sample (section 4, Format tab, M4e, #199), at the panel's default and least widths.
+  for (const width of [320, 280]) {
+    await run(`sample ${width}`, 1280, async ({ tab, row, start, edit }) => {
+      await start({ sheetPanelWidth: width }, sampleSheet)
+      const inside = (inner, outer) => inner.left >= outer.left - 0.5 && inner.right <= outer.right + 0.5 && inner.top >= outer.top - 0.5 && inner.bottom <= outer.bottom + 0.5
+      /** Moves the edit to `line` with ↓ and ↑, and reads its sample. */
+      let at = SAMPLE.check
+      const sampleOf = async (line, name) => {
+        for (; at < line; at += 1) await tab.keyboard.press('ArrowDown')
+        for (; at > line; at -= 1) await tab.keyboard.press('ArrowUp')
+        await tab.waitForTimeout(400)
+        if (SHOTS) await tab.locator('.sheet-sidebar').screenshot({ path: join(SHOTS, `sample-${width}-${name}.png`) })
+        return tab.evaluate(() => window.__sample())
+      }
+      const charts = await tab.evaluate(() => document.querySelectorAll('[data-anchor-id="calc"] .math-element__plot-cell svg').length)
+      await edit(SAMPLE.check)
+
+      // The `check` line: one row of equation, the result on the second.
+      let s = await sampleOf(SAMPLE.check, 'check')
+      row('the sample is 13 px with 20 px rows', s.font === '13px/20px' && s.rowMin === '20px' && Math.abs(parseFloat(s.katex) - 13 * 1.21) < 0.01, `${s.font}, rows at least ${s.rowMin}, KaTeX ${s.katex}`)
+      row('its box is as wide as the panel’s content', Math.abs(s.drawing.width - s.tab.width + 20) < 1 && s.drawing.left > s.panel.left && s.drawing.right < s.panel.right, `box ${px(s.drawing.width)} px in a ${px(s.panel.width)} px panel`)
+      row(
+        'the check line is two rows, its result on the second',
+        s.rows.length === 1 && s.result && s.result.top >= s.rows[0].bottom - 1 && s.resultText === 'Pass' && /\bis-text-green\b/.test(s.classes) && s.drawing.height <= 90,
+        `equation rows ${s.rows.length} (to ${px(s.rows[0]?.right)} of ${px(s.rowBox.right)}), result at ${px(s.result?.top)} under ${px(s.rows[0]?.bottom)}, box ${px(s.drawing.height)} px high`,
+      )
+      row('the result keeps its rule on the left, at the row’s start', s.resultRule === '1px solid' && Math.abs(s.result.left - s.rows[0].left) < 1, `rule ${s.resultRule}, result from ${px(s.result?.left)}, equation from ${px(s.rows[0]?.left)}`)
+      row('the check line needs no scrolling', s.scroll.width <= s.client.width && s.scroll.height <= s.client.height, `${s.scroll.width} × ${s.scroll.height} in ${s.client.width} × ${s.client.height}`)
+
+      // Two roots and three fractions: wrapped after its operators, the long root scrolling sideways.
+      s = await sampleOf(SAMPLE.roots, 'roots')
+      const fits = s.rows.filter((r) => r.right <= s.drawing.left + s.client.width + 1)
+      row('a line with two roots and three fractions wraps', s.rows.length >= 3 && fits.length >= 2, `${s.rows.length} rows, ${fits.length} inside the box`)
+      row('its unbreakable part sticks out, and the box scrolls sideways', s.overflow === 'auto auto' && s.scroll.width > s.client.width + 20 && s.rows.some((r) => r.right > s.drawing.right), `${s.scroll.width} px of content in ${s.client.width} px, overflow ${s.overflow}`)
+      const scrolled = await tab.evaluate(() => {
+        const box = document.querySelector('.sheet-sidebar .sheet-format__drawing')
+        box.scrollLeft = 100000
+        const reached = box.scrollLeft
+        const root = [...box.querySelectorAll('.katex-html > .base')].reduce((widest, b) => (b.getBoundingClientRect().width > widest.getBoundingClientRect().width ? b : widest))
+        const end = root.getBoundingClientRect().right <= box.getBoundingClientRect().right + 1
+        box.scrollLeft = 0
+        return { reached, end }
+      })
+      row('scrolled to its end, the long root’s end is in the box', scrolled.reached > 20 && scrolled.end, `scrolled ${px(scrolled.reached)} px`)
+      row('nothing is scaled down to fit', s.transformed === 'none none 1' && Math.abs(parseFloat(s.katex) - 13 * 1.21) < 0.01, `transforms ${s.transformed}, KaTeX ${s.katex}`)
+      row('the box is at most about six rows high, and scrolls inside past that', s.drawing.height <= 150.5 && s.scroll.height >= s.client.height, `box ${px(s.drawing.height)} px, content ${s.scroll.height} px`)
+      // The wheel over the box scrolls it: the box takes pointer events.
+      const wheeled = await tab.evaluate(async () => {
+        const box = document.querySelector('.sheet-sidebar .sheet-format__drawing')
+        const r = box.getBoundingClientRect()
+        return { over: document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2)?.closest('.sheet-format__drawing') === box }
+      })
+      row('the box is under the pointer, so the wheel and a finger scroll it', wheeled.over)
+      row('the open line is still open, with the keyboard', await tab.evaluate(() => document.activeElement?.classList.contains('math-element__field') ?? false))
+
+      // The stored format and a true rule, with the note; live as the line is typed.
+      s = await sampleOf(SAMPLE.rule, 'rule')
+      row(
+        'the sample shows the stored format and a true rule, the override note under it',
+        /\bis-bold\b/.test(s.classes) && /\bis-text-red\b/.test(s.classes) && s.resultText === '4 m / s' && s.note === 'speed' && s.overrides.join() === 'A rule sets the text colour while u > 3 m/s.',
+        `${s.classes}; ${s.resultText}; ${s.overrides.join(' | ')}`,
+      )
+      const field = await tab.evaluate(() => document.querySelector('.math-element__field').value)
+      row('the line’s field holds no clause: the format is stored beside it', field === 'u = 2 m/s * 2 # speed', field)
+      await tab.keyboard.press('Home')
+      for (let i = 0; i < 4; i += 1) await tab.keyboard.press('ArrowRight')
+      await tab.keyboard.press('Delete')
+      await tab.keyboard.type('1')
+      s = await sampleOf(SAMPLE.rule, 'rule-typed')
+      row(
+        'the sample follows the line as it is typed: the rule is false, its note gone',
+        /\bis-bold\b/.test(s.classes) && /\bis-text-blue\b/.test(s.classes) && !/\bis-text-red\b/.test(s.classes) && s.resultText === '2 m / s' && s.overrides.length === 0,
+        `${s.classes}; ${s.resultText}; ${s.overrides.join(' | ')}`,
+      )
+
+      // A plot line: its line and the note, never the chart.
+      s = await sampleOf(SAMPLE.plot, 'plot')
+      row(
+        'a size L plot line is its line and the note, with no chart',
+        s.caption.toUpperCase().startsWith('MATH LINE') && s.rows.length >= 1 && s.charts === 0 && s.chartNote === 'Its chart is drawn on the sheet.' && s.drawing.height <= 20 * 2 + 20 && inside({ ...s.chartNoteBox, top: s.panel.top, bottom: s.panel.bottom }, s.panel),
+        `${s.rows.length} row(s), ${s.charts} chart(s), note ${JSON.stringify(s.chartNote)}, box ${px(s.drawing.height)} px high`,
+      )
+      row('the chart is the sheet’s: one was drawn there before the line opened', charts === 1, `${charts}`)
+
+      // A table of 3 columns and 9 rows is whole.
+      s = await sampleOf(SAMPLE.table, 'table')
+      row(
+        'a table of 3 columns and 9 rows is whole, under its line',
+        s.table && s.tableColumns === 3 && s.tableRows === 9 && inside(s.table, s.drawing) && s.rows.length === 1 && s.table.top >= s.rows[0].bottom - 1 && s.scroll.height <= s.client.height && s.scroll.width <= s.client.width && s.drawing.height <= 300.5 && s.chartNote === null,
+        s.table && `table ${px(s.table.width)} × ${px(s.table.height)} px at ${px(s.scale)}, box ${px(s.drawing.width)} × ${px(s.drawing.height)} px`,
+      )
+
+      // More than three columns (section 17): the whole table, scaled down to the box, with no floor.
+      s = await sampleOf(SAMPLE.wide, 'wide')
+      row(
+        'a table of 8 columns is scaled down to the box’s width, whole',
+        s.table && s.tableColumns === 8 && s.tableRows === 9 && s.scale < 0.6 && s.tableWidth > s.client.width && inside(s.table, s.drawing) && s.scroll.height <= s.client.height && Math.abs(s.table.width - s.tableWidth * s.scale) < 1,
+        s.table && `${s.tableWidth} px drawn at ${Math.round(s.scale * 100)}%: ${px(s.table.width)} × ${px(s.table.height)} px in a box ${px(s.drawing.width)} × ${px(s.drawing.height)} px`,
+      )
+      row('the scaled table fills the row’s width', s.table && Math.abs(s.table.right - (s.rowBox.right)) < 1.5, s.table && `table to ${px(s.table.right)}, row to ${px(s.rowBox.right)}`)
+
+      // A line shown as source, and its error's message, wrap as text.
+      s = await sampleOf(SAMPLE.broken, 'broken')
+      await tab.keyboard.press('End')
+      await tab.keyboard.type('1 + 2 + 3 + 4 + 5 + 6 + 7 + 8 + 9 + 10 + 11 + 12 + 13 + 14 + 15 + 16 + 17')
+      s = await sampleOf(SAMPLE.broken, 'broken-typed')
+      row(
+        'a line shown as source wraps as text, and so does its error’s message',
+        s.text && s.text.height > 30 && s.text.right <= s.drawing.right && s.result && s.result.right <= s.drawing.right && s.scroll.width <= s.client.width,
+        s.text && `source ${px(s.text.width)} × ${px(s.text.height)} px, message ${px(s.result?.width)} × ${px(s.result?.height)} px`,
+      )
+    })
+  }
+
   // The web app: the width survives a reload, in the browser's own storage.
   await run('web', 1280, async ({ tab, row, read, drag, docked }) => {
     const open = async () => {
@@ -483,4 +692,4 @@ if (failed.length || errors.length || results.length === 0) {
   for (const error of errors) console.error(`  - ${error}`)
   process.exit(1)
 }
-console.log('Panel run passed: 320 px, icon tabs, the drag handle, docking by width, and every tab usable at 280 px.')
+console.log('Panel run passed: 320 px, icon tabs, the drag handle, docking by width, every tab usable at 280 px, and the Format tab’s sample.')

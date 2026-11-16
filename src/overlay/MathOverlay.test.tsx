@@ -160,7 +160,7 @@ let current: ReturnType<typeof fakeScene>
  * them (section 4, Format tab, M4d): the tab hears what is open and the sheet
  * as evaluated, and its presses reach the line edit through the control.
  */
-function WithFormatTab({ props }: { props: MathOverlayProps }) {
+function WithFormatTab({ props, phone = false }: { props: MathOverlayProps; phone?: boolean }) {
   const control = useRef<LineEditControl>(null)
   const [target, setTarget] = useState<EditTarget | null>(null)
   const [sheet, setSheet] = useState<readonly EvaluatedElement[]>([])
@@ -201,7 +201,7 @@ function WithFormatTab({ props }: { props: MathOverlayProps }) {
         onEvaluated={setSheet}
       />
       <aside aria-label="Format tab">
-        <FormatTab sheet={sheet} target={target} selected={selected} actions={actions} />
+        <FormatTab sheet={sheet} target={target} selected={selected} phone={phone} actions={actions} />
       </aside>
     </>
   )
@@ -210,7 +210,7 @@ function WithFormatTab({ props }: { props: MathOverlayProps }) {
 function renderOverlay(
   elements: ExcalidrawElement[],
   extra: Partial<MathOverlayProps> = {},
-  { formatTab = false }: { formatTab?: boolean } = {},
+  { formatTab = false, phone = false }: { formatTab?: boolean; phone?: boolean } = {},
 ) {
   const scene = fakeScene(elements)
   current = scene
@@ -227,7 +227,7 @@ function renderOverlay(
       flash,
       ...extra,
     }
-    return formatTab ? <WithFormatTab props={props} /> : <MathOverlay {...props} />
+    return formatTab ? <WithFormatTab props={props} phone={phone} /> : <MathOverlay {...props} />
   }
   const view = render(overlay(null))
   /** A jump from the Sheet panel flashes a line, as App passes it; null clears it. */
@@ -1624,6 +1624,90 @@ describe('the Format tab (docs/spec-v1.md section 4, Format tab, M4d)', () => {
     type(field, 'v = 1 m/s * 2 @bold @text-red if v > 3 m/s # speed')
     expect(row()).not.toHaveClass('is-text-red')
     expect(row().querySelector('.math-element__result')).toHaveAttribute('data-text', '2 m / s')
+  })
+
+  // M4e (#199): the sample is smaller than the sheet and wraps. jsdom lays
+  // nothing out, so the sizes and the wrapping are held in Chromium
+  // (`scripts/panel-run.mjs`, `scripts/touch-run.mjs`); here, what it holds.
+  describe('from M4e, a line’s sample is its own smaller drawing', () => {
+    const drawing = () => sample()!.querySelector('.sheet-format__drawing')!
+    const chartNote = () => within(tab()).queryByText(FORMAT_HINTS.chartOnSheet)
+
+    it('draws a line in the wrapping layout, and the title as before', () => {
+      titledWithTab('Pipe flow', 'v = 4 m/s')
+      openLine(1)
+      expect(drawing()).toHaveClass('is-line')
+      expect(drawing().querySelector('.math-element__body')).toHaveClass('is-sample', 'is-line-sample')
+      // The name stays with its ≔: one box, which no row breaks.
+      const lhs = drawing().querySelector('.math-element__lhs')!
+      expect(lhs.querySelector('.math-element__name')).not.toBeNull()
+      expect(lhs.querySelector('.math-element__defines')).not.toBeNull()
+      expect(lhs.nextElementSibling).toHaveClass('math-element__expression')
+
+      fireEvent.keyDown(openField()!, { key: 'ArrowUp' })
+      expect(drawing()).not.toHaveClass('is-line')
+      expect(drawing().querySelector('.math-element__body')).toHaveClass('is-sample')
+      expect(drawing().querySelector('.math-element__body')).not.toHaveClass('is-line-sample')
+      expect(drawing().querySelector('.math-element__title')).toHaveTextContent('Pipe flow')
+    })
+
+    it('a plot line shows its line only, with the note; the chart stays on the sheet', async () => {
+      withTab('x = 0 .. 3\ny = x^2\nplot(x, x^2), size L # curve')
+      await waitFor(() => expect(rowOf('m1', 3).querySelector('.math-element__plot-chart svg')).not.toBeNull(), { timeout: 5000 })
+      expect(chartNote()).toBeNull()
+      openLine(3)
+
+      expect(sample()!.querySelector('.math-element__equation')).toHaveTextContent(/plot/)
+      expect(sample()!.querySelector('.math-element__note')).toHaveTextContent('curve')
+      expect(sample()!.querySelector('.math-element__plot-cell, .math-element__plot, .math-element__plot-chart')).toBeNull()
+      expect(chartNote()).not.toBeNull()
+      expect(FORMAT_HINTS.chartOnSheet).toBe('Its chart is drawn on the sheet.')
+
+      // Another line has no chart to speak of.
+      fireEvent.keyDown(openField()!, { key: 'ArrowUp' })
+      expect(chartNote()).toBeNull()
+    })
+
+    it('a table line shows its line and the whole table, in the box that scales it, its rule’s rows coloured', () => {
+      withTab('x = 1 .. 4\ntable(x, x^2) @yellow if x > 2')
+      openLine(2)
+
+      expect(drawing()).toHaveClass('is-line', 'has-table')
+      const scaled = sample()!.querySelector('.math-element__sample-table')!
+      const rows = scaled.querySelectorAll('.math-element__table tbody tr')
+      expect(rows).toHaveLength(4)
+      expect([...rows].map((row) => row.classList.contains('is-yellow'))).toEqual([false, false, true, true])
+      expect(sample()!.querySelector('.math-element__equation')).toHaveTextContent(/table/)
+      expect(chartNote()).toBeNull()
+    })
+
+    it('on a phone’s bottom sheet, a plot or a table line shows its line only, without the note', () => {
+      renderOverlay([anchorWith('x = 1 .. 4\ntable(x, x^2)\nplot(x, x^2)')], {}, { formatTab: true, phone: true })
+      openLine(2)
+      expect(drawing()).toHaveClass('is-line', 'is-phone')
+      expect(drawing()).not.toHaveClass('has-table')
+      expect(sample()!.querySelector('.math-element__equation')).toHaveTextContent(/table/)
+      expect(sample()!.querySelector('table')).toBeNull()
+
+      fireEvent.keyDown(openField()!, { key: 'ArrowDown' })
+      expect(sample()!.querySelector('.math-element__equation')).toHaveTextContent(/plot/)
+      expect(sample()!.querySelector('.math-element__plot-cell, .math-element__plot, .math-element__plot-chart')).toBeNull()
+      expect(chartNote()).toBeNull()
+    })
+
+    it('gives a problem’s mark its column only when there is one', () => {
+      withTab('v = 4 m/s\nw = nope + 1')
+      openLine(1)
+      const row = () => sample()!.querySelector('.math-element__row')!
+      expect(row()).not.toHaveClass('has-mark')
+      expect(row().querySelector('.math-element__gutter')).toBeEmptyDOMElement()
+
+      fireEvent.keyDown(openField()!, { key: 'ArrowDown' })
+      expect(row()).toHaveClass('has-mark')
+      expect(row().querySelector('.math-element__gutter')).toHaveTextContent('●')
+      // The whole message, to wrap: nothing in the sample is cut with an ellipsis.
+      expect(row().querySelector('.math-element__result.is-error')).toHaveTextContent('Undefined symbol nope')
+    })
   })
 
   it('says when a true rule sets a property over the buttons, which still show the plain format', () => {

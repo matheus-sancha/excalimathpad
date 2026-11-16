@@ -121,6 +121,8 @@ export const FORMAT_HINTS = {
   nothingOpen: 'Open a line or a title to format it: double-click it, or select its element and press Enter.',
   nothingOpenTouch: 'Double-tap a line, or tap Edit',
   noFormat: 'This line takes no format.',
+  /** Under a plot line's sample, which never draws the chart (M4e). */
+  chartOnSheet: 'Its chart is drawn on the sheet.',
   /** In the Rules list, on a rule whose condition is empty. */
   noCondition: 'a rule needs a condition',
 } as const
