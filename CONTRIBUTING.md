@@ -58,13 +58,14 @@ You need **Node.js** `^22.22.2 || ^24.15.0 || >=26` and **npm 10+**. CI runs on 
 | `npm run test:popout` | Open the built plugin in headless Chromium with a sheet tab in a pop-out window, and check it drags, places math, opens Help and the Math guide, pastes and copies there |
 | `npm run test:touch` | Open the built plugin in headless Chromium by touch, at a phone and a tablet viewport, as Android and as iOS, and check the touch gestures, the quick keys and the phone's bottom sheet |
 | `npm run test:follow` | Open the built plugin in headless Chromium, type a long plot line near the window's bottom, press Enter and Esc, and check the math stays drawn on its box and the caret stays in view; then check the line's field wraps at 1280 px and 880 px |
+| `npm run test:panel` | Open the built plugin and the built web app in headless Chromium and check the Sheet panel: 320 px and docked at 1536, 1280 and 1000 px, closed on an edit at 880 px, the drag handle and its keys, the docking width following the drag, the width remembered after a restart and a reload, and every tab usable at 280 px |
 | `npm run test:probe` | The odd-values probe: about 40,000 sheets of odd values through the engine and the view, about 8 minutes. Not part of `check`: run by hand before a release |
 | `npm run preview` | Serve `dist/` locally |
 | `npm run lint` | Lint with oxlint, then Obsidian's ESLint rules at zero warnings |
 | `npm test` | Run the tests once with Vitest (jsdom) |
 | `npm run test:watch` | Run the tests in watch mode |
 | `npm run typecheck` | Run the TypeScript project build, with no output files |
-| `npm run check` | Run lint, the tests, both builds, the plugin audit, the blocked run, the pop-out run, the touch run and the follow run. **This is what CI runs, so run it before you push** |
+| `npm run check` | Run lint, the tests, both builds, the plugin audit, the blocked run, the pop-out run, the touch run, the follow run and the panel run. **This is what CI runs, so run it before you push** |
 
 ### Typical workflow
 

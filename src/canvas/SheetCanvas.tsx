@@ -9,6 +9,8 @@ import { insertImage, measureIn, takeOverImageTool, type PickedImage } from './i
 import { markMathSelection, markTouch } from './mathSelection.ts'
 import { SHEET_PANEL_TABS, SHEET_SIDEBAR_CLASS, type SheetPanelTab } from './panelPresses.ts'
 import { BottomSheet } from './BottomSheet.tsx'
+import { PanelResizeHandle } from './PanelResizeHandle.tsx'
+import { PANEL_WIDTH, clampPanelWidth, docksAbove, type PanelWidthMemory } from './panelWidth.ts'
 import { closeMoreTools, markMoreTools, useMoreToolsSlot } from './moreTools.ts'
 import type { SheetTheme, ThemeMemory } from './theme.ts'
 import { VAULT_CLASS } from './vaultItems.ts'
@@ -43,6 +45,12 @@ export interface SheetCanvasHandle {
    * opens next (an edit's open and restore, section 8, M4d).
    */
   showSheetPanel: (state: SheetPanelState) => void
+  /**
+   * Whether the panel docks beside the sheet at the editor's width (section 8,
+   * M4e): read from the docking width Excalidraw is given, so the two never
+   * differ. Never on a phone, whose panel is the bottom sheet.
+   */
+  panelDocks: () => boolean
   /** ☰ → Math guide: opens the guide's dialog (section 8, Math guide, M4d). */
   openMathGuide: () => void
 }
@@ -67,7 +75,10 @@ export const SHEET_PANEL = 'sheet'
 
 export { SHEET_PANEL_TABS, type SheetPanelTab } from './panelPresses.ts'
 
-/** Each tab's name: its tooltip, its accessible name, and its label while active. */
+/**
+ * Each tab's name: its tooltip, its accessible name, the heading over its
+ * content in the sidebar (M4e), and its label while active in the bottom sheet.
+ */
 const TAB_NAMES: Record<SheetPanelTab, string> = {
   format: 'Format',
   symbols: 'Symbols',
@@ -99,6 +110,12 @@ export interface SheetPanelSlot {
   compact?: boolean
   /** Opened, closed, or moved to another tab. */
   onChange?: (open: boolean, tab: SheetPanelTab) => void
+  /**
+   * Where the panel's width is remembered (section 8, M4e): read once, and
+   * told the width each drag or key ends at. Unset, the width lasts as long
+   * as the canvas.
+   */
+  width?: PanelWidthMemory
 }
 
 export interface SheetCanvasProps {
@@ -159,9 +176,7 @@ export interface ImageToolSlot {
  * sheet's block (ADR 0004). Its Ctrl+Shift+S and Ctrl+Shift+E ignore these, so
  * the file chrome takes those keys itself.
  */
-const UI_OPTIONS: Partial<UIOptions> = {
-  canvasActions: { loadScene: false, saveToActiveFile: false, saveAsImage: false, export: false },
-}
+const CANVAS_ACTIONS: UIOptions['canvasActions'] = { loadScene: false, saveToActiveFile: false, saveAsImage: false, export: false }
 
 /**
  * New text starts in the Normal font, for headings and prose beside the math,
@@ -191,6 +206,21 @@ export function SheetCanvas({
   // The tab Math settings opens: the one last shown.
   const lastTab = useRef<SheetPanelTab>('variables')
   const [docked, setDocked] = useState(true)
+  // The panel's width (section 8, M4e): the remembered one, read once, then
+  // the drag handle's. It is the `--sheet-panel-width` this box hands down to
+  // Excalidraw's `--right-sidebar-width` (`SheetCanvas.css`), and the docking
+  // width follows it: one value, passed to Excalidraw and read by `panelDocks`.
+  const widthMemory = sheetPanel?.width
+  const [panelWidth, setPanelWidth] = useState(() => clampPanelWidth(widthMemory?.rememberedWidth() ?? PANEL_WIDTH))
+  const docksAboveRef = useRef(docksAbove(panelWidth))
+  const showPanelWidth = useCallback((width: number) => {
+    docksAboveRef.current = docksAbove(width)
+    setPanelWidth(width)
+  }, [])
+  const uiOptions = useMemo(
+    (): Partial<UIOptions> => ({ canvasActions: CANVAS_ACTIONS, dockedSidebarBreakpoint: docksAbove(panelWidth) }),
+    [panelWidth],
+  )
   // On a phone the panel is the bottom sheet, whose state is held here.
   const [bottom, setBottom] = useState<SheetPanelState>({ open: false, tab: 'variables' })
   const bottomRef = useRef(bottom)
@@ -266,6 +296,7 @@ export function SheetCanvas({
       else if (open) api.toggleSidebar({ name: SHEET_PANEL, tab, force: true })
       else if (sheetPanel().open) api.toggleSidebar({ name: SHEET_PANEL, force: false })
     }
+    const panelDocks = () => !phone && root.clientWidth > docksAboveRef.current
     onReadyRef.current?.({
       api,
       forwardWheel,
@@ -275,6 +306,7 @@ export function SheetCanvas({
       toggleSheetPanel,
       sheetPanel,
       showSheetPanel,
+      panelDocks,
       openMathGuide,
     })
   }, [api, forwardWheel, focusCanvas, phone, showBottom, openMathGuide])
@@ -285,6 +317,16 @@ export function SheetCanvas({
     () => (api && root ? root.querySelector<HTMLElement>('.excalidraw') : null),
     [api, root],
   )
+
+  // Excalidraw reads a new docking width after its render (`componentDidUpdate`)
+  // and draws nothing again by itself, so the panel would dock or float one
+  // render late: its public `refresh` draws it again. No scene change, no undo step.
+  const drawnWidth = useRef(panelWidth)
+  useEffect(() => {
+    if (!api || drawnWidth.current === panelWidth) return
+    drawnWidth.current = panelWidth
+    api.refresh()
+  }, [api, panelWidth])
 
   // A change of light or dark (☰ Dark mode, Alt+Shift+D) is remembered.
   useEffect(() => {
@@ -346,12 +388,12 @@ export function SheetCanvas({
         setRoot(node)
       }}
       className={vault ? VAULT_CLASS : undefined}
-      style={{ width: '100%', height: '100%' }}
+      style={{ width: '100%', height: '100%', ['--sheet-panel-width' as string]: `${panelWidth}px` }}
     >
       <Excalidraw
         excalidrawAPI={setApi}
         initialData={initialData}
-        UIOptions={UI_OPTIONS}
+        UIOptions={uiOptions}
         aiEnabled={!vault}
         // `false` makes every embed invalid, so none loads its iframe.
         validateEmbeddable={embeds ? undefined : false}
@@ -429,6 +471,11 @@ export function SheetCanvas({
                 selected element. The panel's own handlers, inside, still run. A box
                 with no box of its own (`display: contents`), so the layout is Excalidraw's. */}
             <div className="sheet-sidebar__keys" onKeyDown={(event) => event.stopPropagation()}>
+            <PanelResizeHandle
+              width={panelWidth}
+              onWidth={showPanelWidth}
+              onSettle={(width) => widthMemory?.rememberWidth(width)}
+            />
             <Sidebar.Tabs>
               {sheetPanel.quickKeys}
               <Sidebar.Header>
@@ -447,6 +494,8 @@ export function SheetCanvas({
               </Sidebar.Header>
               {panelTabs.map(([tab, content]) => (
                 <Sidebar.Tab key={tab} tab={tab}>
+                  {/* The tabs are icons only (M4e): the shown tab's name is a heading over its content. */}
+                  <h2 className="sheet-sidebar__heading">{TAB_NAMES[tab]}</h2>
                   {content}
                 </Sidebar.Tab>
               ))}
@@ -490,7 +539,11 @@ export function SheetCanvas({
   )
 }
 
-/** A tab trigger's face: its icon, its name (shown on the active tab, read on every tab) and Problems' badge. */
+/**
+ * A tab trigger's face: its icon, its name (read on every tab; shown only on
+ * the bottom sheet's active tab, the sidebar's tabs being icons only) and
+ * Problems' badge.
+ */
 function TabFace({ tab, errors }: { tab: SheetPanelTab; errors: number }) {
   return (
     <>

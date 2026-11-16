@@ -84,8 +84,9 @@
   content: var(--math-hint-touch);
 }
 
-/* The Sheet panel's tabs (section 8): from M4d six icons, the active one also
-   labelled, in one segmented control like Excalidraw's own sidebar tabs. */
+/* The Sheet panel's tabs (section 8): six icons (from M4e with no label: the
+   shown tab's name is a heading over its content), in one segmented control
+   like Excalidraw's own sidebar tabs. */
 .excalidraw .sheet-sidebar {
   display: flex;
   flex-direction: column;
@@ -104,17 +105,65 @@
   background: var(--default-bg-color);
 }
 
-/* Six tabs, the dock button and the close button have to fit the
-   panel, so it is wider than Excalidraw's 302px (set inline on the container,
-   hence `!important`; the canvas's docked width reads the same variable), and
-   the tabs give way: they shrink, and their padding is small enough that the
-   close button stays inside the window. */
+/* The panel's width (section 8, M4e): 320px, or what the drag handle set,
+   which `SheetCanvas` hands down as `--sheet-panel-width`. Excalidraw sets its
+   own 302px inline on the container, hence `!important`; the canvas's docked
+   width reads the same variable. Six tabs, the dock button and the close
+   button have to fit it down to 280px: the header's padding and gap are
+   small, and the tabs give way, 32px at 320px and about 28px at the least. */
 .excalidraw.excalidraw-container {
-  --right-sidebar-width: 384px !important;
+  --right-sidebar-width: var(--sheet-panel-width, 320px) !important;
 }
 
 .excalidraw .sheet-sidebar .sidebar__header {
   gap: 0.25rem;
+  padding-left: 0.75rem;
+  padding-right: 0.5rem;
+}
+
+/* The drag handle (section 8, M4e): the panel's left edge, the app's own
+   control. Wider for a finger after a touch press. */
+.excalidraw .sheet-sidebar__resize {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 2;
+  width: 0.5rem;
+  cursor: ew-resize;
+  touch-action: none;
+  outline: none;
+}
+
+[data-math-touch] .sheet-sidebar__resize {
+  width: 1rem;
+}
+
+.excalidraw .sheet-sidebar__resize::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 2px;
+  background: transparent;
+}
+
+.excalidraw .sheet-sidebar__resize:hover::after,
+.excalidraw .sheet-sidebar__resize:active::after,
+.excalidraw .sheet-sidebar__resize:focus-visible::after {
+  background: var(--color-primary);
+}
+
+/* The shown tab's name, over its content. */
+.excalidraw .sheet-sidebar__heading {
+  margin: 0;
+  padding: 0 0.75rem 0.5rem;
+  color: var(--color-on-surface);
+  font-family: var(--ui-font);
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1.25rem;
 }
 
 .excalidraw .sheet-sidebar .sidebar-triggers {
@@ -128,12 +177,12 @@
 
 .excalidraw .sheet-sidebar .sidebar-tab-trigger {
   flex: 0 1 auto;
+  justify-content: center;
   min-width: 0;
-  width: auto;
+  width: 2rem;
   height: 2rem;
-  padding: 0 0.4375rem;
+  padding: 0;
   overflow: hidden;
-  text-overflow: ellipsis;
   border: none;
   font-size: 0.8125rem;
   white-space: nowrap;
@@ -143,9 +192,8 @@
   overflow-y: auto;
 }
 
-/* An icon tab (section 8, M4d): its name shows beside the icon only while it
-   is active, and stays in the DOM on every tab, visually hidden, as its
-   accessible name; the tooltip is its title. */
+/* An icon tab (section 8; icons only from M4e): its name stays in the DOM,
+   visually hidden, as its accessible name; the tooltip is its title. */
 .excalidraw .sheet-sidebar .sheet-tab {
   position: relative;
   display: inline-flex;
@@ -159,7 +207,7 @@
   height: 1.125rem;
 }
 
-.excalidraw .sheet-sidebar .sheet-tab:not([data-state='active']) .sheet-tab__label {
+.excalidraw .sheet-sidebar:not(.sheet-bottom) .sheet-tab .sheet-tab__label {
   position: absolute;
   width: 1px;
   height: 1px;

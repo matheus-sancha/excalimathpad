@@ -97,10 +97,3 @@ export function visibleArea(root: HTMLElement, phone: boolean): Box {
   if (viewport) area.bottom = Math.min(area.bottom, viewport.offsetTop + viewport.height)
   return area
 }
-
-/**
- * Excalidraw docks its sidebar only when the editor is wider than this
- * (`MQ_RIGHT_SIDEBAR_MIN_WIDTH`, Excalidraw 0.18); narrower, it floats over
- * the canvas.
- */
-export const SIDEBAR_DOCKS_ABOVE = 1229

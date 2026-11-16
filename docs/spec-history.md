@@ -480,6 +480,18 @@ The items with a recorded result. Those still open are in
   The builders and the functions whose result grows are checked on the size they would build; the rest
   have the bounds listed in [spec section 14](spec-v1.md#14-engineering-constraints), each set where the
   call measured about 100 ms or less. With them the sweep's 6,669 calls take about 25 s.
+- (M4e) The panel at 280 px: 28 px tabs, the Format tab's colour rows wrapping, a rule's condition
+  field, and the Settings tab. **Passed, with two changes (2026-11-16, #198, in Chromium, the built
+  plugin at 1280 px with the panel at 280 px and at 320 px; `scripts/panel-run.mjs` holds it in CI):** in
+  every tab no control is cut by the panel's edge and nothing scrolls sideways but a text field's own
+  text. The six tabs are 28.2 px at 280 px and 32 px from 320 px to 480 px, their 18 px icons whole, with
+  "Keep sidebar open" and Close inside the panel. The Format tab's Text and Highlight rows wrap to two
+  lines of swatches, and a rule's own rows too. The Settings tab fits, Custom's kind → unit table
+  included; a unit's name longer than its `<select>` ends in the browser's ellipsis. **Changed:** a rule's
+  condition field was 79 px wide at 280 px (119 px at 320 px) beside ↑ ↓ ✕, so those sit under it now,
+  beside the rule’s state, and the field is 181 px at 280 px (221 px at 320 px); a long condition still scrolls inside
+  it. **Changed:** a long constant's value (`3.99·10⁻¹⁰ (kg m²)/(s mol)`) scrolled inside its cell, at
+  320 px too; it goes under its symbol now. Not run in Obsidian or on a device (the beta `0.3.0`).
 
 ## 18. Decision index
 

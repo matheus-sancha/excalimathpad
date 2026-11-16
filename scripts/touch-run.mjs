@@ -12,7 +12,10 @@
 // Done, ↑ ↓ and Edit, the canvas hint by tap and by click, a tap's tips and the slots and ⚙ a touch selection
 // shows, the quick keys and their undo, the panel's open and restore, the
 // suggestions opening above the field, and a rule's condition typed in the
-// Rules list with the line still open (M4e, #197); on the tablet, a mouse keeps hover. It
+// Rules list with the line still open (M4e, #197); on the tablet, a mouse keeps hover.
+// The tablet lies on its side (1180 px), where the panel docks; held upright
+// (820 px) it is too narrow to dock, so an edit opens no panel and Math
+// settings opens it floating, with the quick keys (M4e, #198). It
 // runs in Chromium, so it covers neither WebKit nor a real on-screen keyboard:
 // those are the device checklist's (CONTRIBUTING.md). It fails on any check
 // that doesn't hold, and on any page error.
@@ -124,8 +127,10 @@ const origin = `http://127.0.0.1:${server.address().port}`
 const DEVICES = [
   { name: 'phone', os: 'android', viewport: { width: 390, height: 844 }, phone: true },
   { name: 'phone', os: 'ios', viewport: { width: 390, height: 844 }, phone: true, platform: 'iPhone' },
-  { name: 'tablet', os: 'android', viewport: { width: 820, height: 1180 }, phone: false },
-  { name: 'tablet', os: 'ios', viewport: { width: 820, height: 1180 }, phone: false, platform: 'iPad' },
+  // On its side a tablet is wider than the panel's docking width (960 px at 320 px), so the
+  // panel docks and an edit opens it; upright, at the run's end, it doesn't (section 8, M4e, #198).
+  { name: 'tablet', os: 'android', viewport: { width: 1180, height: 820 }, upright: { width: 820, height: 1180 }, phone: false },
+  { name: 'tablet', os: 'ios', viewport: { width: 1180, height: 820 }, upright: { width: 820, height: 1180 }, phone: false, platform: 'iPad' },
 ]
 
 const { chromium } = createRequire(import.meta.url)('playwright')
@@ -188,8 +193,8 @@ try {
         tab.evaluate(() => document.querySelector('.sheet-sidebar .sheet-tab[data-state="active"]')?.getAttribute('title') ?? null)
       const pressPanel = async (name) => tap(await pointOf(`.sheet-sidebar [aria-label="${name}"]`, 1000))
       const tabTo = async (name) => tap(await pointOf(`.sheet-sidebar .sheet-tab[title="${name}"]`, 1000))
-      // The panel's own close: on the tablet the floating panel covers More tools,
-      // as on a small window, so Math settings isn't reachable while it is open.
+      // The panel's own close: a floating panel covers More tools, so Math
+      // settings isn't reachable while it is open.
       const closePanel = async () =>
         tap(await pointOf(device.phone ? '.sheet-bottom__close' : '.sheet-sidebar [data-testid="sidebar-close"]', 1000))
       const mathSettings = async () => {
@@ -264,9 +269,8 @@ try {
       await tap(empty)
       row(
         'an edit shows Format, and its end restores the panel',
-        // A floating panel (the tablet's, narrower than 1229 px) closes at a press on the
-        // canvas, as on a small window, so the edit found it closed (section 8).
-        opened === 'Variables' && during === 'Format' && (device.phone ? (await panelOpen()) && (await activeTab()) === 'Variables' : !(await panelOpen())),
+        // The bottom sheet and the tablet's docked panel both stay through a press on the canvas.
+        opened === 'Variables' && during === 'Format' && (await panelOpen()) && (await activeTab()) === 'Variables',
         `${opened} → ${during} → ${await activeTab()}`,
       )
 
@@ -434,6 +438,33 @@ try {
         (await field().count()) === 0 && stored?.formats === '@text-red if x >= 0\n' && stored.source.startsWith(`${LIST}\n`),
         JSON.stringify(stored?.formats),
       )
+
+      if (device.upright) {
+        // Held upright the tablet is too narrow for the panel to dock (section 8, M4e, #198).
+        await closePanel()
+        await tab.setViewportSize(device.upright)
+        await pause()
+        await tap(empty)
+        await doubleTap(await pointOf(lineOf('calc', 2)))
+        row('upright, a double tap opens the line and no panel', (await fieldText()) === 'b = a * 3' && !(await panelOpen()), `field: ${await fieldText()}`)
+        await tab.keyboard.press('Escape')
+        await pause()
+        // Math settings opens it floating; Edit in its Format tab opens the line, with the quick keys.
+        await mathSettings()
+        const floats = (await panelOpen()) && (await tab.locator('.sheet-sidebar [data-testid="sidebar-dock"]').count()) === 0
+        await tabTo('Format')
+        await pressPanel('Edit (Enter)')
+        await pause()
+        row(
+          'upright, Math settings opens the panel floating, and its Edit opens the line with the quick keys',
+          floats && (await fieldText()) === 'c = q + 1' && (await fieldFocused()) && (await activeTab()) === 'Format' && (await tab.locator('.sheet-quick-keys').count()) === 1,
+          `floating: ${floats}, field: ${await fieldText()}, active: ${await activeTab()}`,
+        )
+        await pressPanel('Done (Esc)')
+        await pause()
+        await tap(empty)
+        row('upright, a tap on the canvas closes the floating panel', !(await panelOpen()) && (await field().count()) === 0)
+      }
     } catch (error) {
       errors.push(`${where}: the run didn't finish: ${error.message.split('\n')[0]}`)
       // TOUCH_RUN_SHOTS=<folder> keeps a screenshot of where it stopped.
