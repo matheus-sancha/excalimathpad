@@ -59,3 +59,19 @@ as the world outside the view (`changeOutside`, `rename`, `failNext`,
 blocked run bundles the same file for the browser.
 `plugin/test/pump-sizing.excalimathpad` is the pump sheet with an image and
 CJK text. Depends on: App, file (`readSheet`, the messages), panel memory.
+
+**The build** (`esbuild.plugin.mjs`, section 12a, One source, two builds and
+Data protection). It stubs Mermaid to Excalidraw, the non-English locales,
+font subsetting and math.js's help texts (`embeddedDocs.js` resolves to
+`src/math/noHelpTexts.ts`, as `vite.config.ts`'s alias does for the web; the
+build fails if it stubbed nothing; section 14, M4e, Lighter plugin);
+rewrites Excalidraw's `./fonts/…` strings to `data:` URLs (Xiaolai to
+`local:`); and in Excalidraw's own files turns `localStorage` into no
+storage, the `esm.sh` fallback into `about:blank#` and every `VITE_APP_*`
+value (service URLs, the Firebase key) into `""`. KaTeX's CSS keeps woff2
+only and loses the `@font-face` of the four families in
+`src/overlay/katexFonts.ts` (`trimKatexCss`, which throws if one has no face to
+drop); the font test (`src/overlay/katexFonts.test.tsx`) reads the same list
+and KaTeX's CSS, and the network-blocked run fails on a KaTeX class drawn in a
+family with no font. Each rewrite depends on Excalidraw 0.18.1's text; the
+audit fails an upgrade that moves it.

@@ -31,6 +31,17 @@ export default defineConfig({
   // Relative asset URLs, so `dist/` works from any static host and sub-path
   // (e.g. GitHub Pages at /excalimathpad/) without rebuilding.
   base: './',
+  // math.js's help texts, read only by `help()`, which the engine disables
+  // (docs/spec-v1.md section 14, M4e, Lighter plugin): one empty module in
+  // their place, as `esbuild.plugin.mjs` does for the plugin.
+  resolve: {
+    alias: [
+      {
+        find: /^(?:\.\.?\/)+(?:expression\/)?embeddedDocs\/embeddedDocs\.js$/,
+        replacement: fileURLToPath(new URL('./src/math/noHelpTexts.ts', import.meta.url)),
+      },
+    ],
+  },
   // GitHub Actions sets GITHUB_SHA; a local build has none and reads `dev`.
   define: {
     __BUILD_STAMP__: JSON.stringify(buildStamp(process.env.GITHUB_SHA, new Date())),
