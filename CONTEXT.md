@@ -39,7 +39,7 @@ what to read for an issue and where to write.
   M4e, #198: the Sheet panel's widths, docking, drag handle and 280 px, in
   the built plugin and web app; the sample, #199; the charts, #200; the Page
   row and the page breaks, M5, #80), and the **print run** (`scripts/print-run.mjs`, M5, #81:
-  the built web app's Print… in real Chromium PDFs, read by `scripts/pdf-read.mjs`). `npm test` holds the **typing test**
+  the built web app's and plugin's Print… in Chromium PDFs, read by `scripts/pdf-read.mjs`). `npm test` holds the **typing test**
   (`src/typing.test.tsx`, M4e, #193: the guide's examples and the acceptance
   sheets, a character at a time); `npm run test:probe` is the **odd-values
   probe** (`src/oddValues.probe.tsx`), by hand before a release. `npm test`
@@ -476,7 +476,7 @@ and everything downstream recalculates. Engine: math.js, client-side.
   names the file.
 - Where the Sheet panel floats (an editor at or below its docking width), it
   covers Excalidraw's More tools; its ✕ closes it.
-- The plugin's `main.js` is about 3.40 MB and `styles.css` 0.55 MB (#81);
+- The plugin's `main.js` is about 3.40 MB and `styles.css` 0.56 MB (#81);
   the audit fails either above 5,000,000 bytes, Obsidian Sync Standard's cap.
 - Excalidraw 0.18.1 listens on the global `document` (copy, cut, paste, `keyup`,
   pointer moves and ups, scroll and others) and `window` (resize, blur, focus,

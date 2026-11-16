@@ -9,6 +9,7 @@ import type { VaultSheet } from '../src/file/vaultSheet.ts'
 import type { PanelMemory } from '../src/panel/panelMemory.ts'
 import { pickVaultImage } from './ImagePicker.ts'
 import { conflictBase, freeSheetPath } from './names.ts'
+import { printInFrame } from './print.ts'
 
 /** The view type registered for `.excalimathpad` files. */
 export const VIEW_TYPE = 'excalimathpad-sheet'
@@ -295,6 +296,18 @@ export class SheetView extends TextFileView {
           // On a phone the Sheet panel is a bottom sheet (section 8, On a phone).
           phone: Platform.isPhone,
           device: Platform.isPhone ? 'phone' : Platform.isTablet ? 'tablet' : 'desktop',
+          // Print… on a computer only (section 11, Changed on 2026-11-15), in
+          // the window the view is in now: a pop-out prints its own sheet.
+          print: Platform.isMobile
+            ? undefined
+            : (sheet, page) =>
+                printInFrame({
+                  doc: this.containerEl.doc,
+                  sheet,
+                  page,
+                  name: this.file?.name ?? 'Untitled',
+                  plain: this.file?.basename ?? 'Untitled',
+                }),
         },
         panelMemory: this.memory.panel,
       }),

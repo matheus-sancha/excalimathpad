@@ -22,10 +22,24 @@
 //   a drawing and dark mode, in one PDF; KaTeX 0.16.47's fonts; and a
 //   hand-set Scale (`page.pdf`'s `scale`, the dialog's own setting).
 // - A sheet whose pages can't be built: no dialog, the notice, the sheet as it was.
+// - The plugin's Print… (section 11, Changed on 2026-11-15 and 2026-11-16): the
+//   built `dist-plugin/main.js` against the fake `obsidian`, with every request
+//   blocked and logged, prints the pump sheet from the "Print…" command and the
+//   true-position sheet from ☰ → Print…. The pages are built in the hidden
+//   frame, whose `print()` is stood in for the same way; Chromium can't print a
+//   frame by itself (`page.pdf` prints a page), so the run prints the frame's
+//   document as it is at that moment, its HTML and its constructed style
+//   sheets, from a page of its own, and reads that PDF. It also reads the frame
+//   itself: standards mode, KaTeX's fonts loaded there, no family without a
+//   font, and a stand-in for Obsidian's own print rules that never reaches it.
+//   The notice names the paper, the window's title is the plain name while the
+//   dialog is open, and afterwards the frame and the notice are gone, the
+//   title is back, the vault was never written and no request was made.
 //
 // Run: `node scripts/print-run.mjs` (`npm run test:print`), after `npm run
 // build`. PRINT_RUN_PDFS=<folder> keeps each PDF.
 
+import { build } from 'esbuild'
 import { createServer } from 'node:http'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
@@ -35,9 +49,54 @@ import { readPdf } from './pdf-read.mjs'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const web = join(root, 'dist')
+const plugin = join(root, 'dist-plugin')
 const fonts = join(root, 'node_modules/@excalidraw/excalidraw/dist/prod/fonts')
 const PDFS = process.env.PRINT_RUN_PDFS
 if (PDFS) await mkdir(PDFS, { recursive: true })
+
+// The plugin's page: the fake `obsidian` bundled for the browser, then the built main.js.
+const fake = await build({
+  absWorkingDir: root,
+  entryPoints: ['plugin/test/obsidian.ts'],
+  bundle: true,
+  format: 'iife',
+  globalName: 'FakeObsidian',
+  write: false,
+  target: ['es2022'],
+})
+/** The window's title as Obsidian sets it, which the dialog's Save as names the PDF from (section 17, M5). */
+const OBSIDIAN_TITLE = 'Pump-Sizing - Vault - Obsidian'
+const pluginPage = `<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>${OBSIDIAN_TITLE}</title>
+<link rel="stylesheet" href="/plugin/styles.css">
+<style>html,body{margin:0;height:100%}.workspace,.workspace-leaf,.workspace-leaf-content,.view-content{height:100%}
+/* A stand-in for Obsidian's own print rules: were they to reach the frame, it would print nothing. */
+@media print { body > * { display: none !important } .print-view { display: none !important } }</style>
+</head><body>
+<script src="/plugin/fake-obsidian.js"></script>
+<script>
+  var module = { exports: {} }, exports = module.exports
+  window.require = (name) => {
+    if (name === 'obsidian') return FakeObsidian
+    throw new Error('main.js required ' + name)
+  }
+</script>
+<script src="/plugin/main.js"></script>
+<script>
+  window.__open = async (path, sheet, manifest) => {
+    const app = new FakeObsidian.App()
+    app.vault.add(path, sheet)
+    const plugin = new module.exports.default(app, manifest)
+    await plugin.onload()
+    const leaf = app.workspace.getLeaf()
+    await leaf.openFile(new FakeObsidian.TFile(path))
+    app.workspace.setActiveLeaf(leaf)
+    window.__app = app
+    window.__plugin = plugin
+    window.__leaf = leaf
+  }
+</script>
+</body></html>`
 
 const types = { '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.html': 'text/html', '.svg': 'image/svg+xml', '.woff2': 'font/woff2', '.ttf': 'font/ttf', '.woff': 'font/woff' }
 const server = createServer(async (request, response) => {
@@ -45,7 +104,11 @@ const server = createServer(async (request, response) => {
   try {
     const file = normalize(path.slice(1) || 'index.html')
     if (file.startsWith('..')) throw new Error('not found')
-    const body = await readFile(join(web, file))
+    let body
+    if (path === '/plugin.html') body = pluginPage
+    else if (path === '/plugin/fake-obsidian.js') body = fake.outputFiles[0].text
+    else if (['/plugin/main.js', '/plugin/styles.css', '/plugin/manifest.json'].includes(path)) body = await readFile(join(plugin, path.slice('/plugin/'.length)))
+    else body = await readFile(join(web, file))
     response.writeHead(200, { 'content-type': types[extname(file)] ?? 'application/octet-stream' })
     response.end(body)
   } catch {
@@ -158,20 +221,22 @@ const shown = (tab) =>
  * every text node shown (visibility visible, laid out), KaTeX's hidden MathML
  * left out, in each page's box; and the footer's three parts.
  */
-const painted = (tab) =>
-  tab.evaluate(() =>
-    [...document.querySelectorAll('.print-view__page')].map((page) => {
-      const walker = document.createTreeWalker(page, NodeFilter.SHOW_TEXT)
+const painted = (tab, frame = null) =>
+  tab.evaluate((frame) => {
+    // The page itself on the web; the plugin's print frame there.
+    const doc = frame ? document.querySelector(frame).contentDocument : document
+    return [...doc.querySelectorAll('.print-view__page')].map((page) => {
+      const walker = doc.createTreeWalker(page, NodeFilter.SHOW_TEXT)
       let text = ''
       for (let node = walker.nextNode(); node; node = walker.nextNode()) {
         const element = node.parentElement
         if (!element || element.closest('.katex-mathml, style, title, desc, metadata')) continue
-        if (getComputedStyle(element).visibility !== 'visible' || element.getClientRects().length === 0) continue
+        if (doc.defaultView.getComputedStyle(element).visibility !== 'visible' || element.getClientRects().length === 0) continue
         text += node.data
       }
       return { text, footer: [...page.querySelectorAll('.print-view__footer > span')].map((span) => span.textContent) }
-    }),
-  )
+    })
+  }, frame)
 
 /** Text as searched: no spaces, no private-use glyphs (a font's alternate figures), the result's plain forms as KaTeX sets them. */
 const SUPERSCRIPT = { '⁰': '0', '¹': '1', '²': '2', '³': '3', '⁴': '4', '⁵': '5', '⁶': '6', '⁷': '7', '⁸': '8', '⁹': '9', '⁻': '−' }
@@ -286,6 +351,153 @@ function checkSheet(where, name, rows, { read, pages, during }, { size = 'A4', o
       read.pages.every((p, i) => norm(p.text).replace(/[−-]/g, '').includes(norm(`${name}${today().replaceAll('-', '')}${i + 1}of${pages.length}`).replace(/[−-]/g, ''))),
     footers.map((f) => f.join(' · ')).join(' / '),
   )
+}
+
+const FRAME = 'iframe.excalimathpad-print-frame'
+
+/**
+ * Excalidraw's own two messages as it puts its fonts inside the drawings' SVG
+ * in the plugin, where font subsetting is trimmed (section 12a, One source, two
+ * builds): it has no worker, its subsetting throws, and it falls back to the
+ * whole font, a data: URL. The heading's Nunito in the PDF shows the fallback
+ * works; any other console error fails the run.
+ */
+const excalidrawsFontFallback = (text) =>
+  (text.startsWith('Failed to use workers for subsetting') && text.includes('WorkerUrlNotDefinedError')) ||
+  (text.startsWith('Failed to fetch font family') && text.includes('is not in the plugin'))
+
+/**
+ * The plugin's page with `text` opened from the vault at `path`. Every request
+ * that isn't to this page's own server is blocked and logged in `blocked`,
+ * and every request at all after the sheet is up is logged in `late`.
+ */
+async function openPlugin(where, { path, text, width = 1400, height = 900 }) {
+  const context = await browser.newContext({ viewport: { width, height }, deviceScaleFactor: 1 })
+  const blocked = []
+  await context.route('**/*', (route) => {
+    const url = route.request().url()
+    if (url.startsWith(`${origin}/`)) return route.continue()
+    blocked.push(url)
+    return route.abort('blockedbyclient')
+  })
+  context.on('websocket', (socket) => blocked.push(socket.url()))
+  // The system's dialog, stood in for: the frame's `print()` waits until the run has its PDF.
+  await context.addInitScript((frame) => {
+    if (!window.frameElement?.matches(frame)) return
+    const host = window.parent
+    window.print = () =>
+      new Promise((resolve) => {
+        host.__framePrints = host.__framePrints ?? []
+        host.__framePrints.push({ title: host.document.title, resolve })
+      })
+  }, FRAME)
+  const tab = await context.newPage()
+  tab.on('pageerror', (error) => errors.push(`${where}: ${error.message}`))
+  tab.on('console', (message) => {
+    if (message.type() !== 'error' || excalidrawsFontFallback(message.text())) return
+    errors.push(`${where} console: ${message.text().slice(0, 300)}`)
+  })
+  await tab.goto(`${origin}/plugin.html`)
+  const manifest = JSON.parse(await readFile(join(plugin, 'manifest.json'), 'utf8'))
+  await tab.evaluate(([path, text, manifest]) => window.__open(path, text, manifest), [path, text, manifest])
+  await tab.waitForSelector('.math-element .katex', { timeout: 30_000 })
+  await tab.waitForTimeout(1500)
+  const late = []
+  tab.on('request', (request) => late.push(request.url()))
+  return { context, tab, blocked, late }
+}
+
+/** The plugin's state: what printing must leave alone, and what it shows. */
+const pluginState = (tab) =>
+  tab.evaluate((frame) => ({
+    title: document.title,
+    frames: document.querySelectorAll(frame).length,
+    view: !!document.querySelector('.print-view'),
+    styles: document.adoptedStyleSheets.length,
+    data: window.__leaf.view.getViewData(),
+    writes: window.__app.vault.writes.length,
+    notices: [...FakeObsidian.notices],
+    hidden: [...FakeObsidian.hiddenNotices],
+  }), FRAME)
+
+/**
+ * The frame's document as it is while the dialog waits, printed from a page of
+ * its own (Chromium's PDF prints a page, not a frame): its HTML, then its
+ * constructed style sheets, its fonts loaded, at its own `@page` size. That
+ * page is offline too.
+ */
+async function framePdf(tab) {
+  const copy = await tab.evaluate((frame) => {
+    const doc = document.querySelector(frame).contentDocument
+    return {
+      html: doc.documentElement.outerHTML,
+      css: doc.adoptedStyleSheets.map((sheet) => [...sheet.cssRules].map((rule) => rule.cssText).join('\n')),
+    }
+  }, FRAME)
+  const context = await browser.newContext({ deviceScaleFactor: 1 })
+  await context.route('**/*', (route) => route.abort())
+  try {
+    const page = await context.newPage()
+    await page.setContent(`<!doctype html>${copy.html}`)
+    await page.evaluate(async (css) => {
+      document.adoptedStyleSheets = css.map((text) => {
+        const sheet = new CSSStyleSheet()
+        sheet.replaceSync(text)
+        return sheet
+      })
+      void document.body.offsetHeight
+      await document.fonts.ready
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+      await document.fonts.ready
+    }, copy.css)
+    return await page.pdf({ preferCSSPageSize: true })
+  } finally {
+    await context.close()
+  }
+}
+
+/** Starts the plugin's Print… with `how`, waits for the frame's dialog, prints the frame meanwhile. */
+async function printPluginWith(tab, how) {
+  const before = await tab.evaluate(() => window.__framePrints?.length ?? 0)
+  await how()
+  await tab.waitForFunction((n) => (window.__framePrints?.length ?? 0) > n, before, { timeout: 30_000 })
+  const during = await tab.evaluate((frame) => {
+    const element = document.querySelector(frame)
+    const doc = element.contentDocument
+    const faces = [...doc.fonts].filter((face) => face.status === 'loaded').map((face) => face.family.replaceAll('"', ''))
+    const known = new Set([...doc.fonts].map((face) => face.family.replaceAll('"', '')))
+    // Every family KaTeX draws the pages in has its font in the frame (as the blocked run asks of the view).
+    const drawn = [...doc.querySelectorAll('.print-view .katex, .print-view .katex *')]
+      .filter((node) => node.childElementCount === 0 && node.textContent.trim() !== '')
+      .map((node) => doc.defaultView.getComputedStyle(node).fontFamily.split(',')[0].replaceAll('"', '').trim())
+    return {
+      title: window.__framePrints.at(-1).title,
+      pages: doc.querySelectorAll('.print-view__page').length,
+      compat: doc.compatMode,
+      inView: element.ownerDocument === document,
+      katex: [...new Set(faces)].filter((face) => face.startsWith('KaTeX_')).sort(),
+      unfonted: [...new Set(drawn)].filter((family) => family.startsWith('KaTeX_') && !known.has(family)),
+      obsidianPrintRule: doc.adoptedStyleSheets.some((sheet) => [...sheet.cssRules].some((rule) => rule.cssText.includes('.print-view { display: none'))),
+    }
+  }, FRAME)
+  const state = await pluginState(tab)
+  const pages = await painted(tab, FRAME)
+  const pdf = await framePdf(tab)
+  await tab.evaluate(() => window.__framePrints.at(-1).resolve())
+  await tab.waitForTimeout(400)
+  return { pdf, during: { ...during, state }, pages, read: readPdf(pdf) }
+}
+
+/** The checks every plugin print answers besides `checkSheet`'s. */
+function checkPlugin(where, notice, before, after, printed, { blocked, late }) {
+  const { during } = printed
+  row(where, 'the pages are in a hidden frame in the view’s own window, in standards mode, and not on the view’s page', during.inView && during.state.frames === 1 && during.compat === 'CSS1Compat' && !during.state.view && during.state.styles === before.styles, `${during.state.frames} frame, ${during.compat}`)
+  row(where, 'KaTeX’s fonts are loaded inside the frame, and every family KaTeX draws there has one', ['KaTeX_Main', 'KaTeX_Math'].every((face) => during.katex.includes(face)) && during.unfonted.length === 0, `${during.katex.join(', ')}${during.unfonted.length ? `; no font: ${during.unfonted.join(', ')}` : ''}`)
+  row(where, 'Obsidian’s own print rules don’t reach the frame: only the app’s style sheets are copied', !during.obsidianPrintRule && printed.read.pages.length > 0)
+  row(where, `the notice before the dialog: "${notice}", shown until it closes`, during.state.notices.at(-1) === notice && !during.state.hidden.includes(notice) && after.hidden.includes(notice), during.state.notices.at(-1))
+  row(where, 'the window’s title is the plain name while the dialog is open, and comes back after', during.title === 'pump-sizing' && before.title === OBSIDIAN_TITLE && after.title === before.title, `${before.title} → ${during.title} → ${after.title}`)
+  row(where, 'afterwards the frame is gone, no styles are left, the sheet is as it was and the vault was never written', after.frames === 0 && !after.view && after.styles === before.styles && after.data === before.data && after.writes === 0 && !after.notices.includes("The pages couldn't be built, so nothing was printed."), `${after.frames} frames, ${after.writes} writes`)
+  row(where, 'no request: none blocked, and none made at all while printing', blocked.length === 0 && late.length === 0, [...blocked, ...late].slice(0, 3).join(' | '))
 }
 
 try {
@@ -437,6 +649,51 @@ try {
     row(where, 'no dialog; the notice says the pages couldn’t be built; nothing left behind', prints === 0 && after.toast === "The pages couldn't be built, so nothing was printed." && !after.view && after.title === before.title && after.undo === before.undo, `${prints} dialogs, "${after.toast}"`)
     await context.close()
   }
+
+  // The plugin's Print… (section 11, Changed on 2026-11-15): the pump sheet from the "Print…" command.
+  {
+    const where = 'plugin pump'
+    const opened = await openPlugin(where, {
+      path: 'Calcs/pump-sizing.excalimathpad',
+      text: sheetFile([heading('heading', 40, 40, 'Pump sizing'), math('calc', 40, 100, PUMP.join('\n'))]),
+    })
+    const { context, tab } = opened
+    const rows = await shown(tab)
+    const before = await pluginState(tab)
+    const command = () =>
+      tab.evaluate(() => {
+        const print = window.__plugin.commands.find((command) => command.id === 'print')
+        if (!FakeObsidian.runCommand(print)) throw new Error('Print… isn’t offered')
+      })
+    const printed = await printPluginWith(tab, command)
+    await keep('plugin-pump', printed.pdf)
+    const after = await pluginState(tab)
+    checkSheet(where, 'pump-sizing.excalimathpad', rows, printed)
+    row(where, 'the heading prints in Nunito: Excalidraw’s fonts inside the drawings’ SVG', printed.read.fonts.some((f) => /^Nunito/.test(f)) && norm(printed.read.pages[0].text).startsWith('Pumpsizing'), printed.read.fonts.filter((f) => /Nunito/.test(f)).join(', '))
+    checkPlugin(where, 'Choose A4, portrait in the print dialog.', before, after, printed, opened)
+    await context.close()
+  }
+
+  // The plugin's ☰ → Print…, its first item: the true-position sheet on Letter landscape.
+  {
+    const where = 'plugin ☰'
+    const opened = await openPlugin(where, {
+      path: 'Calcs/pump-sizing.excalimathpad',
+      text: sheetFile([math('calc', 40, 40, TRUE_POSITION.join('\n'))], { page: { size: 'Letter', orientation: 'landscape' } }),
+    })
+    const { context, tab } = opened
+    const rows = await shown(tab)
+    const before = await pluginState(tab)
+    await tab.click('[data-testid="main-menu-trigger"]')
+    const first = await tab.evaluate(() => document.querySelector('.dropdown-menu-item')?.textContent?.trim())
+    row(where, 'Print… is the first ☰ item, with no key', first === 'Print…' && (await tab.locator('[data-testid="print-item"] .dropdown-menu-item__shortcut').count()) === 0, first)
+    const printed = await printPluginWith(tab, () => tab.click('[data-testid="print-item"]'))
+    await keep('plugin-true-position', printed.pdf)
+    const after = await pluginState(tab)
+    checkSheet(where, 'pump-sizing.excalimathpad', rows, printed, { size: 'Letter', orientation: 'landscape' })
+    checkPlugin(where, 'Choose Letter, landscape in the print dialog.', before, after, printed, opened)
+    await context.close()
+  }
 } finally {
   await browser.close()
   server.close()
@@ -452,4 +709,4 @@ if (failed.length || errors.length || results.length === 0) {
   for (const error of errors) console.error(`  - ${error}`)
   process.exit(1)
 }
-console.log('Print run passed: the pump and true-position sheets through Print…, the footer, the title, the sheet left alone, the one line, and section 17’s web items.')
+console.log('Print run passed: the pump and true-position sheets through Print…, the footer, the title, the sheet left alone, the one line, section 17’s web items, and the plugin’s Print… in its frame.')

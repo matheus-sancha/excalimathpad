@@ -26,6 +26,19 @@
   all: revert-layer;
 }
 
+/* Print…'s hidden frame (plugin/print.ts, section 11): in the window's
+   viewport, so the browser draws it and its fonts load, but transparent and
+   out of the pointer's way; it lives only while the print dialog is open. */
+.excalimathpad-print-frame {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
 @layer excalimathpad {
   .excalimathpad-view__app {
     position: relative;

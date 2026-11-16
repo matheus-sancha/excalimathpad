@@ -1,6 +1,6 @@
 import { act, fireEvent, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, onTestFinished } from 'vitest'
-import { isOffered, runCommand, type Command, type WorkspaceLeaf } from './obsidian.ts'
+import { isOffered, Platform, runCommand, type Command, type WorkspaceLeaf } from './obsidian.ts'
 import { DEFAULT_SETTINGS, writeSheet } from '../../src/file/sheetFormat.ts'
 import { doubleClickLine } from '../../src/test/gestures.ts'
 import { SHEET_COMMANDS } from '../main.ts'
@@ -188,16 +188,44 @@ describe('the theme (section 8: Excalimathpad’s own light or dark, remembered)
 })
 
 describe('Obsidian’s commands (section 8: only while a sheet tab is active, no default hotkeys)', () => {
-  it('registers New sheet, Add math, Toggle Math settings and Open Math guide, none with a hotkey', async () => {
+  it('registers New sheet, Add math, Toggle Math settings, Open Math guide and, on a computer, Print…, none with a hotkey', async () => {
     const vault = await setUp()
     expect(vault.recorded.commands.map((c) => [c.id, c.name])).toEqual([
       ['new-sheet', 'New sheet'],
       ['add-math', 'Add math'],
       ['toggle-math-settings', 'Toggle Math settings'],
       ['open-math-guide', 'Open Math guide'],
+      ['print', 'Print…'],
     ])
-    expect(SHEET_COMMANDS.map((c) => c.id)).toEqual(['add-math', 'toggle-math-settings', 'open-math-guide'])
+    expect(SHEET_COMMANDS.map((c) => c.id)).toEqual(['add-math', 'toggle-math-settings', 'open-math-guide', 'print'])
     expect(vault.recorded.commands.every((c) => c.hotkeys === undefined)).toBe(true)
+  })
+
+  it('Print… is offered only with a sheet tab active, and is the first ☰ item (section 8, M5)', async () => {
+    const vault = await setUp()
+    expect(isOffered(command(vault, 'print'))).toBe(false)
+    const leaf = await openTab(vault, A)
+    expect(isOffered(command(vault, 'print'))).toBe(true)
+    fireEvent.click(leaf.containerEl.querySelector<HTMLElement>('[data-testid="main-menu-trigger"]')!)
+    const items = await waitFor(() => {
+      const found = [...leaf.containerEl.querySelectorAll('.dropdown-menu-item')].map((item) => item.textContent?.trim())
+      expect(found.length).toBeGreaterThan(1)
+      return found
+    })
+    expect(items[0]).toBe('Print…')
+  })
+
+  it('on a phone or tablet there is no Print… command and no ☰ item (section 11, Changed on 2026-11-15)', async () => {
+    Platform.isMobile = true
+    onTestFinished(() => {
+      Platform.isMobile = false
+    })
+    const vault = await setUp()
+    expect(vault.recorded.commands.map((c) => c.id)).not.toContain('print')
+    const leaf = await openTab(vault, A)
+    fireEvent.click(leaf.containerEl.querySelector<HTMLElement>('[data-testid="main-menu-trigger"]')!)
+    await waitFor(() => expect(leaf.containerEl.querySelector('[data-testid="math-guide-item"]')).not.toBeNull())
+    expect(leaf.containerEl.querySelector('[data-testid="print-item"]')).toBeNull()
   })
 
   it('offers the sheet commands only with a sheet tab active; New sheet always', async () => {

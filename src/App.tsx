@@ -59,6 +59,8 @@ export interface SheetCommands {
   toggleMathSettings: () => void
   /** ☰ → Math guide (M4d). */
   openMathGuide: () => void
+  /** Print… (M5, section 11), on a computer only: unset where the view has no print route. */
+  print?: () => void
 }
 
 /**
@@ -104,6 +106,13 @@ export interface VaultHome {
   phone?: boolean
   /** What Obsidian runs on, for Copy details (section 4, Unexpected failures). */
   device?: 'desktop' | 'phone' | 'tablet'
+  /**
+   * Print… in a vault (docs/spec-v1.md section 11, Changed on 2026-11-15):
+   * the view's route, a hidden frame and the system's dialog, given the sheet
+   * as drawn and its Page. Unset on a phone or tablet, where there is no
+   * Print… command and no ☰ item.
+   */
+  print?: (sheet: () => SheetToPrint, page: PageSetting) => Promise<void>
 }
 
 export interface AppProps {
@@ -284,17 +293,6 @@ function Sheet({
     if (canvasRoot) return keepPanelPresses(canvasRoot, vaultContainer)
   }, [canvasRoot, vaultContainer])
 
-  // Obsidian's Add math, Toggle Math settings and Open Math guide commands act on this tab.
-  const handCommands = vault?.commands
-  useEffect(() => {
-    if (!handCommands || !canvas) return
-    handCommands({
-      addMath: canvas.addMath,
-      toggleMathSettings: canvas.toggleSheetPanel,
-      openMathGuide: canvas.openMathGuide,
-    })
-    return () => handCommands(null)
-  }, [handCommands, canvas])
   const imageTool = useMemo(
     () => vault && { keys: vault.container, pick: vault.pickImage },
     [vault],
@@ -520,17 +518,39 @@ function Sheet({
   )
 
   const web = file?.web
-  // Print… on the web (section 11, Print flow): Ctrl+P and the ☰ item, through
-  // the browser's dialog on the page itself (section 14, Print). One at a time.
+  // Print… (section 11, Print flow): on the web Ctrl+P and the ☰ item, through
+  // the browser's dialog on the page itself (section 14, Print); in a vault on
+  // a computer the "Print…" command and the ☰ item, through the view's route.
+  // One at a time.
   const printing = useRef(false)
   const page = settings.page
+  const vaultPrint = vault?.print
   const print = useCallback(() => {
-    if (!canvas || !web || printing.current) return
+    if (!canvas || printing.current) return
+    const printed = web
+      ? printOnTheWeb(canvas, web.session, page, line)
+      : vaultPrint && printInVault(canvas, vaultPrint, page, line)
+    if (!printed) return
     printing.current = true
-    void printOnTheWeb(canvas, web.session, page, line).finally(() => {
+    void printed.finally(() => {
       printing.current = false
     })
-  }, [canvas, web, page, line])
+  }, [canvas, web, vaultPrint, page, line])
+  // In a vault, only where the view has a print route: a computer.
+  const vaultPrintItem = vaultPrint ? print : undefined
+
+  // Obsidian's Add math, Toggle Math settings, Open Math guide and Print… commands act on this tab.
+  const handCommands = vault?.commands
+  useEffect(() => {
+    if (!handCommands || !canvas) return
+    handCommands({
+      addMath: canvas.addMath,
+      toggleMathSettings: canvas.toggleSheetPanel,
+      openMathGuide: canvas.openMathGuide,
+      ...(vaultPrintItem && { print: vaultPrintItem }),
+    })
+    return () => handCommands(null)
+  }, [handCommands, canvas, vaultPrintItem])
   const fileMenu = useMemo(
     () =>
       web && {
@@ -555,6 +575,7 @@ function Sheet({
           touch={touch}
           imageTool={imageTool ?? undefined}
           fileMenu={fileMenu ?? undefined}
+          print={vaultPrintItem}
           sheetPanel={{
             errors,
             format: tab(
@@ -649,7 +670,7 @@ function followCaret(canvas: SheetCanvasHandle, phone: boolean) {
  * laid-out body's size and rows, and the overlay's view to copy. Both homes
  * read it the same way.
  */
-function sheetToPrint(canvas: SheetCanvasHandle, page: PageSetting): SheetToPrint {
+function sheetToPrint(canvas: SheetCanvasHandle, page: PageSetting, inlineFonts = false): SheetToPrint {
   const stage = canvas.root.closest('.app-shell__stage') ?? canvas.root
   const { views, colors } = printViews(stage)
   const elements = anchorPlaces(canvas.api).flatMap((anchor) => {
@@ -661,7 +682,7 @@ function sheetToPrint(canvas: SheetCanvasHandle, page: PageSetting): SheetToPrin
     elements,
     page,
     colors,
-    drawingsOn: (top, bottom) => drawingsSvg(canvas.api, top, bottom),
+    drawingsOn: (top, bottom) => drawingsSvg(canvas.api, top, bottom, { inlineFonts }),
     rowNodes: printRowNodes,
   }
 }
@@ -680,9 +701,7 @@ async function printOnTheWeb(
 ): Promise<void> {
   const doc = canvas.root.ownerDocument
   const view = doc.defaultView
-  line.current?.leaveLine()
-  // The overlay draws the line closed before it is copied.
-  await new Promise<void>((resolve) => (view ? view.requestAnimationFrame(() => resolve()) : resolve()))
+  await leaveLine(canvas, line)
   const { name } = session.getState()
   await printSheet({
     doc,
@@ -698,4 +717,26 @@ async function printOnTheWeb(
     print: () => view?.print(),
     notify: (message) => canvas.api.setToast({ message, closable: true, duration: 6000 }),
   })
+}
+
+/** Print… ends an open line first, as Esc does, and the overlay draws it closed before it is copied. */
+async function leaveLine(canvas: SheetCanvasHandle, line: { current: LineEditControl | null }): Promise<void> {
+  const view = canvas.root.ownerDocument.defaultView
+  line.current?.leaveLine()
+  await new Promise<void>((resolve) => (view ? view.requestAnimationFrame(() => resolve()) : resolve()))
+}
+
+/**
+ * Print… in a vault (section 11, Changed on 2026-11-15): an open line ends
+ * first, then the view's route builds the pages in its hidden frame, with
+ * Excalidraw's fonts inside the drawings' SVG, since the frame hasn't loaded them.
+ */
+async function printInVault(
+  canvas: SheetCanvasHandle,
+  route: NonNullable<VaultHome['print']>,
+  page: PageSetting,
+  line: { current: LineEditControl | null },
+): Promise<void> {
+  await leaveLine(canvas, line)
+  await route(() => sheetToPrint(canvas, page, true), page)
 }

@@ -127,6 +127,11 @@ export interface SheetCanvasProps {
   initialElements?: readonly ExcalidrawElement[]
   /** The app's file items, at the top of the ☰ menu. */
   fileMenu?: FileMenu
+  /**
+   * Print… in a vault on a computer (M5, section 8, Inside an Obsidian tab):
+   * the first ☰ item, with no key. Unset, there is none.
+   */
+  print?: () => void
   /** Math settings: its More tools item and the panel. */
   sheetPanel?: SheetPanelSlot
   /**
@@ -196,6 +201,7 @@ export function SheetCanvas({
   onReady,
   initialElements,
   fileMenu,
+  print,
   sheetPanel,
   embeds = true,
   imageTool,
@@ -454,7 +460,7 @@ export function SheetCanvas({
           )
         }
       >
-        <SheetMenu fileMenu={fileMenu} onMathGuide={openMathGuide} />
+        <SheetMenu fileMenu={fileMenu} print={print} onMathGuide={openMathGuide} />
         <SheetWelcome fileMenu={fileMenu} />
         {sheetPanel && !phone && (
           <Sidebar
@@ -660,12 +666,29 @@ export const WELCOME_HINT = 'Press M, or choose Add math under More tools, then 
 /**
  * The ☰ menu: the app's file items first, then the Excalidraw items v1 keeps,
  * with Math guide just above Excalidraw's Help (M4d). Excalidraw's Open, Save
- * to… and Export image… are left out. Print… (M5, #81) is the web's: in a
- * vault it is Obsidian's command and ☰ item, with the plugin's route.
+ * to… and Export image… are left out. Print… (M5, #81) is the web's file
+ * item with Ctrl+P; in a vault on a computer it is the first item, with no
+ * key (Ctrl+P is Obsidian's), and on a phone or tablet there is none.
  */
-function SheetMenu({ fileMenu, onMathGuide }: { fileMenu?: FileMenu; onMathGuide: () => void }) {
+function SheetMenu({
+  fileMenu,
+  print,
+  onMathGuide,
+}: {
+  fileMenu?: FileMenu
+  print?: () => void
+  onMathGuide: () => void
+}) {
   return (
     <MainMenu>
+      {!fileMenu && print && (
+        <>
+          <MainMenu.Item onSelect={print} data-testid="print-item">
+            Print…
+          </MainMenu.Item>
+          <MainMenu.Separator />
+        </>
+      )}
       {fileMenu && (
         <>
           <MainMenu.Item onSelect={fileMenu.open} shortcut="Ctrl+O">

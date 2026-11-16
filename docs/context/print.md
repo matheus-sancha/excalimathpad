@@ -51,7 +51,11 @@ The parts it is given come from the modules that know them: the drawings from `s
 (`printViews`, `printRowNodes`), put together in App (`sheetToPrint`). The web's route is App's
 `printOnTheWeb`: the page's own document, `window.print()`, `document.title` and Excalidraw's toast.
 
-**Still to come, the plugin's route** (spec section 11, As built (#81)): a hidden frame in the view's
-window, `printSheet` with its document, `styles` copied from the view's document,
-`drawingsSvg(…, { inlineFonts: true })` and the frame's `contentWindow.print()`, from a "Print…"
-command and ☰ item on a computer. Depends on: nothing.
+**The plugin's route** (spec section 11, Changed on 2026-11-16 and As built (#81, the plugin's route))
+is `plugin/print.ts` ([plugin](plugin.md)): `printInFrame` makes a hidden `srcdoc` frame in the view's
+window (`containerEl.doc`), calls `printSheet` with its document, `styles` (`appStyles`: the view
+document's sheets that hold the app's cascade layer, as text), the window's title, Obsidian's `Notice`
+and a `print` that shows the paper's notice (`paperNotice`), waits two frames and the frame's fonts, and
+calls the frame's `contentWindow.print()`; then removes the frame. The print run holds it in the built
+plugin, printing the frame's document from a page of its own; the pop-out run prints from each window.
+Depends on: nothing.

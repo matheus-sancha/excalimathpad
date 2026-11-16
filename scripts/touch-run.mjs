@@ -14,7 +14,8 @@
 // suggestions opening above the field, and a rule's condition typed in the
 // Rules list with the line still open (M4e, #197), and the Format tab's sample
 // (M4e, #199: on the phone's bottom sheet 72 px at most, scrolling inside, and
-// never a chart or a table); on the tablet, a mouse keeps hover.
+// never a chart or a table); on the tablet, a mouse keeps hover. On both
+// there is no Print…: no command and no ☰ item (section 11, M5, #81).
 // The tablet lies on its side (1180 px), where the panel docks; held upright
 // (820 px) it is too narrow to dock, so an edit opens no panel and Math
 // settings opens it floating, with the quick keys (M4e, #198). It
@@ -73,6 +74,7 @@ const page = `<!doctype html>
     const leaf = app.workspace.getLeaf()
     await leaf.openFile(new FakeObsidian.TFile(${JSON.stringify(FILE)}))
     window.__leaf = leaf
+    window.__commands = plugin.commands.map((command) => command.id)
   }
   // Whether Excalidraw's text editor has opened since the last reset: in
   // Chromium's touch, as Android, it closes again by itself (the browser's
@@ -169,6 +171,19 @@ try {
         return { x: box.x + Math.min(left, box.width / 2), y: box.y + box.height / 2 }
       }
       const lineOf = (anchor, line) => `[data-anchor-id="${anchor}"] [data-line="${line}"]`
+
+      // Print is for a computer (section 11, Changed on 2026-11-15): no command, and ☰ has no item.
+      const commands = await tab.evaluate(() => window.__commands)
+      await tab.locator('[data-testid="main-menu-trigger"]').first().tap()
+      await tab.waitForSelector('[data-testid="math-guide-item"]', { timeout: 10_000 })
+      const printItems = await tab.locator('[data-testid="print-item"]').count()
+      await tab.locator('[data-testid="main-menu-trigger"]').first().tap()
+      await pause()
+      row(
+        'no Print… command and no ☰ item',
+        commands.includes('add-math') && !commands.includes('print') && printItems === 0 && (await tab.locator('[data-testid="math-guide-item"]').count()) === 0,
+        `commands: ${commands.join(', ')}; ☰ print items: ${printItems}`,
+      )
       // One tap. The next comes after Excalidraw's 300 ms, which counts any two
       // touches as a double tap, wherever they land.
       const tap = async (point) => {
