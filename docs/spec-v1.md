@@ -764,6 +764,22 @@ function's definition show none. Hover is screen-only.
   empty because the note is in the field.
 - The sheet re-runs on every keystroke. Every other line stays typeset and updates
   live.
+- **The math is always drawn on its box** (0.2.2, [#191](https://github.com/matheus-sancha/excalimathpad/issues/191)): nothing but the canvas's own
+  pan and zoom moves it. The overlay can't be scrolled by the browser.
+- **The view follows the caret** (0.2.2). When a line or the title opens, on Enter, on ↑ and
+  ↓, and while typing, if the caret's row isn't wholly inside the visible area less a 48 px
+  margin, the canvas scrolls the least distance that puts it there: up, down or sideways.
+  Otherwise nothing moves. There is no zoom change, no undo step, no animation, and no scroll
+  back when the edit ends. A pan by hand during an edit is left alone until the caret next
+  moves. The caret's row is the open field; a field wider than the visible area less both
+  margins can't fit, so there the view follows the caret itself, and until the field wraps
+  (M4e) a very long line scrolls the canvas sideways as it is typed. Where the visible area is
+  too small for the row and both margins, the margin gives way and the row is centred. The
+  suggestion list keeps its own rule and doesn't move the view.
+- **The visible area** is the canvas less the Sheet panel where it covers the canvas (a
+  floating panel, and a docked one, which Excalidraw draws over the canvas's right) and, on a
+  phone, the bottom sheet and the keyboard. When it changes during an edit (the panel the edit
+  opens is drawn, the keyboard comes up) the caret is followed again.
 - **Enter** splits the line at the caret and continues on the new line below. At the
   end of a line, that opens an empty line.
 - **↑ / ↓** move the edit to the line above or below.
@@ -1687,7 +1703,8 @@ The Problems badge sits on its icon. Format is the [Format tab](#format-tab) and
 - **On a small window** the same rule holds. The fields carry `data-prevent-outside-click`,
   so a press in them keeps the floating panel; a press on the canvas still closes it, and
   the next edit reopens it. If the open line would sit under the panel, the view scrolls it
-  clear, as a jump does.
+  clear by the [follow rule](#while-editing-a-line) (0.2.2): the least distance, with no
+  centring. A jump from the panel still centres its element.
 - **A press in the panel never leaves the line.** Its controls that act on the open line
   are no-focus buttons. A typed field in it (a filter) takes focus, and so leaves an open
   line. A focused control in the panel never passes a key to Excalidraw: Delete on a focused
@@ -1781,7 +1798,8 @@ above, by the editor's width (1229 px until M4e).
   taller, about half the view. Its ✕ closes it, as Math settings does. The tab contents are
   the same components.
 - The open-then-restore rule holds, and the view scrolls the open line into the space left
-  above the sheet and the keyboard.
+  above the sheet and the keyboard by the [follow rule](#while-editing-a-line) (0.2.2): the
+  least distance, with no centring.
 - Buttons for a finger are at least 40 px. The quick keys sit in the order
   `_ ^ = ( ) * / , ..` then the quotes.
 
@@ -2903,7 +2921,9 @@ Evidence: [`obsidian-plugin.md`](research/obsidian-plugin.md).
 - **The docking width** passed to Excalidraw (`UIOptions.dockedSidebarBreakpoint`) and the
   app's own must be one value, or the panel docks where the app thinks it floats.
 - **The overlay never scrolls** (`overflow: clip`, 0.2.2): the canvas's pan is the only thing
-  that moves the math.
+  that moves the math. `overflow: hidden` isn't enough: the browser still scrolls a hidden box to
+  show a focused field's caret. The follow run (`scripts/follow-run.mjs`, `npm run test:follow`)
+  fails if any box around the math has been scrolled.
 - **Plot:** `aspectRatio` is ignored at fixed sizes, so equal scales are made by setting both
   axis ranges; all four margins are set by the app. Observable Plot is imported by name once
   the new clauses are built.
@@ -4249,3 +4269,28 @@ Changes line if it changes behaviour.
       after M5 (#203), not by M4e's last issue, since M5 adds code; the prototypes under `docs/research/` are
       deleted by the first issue; the true-position reference values (`TP` 0.1887 mm, `used` 75.47,
       `margin` 0.06132 mm) were worked by hand, not run.
+- 2026-11-15, [sections 4](#while-editing-a-line) and [8](#8-app-chrome) ([#191](https://github.com/matheus-sancha/excalimathpad/issues/191), a fix released as 0.2.2; the rule
+  agreed by Matheus in [#190](https://github.com/matheus-sancha/excalimathpad/issues/190)): **the math is always
+  drawn on its box, and the view follows the caret.**
+  - **The overlay can't be scrolled by the browser.** It was `overflow: hidden`, which the browser still scrolls
+    to show the focused field: typing the 146-character plot line near the window's edge drew the math 671 px
+    left of its box, and Enter 453 px above it, where it stayed after Esc.
+  - **One follow rule** replaces the two scrolls of M4d (a line under a floating panel centred in the strip left
+    of it; a line on a phone centred above the bottom sheet): the least distance that puts the caret's row inside
+    the visible area less 48 px, in section 4. A jump from the panel still centres.
+  - **Found while building, not asked; say on the PR if any is wrong:**
+    - *A docked panel counts too.* Excalidraw draws its docked sidebar over the canvas's right (at 1366 px the
+      panel covers x 990 to 1366 of the canvas), so the visible area ends at the panel's left edge whether it
+      floats or is docked. #190 said "less a floating Sheet panel".
+    - *The caret's row is the open field,* not the result beside it. A field wider than the visible area less
+      both margins is followed at its caret; one that fits is kept whole in view.
+    - *The caret is followed again when the visible area changes during an edit:* when the panel the edit opened
+      is drawn, and on a phone when the keyboard or the sheet resizes (as M4d did). A window resize on a desktop
+      doesn't.
+    - *Only while the open field has the keyboard,* which is how a Format tab field doesn't move the view. A
+      Format tab button rewrites the line with the field still focused, so it follows like a keystroke.
+    - *← → Home End and a click in the field don't follow.* #190 lists opening, Enter, ↑ ↓ and typing; the next
+      keystroke brings the caret back.
+    - *Where a browser has no `overflow: clip`* the overlay stays `hidden` and each scroll is put back at once.
+  - **Not verified:** Obsidian itself, a phone's real keyboard, Firefox and Safari. The follow run is headless
+    Chromium at 1366 × 768 and 1000 × 800 against the built plugin; the phone's bottom sheet is the touch run's.

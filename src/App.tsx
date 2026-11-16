@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 import type { ExcalidrawElement } from '@excalidraw/excalidraw/element/types'
 import { AppShell } from './shell/AppShell.tsx'
 import {
-  SHEET_SIDEBAR_CLASS,
   SheetCanvas,
   type SheetCanvasHandle,
   type SheetPanelState,
@@ -11,7 +10,8 @@ import {
 import { isMathAnchor } from './canvas/mathAnchor.ts'
 import { mathSelection } from './canvas/mathSelection.ts'
 import { sceneFileFor } from './canvas/sceneFile.ts'
-import { jumpToAnchor, scrollClearAbove, scrollClearOf, SIDEBAR_DOCKS_ABOVE } from './canvas/selection.ts'
+import { FOLLOW_MARGIN, jumpToAnchor, scrollIntoArea, SIDEBAR_DOCKS_ABOVE, visibleArea } from './canvas/selection.ts'
+import { caretRow } from './overlay/caretRow.ts'
 import {
   MathOverlay,
   type EditTarget,
@@ -305,25 +305,17 @@ export default function App({ files, recovery, panelMemory, vault, initialElemen
   )
   // What is open, for the Format tab (section 4, Format tab, M4d).
   const [editTarget, setEditTarget] = useState<EditTarget | null>(null)
+  const phone = vault?.phone ?? false
   const onEdit = useCallback(
     (target: EditTarget | null) => {
       setEditTarget(target)
       if (!canvas) return
+      // The view follows the caret: as a line or the title opens, on Enter,
+      // on ↑ and ↓ and while typing (section 4, While editing a line, 0.2.2).
+      if (target) followCaret(canvas, phone)
       if (target && !beforeEdit.current) {
         beforeEdit.current = canvas.sheetPanel()
         showAutomatically({ open: true, tab: 'format' })
-        // On a phone the open line moves into the space above the bottom sheet
-        // and the keyboard; on a small window the panel floats, and the line
-        // moves clear of it.
-        if (vault?.phone) clearOfBottomSheet(canvas)
-        else if (!wideRoot(canvas.root)) {
-          const view = canvas.root.ownerDocument.defaultView
-          view?.requestAnimationFrame(() => {
-            const panel = canvas.root.querySelector(`.${SHEET_SIDEBAR_CLASS}`)?.getBoundingClientRect()
-            if (!panel || panel.width === 0) return
-            scrollClearOf(canvas.api, target.anchorId, panel.left - canvas.root.getBoundingClientRect().left)
-          })
-        }
       } else if (!target && beforeEdit.current) {
         const before = beforeEdit.current
         beforeEdit.current = null
@@ -331,18 +323,17 @@ export default function App({ files, recovery, panelMemory, vault, initialElemen
         showAutomatically({ open: before.open && canvas.sheetPanel().open, tab: before.tab })
       }
     },
-    [canvas, showAutomatically, vault?.phone],
+    [canvas, showAutomatically, phone],
   )
 
   // On a phone the keyboard and the sheet settle after the edit opens: the
-  // line is moved clear again each time the sheet's room changes.
-  const phone = vault?.phone ?? false
+  // caret is followed again each time the visible area changes.
   const editing = editTarget !== null
   useEffect(() => {
     if (!phone || !editing || !canvas) return
     const view = canvas.root.ownerDocument.defaultView
     const viewport = view?.visualViewport
-    const clear = () => clearOfBottomSheet(canvas)
+    const clear = () => followCaret(canvas, true)
     viewport?.addEventListener('resize', clear)
     view?.addEventListener('resize', clear)
     return () => {
@@ -468,6 +459,9 @@ export default function App({ files, recovery, panelMemory, vault, initialElemen
             // Remembered per home; a floating panel closes by itself, so
             // only a wide window's choice counts.
             onChange: (open, tab) => {
+              // The panel an edit opens covers part of the canvas once it is
+              // drawn: the caret is followed again in what is left.
+              if (open && editing && canvas) followCaret(canvas, phone)
               const asked = automatic.current
               if (asked && asked.open === open && (!open || asked.tab === tab)) {
                 automatic.current = null
@@ -506,17 +500,19 @@ export default function App({ files, recovery, panelMemory, vault, initialElemen
 }
 
 /**
- * Moves the open line into the space left above the bottom sheet and the
- * keyboard (section 8, On a phone), once the sheet has laid out.
+ * The follow rule (docs/spec-v1.md section 4, While editing a line, 0.2.2,
+ * #191): once the edit has laid out, the canvas scrolls the least distance
+ * that puts the caret's row inside the visible area less the margin. Only
+ * while the open field has the keyboard, so typing in a Format tab field
+ * doesn't move the view.
  */
-function clearOfBottomSheet(canvas: SheetCanvasHandle) {
-  const view = canvas.root.ownerDocument.defaultView
-  view?.requestAnimationFrame(() => {
-    const field = canvas.root.closest('.app-shell__stage')?.querySelector('.math-element__field')?.getBoundingClientRect()
-    const sheet = canvas.root.querySelector(`.${SHEET_SIDEBAR_CLASS}`)?.getBoundingClientRect()
-    const top = canvas.root.getBoundingClientRect().top
-    if (!field || !sheet || sheet.height === 0) return
-    scrollClearAbove(canvas.api, { top: field.top - top, bottom: field.bottom - top }, sheet.top - top)
+function followCaret(canvas: SheetCanvasHandle, phone: boolean) {
+  const document = canvas.root.ownerDocument
+  document.defaultView?.requestAnimationFrame(() => {
+    const field = canvas.root.closest('.app-shell__stage')?.querySelector<HTMLInputElement>('.math-element__field')
+    if (!field || document.activeElement !== field) return
+    const area = visibleArea(canvas.root, phone)
+    scrollIntoArea(canvas.api, caretRow(field, area.right - area.left - 2 * FOLLOW_MARGIN), area)
   })
 }
 

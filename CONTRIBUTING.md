@@ -57,12 +57,13 @@ You need **Node.js** `^22.22.2 || ^24.15.0 || >=26` and **npm 10+**. CI runs on 
 | `npm run test:blocked` | Open the built plugin in headless Chromium with the network blocked (Playwright's Chromium: `npx playwright install chromium` once) |
 | `npm run test:popout` | Open the built plugin in headless Chromium with a sheet tab in a pop-out window, and check it drags, places math, opens Help and the Math guide, pastes and copies there |
 | `npm run test:touch` | Open the built plugin in headless Chromium by touch, at a phone and a tablet viewport, as Android and as iOS, and check the touch gestures, the quick keys and the phone's bottom sheet |
+| `npm run test:follow` | Open the built plugin in headless Chromium, type a long plot line near the window's bottom, press Enter and Esc, and check the math stays drawn on its box and the caret stays in view |
 | `npm run preview` | Serve `dist/` locally |
 | `npm run lint` | Lint with oxlint, then Obsidian's ESLint rules at zero warnings |
 | `npm test` | Run the tests once with Vitest (jsdom) |
 | `npm run test:watch` | Run the tests in watch mode |
 | `npm run typecheck` | Run the TypeScript project build, with no output files |
-| `npm run check` | Run lint, the tests, both builds, the plugin audit, the blocked run, the pop-out run and the touch run. **This is what CI runs, so run it before you push** |
+| `npm run check` | Run lint, the tests, both builds, the plugin audit, the blocked run, the pop-out run, the touch run and the follow run. **This is what CI runs, so run it before you push** |
 
 ### Typical workflow
 
