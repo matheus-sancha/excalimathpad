@@ -77,14 +77,17 @@ You need **Node.js** `^22.22.2 || ^24.15.0 || >=26` and **npm 10+**. CI runs on 
 
 ## Spec, CONTEXT.md and ADRs
 
-The project keeps four documents in step with the code. A pull request that changes what they describe updates them in the same pull request.
+The project keeps five documents in step with the code. A pull request that changes what they describe updates them in the same pull request.
 
 | Document | Says | Update it when |
 |---|---|---|
 | [`docs/spec-v1.md`](docs/spec-v1.md) | What v1 **will be** | Behaviour changes. **Behaviour doesn't change without this file changing.** Record the change under [Changes since agreed](docs/spec-v1.md#changes-since-agreed) |
-| [`CONTEXT.md`](CONTEXT.md) | What the code **is today**: modules, interfaces, terms, invariants | You add or change a module, an interface, a term or an invariant. Use the spec's names |
+| [`CONTEXT.md`](CONTEXT.md) | What the code **is today**: the model, the terms, the invariants and one line per module. It has a size budget, checked by `npm run check` | You add or change a term, an invariant or a module's one line. Use the spec's names. Behaviour goes in the spec, not here |
+| [`docs/context/`](docs/context/) | One file per module: its files, its interfaces and how they work together | You add or change a module or an interface |
 | [`docs/adr/`](docs/adr/) | **Why**, for choices that are hard to reverse | You make, or amend, a decision of that kind. Add a new numbered ADR or amend the existing one |
 | [`docs/math-guide.md`](docs/math-guide.md) | **How to use it**, for users: every form, key and setting, with examples. Shown in the app from ☰ → Math guide | Something a user types, sees or presses changes: a line form, a unit, a setting, a key or a message. Its examples run in CI, so a change that alters one fails `src/math/math-guide.test.ts` until the guide follows |
+
+The issue orders of the milestones already built, the results of the spec's Verify first items and its decision index are in [`docs/spec-history.md`](docs/spec-history.md). [`CLAUDE.md`](CLAUDE.md) tells a coding agent which of these to read for an issue.
 
 Background investigations go in [`docs/research/`](docs/research/): units, solvers, undo, printing, the PWA and the Obsidian plugin. The acceptance sheet and its independent reference calculation are in [`docs/acceptance/`](docs/acceptance/).
 
@@ -131,7 +134,7 @@ docs/
 5. **Line commit.** Leaving an edited line writes the element's whole source once, as one undo step on Excalidraw's own stack.
 6. **File.** The scene is saved as Excalidraw JSON plus an `excalimathpad` block for settings and the format version ([ADR 0004](docs/adr/0004-sheet-file-is-excalidraw-json-plus-a-block.md)). Older files are upgraded on open, and files from a newer version are refused. In a vault, the plugin's view saves through Obsidian in place of the web app's file access and recovery copy.
 
-[`CONTEXT.md`](CONTEXT.md) describes each module's interface and what it depends on.
+[`CONTEXT.md`](CONTEXT.md) names each module and what it depends on, and [`docs/context/`](docs/context/) describes each one's interface.
 
 ## Tech Stack
 
