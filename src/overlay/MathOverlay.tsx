@@ -36,15 +36,11 @@ import {
 } from '../math/evaluate.ts'
 import {
   caretAfterFormat,
-  codeLength,
   lineFormats,
   pressCommentFormat,
   pressFormat,
   pressRules,
-  readLine,
   storeFormats,
-  writeNewRule,
-  type FormatRule,
   type RuleRow,
   writeDisplayUnit,
   type CommentFormat,
@@ -59,6 +55,7 @@ import {
   applyLineMove,
   startLineEdit,
   TITLE_LINE,
+  withTypedFormat,
   withTypedLine,
   type LineEdit,
   type LineMove,
@@ -71,7 +68,7 @@ import { Boundary } from '../failure/Boundary.tsx'
 import { TEXT_COLOR_VALUES } from './textColors.ts'
 import { PlacingGhost } from './PlacingGhost.tsx'
 import { readingOrder } from './readingOrder.ts'
-import { constantSuggestions, FUNCTION_SUGGESTIONS, sheetNames, suggest, unitSuggestions } from './suggest.ts'
+import { constantSuggestions, FUNCTION_SUGGESTIONS, sheetNames, suggest, unitSuggestions, type Suggested } from './suggest.ts'
 import { isPlainAt, planInsert } from './symbolInsert.ts'
 import { fieldRoom, wrapWidthTo } from './wrapRoom.ts'
 import type { OpenField } from './caretRow.ts'
@@ -131,26 +128,30 @@ export interface LineEditControl {
   openLast(anchorId: string): void
   /**
    * The open math line's rules, as the Rules list writes them (section 4,
-   * Rules list): the stored format, one undo step, the line kept open. Each
-   * row says which rule it was (`from`: the rules typed in the line first,
-   * then the stored ones). A rule still typed in the line is rewritten there,
-   * and a caret inside it goes back to its condition's end.
+   * Rules list, M4e): every row goes to the line's stored format, with the
+   * typed text, in one write and one undo step, the line kept open. The field
+   * is left alone, unless rules were typed in the line: they move out with the
+   * write, on a new field with the caret in the code.
    */
-  setRules(rows: readonly RuleEdit[]): void
+  setRules(rows: readonly RuleRow[]): void
+  /**
+   * The same rows while a condition is being typed in its field: nothing is
+   * written, and the sheet runs from them, so the rule's live state follows
+   * the field. They are written by `saveRules`, by the next press, or when the
+   * edit leaves the line. Rules typed in the line are written at once, as
+   * `setRules` does, since they move out of its text.
+   */
+  typeRules(rows: readonly RuleRow[]): void
+  /** Writes what `typeRules` holds: a condition saved, one undo step. Nothing when nothing was typed. */
+  saveRules(): void
+  /** The suggestions the open line's field offers, for a condition's text and caret; null for none. */
+  suggest(text: string, caret: number): Suggested | null
   /**
    * Measures the open line's wrap width again (section 4, While editing a
    * line, The field wraps, M4e): the panel the edit opened has been drawn,
    * and covers part of what was the visible area when the line opened.
    */
   rewrap(): void
-  /** Puts the caret at the end of the `index`th rule's condition, when that rule is typed in the open line. */
-  caretToRule(index: number): void
-  /**
-   * + Add rule: types ` @text-red if <name> ` after the line's code, the caret
-   * after it; null names nothing (a table line). The rule is the line's text
-   * until the line is committed.
-   */
-  addRule(name: string | null): void
   /**
    * A Symbols or Constants button (section 4, What a click inserts, M4d): types
    * the insert at the open field's caret, by its mode, as typing does, so the
@@ -161,15 +162,16 @@ export interface LineEditControl {
   insert(insert: SymbolInsert, anchorId?: string | null): void
 }
 
-/** A row of the Rules list, and the rule it was in the line before the press (null for none). */
-export type RuleEdit = RuleRow & { from: number | null }
-
 /** What is open, for the Sheet panel (section 8): a line or the title, and its typed text. */
 export interface EditTarget {
   anchorId: string
   lineIndex: number | 'title'
   text: string
-  /** The open line's stored format (section 3, Where a line's format lives, M4e); empty for none and for the title. */
+  /**
+   * The open line's stored format (section 3, Where a line's format lives,
+   * M4e), as a condition being typed in the Rules list has it; empty for none
+   * and for the title.
+   */
   stored: string
 }
 
@@ -310,11 +312,15 @@ export function MathOverlay({
   const typedSourceOf = (anchor: MathAnchor) =>
     edit?.anchorId === anchor.id ? withTypedLine(anchor.source, edit) : anchor.source
 
+  // A condition being typed in the Rules list is read as the line's text is (section 4, Rules list).
+  const typedFormatsOf = (anchor: MathAnchor) =>
+    edit?.anchorId === anchor.id ? withTypedFormat(anchor.source, anchor.formats, edit) : anchor.formats
+
   // A string, so moves that keep the order and the sources keep the memo below.
   const sheetKey = JSON.stringify(
     readingOrder(anchors).map((id): SheetBlock => {
       const anchor = anchors.find((candidate) => candidate.id === id)
-      return { id, source: anchor ? typedSourceOf(anchor) : '', formats: anchor?.formats ?? '' }
+      return { id, source: anchor ? typedSourceOf(anchor) : '', formats: anchor ? typedFormatsOf(anchor) : '' }
     }),
   )
   const lines = useMemo(
@@ -450,7 +456,14 @@ export function MathOverlay({
       changeEdit(null)
       return
     }
-    const next = applyLineMove(anchor.source, current, move, anchor.title, anchor.formats)
+    // A condition typed and not yet saved goes with the line, in its one write.
+    const next = applyLineMove(
+      anchor.source,
+      current,
+      move,
+      anchor.title,
+      withTypedFormat(anchor.source, anchor.formats, current),
+    )
     if (next.remove) removeAnchor(api, current.anchorId)
     else {
       // A move changes the line or the title, never both: one write, one step.
@@ -464,44 +477,41 @@ export function MathOverlay({
   /**
    * A press in the Format tab or a format key on the open line (section 4,
    * Format tab, Writes): `write` gives the line's text and its stored format
-   * after the press, and both go to the scene in one write, one undo step. The
-   * field is left alone, with its text undo, unless the press changed the
-   * line's text (a clause typed in it moved out): then the line stays open on
-   * a new field, the caret where `caretOf` puts it.
+   * after the press, and both go to the scene in one write, one undo step,
+   * with any condition typed in the Rules list and not yet saved. The field is
+   * left alone, with its text undo, unless the press changed the line's text
+   * (a clause typed in it moved out): then the line stays open on a new field,
+   * the caret where `caretAfterFormat` puts it.
    */
-  const pressLine = (
-    write: (text: string, stored: string) => { text: string; stored: string },
-    caretOf: (before: string, after: string, caret: number) => number = caretAfterFormat,
-  ) => {
+  const pressLine = (write: (text: string, stored: string) => { text: string; stored: string }) => {
     const current = editRef.current
     const live = current && findAnchor(current.anchorId)
     if (!current || !live || current.lineIndex === TITLE_LINE) return
     const sourceLines = splitLines(live.source)
     if (current.lineIndex >= sourceLines.length) return
     const entries = lineFormats(live.formats, sourceLines.length)
-    const next = write(current.text, entries[current.lineIndex])
+    const next = write(current.text, current.stored ?? entries[current.lineIndex])
     const same = next.text === sourceLines[current.lineIndex] && next.stored === entries[current.lineIndex]
     sourceLines[current.lineIndex] = next.text
     entries[current.lineIndex] = next.stored
     if (!same) writeAnchorSource(api, current.anchorId, sourceLines.join('\n'), storeFormats(entries))
-    if (next.text === current.text) return
+    if (next.text === current.text) {
+      // The scene holds what was being typed in the Rules list.
+      if (current.stored !== undefined) changeEdit({ ...current, stored: undefined })
+      return
+    }
     const caret = openField(overlayRef.current)?.selectionStart ?? next.text.length
     changeEdit({
       ...current,
       text: next.text,
-      caret: caretOf(current.text, next.text, caret),
+      caret: caretAfterFormat(current.text, next.text, caret),
       revision: (current.revision ?? 0) + 1,
+      stored: undefined,
     })
   }
   const setFormat = (format: LineFormat) => pressLine((text, stored) => pressFormat(text, stored, format))
   const setCommentFormat = (format: CommentFormat) =>
     pressLine((text, stored) => pressCommentFormat(text, stored, format))
-
-  /** The rules a line's typed text holds. */
-  const rulesOf = (text: string): readonly FormatRule[] => {
-    const form = readLine(text)
-    return form.kind === 'code' ? form.rules : []
-  }
 
   const openLine = (anchorId: string, lineIndex: number) => {
     moveEdit({ kind: 'leave' })
@@ -536,7 +546,14 @@ export function MathOverlay({
       const anchor = current && findAnchor(current.anchorId)
       if (!current || !anchor) return
       if (current.lineIndex === TITLE_LINE) writeAnchorTitle(api, current.anchorId, current.text)
-      else writeAnchorSource(api, current.anchorId, withTypedLine(anchor.source, current))
+      else {
+        writeAnchorSource(
+          api,
+          current.anchorId,
+          withTypedLine(anchor.source, current),
+          withTypedFormat(anchor.source, anchor.formats, current),
+        )
+      }
     },
     leaveLine: () => moveEdit({ kind: 'leave' }),
     isOpen: () => editRef.current !== null,
@@ -561,42 +578,23 @@ export function MathOverlay({
       if (anchor) openLine(anchorId, splitLines(anchor.source).length - 1)
     },
     setRules(rows) {
-      pressLine(
-        (text, stored) => pressRules(text, stored, rows),
-        (before, text, caret) => {
-          // A caret inside a typed rule follows it to its condition's end (section 4, Rules list).
-          const typed = rulesOf(before)
-          // Just after + Add rule the caret is a space past the rule, where its condition goes on.
-          const inside = typed.findIndex(
-            ({ start, end }) => caret >= start && (caret <= end || before.slice(end, caret).trim() === ''),
-          )
-          if (inside === -1) return caretAfterFormat(before, text, caret)
-          const followed = rows.filter(({ from }) => from !== null && from < typed.length).findIndex(({ from }) => from === inside)
-          const target = followed === -1 ? undefined : rulesOf(text)[followed]
-          return target ? target.end : codeLength(text)
-        },
-      )
+      pressLine((text, stored) => pressRules(text, stored, rows))
     },
-    rewrap: measureWrap,
-    caretToRule(index) {
-      const current = editRef.current
-      const rule = current && current.lineIndex !== TITLE_LINE ? rulesOf(current.text)[index] : undefined
-      const field = openField(overlayRef.current)
-      if (!rule || !field) return
-      field.focus()
-      field.setSelectionRange(rule.end, rule.end)
-    },
-    addRule(name) {
+    typeRules(rows) {
       const current = editRef.current
       const live = current && findAnchor(current.anchorId)
-      if (!current || !live || current.lineIndex === TITLE_LINE || readLine(current.text).kind !== 'code') return
-      // Typed for the user: the rule is the line's text until the line is
-      // committed, so its condition is typed after it (section 4, Rules list).
-      const { text, caret } = writeNewRule(current.text, name)
-      const next = { ...current, text, caret, revision: (current.revision ?? 0) + 1 }
-      writeAnchorSource(api, current.anchorId, withTypedLine(live.source, next))
-      changeEdit(next)
+      if (!current || !live || current.lineIndex === TITLE_LINE) return
+      const stored = storedFormat([live], current)
+      const next = pressRules(current.text, stored, rows)
+      // Rules typed in the line move out of its text: written at once.
+      if (next.text !== current.text) return pressLine(() => next)
+      if (next.stored !== stored) changeEdit({ ...current, stored: next.stored })
     },
+    saveRules() {
+      if (editRef.current?.stored !== undefined) pressLine((text, stored) => ({ text, stored }))
+    },
+    suggest: (text, caret) => suggestRef.current?.(text, caret) ?? null,
+    rewrap: measureWrap,
     insert(insert, anchorId = null) {
       if (editRef.current) return typeInsert(insert)
       const anchor = anchorId === null ? undefined : findAnchor(anchorId)
@@ -655,6 +653,12 @@ export function MathOverlay({
           ),
         )
       : null
+
+  // A rule's condition field offers the same list (section 4, Rules list, M4e).
+  const suggestRef = useRef(suggestForEdit)
+  useEffect(() => {
+    suggestRef.current = suggestForEdit
+  })
 
   const leaveLine = (anchorId: string, lineIndex: number) => {
     const current = editRef.current
@@ -756,10 +760,11 @@ export function MathOverlay({
 
 const runNow = (write: () => void) => write()
 
-/** The stored format of the line `edit` is on (section 3, M4e): none for the title. */
+/** The stored format of the line `edit` is on (section 3, M4e), as the Rules list has typed it if it has: none for the title. */
 function storedFormat(anchors: readonly MathAnchor[], edit: LineEdit | null): string {
   const anchor = edit && edit.lineIndex !== TITLE_LINE ? anchors.find(({ id }) => id === edit.anchorId) : undefined
   if (!edit || !anchor) return ''
+  if (edit.stored !== undefined) return edit.stored
   return lineFormats(anchor.formats, splitLines(anchor.source).length)[edit.lineIndex] ?? ''
 }
 

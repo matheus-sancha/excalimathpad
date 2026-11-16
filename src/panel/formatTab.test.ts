@@ -39,7 +39,6 @@ describe('formatView (docs/spec-v1.md section 4, Format tab)', () => {
       format: { bold: true, underline: false, color: 'red', textColor: null },
       overrides: ['A rule sets the text colour while v > 3.'],
       rules: [{ condition: 'v > 3', text: '@text-red if v > 3' }],
-      typedRules: 0,
       ruleStates: [{ kind: 'true' }],
     })
     expect(formatView(sheet, { anchorId: 'm1', lineIndex: 1, text: '# Pumps', stored: '@L' })).toMatchObject({
@@ -52,7 +51,6 @@ describe('formatView (docs/spec-v1.md section 4, Format tab)', () => {
     ).toMatchObject({
       format: { bold: true, color: 'yellow' },
       rules: [{ condition: 'v > 9' }, { condition: 'v > 3' }],
-      typedRules: 1,
     })
     // Stored on a blank line, a clause formats nothing.
     expect(formatView(sheet, { anchorId: 'm1', lineIndex: 0, text: '', stored: '@bold' })).toMatchObject({ kind: 'blank' })

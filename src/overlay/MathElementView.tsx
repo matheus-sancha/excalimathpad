@@ -40,7 +40,7 @@ import { GEAR } from './useSheetGestures.ts'
 import { readPlot, type PlotClause } from '../math/plotLine.ts'
 import { hasText, TITLE_LINE, type LineEdit, type LineMove } from './lineEdit.ts'
 import { listGoesAbove, type Suggested, type Suggestion } from './suggest.ts'
-import { BOTTOM_SHEET_CLASS } from '../canvas/panelPresses.ts'
+import { BOTTOM_SHEET_CLASS, isLineField } from '../canvas/panelPresses.ts'
 import { sceneToStage, type Viewport } from './viewport.ts'
 import { caretPlace, caretRow } from './caretRow.ts'
 
@@ -1116,7 +1116,9 @@ function LineField({
 
   useLayoutEffect(() => {
     const field = fieldRef.current
-    field?.focus()
+    // A field mounted again while a rule's condition is being typed (a typed
+    // rule moved out of the text) leaves the keyboard there (section 4, Rules list).
+    if (!isLineField(field?.ownerDocument.activeElement ?? null)) field?.focus()
     field?.setSelectionRange(opening.caret, opening.caret)
   }, [opening, fieldRef])
 
@@ -1232,6 +1234,8 @@ function LineField({
         // window): Excalidraw's outside click skips this mark, which isn't public
         // API (`panelPresses.excalidraw.test.tsx`).
         data-prevent-outside-click
+        // `LINE_FIELD`: the keyboard may pass to a rule's condition and back with the line still open.
+        data-line-field
         onInput={(event) => {
           const field = event.currentTarget
           // A newline that got in another way (a drop): the field holds one line.
@@ -1263,7 +1267,9 @@ function LineField({
         onBlur={(event) => {
           setList(null)
           // The window lost focus, not the field: the edit hasn't left its line.
-          if (event.currentTarget.ownerDocument.activeElement !== event.currentTarget) onBlur()
+          // Nor has it when the keyboard went to a rule's condition in the
+          // Rules list (section 4, Rules list, M4e): the line stays open.
+          if (event.currentTarget.ownerDocument.activeElement !== event.currentTarget && !isLineField(event.relatedTarget)) onBlur()
         }}
       />
       {list && (

@@ -358,21 +358,52 @@ export function writeRules(line: string, rows: readonly RuleRow[]): string {
 }
 
 /**
- * + Add rule (section 4, Rules list): ` @text-red if <name> ` at the end of the
- * clause, before any note, and the caret after it, so the condition is typed
- * next. With no name (a table line) it writes ` @text-red if ` alone.
+ * The row + Add rule adds (section 4, Rules list, M4e): the format `text-red`
+ * and the condition `<name>`, or none on a table line, which names nothing.
  */
-export function writeNewRule(line: string, name: string | null): { text: string; caret: number } {
-  const at = commentStart(line)
-  const head = (at === -1 ? line : line.slice(0, at)).trimEnd()
-  const added = `${head} @text-red if ${name === null ? '' : `${name} `}`
-  return { text: at === -1 ? added : `${added} ${line.slice(at)}`, caret: added.length }
+export function newRule(name: string | null): RuleRow {
+  return { words: [{ kind: 'text', color: 'red' }], condition: name ?? '', text: null }
 }
 
-/** A rule as one joined word and one condition: its words in the order text, highlight, bold, underline. */
+/**
+ * What a condition's field takes of `text` (section 4, Rules list, M4e): up to
+ * the first `@` or `#` outside a string, since an `@` starts the next word of
+ * the clause and a `#` ends it.
+ */
+export function conditionText(text: string): string {
+  const cut = [commentStart(text), clauseStart(text)].filter((at) => at !== -1)
+  return cut.length === 0 ? text : text.slice(0, Math.min(...cut))
+}
+
+/**
+ * A rule as one joined word and one condition: its words in the order text,
+ * highlight, bold, underline. The condition is written so the rule reads back
+ * as one rule wherever it stands in a clause: cut where `conditionText` cuts
+ * it, and a text left open (`result == "Pa`, as it is being typed) closed.
+ */
 export function ruleText(words: readonly FormatWord[], condition: string): string {
   const joined = formatWords(words.reduce(applyFormatWord, NO_FORMAT)).map(wordName).join('+')
-  return `@${joined} if${condition.trim() ? ` ${condition.trim()}` : ''}`
+  const written = closeString(conditionText(condition).trim())
+  return `@${joined} if${written ? ` ${written}` : ''}`
+}
+
+/**
+ * `text` with a string it leaves open closed, by the quote rule of the
+ * comment: an open string would take in every word of the clause after it.
+ */
+function closeString(text: string): string {
+  let quote: string | null = null
+  let escaped = false
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i]
+    if (quote) {
+      if (char === '\\') escaped = ++i >= text.length
+      else if (char === quote) quote = null
+    } else if (char === '"' || (char === "'" && !endsValue(text, i))) {
+      quote = char
+    }
+  }
+  return quote === null ? text : `${text}${escaped ? '\\' : ''}${quote}`
 }
 
 /** A format's words, in the order a rule writes them: text colour, highlight, bold, underline. */
@@ -571,34 +602,22 @@ export function pressCommentFormat(line: string, stored: string, format: Comment
 }
 
 /**
- * A Rules list press (section 4, Rules list): `rows` are the line's rules as
- * they should be, each saying which rule it was (`from`, counting the rules
- * typed in the text first, then the stored ones). Stored rules are written to
- * the stored clause. Rules still typed in the open line stay in its text, so
- * their conditions can go on being typed, unless the press puts a stored rule
- * above one: then every rule moves out.
+ * A Rules list write (section 4, Rules list, M4e): `rows` are the line's rules
+ * as they should be, and all of them go to the stored clause, after its plain
+ * words. Rules typed in the open line move out of its text with the write, as
+ * plain words do with a Format tab press; plain words typed there stay, and the
+ * text is otherwise left exactly as it is.
  */
-export function pressRules(
-  line: string,
-  stored: string,
-  rows: readonly (RuleRow & { from: number | null })[],
-): { text: string; stored: string } {
+export function pressRules(line: string, stored: string, rows: readonly RuleRow[]): { text: string; stored: string } {
   const { text: bare, clause } = splitFormat(line)
   if (readLine(bare).kind !== 'code') return { text: line, stored }
   const typed = splitClause(clause).segments
-  const typedRules = typed.filter(isRuleSegment)
-  const isTyped = rows.map(({ from }) => from !== null && from < typedRules.length)
-  const firstStored = isTyped.indexOf(false)
-  if (firstStored !== -1 && isTyped.lastIndexOf(true) > firstStored) {
-    return { text: bare, stored: splitFormat(writeRules(withFormat(line, stored), rows)).clause }
-  }
-  const textOf = (row: RuleRow) => row.text ?? ruleText(row.words, row.condition)
-  const nextTyped = rows.filter((_, i) => isTyped[i]).map(textOf)
-  const same = nextTyped.length === typedRules.length && nextTyped.every((text, i) => text === typedRules[i])
+  const typedPlain = typed.filter((segment) => !isRuleSegment(segment))
   const storedPlain = splitClause(stored).segments.filter((segment) => !isRuleSegment(segment))
   return {
-    text: same ? line : withFormat(bare, [...typed.filter((segment) => !isRuleSegment(segment)), ...nextTyped].join(' ')),
-    stored: [...storedPlain, ...rows.filter((_, i) => !isTyped[i]).map(textOf)].join(' '),
+    text: typedPlain.length === typed.length ? line : withFormat(bare, typedPlain.join(' ')),
+    // A rule kept as typed may end in an open text, which would take in the rows after it.
+    stored: [...storedPlain, ...rows.map((row) => closeString(row.text ?? ruleText(row.words, row.condition)))].join(' '),
   }
 }
 

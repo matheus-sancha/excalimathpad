@@ -12,11 +12,18 @@ export interface LineEdit {
   text: string
   caret: number
   /**
-   * Goes up each time the app rewrites the text of the open line (+ Add rule,
-   * a format press that moves a typed clause out): the field takes only what
+   * Goes up each time the app rewrites the text of the open line (a format or
+   * Rules list press that moves a typed clause out): the field takes only what
    * the user types, so it is mounted again.
    */
   revision?: number
+  /**
+   * The line's stored format as it is being typed in the Rules list (section
+   * 4, Rules list, M4e): a condition not saved yet. The sheet runs from it, as
+   * it does from `text`, and it reaches the scene when the condition is saved
+   * or the edit leaves the line. Unset while nothing is being typed there.
+   */
+  stored?: string
 }
 
 /**
@@ -79,6 +86,20 @@ export function withTypedLine(source: string, edit: LineEdit): string {
   if (edit.lineIndex >= lines.length || lines[edit.lineIndex] === edit.text) return source
   lines[edit.lineIndex] = edit.text
   return lines.join('\n')
+}
+
+/**
+ * The lines' stored formats as the sheet should read them while `edit` is
+ * open: the scene's, with the format being typed in the Rules list, if any, in
+ * the open line's place.
+ */
+export function withTypedFormat(source: string, formats: string, edit: LineEdit): string {
+  const count = splitLines(source).length
+  if (edit.stored === undefined || edit.lineIndex === TITLE_LINE || edit.lineIndex >= count) return formats
+  const entries = lineFormats(formats, count)
+  if (entries[edit.lineIndex] === edit.stored) return formats
+  entries[edit.lineIndex] = edit.stored
+  return storeFormats(entries)
 }
 
 /**

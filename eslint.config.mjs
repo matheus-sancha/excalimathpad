@@ -70,8 +70,9 @@ export default defineConfig([
     // A suggestion, and from M4d a Symbols insert from the panel
     // (`LineEditControl.insert`), goes in with `execCommand('insertText')`,
     // the one way that keeps the field's own Ctrl+Z (section 6); where it's
-    // gone, the field writes the text itself.
-    files: ['src/overlay/MathElementView.tsx', 'src/overlay/MathOverlay.tsx'],
+    // gone, the field writes the text itself. A rule's condition field takes
+    // a suggestion the same way (M4e, #197).
+    files: ['src/overlay/MathElementView.tsx', 'src/overlay/MathOverlay.tsx', 'src/panel/ConditionField.tsx'],
     rules: { '@typescript-eslint/no-deprecated': 'off' },
   },
   {

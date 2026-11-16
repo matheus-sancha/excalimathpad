@@ -135,10 +135,16 @@ element and line under a point from geometry and the rows' `offsetTop` and
 sheet file commit the line (Ctrl+S keeps it open) or leave it (Open). From M4d (#143) the Sheet
 panel acts on it too: `setFormat`, `setCommentFormat` (#144),
 `setTitleFormat`, `moveTo('title' | 'first')`, `move('up' | 'down')` and
-`openLast(anchorId)` (#144), `setRules(rows)`, `caretToRule(index)` and
-`addRule(name)` (#145: a caret inside a rule typed in the line follows it to
-its condition's end, by each row's `from`; `addRule` types the new rule into
-the line, where it stays until the commit) and `insert(symbol, anchorId)` (#146: a Symbols
+`openLast(anchorId)` (#144), `setRules(rows)`, `typeRules(rows)`,
+`saveRules()` and `suggest(text, caret)` (the Rules list, #145 and, M4e,
+#197: `setRules` is a press, `pressRules` through `pressLine`, so every row
+goes to the stored clause and a rule typed in the line moves out of its
+text; `typeRules` keeps the rows as `LineEdit.stored`, the open line's
+stored format while a condition is being typed, which the sheet is evaluated
+from (`withTypedFormat`), `EditTarget.stored` reports, and every write of
+the line takes: `saveRules`, the next press, `commitLine` and each move of
+the edit; `suggest` is the open line's own list, for the condition's field)
+and `insert(symbol, anchorId)` (#146: a Symbols
 or Constants button; `symbolInsert.ts`'s pure `planInsert` gives the range,
 the text and the caret by the insert's mode, typed by
 `execCommand('insertText')`, which keeps the field's Ctrl+Z, then
@@ -149,7 +155,10 @@ through the line relay (`createLineRelay<LineEditControl>`). `onEdit` reports wh
 open (`EditTarget`: anchor, line or `'title'`, text) on each change, and
 null when the edit ends. The line and title fields carry
 `data-prevent-outside-click`, so a press in them keeps a floating panel, and
-turn off spelling, capitals and corrections.
+turn off spelling, capitals and corrections. They also carry `LINE_FIELD`
+(`data-line-field`, M4e, #197), as a rule's condition field in the panel
+does: a blur whose `relatedTarget` carries it doesn't leave the line, and a
+line's field mounted while such a field has the keyboard doesn't take it.
 **Unexpected failures** (spec section 4, #193): `MathOverlay` wraps each
 `MathElementView` in a `Boundary` (reset by its source, its lines, the open
 line's index and its title), whose fallback is `FailedElement.tsx`: the

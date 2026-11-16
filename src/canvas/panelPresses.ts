@@ -20,7 +20,10 @@
  *   (section 12a).
  *
  * A field in the panel (a filter) takes focus as usual, so its press leaves
- * the line: that blur is the line commit.
+ * the line: that blur is the line commit. A rule's condition field is the one
+ * exception (section 4, Rules list, M4e): it carries `LINE_FIELD`, as the open
+ * line's own field does, and the keyboard passing between two such fields
+ * leaves the line open.
  */
 
 /**
@@ -39,6 +42,17 @@ export type SheetPanelTab = (typeof SHEET_PANEL_TABS)[number]
 /** Whether an event's target is inside the Sheet panel. */
 export function isInSheetPanel(target: EventTarget | null): boolean {
   return isElement(target) && target.closest(`.${SHEET_SIDEBAR_CLASS}`) !== null
+}
+
+/**
+ * The mark of a field the open line is edited through: the line's own field,
+ * the title's, and a rule's condition field in the Rules list.
+ */
+export const LINE_FIELD = 'data-line-field'
+
+/** Whether focus that went to `target` stayed with the open line. */
+export function isLineField(target: EventTarget | null): boolean {
+  return isElement(target) && target.hasAttribute(LINE_FIELD)
 }
 
 /** The targets in the panel that take focus on a press: its fields. */

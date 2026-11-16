@@ -8,6 +8,8 @@ import {
   lineFormats,
   pressCommentFormat,
   pressFormat,
+  newRule,
+  conditionText,
   pressRules,
   splitFormat,
   storeFormats,
@@ -20,7 +22,6 @@ import {
   writeCommentFormat,
   writeDisplayUnit,
   writeFormat,
-  writeNewRule,
   writeRules,
   type CommentFormat,
   type LineFormat,
@@ -230,12 +231,23 @@ describe('the Rules list’s writers (docs/spec-v1.md section 4, Rules list, M4d
     expect(ruleText([{ kind: 'bold' }], '')).toBe('@bold if')
   })
 
-  it('+ Add rule writes @text-red if <name> at the end of the clause, before the note, the caret after it', () => {
-    expect(writeNewRule('v = 4 m/s @bold # speed', 'v')).toEqual({ text: 'v = 4 m/s @bold @text-red if v  # speed', caret: 31 })
-    expect(writeNewRule('Q / A', 'result')).toEqual({ text: 'Q / A @text-red if result ', caret: 26 })
-    expect(writeNewRule('table(x)  ', null)).toEqual({ text: 'table(x) @text-red if ', caret: 22 })
-    // What it wrote reads back as the last rule, with nothing yet after the name.
-    expect(rulesOf(writeNewRule('v = 4 # speed', 'v').text).at(-1)).toMatchObject({ condition: 'v', end: 20 })
+  it('+ Add rule’s row is text-red with the name as its condition, or none on a table line (M4e)', () => {
+    expect(newRule('v')).toEqual({ words: [{ kind: 'text', color: 'red' }], condition: 'v', text: null })
+    expect(newRule(null)).toMatchObject({ condition: '' })
+    // Written, it reads back as a rule, with nothing yet after the name; an empty condition is still a rule.
+    expect(rulesOf(`v = 4 ${ruleText(newRule('v').words, 'v')} # speed`).at(-1)).toMatchObject({ condition: 'v' })
+    expect(rulesOf(`table(x) ${ruleText(newRule(null).words, '')} @red if x > 1`)).toMatchObject([
+      { condition: '', text: '@text-red if' },
+      { condition: 'x > 1' },
+    ])
+  })
+
+  it('a condition holds no @ and no # outside a text, which would start a word or end the clause', () => {
+    expect(conditionText('v > 3 m/s ')).toBe('v > 3 m/s ')
+    expect(conditionText('v > 3 @bold')).toBe('v > 3 ')
+    expect(conditionText('v > 3 # fast')).toBe('v > 3 ')
+    expect(conditionText('result == "a@b #1"')).toBe('result == "a@b #1"')
+    expect(conditionText('')).toBe('')
   })
 
   it('leaves a line with no code alone', () => {
@@ -625,14 +637,14 @@ describe('a line’s format, stored beside it', () => {
     })
   })
 
-  describe('pressRules: a Rules list press', () => {
+  describe('pressRules: a Rules list write', () => {
     const rulesOf = (line: string, stored: string) => {
       const form = readLine(withFormat(line, stored))
-      return form.kind === 'code' ? form.rules.map((rule, from) => ({ ...rule, from })) : []
+      return form.kind === 'code' ? form.rules : []
     }
     const STORED = '@bold @text-red if v > 3 @red if v > 1 @bold if v > 9'
 
-    it('reorders, removes and reformats stored rules in the stored clause, the text untouched', () => {
+    it('reorders, removes, reformats and adds rules in the stored clause, the text untouched', () => {
       const [first, second, third] = rulesOf('v = 4 # speed', STORED)
       expect(pressRules('v = 4 # speed', STORED, [first, third, second])).toEqual({
         text: 'v = 4 # speed',
@@ -649,29 +661,55 @@ describe('a line’s format, stored beside it', () => {
         stored: '@bold @text-red if v > 3 @text-blue+red if v > 1 @bold if v > 9',
       })
       expect(pressRules('v = 4', '@red if v > 1', [])).toEqual({ text: 'v = 4', stored: '' })
-    })
-
-    it('keeps a rule still typed in the line in its text, so its condition can go on being typed', () => {
-      const line = 'v = 4 @text-red if v  # speed'
-      const [typed, stored] = rulesOf(line, '@bold @red if v > 1')
-      expect(typed.condition).toBe('v')
-      const green = { ...typed, words: [{ kind: 'text', color: 'green' } as const], text: null }
-      expect(pressRules(line, '@bold @red if v > 1', [green, stored])).toEqual({
-        text: 'v = 4 @text-green if v # speed',
-        stored: '@bold @red if v > 1',
+      // + Add rule's row goes last; a condition typed in its field replaces the row's.
+      expect(pressRules('v = 4', '@red if v > 1', [...rulesOf('v = 4', '@red if v > 1'), newRule('v')])).toEqual({
+        text: 'v = 4',
+        stored: '@red if v > 1 @text-red if v',
       })
-      // Removing the stored rule leaves the typed text exactly as it is.
-      expect(pressRules(line, '@bold @red if v > 1', [typed])).toEqual({ text: line, stored: '@bold' })
-      // Removing the typed one takes it out of the text.
-      expect(pressRules(line, '@bold @red if v > 1', [stored])).toEqual({ text: 'v = 4 # speed', stored: '@bold @red if v > 1' })
+      expect(pressRules('v = 4', '@bold', [{ ...newRule('v'), condition: 'v > 3 m/s' }])).toEqual({
+        text: 'v = 4',
+        stored: '@bold @text-red if v > 3 m/s',
+      })
+      expect(pressRules('v = 4', '', [newRule(null)])).toEqual({ text: 'v = 4', stored: '@text-red if' })
     })
 
-    it('moves every rule out when a stored rule goes above a typed one', () => {
-      const line = 'v = 4 @text-red if v > 3 # speed'
+    it('closes a text a condition leaves open, so the rules after it stay rules', () => {
+      const [first, second] = rulesOf('check = "Pass"', '@text-green if result == "Pass" @text-red if result == "Fail"')
+      // As it is typed in the first rule's field: the second rule is still read.
+      const typing = { ...first, condition: 'result == "Pa', text: null }
+      const written = pressRules('check = "Pass"', '', [typing, second])
+      expect(written.stored).toBe('@text-green if result == "Pa" @text-red if result == "Fail"')
+      expect(rulesOf('check = "Pass"', written.stored).map(({ condition }) => condition)).toEqual(['result == "Pa"', 'result == "Fail"'])
+      // A backslash left at the end, and a single-quoted text.
+      expect(ruleText(first.words, 'result == "a\\')).toBe('@text-green if result == "a\\\\"')
+      expect(ruleText(first.words, "result == 'a")).toBe("@text-green if result == 'a'")
+      // A transpose is no text; a closed text is left as it is.
+      expect(ruleText(first.words, "A' == B")).toBe("@text-green if A' == B")
+      expect(ruleText(first.words, 'result == "a@b #1"')).toBe('@text-green if result == "a@b #1"')
+      // A rule typed in the line with its text left open, moved above another by the list.
+      const [open] = rulesOf('check = 1 @red if result == "a', '')
+      const [bold] = rulesOf('check = 1', '@bold if check > 0')
+      expect(pressRules('check = 1 @red if result == "a', '', [open, bold])).toEqual({
+        text: 'check = 1',
+        stored: '@red if result == "a" @bold if check > 0',
+      })
+    })
+
+    it('moves the rules typed in the line out of its text, in the rows’ order; plain words typed there stay', () => {
+      const line = 'v = 4 @underline @text-red if v > 3 # speed'
       const [typed, stored] = rulesOf(line, '@bold @red if v > 1')
+      expect(pressRules(line, '@bold @red if v > 1', [typed, stored])).toEqual({
+        text: 'v = 4 @underline # speed',
+        stored: '@bold @text-red if v > 3 @red if v > 1',
+      })
       expect(pressRules(line, '@bold @red if v > 1', [stored, typed])).toEqual({
-        text: 'v = 4 # speed',
+        text: 'v = 4 @underline # speed',
         stored: '@bold @red if v > 1 @text-red if v > 3',
+      })
+      // Removing the typed one takes it out of the text.
+      expect(pressRules(line, '@bold @red if v > 1', [stored])).toEqual({
+        text: 'v = 4 @underline # speed',
+        stored: '@bold @red if v > 1',
       })
     })
 

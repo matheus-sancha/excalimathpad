@@ -39,7 +39,8 @@ export interface FormatTabProps {
  * sample in a light box under a caption naming what is open; beside it the
  * link that moves the edit, and Done, ↑ and ↓. Then one labelled row of large
  * buttons per property the open thing takes. Every control is a no-focus
- * button (section 14): a blur would leave the line.
+ * button (section 14): a blur would leave the line. The one field is a rule's
+ * condition, in the Rules list, which keeps the line open (M4e).
  */
 export function FormatTab({ sheet, target, selected, resultColor = 'blue', touch = false, actions }: FormatTabProps) {
   const view = formatView(sheet, target)
@@ -110,7 +111,6 @@ export function FormatTab({ sheet, target, selected, resultColor = 'blue', touch
           // A new line starts with every rule's controls closed.
           key={`${view.anchorId}:${target?.lineIndex}`}
           rules={view.rules}
-          typed={view.typedRules}
           states={view.ruleStates}
           name={view.ruleName}
           actions={actions}

@@ -5,6 +5,7 @@ import {
   commitTypedLine,
   hasText,
   startLineEdit,
+  withTypedFormat,
   withTypedLine,
   type LineEdit,
   type LineMove,
@@ -26,6 +27,37 @@ describe('startLineEdit', () => {
 describe('withTypedLine', () => {
   it('puts the typed text in place of its line', () => {
     expect(withTypedLine(SOURCE, editing(1, 'b = 9'))).toBe('a = 1\nb = 9\nc = 3')
+  })
+})
+
+// Section 4, Rules list (M4e): a condition typed in the Rules list and not yet saved.
+describe('withTypedFormat', () => {
+  it('puts the format being typed in place of the open line’s stored one', () => {
+    const typing = { ...editing(1), stored: '@red if b > 1' }
+    expect(withTypedFormat(SOURCE, '', typing)).toBe('\n@red if b > 1\n')
+    expect(withTypedFormat(SOURCE, '@bold\n@red if b > 9\n@L', typing)).toBe('@bold\n@red if b > 1\n@L')
+    // Emptied, with no other line formatted: no formats at all.
+    expect(withTypedFormat(SOURCE, '\n@red\n', { ...editing(1), stored: '' })).toBe('')
+  })
+
+  it('gives the scene’s formats back, the same string, when nothing is being typed there', () => {
+    const formats = '@bold\n@red if b > 9\n'
+    expect(withTypedFormat(SOURCE, formats, editing(1))).toBe(formats)
+    expect(withTypedFormat(SOURCE, formats, { ...editing(1), stored: '@red if b > 9' })).toBe(formats)
+    expect(withTypedFormat(SOURCE, formats, { ...editing(TITLE_LINE), stored: '@red' })).toBe(formats)
+    expect(withTypedFormat(SOURCE, formats, { ...editing(9), stored: '@red' })).toBe(formats)
+  })
+
+  it('goes into the scene with the line when the edit leaves it, in the one write', () => {
+    const typing = { ...editing(1, 'b = 5'), stored: '@red if b > 1' }
+    const formats = withTypedFormat(SOURCE, '@bold\n\n', typing)
+    expect(applyLineMove(SOURCE, typing, { kind: 'leave' }, '', formats)).toMatchObject({
+      source: 'a = 1\nb = 5\nc = 3',
+      formats: '@bold\n@red if b > 1\n',
+      edit: null,
+    })
+    // The next line opens with nothing typed in its format.
+    expect(applyLineMove(SOURCE, typing, { kind: 'down' }, '', formats).edit).toEqual({ anchorId: 'm1', lineIndex: 2, text: 'c = 3', caret: 5 })
   })
 })
 

@@ -10,8 +10,9 @@
 // It covers what the device checklist can't leave to chance: a double tap
 // opens a line (and a drawing on top keeps Excalidraw's own), the Format tab's
 // Done, ↑ ↓ and Edit, the canvas hint by tap and by click, a tap's tips and the slots and ⚙ a touch selection
-// shows, the quick keys and their undo, the panel's open and restore, and the
-// suggestions opening above the field; on the tablet, a mouse keeps hover. It
+// shows, the quick keys and their undo, the panel's open and restore, the
+// suggestions opening above the field, and a rule's condition typed in the
+// Rules list with the line still open (M4e, #197); on the tablet, a mouse keeps hover. It
 // runs in Chromium, so it covers neither WebKit nor a real on-screen keyboard:
 // those are the device checklist's (CONTRIBUTING.md). It fails on any check
 // that doesn't hold, and on any page error.
@@ -370,6 +371,69 @@ try {
         const shown = await tab.locator('.math-hover-tip').count()
         row('a mouse keeps hover on a tablet', hovered === 1 && shown === 1, `outlined: ${hovered}, tip: ${shown}`)
       }
+
+      // A rule's condition (section 4, Rules list, M4e, #197): its field takes the
+      // keyboard and the line stays open; on a phone the sheet stays short, above
+      // the keyboard, here a page that the keyboard resizes.
+      const LIST = 'x = 0 .. 4'
+      await tap(empty)
+      await doubleTap(await pointOf(lineOf('plot', 0)))
+      const rule = () =>
+        tab.evaluate(() => {
+          const condition = document.querySelector('.sheet-rules__field')
+          const box = condition?.getBoundingClientRect()
+          return {
+            focused: !!condition && document.activeElement === condition,
+            value: condition?.value ?? null,
+            line: document.querySelector('.math-element__field')?.value ?? null,
+            state: document.querySelector('.sheet-rules__state')?.textContent ?? null,
+            box: box ? { top: box.top, bottom: box.bottom } : null,
+          }
+        })
+      await tab.locator('.sheet-sidebar [aria-label="+ Add rule"]').scrollIntoViewIfNeeded()
+      await pressPanel('+ Add rule')
+      await pause(200)
+      let added = await rule()
+      row(
+        '+ Add rule puts the keyboard in the rule’s condition, and the line stays open',
+        added.focused && added.value === 'x ' && added.line === LIST,
+        JSON.stringify(added),
+      )
+      if (device.phone) {
+        const height = 520
+        await tab.setViewportSize({ width: device.viewport.width, height })
+        await pause()
+        const sheetBox = await panel().boundingBox()
+        const compact = await tab.locator('.sheet-bottom.is-compact').count()
+        added = await rule()
+        row(
+          'the bottom sheet stays short and above the keyboard while the condition has it',
+          compact === 1 && !!sheetBox && sheetBox.y > 0 && Math.abs(sheetBox.y + sheetBox.height - height) <= 1 && added.focused && added.line === LIST,
+          sheetBox ? `sheet ${Math.round(sheetBox.y)}–${Math.round(sheetBox.y + sheetBox.height)} of ${height}` : 'no sheet',
+        )
+        row(
+          'the condition’s field is in view inside the sheet',
+          !!added.box && !!sheetBox && added.box.top >= sheetBox.y && added.box.bottom <= sheetBox.y + sheetBox.height,
+          added.box ? `field ${Math.round(added.box.top)}–${Math.round(added.box.bottom)}` : 'no field',
+        )
+      }
+      await tab.keyboard.type('>= 0')
+      await pause(200)
+      added = await rule()
+      row('the condition is typed, and its live state follows', added.value === 'x >= 0' && added.state === '5 of 5 points' && added.line === LIST, JSON.stringify(added))
+      if (device.phone) {
+        await tab.setViewportSize(device.viewport)
+        await pause()
+      }
+      await tab.locator('.sheet-sidebar [aria-label="Done (Esc)"]').scrollIntoViewIfNeeded()
+      await pressPanel('Done (Esc)')
+      await pause()
+      const stored = await tab.evaluate(() => JSON.parse(window.__leaf.view.getViewData()).elements.find((e) => e.id === 'plot')?.customData)
+      row(
+        'Done leaves the line, with the condition saved beside it',
+        (await field().count()) === 0 && stored?.formats === '@text-red if x >= 0\n' && stored.source.startsWith(`${LIST}\n`),
+        JSON.stringify(stored?.formats),
+      )
     } catch (error) {
       errors.push(`${where}: the run didn't finish: ${error.message.split('\n')[0]}`)
       // TOUCH_RUN_SHOTS=<folder> keeps a screenshot of where it stopped.
