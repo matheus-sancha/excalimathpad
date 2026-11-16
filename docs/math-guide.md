@@ -388,7 +388,7 @@ At 3.4 m/s the line is red; at 2.5 m/s, orange; at 1 m/s, blue.
 
 On a list or a table a rule is tested at each point: a table row whose point is true takes the format, and a list's summary takes it only when every point is true.
 
-**The Format tab.** At its top a sample draws the open line as the sheet will. Below it, one row of buttons per property: **Style** (B and U; I too on a comment line or the title), **Size** (S, M, L, XL, on a comment line or the title), **Align** (the title only), **Text** (six colours or none) and **Highlight** (five or none). Pressing a pressed button takes the format off. On a math line, the **Rules list** shows each rule with its condition, whether it is true now, ↑ ↓ to reorder and ✕ to remove; **+ Add rule** types a new rule into the line and puts the caret where you type its condition; like any typed format, it moves out of the line when you leave it. A title's format is set only here, never typed.
+**The Format tab.** At its top a sample draws the open line as the sheet will. Below it, one row of buttons per property: **Style** (B and U; I too on a comment line or the title), **Size** (S, M, L, XL, on a comment line or the title), **Align** (the title only), **Text** (six colours or none) and **Highlight** (five or none). Pressing a pressed button takes the format off. On a math line, the **Rules list** shows each rule with its condition, whether it is true now, ↑ ↓ to reorder and ✕ to remove; each condition is a text field on its row, with the line's suggestions: type or change it there, and press Enter. The line you are editing stays open meanwhile. **+ Add rule** adds a rule at the end, with the line's name already in its condition. A title's format is set only here, never typed.
 
 ## 13. The Symbols tab
 

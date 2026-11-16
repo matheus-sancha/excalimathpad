@@ -27,8 +27,10 @@ sees it (ADR 0005), so a note or a format never reaches math.js. A word with
 **joined**, `@text-red+red+bold`: one word, one rule with an `if`; a part
 that isn't a format is `Unknown format @blod in @text-red+blod`. `writeRules`
 writes a Rules list's `RuleRow`s (a row with its `text` is kept exactly; one
-without is `ruleText`, one joined word and one condition) and
-`writeNewRule` + Add rule's ` @text-red if <name> `; `writeFormat`
+without is `ruleText`, one joined word and one condition), `newRule` is
++ Add rule's row (M4e, #197) and `conditionText` what a condition's field
+takes (no `@` or `#` outside a string; `ruleText` also closes a string left
+open, so a written rule always reads back as one rule); `writeFormat`
 composes the plain words back for the Format tab in a fixed order and keeps
 every rule, and `writeCommentFormat` a comment line's (`@bold @upright
 @underline @<size> @text-<name> @<highlight>`, M4d, #144); `caretAfterFormat`
@@ -43,7 +45,8 @@ it, `commitFormat` is what a line commit writes, and `lineFormats` /
 padded or cut; an entry that isn't a clause is none; no text at all for no
 format). `pressFormat`, `pressCommentFormat` and `pressRules` are what a
 Format tab press writes: the stored clause, and the text only where a clause
-typed in it has to move (a rule still being typed stays in the text). A math line carries its `LineFormat` (bold, underline, highlight, text
+typed in it has to move (plain words with a Format tab press, rules with a
+Rules list write). A math line carries its `LineFormat` (bold, underline, highlight, text
 colour); an unknown clause word is the line's error, reported after the line
 ran. A clause's first problem is the form's `formatError`, in section 13's
 words (`Unknown format @blod`, and a comment word on a math line, `@L is for

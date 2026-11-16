@@ -31,12 +31,13 @@ and what is open (`FormatTarget`, the overlay's `EditTarget`) into a
 `FormatView`: none, a title, a math line (its plain format and the
 "A rule sets …" notes), a comment line, or a blank one, each read from the
 line's typed text with its stored format behind it (`FormatTarget.stored`,
-M4e, #195; `typedRules` counts the rules still typed in the text, which come
-first); with its caption
+M4e, #195: as a condition being typed has it; a rule typed in the text comes
+before the stored ones); with its caption
 ("Math line — Pipe flow, line 3", shown in capitals) and its link (Edit or
 Add title ↑, First line ↓). `FormatTab.tsx` renders it: the sample in a
 light box (the dark theme's filter on it), the link, Done, ↑ and ↓, then a
-labelled row per property, every control a no-focus button; with nothing
+labelled row per property, every control a no-focus button but a rule's
+condition; with nothing
 open, the hint, and Edit while one math element is selected. Its presses are
 `FormatActions`, which App maps onto the line relay; App holds what is open
 (from `onEdit`) and the one selected math element (`mathSelection`). Its
@@ -44,8 +45,23 @@ rows are `formatControls.tsx` (`Row`, `Toggle`, `SizeRow`, `TextRow`,
 `HighlightRow`, `PanelButton`; `locked` keeps a rule's last property).
 **The Rules list** (#145, `RulesList.tsx`) sits under a math line's rows:
 one row per rule (a chip in its format that opens its Text, Highlight and
-Style rows, its condition, which puts the caret at its end, ↑ ↓ ✕ and its
-live state), and + Add rule, whose new rule's controls open at once.
+Style rows, its condition, ↑ ↓ ✕ and its live state), and + Add rule, whose
+new rule is the last row, its controls open. **A rule's condition is a text
+field** (spec section 4, Rules list, M4e, #197; `ConditionField.tsx`), the
+one control in the panel that takes the keyboard and keeps the line open: it
+carries `LINE_FIELD` (`canvas/panelPresses.ts`), is `type="text"`, and shows
+the line's own suggestions (`RulesActions.suggest`) in a list under it. The
+list holds only the text as typed (`typing`: a rule's own condition is
+trimmed) and the row + Add rule should give the keyboard to; the condition
+itself lives in the overlay's line edit. Its presses are `RulesActions`:
+`setRules(rows)` writes the rows (`RuleRow`s: a rule the list didn't change
+keeps its `text`), `typeRules(rows)` hands over the rows at each keystroke
+with nothing written, `saveRules()` writes them (Enter, or the keyboard gone
+back to the line or to another condition), and `leave()` ends the edit when
+the keyboard went anywhere else. A field is a new element each time it loses
+the keyboard, which keeps what was typed in it out of the browser's text
+undo (spec section 14). An empty condition's row reads
+`FORMAT_HINTS.noCondition`.
 **The quick keys** (M4d, #147): `quickKeys.ts` is `QUICK_KEYS`, the pinned
 row's keys in order, each a `SymbolInsert` (`(` with `alone`: it wraps a
 selection, else types only itself); `QuickKeys.tsx` draws them as no-focus

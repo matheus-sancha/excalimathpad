@@ -184,8 +184,10 @@ function WithFormatTab({ props }: { props: MathOverlayProps }) {
     },
     edit: (anchorId) => control.current?.openLast(anchorId),
     setRules: (rows) => control.current?.setRules(rows),
-    caretToRule: (index) => control.current?.caretToRule(index),
-    addRule: (name) => control.current?.addRule(name),
+    typeRules: (rows) => control.current?.typeRules(rows),
+    saveRules: () => control.current?.saveRules(),
+    leave: () => control.current?.leaveLine(),
+    suggest: (text, caret) => control.current?.suggest(text, caret) ?? null,
   }
   return (
     <>
@@ -1910,19 +1912,22 @@ describe('the Format tab (docs/spec-v1.md section 4, Format tab, M4d)', () => {
       expect(states()).toEqual(['true', 'true, overridden', '⚠ Undefined symbol w'])
     })
 
-    it('a press on one rule’s format rewrites only that rule, as one joined word, one line commit, the line kept open', () => {
+    it('a press on one rule’s format rewrites only that rule, as one joined word, one write, the line kept open', () => {
       const { scene } = withTab(RULES)
       openLine(1)
 
       expect(press(inList('Format of rule 2')).defaultPrevented).toBe(true)
       press(within(ruleFormat(2)).getByRole('button', { name: 'Text blue' }))
 
-      expect(scene.sourceOf('m1')).toBe('v = 4 m/s @text-red if v > 3 m/s @text-blue+red if v > 1 m/s @bold if v > 9 m/s # speed')
+      // Rules typed in the line move out of its text with the list's write (M4e).
+      expect(scene.sourceOf('m1')).toBe('v = 4 m/s # speed')
+      expect(scene.formatsOf('m1')).toBe('@text-red if v > 3 m/s @text-blue+red if v > 1 m/s @bold if v > 9 m/s')
       expect(scene.sourceWrites()).toBe(1)
       expect(openField()).toHaveFocus()
+      expect(openField()).toHaveValue('v = 4 m/s # speed')
       // Its controls stay open on the rewritten line.
       press(within(ruleFormat(2)).getByRole('button', { name: 'Bold (Ctrl+B)' }))
-      expect(scene.sourceOf('m1')).toBe('v = 4 m/s @text-red if v > 3 m/s @text-blue+red+bold if v > 1 m/s @bold if v > 9 m/s # speed')
+      expect(scene.formatsOf('m1')).toBe('@text-red if v > 3 m/s @text-blue+red+bold if v > 1 m/s @bold if v > 9 m/s')
     })
 
     // Section 4, Rules list (M4e): a stored rule is written to the stored format, never to the line's text.
@@ -1978,42 +1983,332 @@ describe('the Format tab (docs/spec-v1.md section 4, Format tab, M4d)', () => {
         expect(rows()).toHaveLength(0)
       })
 
-      it('a stored condition is read-only: a click on it leaves the caret where it was', () => {
+    })
+
+    // Section 4, Rules list (M4e): a rule's condition is edited in a field on its row.
+    describe('a rule’s condition field', () => {
+      const STORED = '@bold @text-red if v > 3 m/s @red if v > 1 m/s'
+      const withStored = (source = 'v = 4 m/s # speed', formats = STORED) =>
+        renderOverlay([createMathAnchorElements([{ id: 'm1', ...box, source, formats }])[0]], {}, { formatTab: true })
+      const condition = (n: number) => within(list()).getByRole<HTMLInputElement>('textbox', { name: `Condition of rule ${n}` })
+      const typeCondition = (n: number, text: string) => fireEvent.change(condition(n), { target: { value: text } })
+      const focus = (field: HTMLElement) => act(() => field.focus())
+
+      it('is a text field on each row, holding the rule’s condition', () => {
         withStored()
-        const field = openLine(1)
-        field.setSelectionRange(2, 2)
-
-        press(inList(/^Condition of rule 2/))
-
-        expect(field.selectionStart).toBe(2)
-        expect(field).toHaveValue('v = 4 m/s # speed')
-      })
-
-      it('+ Add rule types the new rule into the line, before the stored ones, and opens its controls', () => {
-        const { scene } = withStored()
         openLine(1)
 
+        expect(condition(1)).toHaveValue('v > 3 m/s')
+        expect(condition(2)).toHaveValue('v > 1 m/s')
+        // Excalidraw runs its shortcuts on keys from any input that isn't text.
+        expect(condition(1)).toHaveAttribute('type', 'text')
+      })
+
+      it('keeps the open line open while it has the keyboard, with its half-typed text and its caret', () => {
+        const { scene } = withStored()
+        const field = openLine(1)
+        type(field, 'v = 4 m/s * 2 # speed')
+        field.setSelectionRange(9, 9)
+
+        focus(condition(2))
+
+        expect(condition(2)).toHaveFocus()
+        expect(openField()).toBe(field)
+        expect(field).toHaveValue('v = 4 m/s * 2 # speed')
+        expect(field.selectionStart).toBe(9)
+        // Nothing was committed: the keyboard is in the condition, and the line is still being typed.
+        expect(scene.sourceWrites()).toBe(0)
+
+        // A press back in the line continues the edit, in the same field.
+        focus(field)
+        expect(openField()).toBe(field)
+        type(field, 'v = 4 m/s * 12 # speed')
+        expect(field).toHaveValue('v = 4 m/s * 12 # speed')
+        expect(scene.sourceWrites()).toBe(0)
+      })
+
+      it('shows the rule’s live state, the sample and the sheet as it is typed, and writes nothing until it is saved', () => {
+        const { scene } = withStored('v = 4 m/s # speed\nw = v', '@text-red if v > 3 m/s')
+        // The line below is open: the rule's line is drawn typeset, so the sheet shows the format.
+        openLine(2)
+        expect(rowOf('m1', 1)).toHaveClass('is-text-red')
+        const field = openLine(1)
+        focus(condition(1))
+        expect(states()).toEqual(['true'])
+
+        typeCondition(1, 'v > 5 m/s')
+        expect(states()).toEqual(['false'])
+        expect(sample()!.querySelector('.math-element__row')).not.toHaveClass('is-text-red')
+        typeCondition(1, 'v > 5 kg')
+        expect(states()).toEqual(['⚠ Units do not match'])
+        typeCondition(1, 'v > 2 m/s ')
+        expect(states()).toEqual(['true'])
+        // As typed: the space isn't eaten while the condition goes on.
+        expect(condition(1)).toHaveValue('v > 2 m/s ')
+        expect(sample()!.querySelector('.math-element__row')).toHaveClass('is-text-red')
+
+        expect(scene.formatsOf('m1')).toBe('@text-red if v > 3 m/s')
+        expect(scene.sourceWrites()).toBe(0)
+        expect(openField()).toBe(field)
+      })
+
+      it('saves on Enter as one write, the line still open with its text and its caret', () => {
+        const { scene } = withStored()
+        const field = openLine(1)
+        type(field, 'v = 4 m/s * 2 # speed')
+        field.setSelectionRange(9, 9)
+        focus(condition(2))
+
+        typeCondition(2, 'v > 2 m/s')
+        fireEvent.keyDown(condition(2), { key: 'Enter' })
+
+        // The condition, with the line's typed text, in one write: one undo step.
+        expect(scene.formatsOf('m1')).toBe('@bold @text-red if v > 3 m/s @red if v > 2 m/s')
+        expect(scene.sourceOf('m1')).toBe('v = 4 m/s * 2 # speed')
+        expect(scene.sourceWrites()).toBe(1)
+        expect(condition(2)).toHaveFocus()
+        expect(openField()).toBe(field)
+        expect(field).toHaveValue('v = 4 m/s * 2 # speed')
+        expect(field.selectionStart).toBe(9)
+
+        // Enter again, with nothing typed since, writes nothing.
+        fireEvent.keyDown(condition(2), { key: 'Enter' })
+        expect(scene.sourceWrites()).toBe(1)
+        // A rule the list didn't change keeps its exact text.
+        expect(rows()[0]).toHaveAttribute('aria-label', 'Rule 1: @text-red if v > 3 m/s')
+      })
+
+      it('saves when the keyboard goes back to the line, or to another condition', () => {
+        const { scene } = withStored()
+        const field = openLine(1)
+        focus(condition(1))
+        typeCondition(1, 'v > 30 m/s')
+
+        focus(condition(2))
+        expect(scene.formatsOf('m1')).toBe('@bold @text-red if v > 30 m/s @red if v > 1 m/s')
+        expect(scene.sourceWrites()).toBe(1)
+        typeCondition(2, 'v > 10 m/s')
+
+        focus(field)
+        expect(scene.formatsOf('m1')).toBe('@bold @text-red if v > 30 m/s @red if v > 10 m/s')
+        expect(scene.sourceWrites()).toBe(2)
+        expect(openField()).toBe(field)
+        expect(field).toHaveFocus()
+      })
+
+      it('leaves the line when the keyboard goes anywhere else, the condition and the line’s text in one write', () => {
+        const { scene } = withStored()
+        const field = openLine(1)
+        type(field, 'v = 5 m/s # speed')
+        focus(condition(1))
+        typeCondition(1, 'v > 4 m/s')
+        const elsewhere = document.body.appendChild(document.createElement('input'))
+
+        focus(elsewhere)
+
+        expect(openField()).toBeNull()
+        expect(scene.sourceOf('m1')).toBe('v = 5 m/s # speed')
+        expect(scene.formatsOf('m1')).toBe('@bold @text-red if v > 4 m/s @red if v > 1 m/s')
+        expect(scene.sourceWrites()).toBe(1)
+        elsewhere.remove()
+      })
+
+      it('a press on the canvas, Done and ↓ take a condition not yet saved with the line, in its one write', () => {
+        const { scene } = withStored('v = 4 m/s # speed\nw = v')
+        openLine(1)
+        focus(condition(1))
+        typeCondition(1, 'v > 30 m/s')
+
+        // ↓ moves the edit: the condition goes with the line it was typed on.
+        press(tabButton('Down (↓)'))
+        expect(openField()).toHaveValue('w = v')
+        expect(scene.formatsOf('m1')).toBe('@bold @text-red if v > 30 m/s @red if v > 1 m/s\n')
+        expect(scene.sourceWrites()).toBe(1)
+
+        press(tabButton('Up (↑)'))
+        focus(condition(2))
+        typeCondition(2, 'v > 20 m/s')
+        press(tabButton('Done (Esc)'))
+        expect(openField()).toBeNull()
+        expect(scene.formatsOf('m1')).toBe('@bold @text-red if v > 30 m/s @red if v > 20 m/s\n')
+        expect(scene.sourceWrites()).toBe(2)
+      })
+
+      it('an empty condition removes nothing: its row says a rule needs a condition', () => {
+        const { scene } = withStored()
+        openLine(1)
+        focus(condition(2))
+
+        typeCondition(2, '')
+        expect(states()).toEqual(['true', '⚠ a rule needs a condition'])
+        fireEvent.keyDown(condition(2), { key: 'Enter' })
+
+        expect(scene.formatsOf('m1')).toBe('@bold @text-red if v > 3 m/s @red if')
+        expect(rows()).toHaveLength(2)
+        expect(states()).toEqual(['true', '⚠ a rule needs a condition'])
+        // Its format still changes, and a rule after it is still read.
+        press(inList('Format of rule 2'))
+        press(within(ruleFormat(2)).getByRole('button', { name: 'Bold (Ctrl+B)' }))
+        expect(scene.formatsOf('m1')).toBe('@bold @text-red if v > 3 m/s @red+bold if')
+      })
+
+      it('takes no @ and no # outside a text: either would end the condition in the clause', () => {
+        const { scene } = withStored('v = 4 m/s', '@red if v > 1 m/s')
+        openLine(1)
+        focus(condition(1))
+
+        typeCondition(1, 'v > 2 m/s @bold')
+        expect(condition(1)).toHaveValue('v > 2 m/s ')
+        typeCondition(1, 'v > 2 m/s # fast')
+        expect(condition(1)).toHaveValue('v > 2 m/s ')
+        fireEvent.keyDown(condition(1), { key: 'Enter' })
+        expect(scene.formatsOf('m1')).toBe('@red if v > 2 m/s')
+      })
+
+      it('a text left open while it is typed doesn’t take in the rules after it', () => {
+        const { scene } = withStored('check = "Pass"', '@text-green if result == "Pass" @text-red if result == "Fail"')
+        openLine(1)
+        focus(condition(1))
+
+        typeCondition(1, 'result == "Pa')
+        expect(rows()).toHaveLength(2)
+        expect(condition(1)).toHaveValue('result == "Pa')
+        expect(condition(2)).toHaveValue('result == "Fail"')
+        expect(states()).toEqual(['false', 'false'])
+        typeCondition(1, 'result == "Pass" ')
+        expect(states()).toEqual(['true', 'false'])
+
+        // Saved with the text still open, it is closed.
+        typeCondition(1, 'result == "Pas')
+        fireEvent.keyDown(condition(1), { key: 'Enter' })
+        expect(scene.formatsOf('m1')).toBe('@text-green if result == "Pas" @text-red if result == "Fail"')
+      })
+
+      it('offers the line’s suggestions: ↓ and Enter or Tab take one, Esc closes the list, and Enter then saves', () => {
+        const { scene } = renderOverlay(
+          [createMathAnchorElements([{ id: 'm1', ...box, source: 'v_max = 3 m/s\nv = 4 m/s', formats: '\n@red if v > 1 m/s' }])[0]],
+          {},
+          { formatTab: true },
+        )
+        openLine(2)
+        focus(condition(1))
+        const options = () => within(list()).queryAllByRole('option').map((option) => option.textContent)
+        const typeAtEnd = (text: string) => {
+          condition(1).setSelectionRange(text.length, text.length)
+          fireEvent.change(condition(1), { target: { value: text, selectionStart: text.length, selectionEnd: text.length } })
+        }
+
+        typeAtEnd('v > v_')
+        // The sheet's names above the line, as the line's own field offers them.
+        expect(options()[0]).toContain('v_max')
+        fireEvent.keyDown(condition(1), { key: 'Tab' })
+        expect(condition(1)).toHaveValue('v > v_max')
+        expect(options()).toEqual([])
+        expect(states()).toEqual(['true'])
+
+        // A unit, by ↓ and Enter: Enter takes the highlighted one and doesn't save.
+        typeAtEnd('v > 2 minu')
+        expect(options()[0]).toContain('minute')
+        fireEvent.keyDown(condition(1), { key: 'ArrowDown' })
+        fireEvent.keyDown(condition(1), { key: 'Enter' })
+        expect(condition(1)).toHaveValue('v > 2 minute')
+        expect(scene.sourceWrites()).toBe(0)
+
+        // Esc closes the list and keeps the line; with no list, Enter saves.
+        typeAtEnd('v > v_')
+        fireEvent.keyDown(condition(1), { key: 'Escape' })
+        expect(options()).toEqual([])
+        expect(openField()).not.toBeNull()
+        typeAtEnd('v > v_max')
+        fireEvent.keyDown(condition(1), { key: 'Enter' })
+        expect(scene.formatsOf('m1')).toBe('\n@red if v > v_max')
+      })
+
+      it('+ Add rule adds a last row, text-red, its condition the line’s name with the caret after it; the line is untouched', () => {
+        const { scene } = withStored('v = 4 m/s # speed\n2 * 3\nx = 1 .. 4\ntable(x)', '@bold @red if v > 1 m/s')
+        const field = openLine(1)
+        type(field, 'v = 4 m/s * 2 # speed')
+        field.setSelectionRange(3, 3)
+
+        expect(press(inList('+ Add rule')).defaultPrevented).toBe(true)
+
+        // Written at once, one step, after the rules already there: lowest in priority.
+        expect(scene.formatsOf('m1')).toBe('@bold @red if v > 1 m/s @text-red if v\n\n\n')
+        expect(scene.sourceWrites()).toBe(1)
+        expect(rows()).toHaveLength(2)
+        // The condition goes on from the name: `v ` and the caret, in the row's own field.
+        expect(condition(2)).toHaveValue('v ')
+        expect(condition(2)).toHaveFocus()
+        expect(condition(2).selectionStart).toBe(2)
+        expect(ruleFormat(2)).toBeInTheDocument()
+        // Nothing went into the line: the same field, its text and its caret as they were.
+        expect(openField()).toBe(field)
+        expect(field).toHaveValue('v = 4 m/s * 2 # speed')
+        expect(field.selectionStart).toBe(3)
+
+        typeCondition(2, 'v > 3 m/s')
+        expect(states()).toEqual(['true', 'true'])
+        fireEvent.keyDown(condition(2), { key: 'Enter' })
+        expect(scene.formatsOf('m1')).toBe('@bold @red if v > 1 m/s @text-red if v > 3 m/s\n\n\n')
+        expect(scene.sourceWrites()).toBe(2)
+
+        // A line with no name tests `result`; a table line names nothing, so its rule needs a condition.
+        openLine(2)
         press(inList('+ Add rule'))
-        expect(openField()).toHaveValue('v = 4 m/s @text-red if v  # speed')
-        expect(openField()!.selectionStart).toBe('v = 4 m/s @text-red if v '.length)
-        expect(scene.formatsOf('m1')).toBe(STORED)
-        expect(rows()).toHaveLength(4)
-        // The new rule is the one typed in the line: its controls are the open ones.
-        expect(ruleFormat(1)).toBeInTheDocument()
+        expect(condition(1)).toHaveValue('result ')
+        openLine(4)
+        press(inList('+ Add rule'))
+        expect(condition(1)).toHaveValue('')
+        expect(states()).toEqual(['⚠ a rule needs a condition'])
+        expect(scene.formatsOf('m1')).toBe('@bold @red if v > 1 m/s @text-red if v > 3 m/s\n@text-red if result\n\n@text-red if')
+        expect(scene.sourceOf('m1')).toBe('v = 4 m/s * 2 # speed\n2 * 3\nx = 1 .. 4\ntable(x)')
+      })
 
-        // Its format can change while its condition is still to be typed: it stays in the line.
-        press(within(ruleFormat(1)).getByRole('button', { name: 'Text green' }))
-        expect(openField()).toHaveValue('v = 4 m/s @text-green if v # speed')
-        expect(openField()!.selectionStart).toBe('v = 4 m/s @text-green if v'.length)
-        expect(scene.formatsOf('m1')).toBe(STORED)
+      it('a rule typed in the line moves out with the list’s first write, the keyboard staying in the condition', () => {
+        const { scene } = withStored('v = 4 m/s', '@red if v > 1 m/s')
+        const field = openLine(1)
+        type(field, 'v = 4 m/s @underline @text-green if v > 2 m/s')
+        // The typed rule comes first, then the stored one.
+        expect(condition(1)).toHaveValue('v > 2 m/s')
+        expect(condition(2)).toHaveValue('v > 1 m/s')
+        focus(condition(1))
 
-        // Typed, then committed: the rule moves out of the text, in front of the stored ones.
-        type(openField()!, 'v = 4 m/s @text-green if v > 2 m/s # speed')
-        expect(states()).toEqual(['true', 'true, overridden', 'true', 'false'])
+        typeCondition(1, 'v > 3 m/s')
+
+        // Written at once: the rule can't be in the line and in its stored format both.
+        expect(scene.sourceOf('m1')).toBe('v = 4 m/s @underline')
+        expect(scene.formatsOf('m1')).toBe('@text-green if v > 3 m/s @red if v > 1 m/s')
+        expect(scene.sourceWrites()).toBe(1)
+        // The line's field was mounted again on the new text, and didn't take the keyboard back.
+        expect(openField()).toHaveValue('v = 4 m/s @underline')
+        expect(condition(1)).toHaveFocus()
+        expect(condition(1)).toHaveValue('v > 3 m/s')
+        expect(rows()).toHaveLength(2)
+
+        // From here the condition is typed without a write, and saved as any other.
+        typeCondition(1, 'v > 3.5 m/s')
+        expect(scene.sourceWrites()).toBe(1)
+        fireEvent.keyDown(condition(1), { key: 'Enter' })
+        expect(scene.formatsOf('m1')).toBe('@text-green if v > 3.5 m/s @red if v > 1 m/s')
+        // The plain word typed in the line leaves it at the line commit, as before.
+        focus(openField()!)
         fireEvent.keyDown(openField()!, { key: 'Escape' })
-        expect(scene.sourceOf('m1')).toBe('v = 4 m/s # speed')
-        expect(scene.formatsOf('m1')).toBe(`@text-green if v > 2 m/s ${STORED}`)
-        expect(rowOf('m1', 1)).toHaveClass('is-text-green')
+        expect(scene.sourceOf('m1')).toBe('v = 4 m/s')
+        expect(scene.formatsOf('m1')).toBe('@underline @text-green if v > 3.5 m/s @red if v > 1 m/s')
+      })
+
+      it('a press on a row while a condition is being typed writes both, and the field shows the rule’s own again', () => {
+        const { scene } = withStored()
+        openLine(1)
+        focus(condition(2))
+        typeCondition(2, 'v > 2 m/s ')
+
+        press(inList('Move rule 2 up'))
+
+        expect(scene.formatsOf('m1')).toBe('@bold @red if v > 2 m/s @text-red if v > 3 m/s')
+        expect(scene.sourceWrites()).toBe(1)
+        expect(condition(1)).toHaveValue('v > 2 m/s')
+        expect(condition(2)).toHaveValue('v > 3 m/s')
       })
     })
 
@@ -2035,54 +2330,31 @@ describe('the Format tab (docs/spec-v1.md section 4, Format tab, M4d)', () => {
       openLine(1)
 
       press(inList('Move rule 3 up'))
-      expect(scene.sourceOf('m1')).toBe('v = 4 m/s @text-red if v > 3 m/s @bold if v > 9 m/s @red if v > 1 m/s # speed')
+      // Typed in the line, they move to its stored format with the list's write (M4e).
+      expect(scene.sourceOf('m1')).toBe('v = 4 m/s # speed')
+      expect(scene.formatsOf('m1')).toBe('@text-red if v > 3 m/s @bold if v > 9 m/s @red if v > 1 m/s')
       expect(inList('Move rule 1 up')).toBeDisabled()
       press(inList('Remove rule 1'))
-      expect(scene.sourceOf('m1')).toBe('v = 4 m/s @bold if v > 9 m/s @red if v > 1 m/s # speed')
+      expect(scene.formatsOf('m1')).toBe('@bold if v > 9 m/s @red if v > 1 m/s')
       expect(scene.sourceWrites()).toBe(2)
       expect(openField()).toHaveFocus()
     })
 
-    it('a click on a condition puts the caret at its end; a press with the caret in a rule puts it back at that rule', () => {
+    it('a press that moves a typed rule out puts the caret back in the code', () => {
       withTab(RULES)
       const field = openLine(1)
-      const endOf = (text: string) => openField()!.value.indexOf(text) + text.length
+      field.setSelectionRange(field.value.length, field.value.length)
 
-      press(inList(/^Condition of rule 2/))
-      expect(field.selectionStart).toBe(endOf('@red if v > 1 m/s'))
-      expect(field).toHaveFocus()
-
-      press(inList('Move rule 2 up'))
-      expect(openField()!.selectionStart).toBe(endOf('@red if v > 1 m/s'))
-      expect(openField()!.value.indexOf('@red')).toBeLessThan(openField()!.value.indexOf('@text-red'))
-
-      // A caret in the code stays where it was.
-      openField()!.setSelectionRange(2, 2)
       press(inList('Remove rule 3'))
-      expect(openField()!.selectionStart).toBe(2)
-    })
+      expect(openField()).toHaveValue('v = 4 m/s # speed')
+      expect(openField()!.selectionStart).toBe('v = 4 m/s'.length)
 
-    it('+ Add rule writes @text-red if <name> before the note, the caret after it, and opens its controls', () => {
-      const { scene } = withTab('v = 4 m/s # speed\n2 * 3\nx = 1 .. 4\ntable(x)')
-      openLine(1)
-
-      press(inList('+ Add rule'))
-      expect(openField()).toHaveValue('v = 4 m/s @text-red if v  # speed')
-      expect(openField()!.selectionStart).toBe('v = 4 m/s @text-red if v '.length)
-      expect(scene.sourceWrites()).toBe(1)
-      expect(ruleFormat(1)).toBeInTheDocument()
-
-      // The condition is typed in the line; the row follows it live.
-      type(openField()!, 'v = 4 m/s @text-red if v > 3 m/s # speed')
-      expect(states()).toEqual(['true'])
-      expect(sample()!.querySelector('.math-element__row')).toHaveClass('is-text-red')
-
-      openLine(2)
-      press(inList('+ Add rule'))
-      expect(openField()).toHaveValue('2 * 3 @text-red if result ')
-      openLine(4)
-      press(inList('+ Add rule'))
-      expect(openField()).toHaveValue('table(x) @text-red if ')
+      // A caret in the code stays where it was, and so does the field once no rule is typed in it.
+      const rewritten = openField()!
+      rewritten.setSelectionRange(2, 2)
+      press(inList('Remove rule 2'))
+      expect(openField()).toBe(rewritten)
+      expect(rewritten.selectionStart).toBe(2)
     })
   })
 })

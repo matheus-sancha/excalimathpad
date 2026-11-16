@@ -86,7 +86,11 @@ export const SLOW_VALUES: Readonly<Record<string, number>> = {
   ifft: 4096,
   lyap: 900,
   mad: 2500,
+  // math.js selects the middle value in quadratic time when many values are
+  // equal: 10,000 zeros took 0.3 s here and over 1 s on a loaded CI runner.
+  median: 5000,
   qr: 2500,
+  quantileSeq: 5000,
   schur: 2500,
 }
 export const SLOW_PAIRS: Readonly<Record<string, number>> = {

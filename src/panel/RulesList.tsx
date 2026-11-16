@@ -1,66 +1,127 @@
-import { useState } from 'react'
+import { useLayoutEffect, useRef, useState, type FocusEvent } from 'react'
+import { isLineField } from '../canvas/panelPresses.ts'
 import type { RuleState } from '../math/evaluate.ts'
-import { applyFormatWord, formatWords, NO_FORMAT, type FormatRule, type LineFormat } from '../math/lineForm.ts'
-import type { RuleEdit } from '../overlay/MathOverlay.tsx'
+import {
+  applyFormatWord,
+  conditionText,
+  formatWords,
+  newRule,
+  NO_FORMAT,
+  type FormatRule,
+  type LineFormat,
+  type RuleRow,
+} from '../math/lineForm.ts'
+import type { Suggested } from '../overlay/suggest.ts'
+import { ConditionField } from './ConditionField.tsx'
 import { HighlightRow, PanelButton, Row, TextRow, Toggle } from './formatControls.tsx'
+import { FORMAT_HINTS } from './formatTab.ts'
 
-/** What the Rules list's presses do: each acts on the open line (`LineEditControl`). */
+/** What the Rules list does: each acts on the open line (`LineEditControl`). */
 export interface RulesActions {
-  setRules: (rows: readonly RuleEdit[]) => void
-  caretToRule: (index: number) => void
-  addRule: (name: string | null) => void
+  /** A press: the rows are written to the line's stored format, one undo step. */
+  setRules: (rows: readonly RuleRow[]) => void
+  /** A condition being typed: the sheet runs from the rows, and nothing is written yet. */
+  typeRules: (rows: readonly RuleRow[]) => void
+  /** Enter, or the keyboard back in the line: the typed condition is written, one undo step. */
+  saveRules: () => void
+  /** The keyboard left a condition for something that isn't the line: the edit leaves the line, as from its own field. */
+  leave: () => void
+  /** The suggestions the open line's field offers. */
+  suggest: (text: string, caret: number) => Suggested | null
 }
 
 export interface RulesListProps {
+  /** The line's rules: those typed in its text first, then the stored ones. */
   rules: readonly FormatRule[]
-  /**
-   * How many of the rules, the first ones, are still typed in the open line's
-   * text (section 3, Where a line's format lives, M4e): the rest are stored
-   * beside the line. + Add rule's new rule goes after the typed ones.
-   */
-  typed?: number
-  /** Each rule's live state; null while the evaluation hasn't caught up with the typed rules. */
+  /** Each rule's live state; null while the evaluation hasn't caught up with the rules. */
   states: readonly RuleState[] | null
-  /** What + Add rule names: null on a table line, which writes ` @text-red if ` alone. */
+  /** What + Add rule names: null on a table line, whose new rule starts with no condition. */
   name: string | null
   actions: RulesActions
 }
 
 /**
- * The Rules list (docs/spec-v1.md section 4, Rules list, M4d): on a math line,
+ * The Rules list (docs/spec-v1.md section 4, Rules list): on a math line,
  * under the Format tab's rows, one row per rule in the line's order, the first
  * true winning, top to bottom. A row holds its format chip, which opens that
- * rule's Text, Highlight and Style rows; its condition, read-only, which puts
- * the caret at its end; ↑ ↓ and ✕; and its live state. The condition is typed
- * in the line itself, so nothing here takes the keyboard. A row the list
- * changes is written as one joined word and one condition; the others keep
- * their exact text.
+ * rule's Text, Highlight and Style rows; its condition, in a text field (M4e);
+ * ↑ ↓ and ✕; and its live state, which follows the field as it is typed. The
+ * condition's field is the one control here that takes the keyboard, and the
+ * open line stays open while it has it. Every write goes to the line's stored
+ * format: a row the list changes is written as one joined word and one
+ * condition; the others keep their exact text.
  */
-export function RulesList({ rules, typed = rules.length, states, name, actions }: RulesListProps) {
+export function RulesList({ rules, states, name, actions }: RulesListProps) {
   // The rule whose format controls are open.
   const [open, setOpen] = useState<number | null>(null)
+  // The condition being typed, as typed: a rule's own is trimmed, which would eat a space as it is typed.
+  const [typing, setTyping] = useState<{ index: number; text: string } | null>(null)
+  const fields = useRef(new Map<number, HTMLInputElement>())
+  // + Add rule's new row takes the keyboard once it is drawn, the caret after its condition.
+  const toFocus = useRef<number | null>(null)
+  useLayoutEffect(() => {
+    const field = toFocus.current === null ? undefined : fields.current.get(toFocus.current)
+    if (!field) return
+    toFocus.current = null
+    field.focus()
+    field.setSelectionRange(field.value.length, field.value.length)
+  })
 
-  const unchanged = (rule: FormatRule, from: number): RuleEdit => ({ ...rule, from })
-  const write = (rows: RuleEdit[]) => actions.setRules(rows)
   const formatOf = (rule: FormatRule): LineFormat => rule.words.reduce(applyFormatWord, NO_FORMAT)
+  /** A press: what was being typed is written with it, so the field shows the rule's own condition again. */
+  const write = (rows: readonly RuleRow[]) => {
+    setTyping(null)
+    actions.setRules(rows)
+  }
   const setFormat = (index: number, format: LineFormat) =>
     write(
-      rules.map((rule, from) =>
-        from === index ? { words: formatWords(format), condition: rule.condition, text: null, from } : unchanged(rule, from),
+      rules.map((rule, at): RuleRow =>
+        at === index ? { words: formatWords(format), condition: rule.condition, text: null } : rule,
       ),
     )
   const move = (index: number, by: -1 | 1) => {
     const to = index + by
     if (to < 0 || to >= rules.length) return
-    const rows = rules.map(unchanged)
+    const rows: RuleRow[] = [...rules]
     ;[rows[index], rows[to]] = [rows[to], rows[index]]
     write(rows)
     if (open === index) setOpen(to)
     else if (open === to) setOpen(index)
   }
   const remove = (index: number) => {
-    write(rules.map(unchanged).filter(({ from }) => from !== index))
+    write(rules.filter((_, at) => at !== index))
     setOpen((current) => (current === null || current === index ? null : current > index ? current - 1 : current))
+  }
+  const add = () => {
+    const row = newRule(name)
+    actions.setRules([...rules, row])
+    // The new rule is last, its format controls open, its condition ready to go on: `v ` and the caret.
+    setOpen(rules.length)
+    setTyping({ index: rules.length, text: row.condition === '' ? '' : `${row.condition} ` })
+    toFocus.current = rules.length
+  }
+  const type = (index: number, typed: string) => {
+    const text = conditionText(typed)
+    setTyping({ index, text })
+    actions.typeRules(
+      rules.map((rule, at): RuleRow =>
+        // A rule whose condition is as it was keeps its exact text.
+        at === index && text.trim() !== rule.condition ? { words: rule.words, condition: text.trim(), text: null } : rule,
+      ),
+    )
+  }
+  const blur = (index: number, event: FocusEvent<HTMLInputElement>) => {
+    const field = event.currentTarget
+    // Not another row's: + Add rule's new row may already hold its start.
+    setTyping((now) => (now?.index === index ? null : now))
+    // Saved when the field loses the keyboard. The line stays open when the
+    // keyboard went back to it or to another condition, when the window lost
+    // focus, or when the field itself went (its rule removed, the tab changed);
+    // anything else has left the line, as a blur of its own field does.
+    const stays =
+      isLineField(event.relatedTarget) || field.ownerDocument.activeElement === field || !field.isConnected
+    if (stays) actions.saveRules()
+    else actions.leave()
   }
 
   return (
@@ -73,8 +134,11 @@ export function RulesList({ rules, typed = rules.length, states, name, actions }
         <ol className="sheet-rules__list">
           {rules.map((rule, index) => {
             const format = formatOf(rule)
-            const state = states?.[index]
             const n = index + 1
+            const condition = typing?.index === index ? typing.text : rule.condition
+            // An empty condition removes nothing: its row says what it needs (section 13, Panel).
+            const state: RuleState | undefined =
+              condition.trim() === '' ? { kind: 'warning', message: FORMAT_HINTS.noCondition } : states?.[index]
             return (
               <li key={index} className="sheet-rules__item" aria-label={`Rule ${n}: ${rule.text}`}>
                 <div className="sheet-rules__row">
@@ -86,13 +150,21 @@ export function RulesList({ rules, typed = rules.length, states, name, actions }
                   >
                     Aa
                   </PanelButton>
-                  <PanelButton
-                    className="sheet-rules__condition"
-                    label={`Condition of rule ${n}: ${rule.condition || 'none yet'}`}
-                    onPress={() => actions.caretToRule(index)}
-                  >
-                    <span className="sheet-rules__if">if</span> {rule.condition || '…'}
-                  </PanelButton>
+                  <div className="sheet-rules__condition">
+                    <span className="sheet-rules__if">if</span>
+                    <ConditionField
+                      label={`Condition of rule ${n}`}
+                      value={condition}
+                      fieldRef={(field) => {
+                        if (field) fields.current.set(index, field)
+                        else fields.current.delete(index)
+                      }}
+                      onType={(text) => type(index, text)}
+                      onEnter={actions.saveRules}
+                      onBlur={(event) => blur(index, event)}
+                      suggest={actions.suggest}
+                    />
+                  </div>
                   {state && <RuleStateText state={state} />}
                   <span className="sheet-rules__keys">
                     <PanelButton
@@ -122,15 +194,7 @@ export function RulesList({ rules, typed = rules.length, states, name, actions }
           })}
         </ol>
       )}
-      <PanelButton
-        className="sheet-rules__add"
-        label="+ Add rule"
-        onPress={() => {
-          actions.addRule(name)
-          // The new rule is the last one typed in the line; its format controls open at once.
-          setOpen(typed)
-        }}
-      >
+      <PanelButton className="sheet-rules__add" label="+ Add rule" onPress={add}>
         + Add rule
       </PanelButton>
     </section>

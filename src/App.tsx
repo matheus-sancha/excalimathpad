@@ -452,8 +452,10 @@ function Sheet({
       },
       edit: (anchorId) => line.current?.openLast(anchorId),
       setRules: (rows) => line.current?.setRules(rows),
-      caretToRule: (index) => line.current?.caretToRule(index),
-      addRule: (name) => line.current?.addRule(name),
+      typeRules: (rows) => line.current?.typeRules(rows),
+      saveRules: () => line.current?.saveRules(),
+      leave: () => line.current?.leaveLine(),
+      suggest: (text, caret) => line.current?.suggest(text, caret) ?? null,
     }),
     [line, canvas],
   )

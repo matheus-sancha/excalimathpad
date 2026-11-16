@@ -405,8 +405,9 @@ v = Q / A @bold @text-red if v > 3 m/s @text-orange if v > 2 m/s # check
 - On a list or a table a rule is tested per point ([section 10](#ranges-and-lists)).
 - Rules are typed, in the line. From M4d the Format tab's **Rules list**
   ([section 4](#rules-list)) adds, removes, reorders and formats them, writing the same
-  clause; the condition is always typed in the line. From M4e the clause it writes is the
-  line's stored format, and a typed rule moves there when the line is committed.
+  clause; until M4e the condition is always typed in the line. From M4e the clause it writes
+  is the line's stored format and a rule's condition is edited in the list; a rule typed in the
+  line moves there when the line is committed, or when the list next writes.
 
 **Conditionals and text** (M4d)
 
@@ -1120,19 +1121,36 @@ the line's text no longer holds the format ([section 3](#3-sheet-lines-every-for
   each, and never touch the line's text or its caret.
 - At the panel's least width a long condition's field scrolls sideways; the colour rows wrap.
 
-**Until the condition's field is built** (#197; the stored format is #195) a condition stays
-read-only in the list and is typed in the line, as in M4d:
+As built (#197):
 
-- **+ Add rule** types ` @text-red if <name> ` into the line, the caret after it, and opens the
-  new rule's controls. The rule is the line's text until the line is committed; it then moves
-  in front of the stored rules, so it is first in priority, not last.
-- The list shows the rules typed in the line first, then the stored ones. A press on a typed
-  rule (its format, ✕, or ↑ ↓ among typed rules) rewrites it in the line and puts the caret back
-  at the end of its condition, so the condition can still be typed. A press on a stored rule
-  writes the stored format and leaves the line alone. Moving a stored rule above a typed one
-  moves every rule out of the line.
-- A click on a stored rule's condition does nothing: to change it, remove the rule and add
-  it again.
+- **Typing a condition writes nothing,** and the sheet runs from it as it does from the line's
+  typed text: the rule's live state, the sample and the sheet follow each keystroke. A save
+  writes the condition with the line's typed text in one write, as a press does
+  ([Format tab](#format-tab), Writes).
+- **Enter keeps the keyboard in the field.** The line stays open when the keyboard goes back to
+  it or on to another rule's condition, and when the window loses focus. When it goes anywhere
+  else (a filter, Excalidraw's toolbar), the edit leaves the line, as it does from the line's
+  own field.
+- **A condition not yet saved goes with the line** when the edit leaves it or moves (Done, ↑ ↓,
+  a press on the canvas, a save of the file), in the line's one write; and with the next press
+  in the list, in that press's write.
+- **The new rule is last,** lowest in priority, and written at once: one undo step for the
+  rule, and one more when its condition is saved. Its row opens its format controls. On a table
+  line its condition starts empty.
+- **The field's keys** are the line's: with the list open, ↓ ↑ highlight, Tab takes the first
+  or the highlighted suggestion, Enter the highlighted one, Esc closes the list. Otherwise
+  Enter saves, and Esc does nothing. Ctrl+Z is the field's own text undo, and never takes
+  back the line's typing; once the field has lost the keyboard, what was typed in it is no
+  longer in any text undo, so Ctrl+Z back in the line is the line's own.
+- **A condition holds no `@` and no `#` outside a text:** the field doesn't take them, since
+  an `@` starts the clause's next word and a `#` ends it. A text left open (`result == "Pa`)
+  is read, and saved, with its quote closed, so the rules after it stay rules.
+- **A rule typed in the line** (`@text-red if v > 3 m/s`, not yet committed, or in a
+  hand-edited file) shows in the list, before the stored ones. It is the one case where the
+  list rewrites the field: the list's next write, the first key in a condition included, moves
+  every typed rule out of the line into the stored format, in the list's order, and the field
+  is mounted again with the caret in the code, as plain words move out with a Format tab press.
+  The keyboard stays where it was. Plain words typed in the line stay there.
 
 What follows describes M4d, and still holds where M4e doesn't replace it.
 
@@ -1141,25 +1159,26 @@ Each row is one rule, in the line's order, and holds no-focus controls:
 - a **format chip**, drawn in the rule's format, which opens the Text, Highlight and Style
   rows for that rule under it. A rule's last property can't be taken off: its "none" is
   disabled, and ✕ removes the rule;
-- its **condition**, read-only, as typed; a click puts the caret at the end of that
-  condition in the line;
+- its **condition**: until M4e read-only, as typed, and a click puts the caret at the end of
+  that condition in the line; from M4e its text field;
 - **↑ ↓** to reorder, and **✕** to remove;
 - its **live state**, beside the condition: "true" or "false"; on a list "12 of 30 points",
   on a table "4 of 10 rows"; "true, overridden" when every property it sets is won by a
   rule above; or `⚠` and the reason, in amber ("units of different kinds", "not true or
   false", an undefined name), the same warning the line carries.
 
-**+ Add rule** writes ` @text-red if <name> ` at the end of the clause, before any note, and
-puts the caret after it, so the user types `> 3 m/s`. `<name>` is the name the line defines,
-or `result` on a line with none; on a table line it writes ` @text-red if ` alone. The new
-rule is last, so lowest in priority, and its row opens its format controls at once.
+**+ Add rule,** until M4e, writes ` @text-red if <name> ` at the end of the clause, before any
+note, and puts the caret after it, so the user types `> 3 m/s`. `<name>` is the name the line
+defines, or `result` on a line with none; on a table line it writes ` @text-red if ` alone. The
+new rule is last, so lowest in priority, and its row opens its format controls at once.
 
 - A row the list writes is one joined word and one condition
   ([section 3](#3-sheet-lines-every-form)). A rule typed the old way is its own row and is
   never rewritten unless changed.
 - Add, remove, reorder and each format change is one press: one line commit, the line kept
-  open. A press made with the caret inside the clause puts it back at the same rule's
-  condition. Typing a condition is ordinary typing, under the field's own Ctrl+Z.
+  open. Until M4e a press made with the caret inside the clause puts it back at the same
+  rule's condition, and typing a condition is ordinary typing in the line, under the field's
+  own Ctrl+Z.
 
 ### Symbols tab
 
@@ -1499,6 +1518,10 @@ Excalidraw's own selection steps, and a nudge or Link edit that a line commit fo
   the line ([section 4](#format-tab)).
 - **A line's text and its stored format are one write** (M4e): a commit that moves a typed
   clause out, an Enter and a join are each one step, and undo puts both back.
+- **A rule's condition** (M4e) is one step when it is saved, on Enter or when its field loses
+  the keyboard ([Rules list](#rules-list)): written with the line's typed text, as a press is,
+  and the line stays open. Typing in the field is no step, and Ctrl+Z there is that field's own
+  text undo. A condition not yet saved when the edit leaves the line is part of the line's step.
 - **An insert from the Symbols tab, the Constants tab or a quick key** (M4d) is typing:
   one step of the field's own Ctrl+Z, and part of the line's one commit.
 - **Redo** (Ctrl+Y, Ctrl+Shift+Z) is Excalidraw's own and mirrors undo.
@@ -1811,7 +1834,8 @@ The Problems badge sits on its icon. Format is the [Format tab](#format-tab) and
   centring. A jump from the panel still centres its element.
 - **A press in the panel never leaves the line.** Its controls that act on the open line
   are no-focus buttons. A typed field in it (a filter) takes focus, and so leaves an open
-  line. A focused control in the panel never passes a key to Excalidraw: Delete on a focused
+  line. From M4e a rule's condition field ([Rules list](#rules-list)) is the one typed field
+  that doesn't: the line stays open while it has the keyboard. A focused control in the panel never passes a key to Excalidraw: Delete on a focused
   `<select>` doesn't delete the selected element (a defect until M4d).
 
 | Tab | Holds |
@@ -2789,9 +2813,9 @@ Engineer's design gate. Tested on Excalidraw 0.18.1, math.js 15.2 and Chromium.
   a list, and a writer for rules (`{ words, condition }` rows in order) sits next to `writeFormat`. A rule
   the panel didn't change keeps its exact `text`. As built (#145): `FormatRule.words`, `writeRules` over
   `RuleRow`s (a row keeping its `text`, or written by `ruleText` in the order text, highlight, bold,
-  underline) and `writeNewRule`; each rule carries its `start` and `end` in the line, so the list puts
-  the caret at a condition's end and a press follows the rule the caret was in. Each rule's live state is
-  `SheetLine.ruleStates`. A comment line's clause reads joined words too.
+  underline); each rule carries its `start` and `end` in the line. Each rule's live state is
+  `SheetLine.ruleStates`. A comment line's clause reads joined words too. From M4e (#197) the list
+  writes through `pressRules`, into the stored clause, and + Add rule's row is `newRule`.
 - **A comment's format (M4d):** the comment split stays first. A line whose code is only a clause, with
   text after the `#`, is read as a formatted comment line; ADR 0005 is amended.
 
@@ -3064,6 +3088,7 @@ Evidence: [`obsidian-plugin.md`](research/obsidian-plugin.md).
     | `cosh`, `sinh`, `tanh`, `coth`, `csch`, `sech` | a BigNumber at most 10,000 (a plain number answers `∞` at once) |
     | `fft`, `ifft` | 4,096 values |
     | `qr`, `schur`, `mad` | 2,500 values |
+    | `median`, `quantileSeq` | 5,000 values (math.js takes quadratic time where many values are equal: `median` of 10,000 zeros took 0.3 s, and over 1 s in CI) |
     | `lyap` | 900 values |
     | `setUnion`, `setIntersect`, `setDifference`, `setSymDifference`, `setIsSubset` | the two sets' sizes multiplied, at most 1,000,000 |
     | `freqz`, `zpk2tf` | the two arguments' sizes multiplied, at most 10,000; `freqz`'s number of points at most 10,000 |
@@ -3108,6 +3133,26 @@ Evidence: [`obsidian-plugin.md`](research/obsidian-plugin.md).
   only when a newline got in by a drop. jsdom lays nothing out, so the follow run holds this
   in Chromium at 1280 px and 880 px: the rows, the wrap width, ↑ and ↓, the suggestion list,
   a pasted newline and the field's own Ctrl+Z.
+- **A rule's condition field keeps the line open** (M4e, #197,
+  `src/panel/ConditionField.tsx`, `RulesList.tsx`). Three things hold it:
+  - The line's field and each condition field carry one mark (`data-line-field`, `LINE_FIELD`
+    in `src/canvas/panelPresses.ts`). A blur whose `relatedTarget` carries it doesn't leave the
+    line; any other blur does, from either field. A line's field mounted again while a
+    condition has the keyboard doesn't take it.
+  - The condition being typed is the open line's stored format in the line edit
+    (`LineEdit.stored`, `src/overlay/lineEdit.ts`), beside the typed text: the sheet is
+    evaluated from it (`withTypedFormat`), and every write of the line, a save, a press, a
+    move or a leave, takes it. Nothing about it lives in the panel but the field's text as
+    typed, since a rule's own condition is trimmed.
+  - Chromium keeps one text undo for all the fields of a page, and a value set from code
+    doesn't take a field's entries out of it: Ctrl+Z in the line took back the condition's
+    typing first, and moved the keyboard there. Only removing the field does. So a condition
+    field is a new element each time it loses the keyboard, and its own Ctrl+Z is stopped
+    when its text is what it was when it took the keyboard.
+  - jsdom has no layout, no text undo and no real focus order, so the follow run holds this in
+    Chromium with real keys and mouse (`scripts/follow-run.mjs`), and the touch run on a phone
+    and a tablet. A save of the file commits what is typed, so those runs read the file only
+    after a write.
 - **Plot:** `aspectRatio` is ignored at fixed sizes, so equal scales are made by setting both
   axis ranges; all four margins are set by the app. Observable Plot is imported by name once
   the new clauses are built.
@@ -3356,6 +3401,10 @@ M1 to M4d, is in [`docs/spec-history.md`](spec-history.md#17-verify-first), with
   was drawn outside the app. Each is seen in the beta `0.3.0`.
 - The panel at 280 px: 28 px tabs, the Format tab's colour rows wrapping, a rule's condition
   field, and the Settings tab.
+- A rule's condition on a device (#197): whether the on-screen keyboard stays up when + Add
+  rule moves it from the line to the new row's field, which isn't the tap's own focus; whether
+  the bottom sheet shows that field above a real keyboard; and Ctrl+Z between the two fields
+  in WebKit and Firefox, which may not share Chromium's one text undo.
 - A table of more than three columns in the sample, scaled with no floor.
 - The typing test's time in CI with the new guide examples (59 s when measured).
 - The savings of the plugin cuts (87 KB, about 148 KB and 109 KB) were probed as separate

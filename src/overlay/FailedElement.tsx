@@ -1,5 +1,6 @@
 import { useLayoutEffect, useRef } from 'react'
 import type { MathAnchor } from '../canvas/mathAnchor.ts'
+import { isLineField } from '../canvas/panelPresses.ts'
 import { FailureActions } from '../failure/FailureActions.tsx'
 import { FAILURE_MESSAGES, type Failure } from '../failure/details.ts'
 import { splitLines } from '../math/evaluate.ts'
@@ -117,8 +118,12 @@ function PlainField({
       autoCapitalize="off"
       autoCorrect="off"
       data-prevent-outside-click
+      data-line-field
       onInput={(event) => onType(event.currentTarget.value)}
-      onBlur={onBlur}
+      // The keyboard gone to a rule's condition leaves the line open (section 4, Rules list).
+      onBlur={(event) => {
+        if (!isLineField(event.relatedTarget)) onBlur()
+      }}
       onKeyDown={(event) => {
         const input = event.currentTarget
         const from = input.selectionStart ?? input.value.length

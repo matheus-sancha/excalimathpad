@@ -469,6 +469,70 @@ describe('App', () => {
         await waitFor(() => expect(row()).not.toHaveClass('is-bold'))
       })
 
+      // Section 4, Rules list (M4e, #197): the condition's field is the one typed
+      // field in the panel that doesn't leave the line.
+      it('a rule’s condition is typed in the Rules list with the line still open, and each save is one undo step (#197)', async () => {
+        await start()
+        await editLine()
+        await waitFor(() => expect(selected()).toBe('Format'))
+        const inPanel = (name: string) => within(panel() as HTMLElement).getByRole('button', { name })
+        const press = (button: HTMLElement) => {
+          fireEvent.pointerDown(button)
+          const down = createEvent.mouseDown(button)
+          fireEvent(button, down)
+          fireEvent.click(button)
+          return down
+        }
+        const row = () => document.querySelector('[data-anchor-id="m1"] [data-line="1"]')
+        const condition = () => within(panel() as HTMLElement).findByRole<HTMLInputElement>('textbox', { name: 'Condition of rule 1' })
+        const opened = lineField()!
+        fireEvent.input(opened, { target: { value: 'x = 4 m' } })
+        opened.setSelectionRange(3, 3)
+
+        // + Add rule: the row's field takes the keyboard, and the line is still open, untouched.
+        expect(press(inPanel('+ Add rule')).defaultPrevented).toBe(true)
+        const field = await condition()
+        await waitFor(() => expect(field).toHaveFocus())
+        expect(field).toHaveValue('x ')
+        expect(lineField()).toBe(opened)
+        expect(opened).toHaveValue('x = 4 m')
+        expect(opened.selectionStart).toBe(3)
+
+        // Its keys never reach Excalidraw: S would open the stroke colour picker.
+        fireEvent.pointerDown(field)
+        fireEvent.keyDown(field, { key: 's', code: 'KeyS' })
+        expect(document.querySelector('.color-picker-content')).toBeNull()
+
+        // The live state follows the field; Enter saves, and the line stays open.
+        fireEvent.change(field, { target: { value: 'x > 3 m' } })
+        await waitFor(() => expect(within(panel() as HTMLElement).getByText('true')).toBeInTheDocument())
+        fireEvent.keyDown(field, { key: 'Enter', code: 'Enter' })
+        expect(field).toHaveFocus()
+        expect(lineField()).toBe(opened)
+        expect(selected()).toBe('Format')
+
+        // Back in the line, the edit continues in the same field.
+        act(() => opened.focus())
+        expect(lineField()).toBe(opened)
+        expect(opened).toHaveValue('x = 4 m')
+        press(inPanel('Done (Esc)'))
+        await waitFor(() => expect(lineField()).toBeNull())
+        expect(row()).toHaveClass('is-text-red')
+
+        // One undo takes the condition back, to what + Add rule wrote; the next takes the rule.
+        undoControls(document.body).undo()
+        await waitFor(() => expect(row()).not.toHaveClass('is-text-red'))
+        press(inPanel('Edit (Enter)'))
+        await waitFor(() => expect(lineField()).toHaveValue('x = 4 m'))
+        expect(await condition()).toHaveValue('x')
+        press(inPanel('Done (Esc)'))
+        await waitFor(() => expect(lineField()).toBeNull())
+        undoControls(document.body).undo()
+        press(inPanel('Edit (Enter)'))
+        await waitFor(() => expect(lineField()).toHaveValue('x = 1 m + 1 s'))
+        expect(within(panel() as HTMLElement).queryByRole('textbox', { name: 'Condition of rule 1' })).toBeNull()
+      })
+
       it('the Symbols and Constants tabs insert at the caret; with nothing open, the selected element’s last line opens (#146)', async () => {
         await start()
         fireEvent.click(await sheetButton())

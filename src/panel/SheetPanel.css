@@ -565,18 +565,77 @@ li + li > .sheet-panel__constant {
   box-shadow: 0 0 0 2px #1971c2;
 }
 
+/* A rule's condition (section 4, Rules list, M4e): `if` and its text field,
+   which takes the row's width; a condition longer than it scrolls sideways
+   inside the field, as any text field's does. */
 .sheet-rules__condition {
   grid-area: condition;
-  overflow: hidden;
-  padding: 0;
-  border: 0;
-  background: none;
-  color: inherit;
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
   font: 13px/18px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  text-align: left;
-  text-overflow: ellipsis;
+}
+
+.sheet-rules__field {
+  box-sizing: border-box;
+  flex: 1 1 auto;
+  width: 0;
+  min-width: 0;
+  height: 28px;
+  padding: 0 6px;
+  border: 1px solid var(--default-border-color, #dee2e6);
+  border-radius: 6px;
+  background: var(--input-bg-color, transparent);
+  color: inherit;
+  font: inherit;
+}
+
+/* The field's suggestions, under it: the list the line's own field shows. */
+.sheet-rules__suggest {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 1;
+  box-sizing: border-box;
+  margin: 3px 0 0;
+  padding: 3px;
+  border: 1px solid var(--default-border-color, #dee2e6);
+  border-radius: 6px;
+  background: var(--island-bg-color, #fff);
+  box-shadow: 0 2px 8px rgb(0 0 0 / 14%);
+  font: 13px/20px system-ui, 'Segoe UI', sans-serif;
+  list-style: none;
+}
+
+.sheet-rules__option {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  cursor: pointer;
   white-space: nowrap;
-  cursor: text;
+}
+
+.sheet-rules__option.is-highlighted,
+.sheet-rules__option:hover {
+  background: var(--button-hover-bg, #e7f5ff);
+}
+
+.sheet-rules__option-name {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12.5px;
+}
+
+.sheet-rules__option-detail {
+  overflow: hidden;
+  color: var(--color-gray-50, #868e96);
+  font-size: 12px;
+  text-overflow: ellipsis;
 }
 
 .sheet-rules__if {

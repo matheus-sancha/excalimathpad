@@ -39,7 +39,7 @@ what to read for an issue and where to write.
   Enter and Esc, and fails if any box around the math was scrolled by the
   browser, if the content isn't drawn where the overlay put it, or if the
   caret is outside the visible area; and, M4e, #196, the wrapping field at
-  1280 and 880 px). `npm test` holds the **typing test**
+  1280 and 880 px, and #197, a rule's condition typed with the line open). `npm test` holds the **typing test**
   (`src/typing.test.tsx`, M4e, #193: the guide's examples and the acceptance
   sheets, a character at a time); `npm run test:probe` is the **odd-values
   probe** (`src/oddValues.probe.tsx`), by hand before a release. `npm test`
@@ -350,7 +350,8 @@ and everything downstream recalculates. Engine: math.js, client-side.
   `mousedown` and skips a prevented one, so in capture, or on the sidebar, the
   tabs stopped switching (`panelPresses.excalidraw.test.tsx`, with the
   control). A field in the panel (a filter) takes focus, and so leaves the
-  line.
+  line; a rule's condition field doesn't (M4e, #197): it shares `LINE_FIELD`
+  with the line's field, and a blur from one to the other keeps the line.
 - **A field inside Excalidraw's container is `type="text"`.** Excalidraw
   runs its letter shortcuts on a key from any input that isn't text, number
   or password, so a `type="search"` filter in the Sheet panel lost the

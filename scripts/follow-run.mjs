@@ -21,8 +21,14 @@
 // the line only from the first or the last, the suggestions open under the
 // caret's row, a pasted newline becomes a space, the field's Ctrl+Z takes
 // typing back, and a pan during the edit doesn't re-wrap. An element with a
-// chosen width wraps at that width. It fails on any check that doesn't hold,
-// and on any page error.
+// chosen width wraps at that width.
+//
+// A rule's condition (M4e, #197): with a line open and half-typed, + Add rule
+// puts the keyboard in the new row's field, a condition is typed there with
+// its suggestions and its live state, and Enter saves it, the line still open
+// with its text and its caret; a press back in the line continues the edit,
+// with the field's own Ctrl+Z; and after Esc one Ctrl+Z takes the condition
+// back. It fails on any check that doesn't hold, and on any page error.
 //
 // Run: `node scripts/follow-run.mjs` (`npm run test:follow`), after
 // `npm run build:plugin`. FOLLOW_RUN_SHOTS=<folder> keeps a screenshot of each step.
@@ -72,7 +78,10 @@ const page = `<!doctype html>
     await plugin.onload()
     const leaf = app.workspace.getLeaf()
     await leaf.openFile(new FakeObsidian.TFile(${JSON.stringify(FILE)}))
+    window.__leaf = leaf
   }
+  // The calc element's source and stored formats, from the view's file as the app holds it.
+  window.__calc = () => JSON.parse(window.__leaf.view.getViewData()).elements.find((e) => e.id === 'calc' && !e.isDeleted)?.customData
   // What the checks read, in the window's px.
   window.__state = () => {
     const box = (element) => {
@@ -457,6 +466,211 @@ try {
       odd.wrapped.fieldText === odd.wrapped.copyText && odd.wrapped.rows > s.wrapped.rows && Math.abs(odd.content.width - 320) <= 1,
       `${odd.wrapped.rows} rows; field’s text ${odd.wrapped.fieldText} px tall, copy ${odd.wrapped.copyText} px; element ${px(odd.content.width)} px wide`,
     )
+  })
+
+  // A rule's condition is typed in the Rules list, the line still open (M4e, #197).
+  await run('condition', { width: 1366, height: 768 }, sheetAt(300, 200, 'v_max = 3 m/s\nv = 4 m/s\nw = v'), async ({ tab, row, step, lineBox, px }) => {
+    const rules = () =>
+      tab.evaluate(() => {
+        const active = document.activeElement
+        const line = document.querySelector('.math-element__field')
+        const fields = [...document.querySelectorAll('.sheet-rules__field')]
+        const box = (element) => {
+          if (!element) return null
+          const { left, top, right, bottom } = element.getBoundingClientRect()
+          return { left, top, right, bottom }
+        }
+        return {
+          line: line && { value: line.value, caret: line.selectionStart, focused: active === line },
+          conditions: fields.map((field) => ({
+            value: field.value,
+            caret: field.selectionStart,
+            focused: active === field,
+            box: box(field),
+            scrolls: field.scrollWidth > field.clientWidth,
+          })),
+          states: [...document.querySelectorAll('.sheet-rules__state')].map((state) => state.textContent),
+          options: [...document.querySelectorAll('.sheet-rules__option-name')].map((option) => option.textContent),
+          list: box(document.querySelector('.sheet-rules__suggest')),
+          panel: box(document.querySelector('.sheet-sidebar')),
+          rowRed: document.querySelector('[data-anchor-id="calc"] [data-line="1"]')?.classList.contains('is-text-red') ?? false,
+          active: document.activeElement?.className ?? null,
+        }
+      })
+    // The element as the file would hold it. Reading it is a save, which commits
+    // what is typed (the line's text, and a condition's): only read after a write.
+    const calc = () => tab.evaluate(() => window.__calc())
+    const pressPanel = async (name) => {
+      const button = tab.locator(`.sheet-sidebar [aria-label="${name}"]`)
+      await button.scrollIntoViewIfNeeded()
+      const box = await button.boundingBox()
+      await tab.mouse.click(box.x + box.width / 2, box.y + box.height / 2)
+      await tab.waitForTimeout(300)
+    }
+    const line = await lineBox(1)
+    await tab.mouse.dblclick(line.x + 30, line.y + line.height / 2)
+    await step('the line opens')
+    // Half-typed: a factor still to come, and the caret back inside the text.
+    await tab.keyboard.type(' * 2 *')
+    for (let i = 0; i < 4; i += 1) await tab.keyboard.press('ArrowLeft')
+    const HALF = 'v = 4 m/s * 2 *'
+    const CARET = HALF.length - 4
+
+    await pressPanel('+ Add rule')
+    let s = await rules()
+    row(
+      '+ Add rule puts the keyboard in the new row’s field, after the line’s name',
+      s.conditions.length === 1 && s.conditions[0].focused && s.conditions[0].value === 'v ' && s.conditions[0].caret === 2,
+      JSON.stringify(s.conditions[0]),
+    )
+    row(
+      'the line is still open, with its half-typed text and its caret',
+      s.line !== null && s.line.value === HALF && s.line.caret === CARET && !s.line.focused,
+      JSON.stringify(s.line),
+    )
+    let file = await calc()
+    row('nothing was written into the line: the rule is stored beside it', file.source.split('\n')[1] === HALF && file.formats === '\n@text-red if v\n', JSON.stringify(file))
+
+    // The line is half-typed, so it has no value yet: finish it from the line, then go on in the condition.
+    await tab.keyboard.type('> v_')
+    await tab.waitForTimeout(200)
+    s = await rules()
+    row(
+      'the field offers the sheet’s names, in a list inside the panel',
+      s.options[0] === 'v_max' && s.list !== null && s.list.top >= s.conditions[0].box.bottom && s.list.right <= s.panel.right && s.list.left >= s.panel.left,
+      `options: ${s.options.join(', ')}`,
+    )
+    await tab.keyboard.press('Tab')
+    await tab.waitForTimeout(200)
+    s = await rules()
+    row('Tab takes the suggestion', s.conditions[0].value === 'v > v_max' && s.options.length === 0 && s.conditions[0].focused, s.conditions[0].value)
+
+    // A press back in the line continues the edit: the line is finished there, with the same field.
+    const fieldBox = await tab.locator('.math-element__field').boundingBox()
+    await tab.mouse.click(fieldBox.x + fieldBox.width - 3, fieldBox.y + fieldBox.height / 2)
+    await tab.waitForTimeout(200)
+    s = await rules()
+    file = await calc()
+    row('a press back in the line gives it the keyboard, and saves the condition', s.line?.focused === true && s.line.value === HALF && file.formats === '\n@text-red if v > v_max\n', JSON.stringify(file.formats))
+    await tab.keyboard.press('End')
+    await tab.keyboard.type(' 1')
+    await tab.waitForTimeout(200)
+    s = await rules()
+    row('the edit continues, and the rule’s live state follows the line', s.line.value === `${HALF} 1` && s.states[0] === 'true' && s.rowRed === false, `${s.line.value}; state ${s.states[0]}`)
+    await step('after the press back in the line')
+
+    // The live state follows the condition's field as it is typed, before anything is saved.
+    const condition = tab.locator('.sheet-rules__field').first()
+    await condition.click()
+    await tab.keyboard.press('ControlOrMeta+a')
+    await tab.keyboard.type('v > 100 m/s')
+    await tab.waitForTimeout(200)
+    s = await rules()
+    const typedFalse = s.states[0]
+    await tab.keyboard.press('ControlOrMeta+a')
+    await tab.keyboard.type('v > 3 kg')
+    await tab.waitForTimeout(200)
+    s = await rules()
+    const typedWarning = s.states[0]
+    await tab.keyboard.press('ControlOrMeta+a')
+    await tab.keyboard.press('Backspace')
+    await tab.waitForTimeout(200)
+    s = await rules()
+    const typedEmpty = s.states[0]
+    await tab.keyboard.type('v > 5 m/s')
+    await tab.waitForTimeout(200)
+    s = await rules()
+    row(
+      'the live state follows the field as it is typed',
+      typedFalse === 'false' && typedWarning.startsWith('⚠') && typedWarning.includes('Units do not match') && typedEmpty === '⚠ a rule needs a condition' && s.states[0] === 'true',
+      `${typedFalse} / ${typedWarning} / ${typedEmpty} / ${s.states[0]}`,
+    )
+    await tab.keyboard.press('Enter')
+    await tab.waitForTimeout(300)
+    s = await rules()
+    file = await calc()
+    row(
+      'Enter saves the condition, and the line is still open with its text and its caret',
+      file.formats === '\n@text-red if v > 5 m/s\n' && s.conditions[0].focused && s.line?.value === `${HALF} 1` && s.line.caret === `${HALF} 1`.length,
+      `${JSON.stringify(file.formats)}; line ${JSON.stringify(s.line)}`,
+    )
+
+    // A long condition scrolls sideways inside its field, which stays in the panel.
+    await tab.keyboard.press('End')
+    await tab.keyboard.type(' and v < 1000000 m/s and v_max > 0.000001 m/s and v_max < 1000000 m/s')
+    await tab.waitForTimeout(200)
+    s = await rules()
+    row('a long condition scrolls sideways inside its field', s.conditions[0].scrolls && s.conditions[0].box.right <= s.panel.right && s.conditions[0].box.left >= s.panel.left, `field ${px(s.conditions[0].box.left)}–${px(s.conditions[0].box.right)}, panel to ${px(s.panel.right)}`)
+    await tab.keyboard.press('Enter')
+
+    // Back in the line: its own Ctrl+Z still takes its typing back, since the field was never rewritten.
+    await tab.mouse.click(fieldBox.x + 20, fieldBox.y + fieldBox.height / 2)
+    await tab.keyboard.press('ControlOrMeta+z')
+    await tab.waitForTimeout(200)
+    s = await rules()
+    row('the line’s own Ctrl+Z still takes its typing back', s.line?.focused === true && s.line.value !== `${HALF} 1` && s.line.value.startsWith('v = 4 m/s'), `line: ${s.line?.value}; active ${s.active}`)
+    await tab.keyboard.press('ControlOrMeta+Shift+z')
+    await tab.waitForTimeout(200)
+
+    // The condition's own Ctrl+Z, with nothing typed in it, doesn't go on to the line's typing.
+    await condition.click()
+    await tab.keyboard.press('ControlOrMeta+z')
+    await tab.waitForTimeout(200)
+    s = await rules()
+    row('with nothing typed in it, the condition’s Ctrl+Z leaves the line’s text alone', s.conditions[0].focused && s.line?.value === `${HALF} 1`, `line: ${s.line?.value}; active ${s.active}`)
+    await tab.mouse.click(fieldBox.x + 20, fieldBox.y + fieldBox.height / 2)
+
+    // Esc leaves the line, which was written with the condition; one Ctrl+Z takes the condition back.
+    await tab.keyboard.press('Escape')
+    await step('Esc', { open: false })
+    const saved = (await calc()).formats
+    await tab.keyboard.press('ControlOrMeta+z')
+    await tab.waitForTimeout(400)
+    file = await calc()
+    row(
+      'one Ctrl+Z takes the condition back',
+      saved.startsWith('\n@text-red if v > 5 m/s and v < 1000000 m/s') && file.formats === '\n@text-red if v > 5 m/s\n',
+      `${JSON.stringify(saved.slice(0, 40))}… → ${JSON.stringify(file.formats)}`,
+    )
+  })
+
+  // The condition's field going away, its rule removed or the tab changed, doesn't leave the line.
+  await run('condition, gone', { width: 1366, height: 768 }, sheetAt(300, 200, 'v = 4 m/s\nw = v'), async ({ tab, row, lineBox }) => {
+    const read = () =>
+      tab.evaluate(() => ({
+        line: document.querySelector('.math-element__field')?.value ?? null,
+        conditions: [...document.querySelectorAll('.sheet-rules__field')].map((field) => field.value),
+        focused: document.activeElement?.classList.contains('sheet-rules__field') ?? false,
+        scrolled: [...document.querySelectorAll('.excalidraw, .app-shell__stage, .app-shell__overlay, body, html')].filter((e) => e.scrollTop || e.scrollLeft).map((e) => e.className || e.tagName),
+      }))
+    const pressPanel = async (selector) => {
+      const button = tab.locator(`.sheet-sidebar ${selector}`)
+      await button.scrollIntoViewIfNeeded()
+      const box = await button.boundingBox()
+      await tab.mouse.click(box.x + box.width / 2, box.y + box.height / 2)
+      await tab.waitForTimeout(300)
+    }
+    const line = await lineBox(0)
+    await tab.mouse.dblclick(line.x + 30, line.y + line.height / 2)
+    await tab.waitForTimeout(600)
+    await pressPanel('[aria-label="+ Add rule"]')
+    await tab.keyboard.type('> 3 m/s')
+    await pressPanel('[aria-label="+ Add rule"]')
+    let s = await read()
+    row('a second rule is added while the first is being typed, which saves it', s.conditions.join(' | ') === 'v > 3 m/s | v ' && s.focused && s.line === 'v = 4 m/s', s.conditions.join(' | '))
+    await pressPanel('[aria-label="Remove rule 2"]')
+    s = await read()
+    row('removing the rule whose condition has the keyboard keeps the line open', s.line === 'v = 4 m/s' && s.conditions.join(' | ') === 'v > 3 m/s', `line: ${s.line}; ${s.conditions.join(' | ')}`)
+    await tab.locator('.sheet-rules__field').first().click()
+    await pressPanel('.sheet-tab[title="Symbols"]')
+    s = await read()
+    row('changing the tab while a condition has the keyboard keeps the line open', s.line === 'v = 4 m/s' && s.conditions.length === 0, `line: ${s.line}`)
+    row('nothing around the sheet was scrolled by the browser', s.scrolled.length === 0, s.scrolled.join(', '))
+    // A press on the canvas leaves the line, as it always does.
+    await tab.mouse.click(500, 600)
+    await tab.waitForTimeout(400)
+    s = await read()
+    row('a press on the canvas leaves the line', s.line === null)
   })
 } finally {
   await browser.close()

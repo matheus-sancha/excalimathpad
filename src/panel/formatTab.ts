@@ -47,11 +47,9 @@ export type FormatView =
       overrides: string[]
       /** The line's rules, those typed in its text first, then the stored ones, for the Rules list (section 4). */
       rules: readonly FormatRule[]
-      /** How many of them are still typed in the line's text: only those have a condition to put the caret in. */
-      typedRules: number
       /** Each rule's live state; null while the evaluation hasn't caught up with the typed rules. */
       ruleStates: readonly RuleState[] | null
-      /** What + Add rule names: the name the line defines, `result` with none, null on a table line. */
+      /** What + Add rule's condition starts with: the name the line defines, `result` with none, null on a table line. */
       ruleName: string | null
     })
   | (Open & { kind: 'comment'; line: SheetLine | null; format: CommentFormat })
@@ -72,7 +70,6 @@ export function formatView(sheet: readonly FormatElement[], target: FormatTarget
   const line = element.lines[target.lineIndex] ?? null
   // The format is the stored one, behind any clause typed in the text (section 3).
   const form = readLine(withFormat(text, target.stored ?? ''))
-  const typed = readLine(text)
   switch (form.kind) {
     case 'code':
       return {
@@ -85,7 +82,6 @@ export function formatView(sheet: readonly FormatElement[], target: FormatTarget
         format: form.format,
         overrides: overrides(form.rules, line?.ruleTruth ?? []),
         rules: form.rules,
-        typedRules: typed.kind === 'code' ? typed.rules.length : 0,
         ruleStates: line && line.ruleStates.length === form.rules.length ? line.ruleStates : null,
         ruleName: line?.table ? null : (line?.variables[0]?.name ?? 'result'),
       }
@@ -125,4 +121,6 @@ export const FORMAT_HINTS = {
   nothingOpen: 'Open a line or a title to format it: double-click it, or select its element and press Enter.',
   nothingOpenTouch: 'Double-tap a line, or tap Edit',
   noFormat: 'This line takes no format.',
+  /** In the Rules list, on a rule whose condition is empty. */
+  noCondition: 'a rule needs a condition',
 } as const

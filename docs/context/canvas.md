@@ -81,7 +81,9 @@ click into a new anchor, selected in the same write, and holds the crosshair.
 left empty. `SheetCanvas` draws the welcome screen, and the app's two
 items in Excalidraw's More tools dropdown: Add math and Math settings, which
 opens the Sheet panel. `panelPresses.ts` holds `SHEET_SIDEBAR_CLASS`,
-`isInSheetPanel` and `keepPanelPresses` (see Load-bearing). The Sheet panel
+`isInSheetPanel` and `keepPanelPresses` (see Load-bearing), and `LINE_FIELD`
+with `isLineField`, the mark the line's field shares with a rule's condition
+field so the keyboard can pass between them (M4e, #197). The Sheet panel
 (M4d, #143) has six icon tabs, `SHEET_PANEL_TABS`: Format, Symbols,
 Variables, Problems, Constants, Settings, each named by a label span (shown
 on the active tab, read on all) and its `title`, the error badge on
