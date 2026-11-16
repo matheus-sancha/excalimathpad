@@ -13,7 +13,7 @@ function fakeApi(scrollX = 0, scrollY = 0, zoom = 1) {
 
 const AREA = { left: 0, top: 0, right: 1000, bottom: 700 }
 
-describe('scrollIntoArea (docs/spec-v1.md section 4, While editing a line: the view follows the caret, 0.2.2)', () => {
+describe('scrollIntoArea (docs/spec-v1.md section 4, While editing a line: the view follows the caret, 0.2.1)', () => {
   it('moves nothing when the row is wholly inside the area less the 48 px margin', () => {
     const api = fakeApi()
 

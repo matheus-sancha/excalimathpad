@@ -44,7 +44,7 @@ export interface Box {
 export const FOLLOW_MARGIN = 48
 
 /**
- * The follow rule (docs/spec-v1.md section 4, While editing a line, 0.2.2,
+ * The follow rule (docs/spec-v1.md section 4, While editing a line, 0.2.1,
  * #191): when `row` isn't wholly inside `area` less the margin, the canvas
  * scrolls the least distance that puts it there, up, down or sideways. Where
  * the area is too small for the row and both margins, the margin gives way

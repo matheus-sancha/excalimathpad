@@ -311,7 +311,7 @@ export default function App({ files, recovery, panelMemory, vault, initialElemen
       setEditTarget(target)
       if (!canvas) return
       // The view follows the caret: as a line or the title opens, on Enter,
-      // on ↑ and ↓ and while typing (section 4, While editing a line, 0.2.2).
+      // on ↑ and ↓ and while typing (section 4, While editing a line, 0.2.1).
       if (target) followCaret(canvas, phone)
       if (target && !beforeEdit.current) {
         beforeEdit.current = canvas.sheetPanel()
@@ -500,7 +500,7 @@ export default function App({ files, recovery, panelMemory, vault, initialElemen
 }
 
 /**
- * The follow rule (docs/spec-v1.md section 4, While editing a line, 0.2.2,
+ * The follow rule (docs/spec-v1.md section 4, While editing a line, 0.2.1,
  * #191): once the edit has laid out, the canvas scrolls the least distance
  * that puts the caret's row inside the visible area less the margin. Only
  * while the open field has the keyboard, so typing in a Format tab field
