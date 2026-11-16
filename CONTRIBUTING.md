@@ -57,7 +57,7 @@ You need **Node.js** `^22.22.2 || ^24.15.0 || >=26` and **npm 10+**. CI runs on 
 | `npm run test:blocked` | Open the built plugin in headless Chromium with the network blocked (Playwright's Chromium: `npx playwright install chromium` once) |
 | `npm run test:popout` | Open the built plugin in headless Chromium with a sheet tab in a pop-out window, and check it drags, places math, opens Help and the Math guide, pastes and copies there |
 | `npm run test:touch` | Open the built plugin in headless Chromium by touch, at a phone and a tablet viewport, as Android and as iOS, and check the touch gestures, the quick keys and the phone's bottom sheet |
-| `npm run test:follow` | Open the built plugin in headless Chromium, type a long plot line near the window's bottom, press Enter and Esc, and check the math stays drawn on its box and the caret stays in view |
+| `npm run test:follow` | Open the built plugin in headless Chromium, type a long plot line near the window's bottom, press Enter and Esc, and check the math stays drawn on its box and the caret stays in view; then check the line's field wraps at 1280 px and 880 px |
 | `npm run test:probe` | The odd-values probe: about 40,000 sheets of odd values through the engine and the view, about 8 minutes. Not part of `check`: run by hand before a release |
 | `npm run preview` | Serve `dist/` locally |
 | `npm run lint` | Lint with oxlint, then Obsidian's ESLint rules at zero warnings |

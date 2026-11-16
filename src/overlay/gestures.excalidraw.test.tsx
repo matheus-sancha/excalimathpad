@@ -103,7 +103,7 @@ async function closeTextEditor() {
   await act(() => new Promise((resolve) => setTimeout(resolve, 50)))
 }
 
-const field = () => screen.queryByRole<HTMLInputElement>('textbox', { name: 'Line source' })
+const field = () => screen.queryByRole<HTMLTextAreaElement>('textbox', { name: 'Line source' })
 const type = (text: string) => fireEvent.input(field()!, { target: { value: text } })
 
 describe('click and drag stay Excalidraw’s', () => {

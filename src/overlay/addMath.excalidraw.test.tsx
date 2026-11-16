@@ -82,7 +82,7 @@ async function mount({ elements = existing, overlay = true } = {}) {
   }
 }
 
-const field = () => screen.queryByRole<HTMLInputElement>('textbox', { name: 'Line source' })
+const field = () => screen.queryByRole<HTMLTextAreaElement>('textbox', { name: 'Line source' })
 const type = (text: string) => fireEvent.input(field()!, { target: { value: text } })
 const escapeField = () => fireEvent.keyDown(field()!, { key: 'Escape' })
 const empty = { clientX: 300, clientY: 400 }

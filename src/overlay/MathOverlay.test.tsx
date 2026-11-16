@@ -22,6 +22,19 @@ import {
   type SceneApi,
 } from './MathOverlay.tsx'
 
+// jsdom lays nothing out, so a field is one row there. A test sets `place` to
+// say which row of a wrapped field the caret is on (`caretPlace`).
+const fieldRows = vi.hoisted(() => ({
+  place: null as { first: boolean; last: boolean; top: number; bottom: number } | null,
+}))
+vi.mock('./caretRow.ts', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./caretRow.ts')>()
+  return {
+    ...actual,
+    caretPlace: (...args: Parameters<typeof actual.caretPlace>) => fieldRows.place ?? actual.caretPlace(...args),
+  }
+})
+
 /**
  * A fake of the slice of Excalidraw's API the overlay uses: a mutable scene,
  * viewport and selection, plus the two subscriptions. Tests change it the way
@@ -226,17 +239,17 @@ const resultsOf = (id: string) => sheetResults(elementOf(id))
 function openLine(n: number, id = 'm1') {
   current.select(id)
   fireEvent.doubleClick(canvasRoot, linePoint(id, n))
-  return screen.getByRole<HTMLInputElement>('textbox', { name: 'Line source' })
+  return screen.getByRole<HTMLTextAreaElement>('textbox', { name: 'Line source' })
 }
 
 const rowOf = (id: string, n: number) =>
   elementOf(id)!.querySelector<HTMLElement>(`[data-line="${n - 1}"]`)!
 
-function type(field: HTMLInputElement, text: string) {
+function type(field: HTMLTextAreaElement, text: string) {
   fireEvent.input(field, { target: { value: text } })
 }
 
-const openField = () => screen.queryByRole<HTMLInputElement>('textbox', { name: 'Line source' })
+const openField = () => screen.queryByRole<HTMLTextAreaElement>('textbox', { name: 'Line source' })
 
 describe('MathOverlay', () => {
   it('places each math element at its anchor, ignoring other elements', () => {
@@ -812,8 +825,8 @@ describe('MathOverlay', () => {
       act(() => field.dispatchEvent(new Event('input', { bubbles: true })))
 
       expect(setValue).not.toHaveBeenCalled()
-      // Nor React's rewrite of the value attribute, from a changing defaultValue.
-      expect(field.getAttribute('value')).toBe('a = 1')
+      // Nor React's rewrite of the field's default, from a changing defaultValue (a textarea's is its text).
+      expect(field.defaultValue).toBe('a = 1')
     })
 
     it('Esc writes the typed line once, ends the edit and gives the keyboard back', () => {
@@ -1561,7 +1574,7 @@ describe('the Format tab (docs/spec-v1.md section 4, Format tab, M4d)', () => {
     renderOverlay([anchorWith(source)], extra, { formatTab: true })
   const titledWithTab = (title: string, source = 'x = 2') =>
     renderOverlay([createMathAnchorElements([{ id: 'm1', ...box, source, title }])[0]], {}, { formatTab: true })
-  const titleField = () => screen.queryByRole<HTMLInputElement>('textbox', { name: 'Title' })
+  const titleField = () => screen.queryByRole<HTMLTextAreaElement>('textbox', { name: 'Title' })
   const titleFormatOf = (scene: ReturnType<typeof fakeScene>) => scene.elementOf('m1').customData?.titleFormat
 
   it('with nothing open, shows the hint, and Edit only while one math element is selected', () => {
@@ -2182,7 +2195,7 @@ describe('a warning at rest (docs/spec-v1.md section 4, Problems, M4d)', () => {
 
 describe('title (docs/spec-v1.md section 4: an optional header on the element)', () => {
   const header = () => elementOf('m1')!.querySelector<HTMLElement>('[data-title]')
-  const titleField = () => screen.queryByRole<HTMLInputElement>('textbox', { name: 'Title' })
+  const titleField = () => screen.queryByRole<HTMLTextAreaElement>('textbox', { name: 'Title' })
   const titled = (title: string, source = 'x = 2') =>
     createMathAnchorElements([{ id: 'm1', ...box, source, title }])[0]
   const titleOf = (scene: ReturnType<typeof fakeScene>) =>
@@ -2455,5 +2468,211 @@ describe('the line edit, as the Sheet panel reaches it', () => {
     })
     expect(scene.sourceWrites()).toBe(0)
     expect(openField()).toBeNull()
+  })
+})
+
+describe('the field wraps (docs/spec-v1.md section 4, While editing a line, M4e)', () => {
+  const cell = () => document.querySelector<HTMLElement>('.math-element__field-cell')!
+  const onRow = (place: { first: boolean; last: boolean }) => {
+    fieldRows.place = { ...place, top: 24, bottom: 48 }
+    onTestFinished(() => {
+      fieldRows.place = null
+    })
+  }
+
+  it('is a textarea of one row that keeps the field’s marks: no capitals, corrections or spelling, and no outside click', () => {
+    renderOverlay([anchorWith('a = 1')])
+    const field = openLine(1)
+
+    expect(field.tagName).toBe('TEXTAREA')
+    expect(field).toHaveAttribute('rows', '1')
+    expect(field).toHaveAttribute('autocapitalize', 'off')
+    expect(field).toHaveAttribute('autocorrect', 'off')
+    expect(field).toHaveAttribute('spellcheck', 'false')
+    expect(field).toHaveAttribute('data-prevent-outside-click')
+
+    fireEvent.keyDown(field, { key: 'ArrowUp' })
+    const title = screen.getByRole('textbox', { name: 'Title' })
+    expect(title.tagName).toBe('TEXTAREA')
+    expect(title).toHaveAttribute('autocapitalize', 'off')
+    expect(title).toHaveAttribute('autocorrect', 'off')
+    expect(title).toHaveAttribute('spellcheck', 'false')
+    expect(title).toHaveAttribute('data-prevent-outside-click')
+  })
+
+  it('↑ and ↓ between the field’s rows are the browser’s: the line stays open and the view follows the caret', () => {
+    const onCaretRow = vi.fn()
+    const { scene } = renderOverlay([anchorWith('a = 1\nb = 2\nc = 3')], { onCaretRow })
+    const field = openLine(2)
+    onRow({ first: false, last: false })
+
+    expect(fireEvent.keyDown(field, { key: 'ArrowUp' })).toBe(true)
+    expect(fireEvent.keyDown(field, { key: 'ArrowDown' })).toBe(true)
+
+    expect(openField()).toBe(field)
+    expect(rowOf('m1', 2)).toHaveClass('is-editing')
+    expect(onCaretRow).toHaveBeenCalledTimes(2)
+    expect(scene.sourceWrites()).toBe(0)
+  })
+
+  it('↑ leaves the line only from its first row, and ↓ only from its last', () => {
+    renderOverlay([anchorWith('a = 1\nb = 2\nc = 3')])
+    const field = openLine(2)
+
+    onRow({ first: true, last: false })
+    expect(fireEvent.keyDown(field, { key: 'ArrowDown' })).toBe(true)
+    expect(rowOf('m1', 2)).toHaveClass('is-editing')
+    expect(fireEvent.keyDown(field, { key: 'ArrowUp' })).toBe(false)
+    expect(rowOf('m1', 1)).toHaveClass('is-editing')
+
+    // Back on the second line, now on its last row.
+    onRow({ first: false, last: true })
+    fireEvent.keyDown(openField()!, { key: 'ArrowDown' })
+    expect(fireEvent.keyDown(openField()!, { key: 'ArrowUp' })).toBe(true)
+    expect(rowOf('m1', 2)).toHaveClass('is-editing')
+    expect(fireEvent.keyDown(openField()!, { key: 'ArrowDown' })).toBe(false)
+    expect(rowOf('m1', 3)).toHaveClass('is-editing')
+  })
+
+  it('a pasted newline becomes a space, typed in as one input', () => {
+    const { scene } = renderOverlay([anchorWith('a = 1')])
+    const field = openLine(1)
+
+    const notPrevented = fireEvent.paste(field, { clipboardData: { getData: () => ' +\r\n2 +\n3' } })
+
+    expect(notPrevented).toBe(false)
+    expect(field.value).toBe('a = 1 + 2 + 3')
+    expect(resultsOf('m1')).toBe('6')
+    expect(scene.sourceWrites()).toBe(0)
+  })
+
+  it('leaves a paste of one line to the browser', () => {
+    renderOverlay([anchorWith('a = 1')])
+
+    expect(fireEvent.paste(openLine(1), { clipboardData: { getData: () => ' + 2' } })).toBe(true)
+  })
+
+  it('a newline that reaches the field another way becomes a space too', () => {
+    renderOverlay([anchorWith('a = 1')])
+    const field = openLine(1)
+
+    type(field, 'a = 1 +\n2')
+
+    expect(field.value).toBe('a = 1 + 2')
+    expect(resultsOf('m1')).toBe('3')
+  })
+
+  it('a line break with no key, as an on-screen keyboard’s Enter, splits the line', () => {
+    const { scene } = renderOverlay([anchorWith('a = 1')])
+    const field = openLine(1)
+
+    const event = new InputEvent('beforeinput', { inputType: 'insertLineBreak', bubbles: true, cancelable: true })
+    act(() => {
+      field.dispatchEvent(event)
+    })
+
+    expect(event.defaultPrevented).toBe(true)
+    expect(scene.sourceOf('m1')).toBe('a = 1\n')
+    expect(rowOf('m1', 2)).toHaveClass('is-editing')
+  })
+
+  describe('the wrap width', () => {
+    function layOut(width: number) {
+      onTestFinished(layOutBodies(() => ({ width, height: 48 })))
+    }
+    // The visible area ends at the canvas's right edge; the element starts at the window's left.
+    function canvasEndsAt(right: number) {
+      canvasRoot.getBoundingClientRect = () => ({ left: 0, top: 0, right, bottom: 600, width: right, height: 600 }) as DOMRect
+    }
+
+    it('is the space from the element’s left edge to the visible area’s right edge less 48 px, shared with the rest of the element', () => {
+      layOut(200)
+      renderOverlay([anchorWith('a = 1\nb = 2')])
+      canvasEndsAt(800)
+
+      openLine(1)
+
+      // 800 - 48 from the left edge, less the 200 px the rest of the element takes.
+      expect(cell().style.maxWidth).toBe('552px')
+    })
+
+    it('is in scene units: at a zoom of 2 the same window holds half as much', () => {
+      layOut(200)
+      const { scene } = renderOverlay([anchorWith('a = 1')])
+      canvasEndsAt(800)
+      scene.scrollTo({ scrollX: -100, scrollY: 0, zoom: 2 })
+
+      openLine(1)
+
+      expect(cell().style.maxWidth).toBe('176px')
+    })
+
+    it('is at least 240 px', () => {
+      layOut(100)
+      renderOverlay([anchorWith('a = 1')])
+      canvasEndsAt(120)
+
+      openLine(1)
+
+      expect(cell().style.maxWidth).toBe('140px')
+    })
+
+    it('is measured when the line opens and kept until it closes; the next line measures again', () => {
+      layOut(200)
+      const { scene } = renderOverlay([anchorWith('a = 1\nb = 2')])
+      canvasEndsAt(800)
+      const field = openLine(1)
+
+      canvasEndsAt(600)
+      scene.scrollTo({ scrollX: 40, scrollY: 0, zoom: 1 })
+      type(field, 'a = 12')
+      expect(cell().style.maxWidth).toBe('552px')
+
+      fireEvent.keyDown(field, { key: 'ArrowDown' })
+      expect(cell().style.maxWidth).toBe('352px')
+    })
+
+    it('is measured again once the panel the edit opened is drawn (`rewrap`)', () => {
+      layOut(200)
+      const control = createRef<LineEditControl>()
+      renderOverlay([anchorWith('a = 1')], { control })
+      canvasEndsAt(800)
+      openLine(1)
+
+      canvasEndsAt(500)
+      act(() => control.current!.rewrap())
+
+      expect(cell().style.maxWidth).toBe('252px')
+    })
+
+    it('is the element’s chosen width when it has one', () => {
+      layOut(200)
+      const chosen = { ...anchorWith('a = 1'), customData: { ...anchorWith('a = 1').customData, width: 360 } }
+      renderOverlay([chosen])
+      canvasEndsAt(800)
+
+      openLine(1)
+
+      expect(cell().style.maxWidth).toBe('160px')
+    })
+
+    it('doesn’t apply to the title, which never wraps', () => {
+      layOut(200)
+      renderOverlay([anchorWith('a = 1')])
+      canvasEndsAt(800)
+
+      fireEvent.keyDown(openLine(1), { key: 'ArrowUp' })
+
+      expect(screen.getByRole('textbox', { name: 'Title' })).toBeInTheDocument()
+      expect(cell().style.maxWidth).toBe('')
+    })
+
+    it('sets nothing where nothing is laid out', () => {
+      renderOverlay([anchorWith('a = 1')])
+
+      openLine(1)
+
+      expect(cell().style.maxWidth).toBe('')
+    })
   })
 })

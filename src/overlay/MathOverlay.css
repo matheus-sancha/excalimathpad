@@ -95,10 +95,6 @@
 .math-element__title.is-gray { background: #e9ecef; }
 .math-element__title[class*='is-'] { print-color-adjust: exact; }
 
-/* The title's field starts with room to type, as a new element's line does. */
-.math-element__field-cell.is-title {
-  min-width: 160px;
-}
 
 /* A row is as tall as its tallest cell; an empty one keeps one line. */
 .math-element__row {
@@ -248,11 +244,35 @@
 }
 
 /* The field and a hidden copy of its text share one cell, so the cell is as
-   wide as what is typed. */
+   wide as what is typed, and as tall: the copy is laid out, and the field
+   lies over it. A line's field wraps (section 4, While editing a line, M4e):
+   the cell's `max-width` is the room the line has, measured as it opens
+   (`wrapRoom.ts`), and past it the copy continues on the next row, so the
+   element grows taller. The copy and the field must break at the same
+   places: one font, one padding, one `white-space`, one `overflow-wrap`.
+   jsdom lays nothing out: check a change here in Chromium (the wrap run). */
 .math-element__field-cell {
   display: grid;
-  /* The suggestions hang under it. */
+  /* The suggestions hang under the caret's row, and the field fills it. */
   position: relative;
+  box-sizing: border-box;
+  /* Room to type on a short or empty line: the 20 characters a one-row
+     field always had. It wins over the wrap's `max-width`. */
+  min-width: calc(20ch + 2px);
+  min-height: 24px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* The title stays one line and never wraps (section 4, Title format). */
+.math-element__field-cell.is-title {
+  /* It starts with room to type, as a new element's line does. */
+  min-width: max(160px, calc(20ch + 2px));
+  white-space: pre;
+}
+
+.math-element__field-cell.is-title .math-element__field-text {
+  height: 24px;
 }
 
 .math-element__field-cell.is-empty-element {
@@ -261,24 +281,47 @@
 
 .math-element__field-text,
 .math-element__field {
-  grid-area: 1 / 1;
   box-sizing: border-box;
-  height: 24px;
   margin: 0;
   padding: 0 2px 0 0;
   border: 0;
   font: inherit;
-  white-space: pre;
+  white-space: inherit;
+  overflow-wrap: inherit;
 }
 
 .math-element__field-text {
+  grid-area: 1 / 1;
   visibility: hidden;
 }
 
-/* The only part of the overlay that takes pointer events. */
+/* `wrapRoom` measures what the element needs without the open field, by
+   laying the body out at no width with the field's cell asking for nothing;
+   important, to win over the inline styles, and removed before the next
+   paint. */
+.math-element__body.is-measuring-wrap {
+  width: 0 !important;
+  min-width: max-content !important;
+}
+
+.math-element__body.is-measuring-wrap .math-element__field-cell {
+  width: 0 !important;
+  min-width: 100% !important;
+  max-width: none !important;
+  overflow: hidden;
+}
+
+/* The only part of the overlay that takes pointer events. A textarea, so it
+   wraps; it never scrolls by itself, since the cell is as tall as its text. */
 .math-element__field {
+  position: absolute;
+  inset: 0;
+  display: block;
   width: 100%;
+  height: 100%;
   min-width: 0;
+  overflow: hidden;
+  resize: none;
   background: transparent;
   color: var(--math-text);
   box-shadow: inset 0 -1px 0 #1971c2;
@@ -702,7 +745,8 @@
    anchor don't change. Screen only: never printed. */
 .math-suggest {
   position: absolute;
-  top: 100%;
+  /* Under the caret's row of a wrapped field (M4e); the field's own bottom otherwise. */
+  top: var(--math-suggest-below, 100%);
   left: 0;
   z-index: 3;
   box-sizing: border-box;
@@ -763,7 +807,7 @@
    on-screen keyboard or a phone's bottom sheet would cover the list. */
 .math-suggest.is-above {
   top: auto;
-  bottom: 100%;
+  bottom: var(--math-suggest-above, 100%);
   margin: 0 0 3px;
 }
 

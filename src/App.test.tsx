@@ -16,7 +16,7 @@ const renderApp = (props: Parameters<typeof App>[0] = {}) => {
 }
 
 const mathElements = () => screen.queryAllByRole('list', { name: 'Lines' })
-const lineField = () => screen.queryByRole<HTMLInputElement>('textbox', { name: 'Line source' })
+const lineField = () => screen.queryByRole<HTMLTextAreaElement>('textbox', { name: 'Line source' })
 
 /** Opens Excalidraw's More tools, where Add math and Math settings are (section 8). */
 async function openMoreTools() {

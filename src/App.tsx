@@ -562,6 +562,8 @@ function Sheet({
               if (open && editing && canvas) followCaret(canvas, phone)
               const asked = automatic.current
               if (asked && asked.open === open && (!open || asked.tab === tab)) {
+                // The line wraps short of the panel its edit opened (section 4, The field wraps).
+                if (open && editing) line.current?.rewrap()
                 automatic.current = null
                 return
               }
@@ -588,6 +590,8 @@ function Sheet({
               settings={settings}
               resultColor={settings.resultColor}
               touch={touch}
+              phone={phone}
+              onCaretRow={() => followCaret(canvas, phone)}
               flash={flash}
             />
             {web && <FileChrome session={web.session} dialogs={web.dialogs} canvasRoot={canvas.root} />}
@@ -608,7 +612,7 @@ function Sheet({
 function followCaret(canvas: SheetCanvasHandle, phone: boolean) {
   const document = canvas.root.ownerDocument
   document.defaultView?.requestAnimationFrame(() => {
-    const field = canvas.root.closest('.app-shell__stage')?.querySelector<HTMLInputElement>('.math-element__field')
+    const field = canvas.root.closest('.app-shell__stage')?.querySelector<HTMLTextAreaElement>('.math-element__field')
     if (!field || document.activeElement !== field) return
     const area = visibleArea(canvas.root, phone)
     scrollIntoArea(canvas.api, caretRow(field, area.right - area.left - 2 * FOLLOW_MARGIN), area)

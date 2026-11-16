@@ -814,9 +814,10 @@ function's definition show none. Hover is screen-only.
   margin, the canvas scrolls the least distance that puts it there: up, down or sideways.
   Otherwise nothing moves. There is no zoom change, no undo step, no animation, and no scroll
   back when the edit ends. A pan by hand during an edit is left alone until the caret next
-  moves. The caret's row is the open field; a field wider than the visible area less both
-  margins can't fit, so there the view follows the caret itself, and until the field wraps
-  (M4e) a very long line scrolls the canvas sideways as it is typed. Where the visible area is
+  moves. The caret's row is the open field and, once the field has wrapped (M4e), the one of
+  its rows the caret is on, so the view follows the field down as it grows. A row wider than
+  the visible area less both margins can't fit (a very long title, or a line whose element
+  starts left of the visible area), so there the view follows the caret itself. Where the visible area is
   too small for the row and both margins, the margin gives way and the row is centred. The
   suggestion list keeps its own rule and doesn't move the view.
 - **The visible area** is the canvas less the Sheet panel where it covers the canvas (a
@@ -842,6 +843,25 @@ function's definition show none. Hover is screen-only.
   [#191](https://github.com/matheus-sancha/excalimathpad/issues/191)). ↑ and ↓ move between
   the field's rows and leave the line only from its first or last row. Enter still splits the
   line; a pasted newline becomes a space. Typing in a Format tab field doesn't move the view.
+  - **The field shares the wrap width with the rest of its row:** the gutter, the padding and
+    the result and note columns, as wide as they are when the line opens. So the element, not
+    the field alone, ends at the wrap width. A result that grows wider while the line is typed,
+    an error's message most of all, can widen the element until the line closes; the field's
+    own rows don't move for it.
+  - **Where the other lines already need more than the wrap width,** the field wraps at the
+    width their equations take, and the element is no wider than it was. The field is never
+    narrower than about 20 characters, the room a short or empty line's field has always had.
+  - **The wrap width is in the sheet's own px,** as every size of the element is: at 200 %
+    zoom the same window holds half as many characters a row, and the least is 240 px at 100 %.
+  - **The panel an edit opens** covers part of the visible area once it is drawn: the wrap
+    width is measured again then, once. After that it is kept as stated.
+  - **At the end of a row** the caret counts as at the start of the next one, which is the same
+    place in the text: there **↑** on the first row goes to the start of the line first, and
+    **↓** on the last row but one leaves the line.
+  - **The suggestion list** opens under the caret's row, or above that row, not under the
+    whole field.
+  - **The title's field never wraps** ([Title format](#title-format)). A newline dropped into
+    the field, like a pasted one, becomes a space.
 - A **single click on another line** of the element moves the edit there.
 - **Formatting** is done in the [Format tab](#format-tab), which opens when an edit starts
   (M4d). Until M4d a floating **format bar** beside the open line did it; the bar and the
@@ -913,7 +933,10 @@ from M4c it can be the user's ([Chosen width](#chosen-width)).
   a heading wraps at about as many characters as an ordinary comment.
 - **A very long line widens the element.** One source line of math stays one row; a comment
   line wraps. You can
-  split it yourself with Enter.
+  split it yourself with Enter. From M4e the line's open field wraps instead
+  ([While editing a line](#while-editing-a-line)): while it is open the element is as tall as
+  the field's rows make it, live, and no wider than the wrap width or what its other lines
+  need. When the edit leaves the line it is typeset on one row again, and widens the element.
 - **The top-left corner stays put,** and the box grows right and down. An upright
   element's size change can't change reading order or re-run the sheet. A rotated
   element keeps its rotated top-left corner in place, which can change its visual top
@@ -937,7 +960,9 @@ Built in M4c. A math element has an optional **chosen width**. Without one it is
   to it.
 - **Content that grows past the chosen width widens the element,** as today. The chosen width
   stays stored and applies again once the content is narrower.
-- **Height is always automatic.** It follows the wrapped content.
+- **Height is always automatic.** It follows the wrapped content, the open field's rows
+  included (M4e): the chosen width is the width a line's field wraps at
+  ([While editing a line](#while-editing-a-line)).
 
 **Setting it:**
 
@@ -3073,6 +3098,16 @@ Evidence: [`obsidian-plugin.md`](research/obsidian-plugin.md).
   that moves the math. `overflow: hidden` isn't enough: the browser still scrolls a hidden box to
   show a focused field's caret. The follow run (`scripts/follow-run.mjs`, `npm run test:follow`)
   fails if any box around the math has been scrolled.
+- **The line's field is a textarea over a hidden copy of its text** (M4e,
+  `src/overlay/MathElementView.tsx`, `MathOverlay.css`): the copy is laid out in the field's
+  cell and gives it its size, and the field lies over it, so the two must break at the same
+  places. The cell's `max-width` is the field's room (`src/overlay/wrapRoom.ts`), measured by
+  laying the element out for a moment with the field asking for nothing. The caret's row is
+  read from a second copy split at the caret (`caretPlace`, `src/overlay/caretRow.ts`), since
+  a field has no box for its caret. The field stays uncontrolled: its value is set from code
+  only when a newline got in by a drop. jsdom lays nothing out, so the follow run holds this
+  in Chromium at 1280 px and 880 px: the rows, the wrap width, ↑ and ↓, the suggestion list,
+  a pasted newline and the field's own Ctrl+Z.
 - **Plot:** `aspectRatio` is ignored at fixed sizes, so equal scales are made by setting both
   axis ranges; all four margins are set by the app. Observable Plot is imported by name once
   the new clauses are built.
@@ -3964,3 +3999,13 @@ Each section above ends with its own tickets.
   patch after the overlay fix ([#191](https://github.com/matheus-sancha/excalimathpad/issues/191)) made `0.2.1`
   with both in it. Every "0.2.2" in this spec, `CONTEXT.md` and the code's comments now reads 0.2.1; there is no
   0.2.2. The issues and the pull request for #191 still say 0.2.2 in their titles and text.
+- 2026-11-16, [section 4](#while-editing-a-line) ([#196](https://github.com/matheus-sancha/excalimathpad/issues/196), found while building, for Matheus to confirm on the
+  PR): **the wrap width is measured a second time, once, when the panel the edit opened is drawn.** "The wrap
+  width is measured once" (#190) would measure it before the Format tab's panel covers the canvas's right, so
+  the first line opened would wrap under the panel. A pan or a resize during the edit still doesn't re-wrap.
+  Written into the section as the build read it, not changes to an agreed rule, and also for him to confirm:
+  the field shares the wrap width with its row's result and note columns as they are when the line opens, so a
+  result that grows while typing (an error's message) can widen the element until the line closes, and the
+  field's rows don't jump at each keystroke; the field is never narrower than about 20 characters, as before;
+  the wrap width is in the sheet's px (240 px at 100 % zoom); a caret at a row's end counts as on the next row
+  for ↑ and ↓; the suggestion list opens under the caret's row.

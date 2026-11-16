@@ -106,7 +106,28 @@ cancels placing (M, Esc) and opens the first line of a placed element.
 leave that finds the element with no text (`hasText`, in `lineEdit.ts`)
 removes it instead of writing the line. The open line
 is a field over the equation's cells, beside its live result as
-plain text; a hidden copy of its text widens the cell. `gestures.ts`
+plain text; a hidden copy of its text widens the cell. **The field wraps**
+(spec section 4, While editing a line, M4e, #196): `LineField` is a
+`<textarea>` laid over that copy, which gives the cell its width and, past
+the cell's `max-width`, its rows. `MathOverlay` measures that room as the
+line opens (`measureWrap`, a layout effect on the open anchor and line, so
+the line is drawn once without it and again before the paint) and keeps it
+until the line closes: `wrapRoom.ts` gives the wrap width
+(`wrapWidthTo`: the element's left edge to `visibleArea`'s right less
+`FOLLOW_MARGIN`, in scene units, at least 240; or the chosen width) and the
+field's share of it (`fieldRoom`: the body laid out for a moment as
+`is-measuring-wrap`, the cell asking for nothing). `control.rewrap()`
+measures again, which App calls when the panel the edit opened is drawn.
+`caretPlace` (`caretRow.ts`) says which row of the field the caret is on,
+from a second copy split at the caret (`offsetTop`, so any zoom and
+rotation; null in jsdom, where a field is one row): ↑ and ↓ are left to the
+browser between rows, reporting `onCaretRow` so App follows the caret, and
+move the edit only from the first or last row; the suggestion list hangs
+under that row (`--math-suggest-below`, `--math-suggest-above`). A pasted
+newline is typed in as a space (`insertText`, keeping the field's Ctrl+Z), a
+line break with no key (`beforeinput`) splits the line, and a newline that
+got in by a drop is the one case the field's value is set from code. The
+title's field is the same element and never wraps. `gestures.ts`
 (pure) decides when a double-click, a click, Enter or Esc is math's, and
 `lineHit.ts` (pure) finds the
 element and line under a point from geometry and the rows' `offsetTop` and
@@ -141,6 +162,7 @@ line's unexpected error shows its raw text under its message in the gutter's
 and the result cell's `data-tip`, on every hover. `onTyped` hands App the
 open text as it is set, before the render that draws it.
 `caretRow.ts` gives the follow rule its row (0.2.1, #191): the open
-field's box, narrowed to the caret, measured on the field's hidden copy,
-when the field is wider than the room. Depends on: canvas (anchor, size, selection and layer contracts, API types),
+field's box and, in a wrapped field, the row the caret is on; narrowed to
+the caret, measured on the field's hidden copy, when the row is wider than
+the room. Depends on: canvas (anchor, size, selection and layer contracts, API types),
 math, `katex` (lazily).
