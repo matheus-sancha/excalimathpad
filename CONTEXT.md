@@ -41,7 +41,10 @@ what to read for an issue and where to write.
   caret is outside the visible area). `npm test` holds the **typing test**
   (`src/typing.test.tsx`, M4e, #193: the guide's examples and the acceptance
   sheets, a character at a time); `npm run test:probe` is the **odd-values
-  probe** (`src/oddValues.probe.tsx`), by hand before a release. CI installs Playwright's Chromium (the
+  probe** (`src/oddValues.probe.tsx`), by hand before a release. `npm test`
+  also holds the **sweep test** (`src/math/sweep.test.ts`, M4e, #194: every
+  math.js function a line can call, at huge arguments, each inside 1 s, in a
+  child process that Node runs from the TypeScript as it is). CI installs Playwright's Chromium (the
   version `package.json` pins) for the last four. The network-blocked run and the pop-out
   run also open ☰ → Math guide in the built plugin (M4d, #148).
 - `docs/math-guide.md` — the **Math guide** (spec section 8, M4d, #148): every
@@ -95,7 +98,8 @@ an issue touches that module ([`CLAUDE.md`](CLAUDE.md) has the reading route).
   keys of a vault tab and the pop-out bridge.
   [`docs/context/canvas.md`](docs/context/canvas.md)
 - **math** (`src/math/`) — the engine: `evaluateSheet(blocks)` gives each line its result
-  and its typeset form, and never throws. Reads the app's line forms before math.js
+  and its typeset form, and never throws; `limits.ts` refuses a call that would build more
+  than 10,000 values or freeze, before math.js runs it. Reads the app's line forms before math.js
   (ADR 0005). Depends on: `mathjs`. [`docs/context/math.md`](docs/context/math.md)
 - **overlay** (`src/overlay/`) — draws math elements over the canvas as typeset grids, and
   holds the line edit, the unit slot, tables and plots. Depends on: canvas, math, `katex`

@@ -200,6 +200,23 @@ its message as `data-tip`. Its ⚙ (`data-unit-slot="line:gear"`, the slot
 target's column `GEAR`) opens `PlotSettings.tsx` on the canvas's click, as a
 unit slot does; each change hands back the clause list, which the overlay
 writes with `writePlotClauses` as one line commit.
+**The limit on math.js's own range and builders** (spec section 10, M4e,
+`limits.ts`): `guardEngine(math)`, called last in the engine's setup, wraps
+what a line can call (`math.expression.mathWithTransform`; math.js's own code
+keeps the functions it was built with) so each guarded function checks its
+arguments before it runs: `range` (which `a:b` compiles to) for its points
+and its ends, the builders for the values they would build (`builds`), and
+the slow calls for their bounds (`SLOW_ARGUMENTS`, `SLOW_BIG`, `SLOW_VALUES`,
+`SLOW_PAIRS`, `SLOW_COUNTS`; spec section 14 lists them). A refusal is a
+`LimitError`, a `SheetError` worded from the values; the line's own catch
+words it as typed with `wordLimit`, which finds the call by running each
+candidate node again, innermost first (a refused call stops at its check).
+`iterate` refuses a list line whose points would hold more than the limit
+between them. `MAX_POINTS` in `lists.ts` is the one number. `largeMatrix` in
+`evaluate.ts` shows a matrix of more than 20 values as a list result: a row
+of values through `listSummary`, a matrix by its size, with `listPreview`.
+`engineFunctionNames()` lists what a line can call, for the sweep test
+(`sweep.test.ts`, whose calls run in a child process, `src/test/sweepChild.ts`).
 App code must evaluate only
 through `evaluateSheet`: math.js functions that depend on the disabled
 names (`help`, `rationalize`, a `parser()`'s methods) no longer work. The

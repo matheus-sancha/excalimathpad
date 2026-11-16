@@ -1977,8 +1977,15 @@ passthrough of math.js: small ones (`inv`, `det`, `cross`, `sum(1:100)`) work as
   error: `identity(100)` is allowed, `identity(101)` refused. The 10,000 is one number in the
   code, shared with the sheet's own range.
 - A function whose result can pass the limit from legal arguments (`kron`, `concat`, `resize`,
-  a list times a matrix) is checked on the size its result would have.
-- An end of `a:b` that isn't a finite number is its own error.
+  `diag` of a list, `setCartesian`, `setPowerset`, a column times a row, a list times a matrix)
+  is checked on the size its result would have. A list times a matrix would hold a matrix at
+  every point: its points fail when points × the matrix's values pass the limit.
+- An end of `a:b` that isn't a finite number is its own error. So is its step, in the same
+  words, and a `0/0`: `0/0 is not a number`.
+- **The message names the call as typed** (`zeros(n) has more than 10,000 values`), inside a
+  longer line too. Where the line can't run the call again by itself (inside a function's
+  body, at one point of a list), it is written from its values instead: `zeros(1e8)`, a
+  matrix too large to write as `…`, and a range's end as `the end is ∞`.
 - A call that is slow without building anything large (`combinations(1e9, 5e8)`) is refused
   by a bound on its argument, set at what keeps the call inside the sweep's time limit
   ([section 14](#14-engineering-constraints)); the bounds are listed there as they are found.
@@ -1986,7 +1993,10 @@ passthrough of math.js: small ones (`inv`, `det`, `cross`, `sum(1:100)`) work as
 - **A large matrix is summarised where it is shown.** A matrix or math.js range of up to 20
   values is shown whole. Past that, the result cell and the Variables tab show a one-row
   summary, and the hover shows the first and last few rows with their index, as a list's
-  does. Nothing is refused for being too big to show.
+  does. Nothing is refused for being too big to show. A row of values reads exactly as a
+  list does, in its unit and the line's display unit (`30 values, 2 … 60 mm`); a matrix reads
+  by its size (`3 × 7 matrix`, `10 × 10 × 10 matrix`), and each row of its hover shows three
+  values from each end. A summarised result has no unit slot, as a list has none.
 
   ```text
   1:5               [1, 2, 3, 4, 5]
@@ -2947,7 +2957,41 @@ Evidence: [`obsidian-plugin.md`](research/obsidian-plugin.md).
   arguments (`1e8`, `(3000, 3000)`, an infinite end such as `1/0`) and with arguments at the
   limit, and the test fails if any call neither answers nor refuses within 1 s. A math.js
   update that adds a builder fails it. One unit test per message row and per shown form of a
-  matrix.
+  matrix (`src/math/limits.test.ts`).
+  - **How it runs** (`src/math/sweep.test.ts`): about 250 functions, each with 27 argument
+    lists, through `evaluateSheet`, under `v = 1:10000`, `m = identity(100)` and `w = 1:100`
+    (6,669 calls, about 25 s). The calls run in a child process, since a call that freezes
+    can't be stopped from inside its own thread: the child says which call it starts, and one
+    still running after 1 s is stopped with its process and fails the test, as one that runs
+    the process out of memory does. A call that only reported more than 1 s is run once more
+    alone. Node runs the child's TypeScript as it is, so `src/math/` keeps to syntax Node can
+    strip (no `enum`, no parameter properties).
+  - **Before the limit,** 42 functions failed it: the builders and the functions of the
+    list above, and the slow calls bounded below.
+  - **The guard wraps what a line can call** (`mathWithTransform`, in `src/math/limits.ts`),
+    not math.js's own namespace: `inv`, `det` and the rest keep calling the builders they
+    were made with. `a:b` compiles to the visible `range`, so the same check covers it.
+  - **The bounds on slow calls,** each refused past it with "is too large to compute". An
+    argument that isn't finite is past every bound.
+
+    | Function | Bound |
+    |---|---|
+    | `bellNumbers`, `stirlingS2` | each argument at most 1,000 |
+    | `bernoulli` | 10,000 |
+    | `catalan`, `combinations`, `combinationsWithRep`, `composition`, `permutations` | each argument at most 1,000,000 |
+    | `isPrime` | a finite number (`isPrime(1/0)` never ended) |
+    | `cosh`, `sinh`, `tanh`, `coth`, `csch`, `sech` | a BigNumber at most 10,000 (a plain number answers `∞` at once) |
+    | `fft`, `ifft` | 4,096 values |
+    | `qr`, `schur`, `mad` | 2,500 values |
+    | `lyap` | 900 values |
+    | `setUnion`, `setIntersect`, `setDifference`, `setSymDifference`, `setIsSubset` | the two sets' sizes multiplied, at most 1,000,000 |
+    | `freqz`, `zpk2tf` | the two arguments' sizes multiplied, at most 10,000; `freqz`'s number of points at most 10,000 |
+    | `format`, `print`, `bin`, `oct`, `hex` | a precision or a word size at most 1,000, as a number or in options |
+    | `quantileSeq` | at most 100 quantiles |
+
+  - **Not bounded:** a legal matrix that is slow for what it holds, not for its size
+    (`eigs` and `sqrtm` of a 60 × 60 matrix of random numbers took over 3 s). The sweep's
+    matrix is the identity; this is the accepted slow line of section 10.
 - **The odd-values probe** (about 8 minutes) is run by hand before a release
   ([section 12a](#releases)): `npm run test:probe` (`src/oddValues.probe.tsx`, about 40,000
   sheets), a line of the release checklist. It fails as the typing test does.
@@ -3211,7 +3255,6 @@ M1 to M4d, is in [`docs/spec-history.md`](spec-history.md#17-verify-first), with
   field, and the Settings tab.
 - A table of more than three columns in the sample, scaled with no floor.
 - The typing test's time in CI with the new guide examples (59 s when measured).
-- The sweep test's bounds for slow scalar calls, listed in section 14 as they are found.
 - The savings of the plugin cuts (87 KB, about 148 KB and 109 KB) were probed as separate
   bundles or read from the source, not measured together.
 - The plugin's start-up time in Obsidian, on the work laptop and one phone.

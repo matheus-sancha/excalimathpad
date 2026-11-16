@@ -39,7 +39,8 @@ import { readTable } from './tableLine.ts'
 import { PLOT_SIZES, readPlot, type PlotClause } from './plotLine.ts'
 import { createIndex, INDEX_FN, indexParts, readIndexes, withoutIndexes } from './indexes.ts'
 import { comparisonSignatures, createIf, IF_FN, strictConditionals } from './conditionals.ts'
-import { AGGREGATES, createRanges, isSheetList, listSummary, SheetList, type Point } from './lists.ts'
+import { AGGREGATES, createRanges, isSheetList, listSummary, MAX_POINTS, SheetList, type Point } from './lists.ts'
+import { codeText, guardEngine, LimitError, matrixSize, tooManyValues, wordLimit } from './limits.ts'
 import { lineTex, rangeTex, resultTex, solveTex, textTex, unitTex, type Names } from './typeset.ts'
 import { bodyNames, lineWarnings, solveWarnings, usedNames } from './warnings.ts'
 
@@ -142,7 +143,21 @@ const solver = createSolver(math)
 /** Ranges (docs/spec-v1.md section 10), on the same engine. */
 const ranges = createRanges(math)
 
+/**
+ * Every function a line can call by name, for the sweep test (section 14,
+ * M4e): math.js's own, as expressions see them, without the app's internals.
+ */
+export function engineFunctionNames(): string[] {
+  const visible = (math as unknown as { expression: { mathWithTransform: Record<string, unknown> } }).expression.mathWithTransform
+  return Object.keys(visible)
+    .filter((name) => typeof visible[name] === 'function' && !name.startsWith('__') && /^[a-z]/.test(name))
+    .sort()
+}
+
 /** How results show when the sheet sets nothing: SI with prefixes, 4 digits. */
+/** A matrix or a math.js range of up to this many values is shown whole (section 10, M4e). */
+const MAX_SHOWN_WHOLE = 20
+
 /** A solved value writes out this many roots at most; more show a summary (section 9, Roots). */
 const MAX_WRITTEN_ROOTS = 5
 
@@ -213,6 +228,11 @@ const TYPED_MUTATORS = [
 for (const name of TYPED_MUTATORS) {
   Object.assign(math.typed, { [name]: disabled(`typed.${name}`) })
 }
+
+// Section 10, Ranges and lists (M4e): `a:b` and math.js's builders take the
+// sheet's limit, checked on their arguments before math.js runs. Last, so no
+// later import replaces a guarded function.
+guardEngine(math)
 
 /**
  * `typed` is math.js's type registry, and expressions can call its methods:
@@ -893,6 +913,8 @@ export function evaluateSheet(
       }
       if (typeof value === 'function') return { name, kind: 'function', params: [], solve: false }
       try {
+        const large = largeMatrix(value, null)
+        if (large !== null) return { name, kind: 'list', text: large.text }
         return { name, kind: 'value', text: display.show(value, null, settings) }
       } catch {
         return { name, kind: 'error' }
@@ -1006,6 +1028,12 @@ export function evaluateSheet(
           preview = previewOf(value, unit)
           return { kind: 'list', text: summaryOf(value, unit), failed: failureOf(value) }
         }
+        // Section 10: a matrix past 20 values is a one-row summary, as a list is.
+        const large = largeMatrix(value, unit)
+        if (large !== null) {
+          preview = large.preview
+          return { kind: 'list', text: large.text, failed: null }
+        }
         const text = display.show(value, unit, settings)
         const offered = display.slot(value, settings)
         slot = offered && { ...offered, chosen: line.displayText }
@@ -1024,7 +1052,8 @@ export function evaluateSheet(
             : line.kind === 'table' || line.kind === 'plot'
               ? (line.args[0]?.node ?? new math.ConstantNode(0))
               : line.node
-      const message = messageOf(error, node, (name) => scope.peek(name))
+      // A call the limit refused is named as typed (section 13).
+      const message = error instanceof LimitError ? wordLimit(error, node, scope) : messageOf(error, node, (name) => scope.peek(name))
       return fail(explain(message, here, definedAt, failed))
     }
   }
@@ -1386,7 +1415,11 @@ export function evaluateSheet(
       }
       const local = new LayeredScope(scope, own)
       try {
-        points.push({ ok: true, value: code.evaluate(local) })
+        const value: unknown = code.evaluate(local)
+        // Section 10: a list times a matrix would hold a matrix at every point.
+        const size = matrixSize(math, value)
+        if (size !== null && size.reduce((total, n) => total * n, 1) * length > MAX_POINTS) throw tooManyValues(codeText(line))
+        points.push({ ok: true, value })
       } catch (error) {
         points.push({ ok: false, message: messageOf(error, expression, (name) => local.get(name)) })
       }
@@ -1445,6 +1478,33 @@ export function evaluateSheet(
         return display.show(value, target?.kind === 'unit' ? target.unit : unit, settings)
       },
     )
+  }
+
+  /**
+   * A matrix or a math.js range of more than 20 values, as it is shown
+   * (section 10, M4e): a row of values reads as a list does, `2000 values,
+   * 1 … 2000`; a matrix by its size, `100 × 100 matrix`. Its hover is the
+   * first and last few values or rows, with their index. Null for anything
+   * shown whole.
+   */
+  function largeMatrix(value: unknown, unit: ShownUnit | null): { text: string; preview: string } | null {
+    const size = matrixSize(math, value)
+    if (size === null || size.reduce((total, n) => total * n, 1) <= MAX_SHOWN_WHOLE) return null
+    const rows = (math.isMatrix(value) ? value.toArray() : value) as unknown[]
+    if (size.length === 1) {
+      const list = new SheetList(rows.map((entry) => ({ ok: true, value: entry })))
+      return { text: summaryOf(list, unit), preview: previewOf(list, unit) }
+    }
+    const cell = (entry: unknown): string => (Array.isArray(entry) ? `[${ends(entry, cell).join(', ')}]` : display.show(entry, unit, settings))
+    const preview = ends(rows, (row, i) => `${i + 1}: ${cell(row)}`).join('\n')
+    return { text: `${size.join(' × ')} matrix`, preview }
+  }
+
+  /** Three from each end with `…` between, or all of up to seven. */
+  function ends<T>(items: readonly T[], write: (item: T, index: number) => string): string[] {
+    const n = items.length
+    if (n <= 7) return items.map(write)
+    return [...[0, 1, 2].map((i) => write(items[i], i)), '…', ...[n - 3, n - 2, n - 1].map((i) => write(items[i], i))]
   }
 
   /** A solved value's roots: written out, `1, 2, 3 m`, the unit once; or a summary with the count. */
