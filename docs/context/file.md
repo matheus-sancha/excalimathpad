@@ -7,7 +7,15 @@ touches this module, and keep it true in the pull request that changes the modul
 
 **file** (`src/file/`) — the sheet file (ADR 0004, spec section 7).
 `sheetFormat.ts` (pure) reads and writes the `excalimathpad` block, settings
-and migrations. The session's state carries the settings, and
+and migrations. `FORMAT` is 2 (M4e, #195): `MIGRATIONS` holds the one step,
+`moveFormatsOut`, which moves each line's format clause out of a math
+element's `customData.source` into `customData.formats` (`commitFormat`, in
+`src/math/lineForm.ts`), one entry per line, leaving an element with no
+clause untouched. `readSheet` runs it on a format 1 file and on a drawing
+with no block, so every open path migrates in memory: the session's Open…, a
+dropped file, the recovery copy and a kept sheet, and the vault's first read
+and an outside change (`plugin/SheetView.ts`). Nothing is written by an open:
+the clean mark is taken from the loaded scene. The session's state carries the settings, and
 `setSettings` changes them. `sheetSession.ts` is the deep module: save, save as, open,
 startup with the recovery offer, the clean mark and the recovery copy, over
 ports (scene, file access, recovery store, dialogs, line), so it knows no

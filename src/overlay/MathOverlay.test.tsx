@@ -38,8 +38,9 @@ function fakeScene(elements: ExcalidrawElement[]) {
   const changeListeners = new Set<() => void>()
   const scrollListeners = new Set<() => void>()
   const pointerUpListeners = new Set<(...args: unknown[]) => void>()
-  const sources = () => JSON.stringify(scene.map((e) => e.customData?.source))
-  // A line commit takes several updates; only one of them changes a source.
+  // A line's format is stored beside its text (M4e), and the two go in one write.
+  const sources = () => JSON.stringify(scene.map((e) => [e.customData?.source, e.customData?.formats]))
+  // A line commit takes several updates; only one of them changes a source or its formats.
   let sourceWrites = 0
   const updateScene = vi.fn((data: { elements?: unknown; appState?: Partial<AppState> }) => {
     const before = sources()
@@ -89,6 +90,8 @@ function fakeScene(elements: ExcalidrawElement[]) {
     updateScene,
     sourceWrites: () => sourceWrites,
     sourceOf: (id: string) => scene.find((e) => e.id === id)?.customData?.source as string,
+    /** `customData.formats`: each line's stored format, or undefined when no line has one. */
+    formatsOf: (id: string) => scene.find((e) => e.id === id)?.customData?.formats as string | undefined,
     listenerCount: () => changeListeners.size + scrollListeners.size + pointerUpListeners.size,
     updateElements(next: ExcalidrawElement[]) {
       scene = next
@@ -1494,15 +1497,19 @@ describe('line format (docs/spec-v1.md section 4: bold, underline, highlight)', 
     fireEvent(openField()!, bold)
     expect(bold.defaultPrevented).toBe(true)
     fireEvent.keyDown(openField()!, { key: 'u', ctrlKey: true })
-    expect(scene.sourceOf('m1')).toBe('x = 2 @bold @underline')
+    // From M4e the format is stored beside the line, and its text is left alone.
+    expect(scene.formatsOf('m1')).toBe('@bold @underline')
+    expect(scene.sourceOf('m1')).toBe('x = 2')
+    expect(rowOf('m1', 1)).toHaveClass('is-bold', 'is-underline')
 
     fireEvent.keyDown(openField()!, { key: 'B', ctrlKey: true })
-    expect(scene.sourceOf('m1')).toBe('x = 2 @underline')
+    expect(scene.formatsOf('m1')).toBe('@underline')
 
     const writes = scene.sourceWrites()
     fireEvent.keyDown(openField()!, { key: 'i', ctrlKey: true })
     expect(scene.sourceWrites()).toBe(writes)
-    expect(scene.sourceOf('m1')).toBe('x = 2 @underline')
+    expect(scene.formatsOf('m1')).toBe('@underline')
+    expect(openField()).toHaveValue('x = 2')
   })
 
   it('on a comment line, Ctrl+B and Ctrl+U toggle bold and underline, and Ctrl+I writes or removes @upright, caret kept', () => {
@@ -1511,15 +1518,18 @@ describe('line format (docs/spec-v1.md section 4: bold, underline, highlight)', 
     field.setSelectionRange(4, 4)
 
     fireEvent.keyDown(field, { key: 'i', ctrlKey: true })
-    expect(scene.sourceOf('m1')).toBe('@upright # Pumps')
-    // Still after `Pu`, in the comment text.
-    expect(openField()!.selectionStart).toBe(13)
+    // From M4e the clause is stored beside the comment line: the same field, its text and caret untouched.
+    expect(scene.formatsOf('m1')).toBe('@upright')
+    expect(scene.sourceOf('m1')).toBe('# Pumps')
+    expect(openField()).toBe(field)
+    expect(field.selectionStart).toBe(4)
 
     fireEvent.keyDown(openField()!, { key: 'b', ctrlKey: true })
     fireEvent.keyDown(openField()!, { key: 'u', ctrlKey: true })
-    expect(scene.sourceOf('m1')).toBe('@bold @upright @underline # Pumps')
+    expect(scene.formatsOf('m1')).toBe('@bold @upright @underline')
     fireEvent.keyDown(openField()!, { key: 'i', ctrlKey: true })
-    expect(scene.sourceOf('m1')).toBe('@bold @underline # Pumps')
+    expect(scene.formatsOf('m1')).toBe('@bold @underline')
+    expect(scene.sourceOf('m1')).toBe('# Pumps')
     expect(openField()).toHaveFocus()
   })
 
@@ -1632,19 +1642,22 @@ describe('the Format tab (docs/spec-v1.md section 4, Format tab, M4d)', () => {
     expect(within(within(tab()).getByRole('group', { name: 'Highlight' })).getAllByRole('button')).toHaveLength(6)
   })
 
-  it('a press writes the clause as one line commit, and the line stays open on it, focused', () => {
+  it('a press writes the stored format as one write, and the line stays open, its field and text untouched (M4e)', () => {
     const { scene } = withTab('x = 2 # two')
-    openLine(1)
+    const opened = openLine(1)
 
     const down = press(tabButton('Bold (Ctrl+B)'))
 
     // The press never takes the keyboard from the field: a blur would leave the line.
     expect(down.defaultPrevented).toBe(true)
     expect(tabButton('Bold (Ctrl+B)')).toHaveAttribute('tabindex', '-1')
-    expect(scene.sourceOf('m1')).toBe('x = 2 @bold # two')
+    expect(scene.formatsOf('m1')).toBe('@bold')
+    expect(scene.sourceOf('m1')).toBe('x = 2 # two')
     expect(scene.sourceWrites()).toBe(1)
     const field = openField()!
-    expect(field.value).toBe('x = 2 @bold # two')
+    // The same field, so its own Ctrl+Z still holds what was typed.
+    expect(field).toBe(opened)
+    expect(field.value).toBe('x = 2 # two')
     expect(field).toHaveFocus()
     expect(rowOf('m1', 1)).toHaveClass('is-bold')
     expect(tabButton('Bold (Ctrl+B)')).toHaveAttribute('aria-pressed', 'true')
@@ -1666,18 +1679,27 @@ describe('the Format tab (docs/spec-v1.md section 4, Format tab, M4d)', () => {
 
     press(tabButton('Underline (Ctrl+U)'))
 
-    expect(scene.sourceOf('m1')).toBe('x = 5 @underline')
+    // The typed text and the format, in the one write.
+    expect(scene.sourceOf('m1')).toBe('x = 5')
+    expect(scene.formatsOf('m1')).toBe('@underline')
+    expect(scene.sourceWrites()).toBe(1)
   })
 
   it('pressing a pressed button takes the format off, and No highlight clears the colour', () => {
     const { scene } = withTab('x = 2 @bold @red')
     openLine(1)
 
+    // The words in the line's text (a hand-edited file) move out with the press.
     press(tabButton('Bold (Ctrl+B)'))
-    expect(scene.sourceOf('m1')).toBe('x = 2 @red')
+    expect(scene.sourceOf('m1')).toBe('x = 2')
+    expect(scene.formatsOf('m1')).toBe('@red')
+    expect(openField()).toHaveValue('x = 2')
+    expect(openField()).toHaveFocus()
 
     press(tabButton('No highlight'))
     expect(scene.sourceOf('m1')).toBe('x = 2')
+    // No line with a format: no key.
+    expect(scene.elementOf('m1').customData).not.toHaveProperty('formats')
     expect(rowOf('m1', 1)).not.toHaveClass('is-red')
   })
 
@@ -1686,24 +1708,42 @@ describe('the Format tab (docs/spec-v1.md section 4, Format tab, M4d)', () => {
     openLine(1)
 
     press(tabButton('Text red'))
-    expect(scene.sourceOf('m1')).toBe('x = 2 @text-red @yellow # two')
+    expect(scene.formatsOf('m1')).toBe('@text-red @yellow')
+    expect(scene.sourceOf('m1')).toBe('x = 2 # two')
     expect(scene.sourceWrites()).toBe(1)
     expect(tabButton('Text red')).toHaveAttribute('aria-pressed', 'true')
     expect(openField()).toHaveFocus()
 
     press(tabButton('Text red'))
-    expect(scene.sourceOf('m1')).toBe('x = 2 @yellow # two')
+    expect(scene.formatsOf('m1')).toBe('@yellow')
     press(tabButton('Text blue'))
     press(tabButton('No text colour'))
-    expect(scene.sourceOf('m1')).toBe('x = 2 @yellow # two')
+    expect(scene.formatsOf('m1')).toBe('@yellow')
+    expect(scene.sourceOf('m1')).toBe('x = 2 # two')
   })
 
   it('leaves every rule as typed when it writes', () => {
     const { scene } = withTab('v = 4 @text-red if v > 3')
     openLine(1)
 
+    // A rule still typed in the line stays there, for its condition to be typed.
     press(tabButton('Bold (Ctrl+B)'))
-    expect(scene.sourceOf('m1')).toBe('v = 4 @bold @text-red if v > 3')
+    expect(scene.sourceOf('m1')).toBe('v = 4 @text-red if v > 3')
+    expect(scene.formatsOf('m1')).toBe('@bold')
+    expect(rowOf('m1', 1)).toHaveClass('is-bold')
+  })
+
+  it('leaves every stored rule as it is when it writes (M4e)', () => {
+    const { scene } = renderOverlay(
+      [createMathAnchorElements([{ id: 'm1', ...box, source: 'v = 4', formats: '@red @text-red if v > 3 @bold if v > 9' }])[0]],
+      {},
+      { formatTab: true },
+    )
+    expect(openLine(1)).toHaveValue('v = 4')
+
+    press(tabButton('Bold (Ctrl+B)'))
+    expect(scene.formatsOf('m1')).toBe('@bold @red @text-red if v > 3 @bold if v > 9')
+    expect(scene.sourceOf('m1')).toBe('v = 4')
   })
 
   it('follows a clause typed by hand, live', () => {
@@ -1725,13 +1765,14 @@ describe('the Format tab (docs/spec-v1.md section 4, Format tab, M4d)', () => {
     expect(tabButton('Size M')).toHaveAttribute('aria-pressed', 'true')
 
     press(tabButton('Italic (Ctrl+I)'))
-    expect(scene.sourceOf('m1')).toBe('@upright # Pumps')
+    expect(scene.formatsOf('m1')).toBe('@upright')
     expect(tabButton('Italic (Ctrl+I)')).toHaveAttribute('aria-pressed', 'false')
     press(tabButton('Size XL'))
     press(tabButton('Highlight blue'))
     press(tabButton('Text green'))
     press(tabButton('Bold (Ctrl+B)'))
-    expect(scene.sourceOf('m1')).toBe('@bold @upright @XL @text-green @blue # Pumps')
+    expect(scene.formatsOf('m1')).toBe('@bold @upright @XL @text-green @blue')
+    expect(scene.sourceOf('m1')).toBe('# Pumps')
     expect(scene.sourceWrites()).toBe(5)
     // The caret stays at the end of the comment text, and the line is open on it.
     expect(openField()).toHaveFocus()
@@ -1740,7 +1781,8 @@ describe('the Format tab (docs/spec-v1.md section 4, Format tab, M4d)', () => {
 
     // The pressed size takes it off, back to M.
     press(tabButton('Size XL'))
-    expect(scene.sourceOf('m1')).toBe('@bold @upright @text-green @blue # Pumps')
+    expect(scene.formatsOf('m1')).toBe('@bold @upright @text-green @blue')
+    expect(openField()).toHaveValue('# Pumps')
   })
 
   it('a blank line, or a clause with no comment text, shows the sample and takes no format', () => {
@@ -1868,6 +1910,98 @@ describe('the Format tab (docs/spec-v1.md section 4, Format tab, M4d)', () => {
       // Its controls stay open on the rewritten line.
       press(within(ruleFormat(2)).getByRole('button', { name: 'Bold (Ctrl+B)' }))
       expect(scene.sourceOf('m1')).toBe('v = 4 m/s @text-red if v > 3 m/s @text-blue+red+bold if v > 1 m/s @bold if v > 9 m/s # speed')
+    })
+
+    // Section 4, Rules list (M4e): a stored rule is written to the stored format, never to the line's text.
+    describe('on rules stored beside the line', () => {
+      const STORED = '@bold @text-red if v > 3 m/s @red if v > 1 m/s @bold if v > 9 m/s'
+      const withStored = (source = 'v = 4 m/s # speed', formats = STORED) =>
+        renderOverlay([createMathAnchorElements([{ id: 'm1', ...box, source, formats }])[0]], {}, { formatTab: true })
+
+      it('shows them with their live states, though the open line holds the math alone', () => {
+        withStored()
+        expect(openLine(1)).toHaveValue('v = 4 m/s # speed')
+
+        expect(rows().map((row) => row.getAttribute('aria-label'))).toEqual([
+          'Rule 1: @text-red if v > 3 m/s',
+          'Rule 2: @red if v > 1 m/s',
+          'Rule 3: @bold if v > 9 m/s',
+        ])
+        expect(states()).toEqual(['true', 'true', 'false'])
+        expect(sample()!.querySelector('.math-element__row')).toHaveClass('is-bold', 'is-text-red', 'is-red')
+      })
+
+      it('a format change, a reorder and a remove each write the stored format in one write, the field untouched', () => {
+        const { scene } = withStored()
+        const field = openLine(1)
+        field.setSelectionRange(3, 3)
+
+        press(inList('Format of rule 2'))
+        press(within(ruleFormat(2)).getByRole('button', { name: 'Text blue' }))
+        expect(scene.formatsOf('m1')).toBe('@bold @text-red if v > 3 m/s @text-blue+red if v > 1 m/s @bold if v > 9 m/s')
+        expect(scene.sourceWrites()).toBe(1)
+
+        press(inList('Move rule 3 up'))
+        expect(scene.formatsOf('m1')).toBe('@bold @text-red if v > 3 m/s @bold if v > 9 m/s @text-blue+red if v > 1 m/s')
+        press(inList('Remove rule 1'))
+        expect(scene.formatsOf('m1')).toBe('@bold @bold if v > 9 m/s @text-blue+red if v > 1 m/s')
+        expect(scene.sourceWrites()).toBe(3)
+
+        // The line's text and its caret were never touched: the same field, with its own undo.
+        expect(scene.sourceOf('m1')).toBe('v = 4 m/s # speed')
+        expect(openField()).toBe(field)
+        expect(field).toHaveValue('v = 4 m/s # speed')
+        expect(field.selectionStart).toBe(3)
+        expect(field).toHaveFocus()
+      })
+
+      it('removing the last rule of an element with no other format removes the key', () => {
+        const { scene } = withStored('v = 4', '@red if v > 1')
+        openLine(1)
+
+        press(inList('Remove rule 1'))
+
+        expect(scene.elementOf('m1').customData).not.toHaveProperty('formats')
+        expect(rows()).toHaveLength(0)
+      })
+
+      it('a stored condition is read-only: a click on it leaves the caret where it was', () => {
+        withStored()
+        const field = openLine(1)
+        field.setSelectionRange(2, 2)
+
+        press(inList(/^Condition of rule 2/))
+
+        expect(field.selectionStart).toBe(2)
+        expect(field).toHaveValue('v = 4 m/s # speed')
+      })
+
+      it('+ Add rule types the new rule into the line, before the stored ones, and opens its controls', () => {
+        const { scene } = withStored()
+        openLine(1)
+
+        press(inList('+ Add rule'))
+        expect(openField()).toHaveValue('v = 4 m/s @text-red if v  # speed')
+        expect(openField()!.selectionStart).toBe('v = 4 m/s @text-red if v '.length)
+        expect(scene.formatsOf('m1')).toBe(STORED)
+        expect(rows()).toHaveLength(4)
+        // The new rule is the one typed in the line: its controls are the open ones.
+        expect(ruleFormat(1)).toBeInTheDocument()
+
+        // Its format can change while its condition is still to be typed: it stays in the line.
+        press(within(ruleFormat(1)).getByRole('button', { name: 'Text green' }))
+        expect(openField()).toHaveValue('v = 4 m/s @text-green if v # speed')
+        expect(openField()!.selectionStart).toBe('v = 4 m/s @text-green if v'.length)
+        expect(scene.formatsOf('m1')).toBe(STORED)
+
+        // Typed, then committed: the rule moves out of the text, in front of the stored ones.
+        type(openField()!, 'v = 4 m/s @text-green if v > 2 m/s # speed')
+        expect(states()).toEqual(['true', 'true, overridden', 'true', 'false'])
+        fireEvent.keyDown(openField()!, { key: 'Escape' })
+        expect(scene.sourceOf('m1')).toBe('v = 4 m/s # speed')
+        expect(scene.formatsOf('m1')).toBe(`@text-green if v > 2 m/s ${STORED}`)
+        expect(rowOf('m1', 1)).toHaveClass('is-text-green')
+      })
     })
 
     it('a rule’s last property can’t be taken off: its none is disabled, and the pressed one stays', () => {
@@ -2201,22 +2335,39 @@ describe('the line edit, as the Sheet panel reaches it', () => {
 
     expect(edits).toEqual([
       null,
-      { anchorId: 'm1', lineIndex: 1, text: 'y = 3' },
-      { anchorId: 'm1', lineIndex: 1, text: 'y = 34' },
+      { anchorId: 'm1', lineIndex: 1, text: 'y = 3', stored: '' },
+      { anchorId: 'm1', lineIndex: 1, text: 'y = 34', stored: '' },
       null,
     ])
   })
 
-  it('setFormat writes the open line’s plain format as one line commit, the line kept open, the caret in the code', () => {
-    const { scene, control } = withControl('v = 4 @text-red if v > 3 # speed')
+  it('setFormat writes the open line’s stored format as one write, the line kept open, its text and caret untouched', () => {
+    const { scene, control, edits } = withControl('v = 4 @text-red if v > 3 # speed')
     const field = openLine(1)
     field.setSelectionRange(5, 5)
 
     act(() => control().setFormat({ ...NO_FORMAT, bold: true }))
 
-    expect(scene.sourceOf('m1')).toBe('v = 4 @bold @text-red if v > 3 # speed')
+    expect(scene.formatsOf('m1')).toBe('@bold')
+    expect(scene.sourceOf('m1')).toBe('v = 4 @text-red if v > 3 # speed')
     expect(scene.sourceWrites()).toBe(1)
-    expect(openField()).toHaveValue('v = 4 @bold @text-red if v > 3 # speed')
+    expect(openField()).toBe(field)
+    expect(field.selectionStart).toBe(5)
+    // The panel hears of the stored format, to draw its buttons.
+    expect(edits.at(-1)).toEqual({ anchorId: 'm1', lineIndex: 0, text: 'v = 4 @text-red if v > 3 # speed', stored: '@bold' })
+  })
+
+  it('setFormat moves plain words typed in the line out with the press, the caret kept in the code', () => {
+    const { scene, control } = withControl('v = 4 # speed')
+    type(openLine(1), 'v = 42 @red @text-red if v > 3 # speed')
+    openField()!.setSelectionRange(5, 5)
+
+    act(() => control().setFormat({ ...NO_FORMAT, color: 'red', bold: true }))
+
+    expect(scene.sourceOf('m1')).toBe('v = 42 @text-red if v > 3 # speed')
+    expect(scene.formatsOf('m1')).toBe('@bold @red')
+    expect(scene.sourceWrites()).toBe(1)
+    expect(openField()).toHaveValue('v = 42 @text-red if v > 3 # speed')
     expect(openField()!.selectionStart).toBe(5)
   })
 
@@ -2285,8 +2436,10 @@ describe('the line edit, as the Sheet panel reaches it', () => {
     expect(openField()).toHaveValue('# Pumps')
 
     act(() => control().setCommentFormat({ ...NO_COMMENT_FORMAT, size: 'L' }))
-    expect(scene.sourceOf('m1')).toBe('x = 2\n@L # Pumps')
-    expect(openField()).toHaveValue('@L # Pumps')
+    // One entry per line: the first line has no format.
+    expect(scene.formatsOf('m1')).toBe('\n@L')
+    expect(scene.sourceOf('m1')).toBe('x = 2\n# Pumps')
+    expect(openField()).toHaveValue('# Pumps')
     act(() => control().setFormat({ ...NO_FORMAT, bold: true }))
     expect(scene.sourceWrites()).toBe(1)
   })

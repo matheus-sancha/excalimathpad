@@ -110,6 +110,7 @@ export function FormatTab({ sheet, target, selected, resultColor = 'blue', touch
           // A new line starts with every rule's controls closed.
           key={`${view.anchorId}:${target?.lineIndex}`}
           rules={view.rules}
+          typed={view.typedRules}
           states={view.ruleStates}
           name={view.ruleName}
           actions={actions}

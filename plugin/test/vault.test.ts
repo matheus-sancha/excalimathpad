@@ -374,6 +374,74 @@ describe("the tab's own writes coming back (section 7: never a conflict, 0.1.0's
   })
 })
 
+// Section 7, The file (M4e, #195): format 2 keeps a line's format beside it. A
+// sheet saved by 0.2.x is migrated in memory, in a vault as on the web.
+describe('a sheet saved by 0.2.x (format 1)', () => {
+  /** The sheet as 0.2.x wrote it: format 1, each clause in its line's text. */
+  const oldSheet = (lines: string[]) => {
+    const data = JSON.parse(sheetOf(lines)) as { excalimathpad: { format: number } }
+    return JSON.stringify({ ...data, excalimathpad: { ...data.excalimathpad, format: 1 } }, null, 2)
+  }
+  const OLD = oldSheet(['a = 2 m @bold @text-red if a > 1 m # two', '@L # Results', 'b = a * 3 @yellow'])
+  const row = (n: number) => document.querySelector<HTMLElement>(`[data-anchor-id="calc"] [data-line="${n - 1}"]`)
+  const dataIn = (text: string) => {
+    const data = JSON.parse(text) as { excalimathpad: { format: number }; elements: { customData: Record<string, unknown> }[] }
+    return { format: data.excalimathpad.format, customData: data.elements[0].customData }
+  }
+
+  it('opens with every line looking as it did, writes nothing for the open, and its next save is format 2', async () => {
+    const { view } = await setUp({ [SHEET]: OLD })
+
+    expect(shownLines()).toEqual(['a = 2 m # two', '# Results', 'b = a * 3'])
+    expect(row(1)).toHaveClass('is-bold', 'is-text-red')
+    expect(row(2)).toHaveClass('is-comment', 'is-size-L')
+    expect(row(3)).toHaveClass('is-yellow')
+    // Opening alone doesn't make the sheet dirty: the file stays as 0.2.x left it.
+    await act(() => view.save())
+    expect(view.saveRequests).toBe(0)
+    expect(writes()).toEqual([])
+    expect(fileText()).toBe(OLD)
+
+    commitLine(3, 'b = a * 4')
+    await act(() => view.save())
+    expect(writes()).toHaveLength(1)
+    expect(dataIn(fileText())).toEqual({
+      format: 2,
+      customData: {
+        kind: 'math',
+        source: 'a = 2 m # two\n# Results\nb = a * 4',
+        formats: '@bold @text-red if a > 1 m\n@L\n@yellow',
+      },
+    })
+  })
+
+  it('an outside change read back as format 1 is migrated too, with no write', async () => {
+    const { view } = await setUp()
+    act(() => vault.app.vault.changeOutside(SHEET, OLD))
+
+    await waitFor(() => expect(shownLines()).toEqual(['a = 2 m # two', '# Results', 'b = a * 3']))
+    expect(row(1)).toHaveClass('is-bold', 'is-text-red')
+    expect(row(2)).toHaveClass('is-size-L')
+    expect(notices).toEqual([])
+    await act(() => view.save())
+    expect(writes()).toEqual([])
+    expect(fileText()).toBe(OLD)
+  })
+
+  it('a format press in a vault writes the line’s format beside it', async () => {
+    const { view } = await setUp()
+    typeLine(1, 'a = 2 m @green')
+    fireEvent.keyDown(lineField()!, { key: 'b', ctrlKey: true })
+    fireEvent.keyDown(lineField()!, { key: 'Escape' })
+
+    await act(() => view.save())
+    expect(dataIn(fileText())).toEqual({
+      format: 2,
+      customData: { kind: 'math', source: 'a = 2 m\nb = a * 3', formats: '@bold @green\n' },
+    })
+  })
+})
+
 describe('a sheet file dropped on the canvas (section 7: ignored in a vault)', () => {
   const drop = (file: File) => {
     const event = new Event('drop', { bubbles: true, cancelable: true }) as DragEvent

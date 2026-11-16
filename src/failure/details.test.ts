@@ -88,6 +88,11 @@ describe('sheetWords', () => {
     }
   })
 
+  it('holds the stored formats too: a rule’s condition is the sheet’s text (M4e)', () => {
+    const words = sheetWords([{ source: 'sigma = 120 MPa', formats: '@text-red if sigma > limit_stress', lines: [] }])
+    expect(words).toEqual(expect.arrayContaining(['@text-red if sigma > limit_stress', 'limit_stress', 'sigma']))
+  })
+
   it('leaves out a one-letter name and other text under three characters', () => {
     const words = sheetWords([{ source: 'a = 2\nab = 7', lines: [{ result: { kind: 'value', text: '2' }, variables: [{ name: 'a', text: '2' }, { name: 'ab' }] }] }])
     expect(words).not.toContain('a')

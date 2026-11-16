@@ -1,6 +1,6 @@
 import type { TitleFormat } from '../canvas/mathAnchor.ts'
 import type { RuleState, SheetLine } from '../math/evaluate.ts'
-import { readLine, type CommentFormat, type FormatRule, type FormatWord, type LineFormat } from '../math/lineForm.ts'
+import { readLine, withFormat, type CommentFormat, type FormatRule, type FormatWord, type LineFormat } from '../math/lineForm.ts'
 import { elementLabel, type PanelElement } from './sheetPanel.ts'
 
 /**
@@ -18,6 +18,8 @@ export interface FormatTarget {
   anchorId: string
   lineIndex: number | 'title'
   text: string
+  /** The line's stored format (section 3, Where a line's format lives, M4e); none when left out. */
+  stored?: string
 }
 
 /** The link beside the sample that moves the edit (section 4, Format tab). */
@@ -43,8 +45,10 @@ export type FormatView =
       format: LineFormat
       /** "A rule sets the text colour while v > 3 m/s.", one per property a true rule wins. */
       overrides: string[]
-      /** The line's rules as typed, for the Rules list (section 4, Rules list). */
+      /** The line's rules, those typed in its text first, then the stored ones, for the Rules list (section 4). */
       rules: readonly FormatRule[]
+      /** How many of them are still typed in the line's text: only those have a condition to put the caret in. */
+      typedRules: number
       /** Each rule's live state; null while the evaluation hasn't caught up with the typed rules. */
       ruleStates: readonly RuleState[] | null
       /** What + Add rule names: the name the line defines, `result` with none, null on a table line. */
@@ -66,7 +70,9 @@ export function formatView(sheet: readonly FormatElement[], target: FormatTarget
   const where = `${label}, line ${target.lineIndex + 1}`
   const link: FormatLink = element.title ? 'Edit title ↑' : 'Add title ↑'
   const line = element.lines[target.lineIndex] ?? null
-  const form = readLine(text)
+  // The format is the stored one, behind any clause typed in the text (section 3).
+  const form = readLine(withFormat(text, target.stored ?? ''))
+  const typed = readLine(text)
   switch (form.kind) {
     case 'code':
       return {
@@ -79,6 +85,7 @@ export function formatView(sheet: readonly FormatElement[], target: FormatTarget
         format: form.format,
         overrides: overrides(form.rules, line?.ruleTruth ?? []),
         rules: form.rules,
+        typedRules: typed.kind === 'code' ? typed.rules.length : 0,
         ruleStates: line && line.ruleStates.length === form.rules.length ? line.ruleStates : null,
         ruleName: line?.table ? null : (line?.variables[0]?.name ?? 'result'),
       }

@@ -4,13 +4,16 @@
  * Excalidraw: the scene half is `src/canvas/sceneFile.ts`.
  */
 
-/** The format this app writes. A file with a higher one is refused. */
-export const FORMAT = 1
+/**
+ * The format this app writes. A file with a higher one is refused. Format 2
+ * (M4e) keeps a line's format beside it, in the anchor's `customData.formats`.
+ */
+export const FORMAT = 2
 
 /** The file extension of a sheet, and what Save as suggests. */
 export const SHEET_EXTENSION = '.excalimathpad'
 
-import { TEXT_COLORS, type TextColor } from '../math/lineForm.ts'
+import { commitFormat, lineFormats, storeFormats, TEXT_COLORS, type TextColor } from '../math/lineForm.ts'
 
 export type UnitSystemName = 'si-prefixed' | 'si-base' | 'uscs'
 
@@ -44,8 +47,36 @@ export type SheetData = Record<string, unknown>
  */
 export type Migration = (data: SheetData) => SheetData
 
-/** v1 is format 1, so there is nothing to upgrade yet. */
-export const MIGRATIONS: readonly Migration[] = []
+/**
+ * Format 1 to 2 (section 7, The file, M4e): each line's format clause moves out
+ * of the text of its math element's `source` into `customData.formats`, one
+ * entry per line, so every line reads as it did. The math and the note stay as
+ * they were typed; an element whose lines hold no clause is left untouched.
+ */
+export const moveFormatsOut: Migration = (data) => ({
+  ...data,
+  elements: (data.elements as unknown[]).map((element) => {
+    const customData = isRecord(element) ? element.customData : undefined
+    if (!isRecord(element) || !isRecord(customData) || customData.kind !== 'math') return element
+    const { source, formats } = customData
+    if (typeof source !== 'string') return element
+    const lines = source.split(/\r?\n/)
+    const moved = lines.map((line, index) => commitFormat(line, lineFormats(typeof formats === 'string' ? formats : '', lines.length)[index]))
+    if (moved.every(({ text }, index) => text === lines[index])) return element
+    return {
+      ...element,
+      customData: {
+        ...customData,
+        source: moved.map(({ text }) => text).join('\n'),
+        formats: storeFormats(moved.map(({ stored }) => stored)),
+      },
+    }
+  }),
+  excalimathpad: { ...(data.excalimathpad as Record<string, unknown>), format: 2 },
+})
+
+/** One step per format this app has left behind. */
+export const MIGRATIONS: readonly Migration[] = [moveFormatsOut]
 
 export type ReadSheet =
   /** `scene` is Excalidraw's part, ready for its `restore`. */

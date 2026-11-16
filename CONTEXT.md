@@ -104,7 +104,7 @@ an issue touches that module ([`CLAUDE.md`](CLAUDE.md) has the reading route).
 - **overlay** (`src/overlay/`) — draws math elements over the canvas as typeset grids, and
   holds the line edit, the unit slot, tables and plots. Depends on: canvas, math, `katex`
   (lazily). [`docs/context/overlay.md`](docs/context/overlay.md)
-- **file** (`src/file/`) — the sheet file (ADR 0004): the format and its migrations, the
+- **file** (`src/file/`) — the sheet file (ADR 0004): format 2 and its migration from 1, the
   session (save, open, the clean mark, the recovery copy) over ports, and the vault's
   sheet. Depends on: canvas (file routes, layers).
   [`docs/context/file.md`](docs/context/file.md)
@@ -148,11 +148,15 @@ and everything downstream recalculates. Engine: math.js, client-side.
   a **comment line**, and so is one whose code is only a format clause, the
   comment's format (`@bold @L # Pumps`, M4d); the text after the first `#` on
   a line with code is its **note**; neither reaches math.js.
+- **Stored format** (M4e, #195) — a line's format clause, its words and
+  rules, kept beside the line and not in its text: `customData.formats`, one
+  clause per line of `source`. A clause typed in a line is read in front of
+  it, and moves into it at the line commit (spec sections 3 and 7).
 - **Content size** — the grid's laid-out size in scene units. The anchor's
   size is a copy of it, written with no undo step.
 - **Anchor** — the Excalidraw rectangle that carries a math element's
   position, size, rotation and source. Excalidraw owns it (move, select, delete,
-  undo); the app writes only `customData.source`, the only stored copy.
+  undo); the app writes only `customData.source` and `formats`, the only stored copy.
 - **Placing** — the UI mode between Add math (M or the More tools item) and the click
   that creates the anchor. It is Excalidraw's active tool, never in the scene,
   and no undo step. Esc cancels it.
@@ -180,8 +184,8 @@ and everything downstream recalculates. Engine: math.js, client-side.
   and `y` unchanged, on an anchor that still owns the point by the same rule;
   otherwise the press was a drag, or a drawing on top took it.
 - **Line commit** — the moment an edit leaves a line whose text differs from the
-  scene. It writes the element's whole source once, as one undo step, so a split
-  or a join is one step too.
+  scene. It writes the element's whole source and its stored formats once, in
+  one write, as one undo step, so a split or a join is one step too.
 - **Anchor style** — fixed, except opacity: a thin, dashed grey border with
   sharp corners, and the `#ffffff01` fill. The element's math is drawn at the
   anchor's opacity.
@@ -319,7 +323,9 @@ and everything downstream recalculates. Engine: math.js, client-side.
 - **Add math selects the new element in its own write.** Starting the tool
   clears the selection, which Excalidraw records; a separate select makes undo
   take two steps when something was selected (`addMath.excalidraw.test.tsx`).
-- **Source writes go through `writeAnchorSource`.** A plain spread isn't recorded
+- **Source writes go through `writeAnchorSource`,** which takes the lines'
+  `formats` in the same write: whatever changes the number of lines must keep
+  the two in step (ADR 0002). A plain spread isn't recorded
   by undo, and `EVENTUALLY` or the default capture drops later updates to that
   anchor off the stack. Excalidraw's own nudge and Link leave the anchor in that
   same state, so the write first records their change as its own step (spec
@@ -364,8 +370,8 @@ and everything downstream recalculates. Engine: math.js, client-side.
 - **`customData` holds no nested objects.** Excalidraw compares it one level
   deep when it records a step, so an object inside it differs from the
   snapshot's clone and every later write of the anchor gains an empty undo
-  step. The title's format is a string for that reason
-  (`mathAnchor.excalidraw.test.tsx`).
+  step. The title's format and the lines' `formats` are strings for that
+  reason (`mathAnchor.excalidraw.test.tsx`).
 - **Underline is drawn, not `text-decoration`.** KaTeX's boxes are
   inline-blocks, which a decoration doesn't reach; bold is set on `.katex`
   itself, because KaTeX sets its own font there.

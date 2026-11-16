@@ -6,6 +6,7 @@
   anchor, the app writes source, size and style, a solid `#ffffff01` background).
   2026-11-13 (M4c; #95, #100): a chosen width and a title's format, both built
   (#110, #111).
+  2026-11-15 (M4e; #182): each line's format beside the source, built (#195).
   Amended items name the milestone that builds them; until then
   [`CONTEXT.md`](../../CONTEXT.md) says what the code does.
 - **Built**: source in the anchor (#41, 2026-11-04); the `#ffffff01` fill, the
@@ -19,7 +20,9 @@
   by the resize handles on release in the resize's own undo step, with the snap-back
   kept for a height-only drag (`settleResizes`, #110, 2026-11-13); the title's format
   in `customData.titleFormat`, a string of the words that differ from no format,
-  written one undo step per press (`writeAnchorTitleFormat`, #111, 2026-11-13).
+  written one undo step per press (`writeAnchorTitleFormat`, #111, 2026-11-13);
+  each line's format in `customData.formats`, written with the source in one write
+  (`writeAnchorSource`, #195, 2026-11-16).
 
 ## Context
 
@@ -92,7 +95,8 @@ Engineering rules that make it work (Engineer's, found in the #2 spike and #28):
   which the first version of this ADR said didn't exist (#28; built in #45,
   `src/canvas/addMath.ts`).
 
-Amended on 2026-11-15 for M4e, decided by Matheus (#182). Not built yet (#195):
+Amended on 2026-11-15 for M4e, decided by Matheus (#182). Built in #195
+(`src/canvas/mathAnchor.ts`; the moves that keep the two in step are `src/overlay/lineEdit.ts`'s):
 
 - M4e: `customData.formats`, each line's format (its words and rules), one entry per line of
   `source` separated by `\n`, each entry the clause as it was written in the line, empty for a

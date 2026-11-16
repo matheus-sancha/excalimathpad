@@ -27,7 +27,14 @@ Load-bearing). `mathAnchor.ts` defines a math element's anchor (a rectangle
 with `customData.kind === "math"` and `customData.source`, ADR 0002; a solid
 `#ffffff01` fill, so clicks inside it select and drag it) and
 `writeAnchorSource`, the only way source enters the scene, and
-`writeAnchorTitle`, the same for the optional `customData.title`. `selection.ts`
+`writeAnchorTitle`, the same for the optional `customData.title`. An anchor
+also carries its lines' **stored formats** (`MathAnchor.formats`,
+`customData.formats`, spec section 7, M4e, #195): a string, one clause per
+line of the source, no key when no line has one. `writeAnchorSource(api, id,
+source, formats)` writes the two in one captured write, one undo step; with
+`formats` left out they stay as they are, which only a write that keeps every
+line in its place may do (a unit slot, a plot's settings, a save with a line
+open). `selection.ts`
 holds `deselectAll`, the second Esc's write (`NEVER`, no undo step).
 `anchorStyle.ts` keeps anchors in the fixed style (`ANCHOR_STYLE`, in
 `mathAnchor.ts`): `restoreAnchorStyles` writes it back with `NEVER`.

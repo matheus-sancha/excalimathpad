@@ -42,7 +42,7 @@ describe('the command, the ribbon and the folder menu', () => {
     const read = readSheet(vault.app.vault.creates[0].data)
     expect(read).toMatchObject({ kind: 'sheet', settings: DEFAULT_SETTINGS })
     expect(read.kind === 'sheet' && read.scene.elements).toEqual([])
-    expect(JSON.parse(vault.app.vault.creates[0].data).excalimathpad.format).toBe(1)
+    expect(JSON.parse(vault.app.vault.creates[0].data).excalimathpad.format).toBe(2)
     expect(vault.app.workspace.leafRequests.at(-1)).toBe('tab')
     expect(lastLeaf().view).toBeInstanceOf(SheetView)
     expect((lastLeaf().view as unknown as SheetView).file?.path).toBe('Untitled.excalimathpad')

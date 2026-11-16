@@ -48,6 +48,13 @@ export interface MathAnchor {
   angle: number
   /** The element's lines. The scene holds the only stored copy. */
   source: string
+  /**
+   * Each line's format, its words and its rules (section 3, Where a line's
+   * format lives, M4e): one clause per line of `source`, separated by `\n`,
+   * empty for a line with none, and `''` when no line has one. Stored in
+   * `customData.formats`; `lineFormats` pads or cuts it to the lines.
+   */
+  formats: string
   /** Excalidraw's lock: it holds the position only, and the lines still edit (#43). */
   locked: boolean
   /**
@@ -148,6 +155,15 @@ function readSource(element: ExcalidrawElement): string {
   return typeof source === 'string' ? source : ''
 }
 
+/**
+ * `customData.formats` (section 7, The file, M4e). A string and not a list,
+ * for the reason the title's format is one; anything else is no format.
+ */
+function readFormats(element: ExcalidrawElement): string {
+  const formats: unknown = element.customData?.formats
+  return typeof formats === 'string' ? formats : ''
+}
+
 /** A chosen width is a positive number; anything else is automatic. */
 function readChosenWidth(element: ExcalidrawElement): number | null {
   const width: unknown = element.customData?.width
@@ -174,6 +190,7 @@ export function toMathAnchor(element: ExcalidrawElement): MathAnchor {
     locked,
     opacity,
     source: readSource(element),
+    formats: readFormats(element),
     title: readTitle(element),
     chosenWidth: readChosenWidth(element),
     titleFormat: readTitleFormat(element),
@@ -192,6 +209,7 @@ export function sameAnchor(a: MathAnchor, b: MathAnchor): boolean {
     a.locked === b.locked &&
     a.opacity === b.opacity &&
     a.source === b.source &&
+    a.formats === b.formats &&
     a.title === b.title &&
     a.chosenWidth === b.chosenWidth &&
     sameTitleFormat(a.titleFormat, b.titleFormat)
@@ -201,8 +219,9 @@ export function sameAnchor(a: MathAnchor, b: MathAnchor): boolean {
 /** Builds the scene elements for new anchors (e.g. for `initialData`). */
 export function createMathAnchorElements(
   anchors: ReadonlyArray<
-    Omit<MathAnchor, 'angle' | 'source' | 'locked' | 'opacity' | 'title' | 'chosenWidth' | 'titleFormat'> & {
+    Omit<MathAnchor, 'angle' | 'source' | 'formats' | 'locked' | 'opacity' | 'title' | 'chosenWidth' | 'titleFormat'> & {
       source?: string
+      formats?: string
       title?: string
       locked?: boolean
       chosenWidth?: number
@@ -210,7 +229,7 @@ export function createMathAnchorElements(
   >,
 ) {
   return convertToExcalidrawElements(
-    anchors.map(({ id, x, y, width, height, source = '', locked = false, title, chosenWidth }) => ({
+    anchors.map(({ id, x, y, width, height, source = '', formats, locked = false, title, chosenWidth }) => ({
       type: 'rectangle' as const,
       id,
       x,
@@ -222,6 +241,7 @@ export function createMathAnchorElements(
       customData: {
         kind: MATH_ANCHOR_KIND,
         source,
+        ...(formats ? { formats } : {}),
         ...(title ? { title } : {}),
         ...(chosenWidth ? { width: chosenWidth } : {}),
       },
@@ -251,15 +271,25 @@ export type SourceWriteApi = Pick<
  *
  * The list stays the whole scene, deleted elements included: a source write has
  * no reason to change anything but its own anchor.
+ *
+ * `formats` is the lines' stored formats (section 7, The file, M4e), written
+ * with the source in the same write, so a commit, an Enter, a join or a Format
+ * tab press is one undo step; left out, they stay as they are, which is right
+ * only for a write that keeps every line in its place. No format at all (`''`)
+ * stores no key.
  */
 export function writeAnchorSource(
   api: SourceWriteApi,
   anchorId: string,
   source: string,
+  formats?: string,
 ): boolean {
-  return writeAnchorData(api, anchorId, (anchor) =>
-    readSource(anchor) === source ? null : { ...anchor.customData, source },
-  )
+  return writeAnchorData(api, anchorId, (anchor) => {
+    const stored = formats ?? readFormats(anchor)
+    if (readSource(anchor) === source && readFormats(anchor) === stored) return null
+    const { formats: _old, ...rest } = anchor.customData ?? {}
+    return { ...rest, source, ...(stored === '' ? {} : { formats: stored }) }
+  })
 }
 
 /**

@@ -29,7 +29,10 @@ relay's `insert`, with the selected element when nothing is open. **The Format t
 the panel's element and its `titleFormat`, which `EvaluatedElement` carries)
 and what is open (`FormatTarget`, the overlay's `EditTarget`) into a
 `FormatView`: none, a title, a math line (its plain format and the
-"A rule sets …" notes), a comment line, or a blank one; with its caption
+"A rule sets …" notes), a comment line, or a blank one, each read from the
+line's typed text with its stored format behind it (`FormatTarget.stored`,
+M4e, #195; `typedRules` counts the rules still typed in the text, which come
+first); with its caption
 ("Math line — Pipe flow, line 3", shown in capitals) and its link (Edit or
 Add title ↑, First line ↓). `FormatTab.tsx` renders it: the sample in a
 light box (the dark theme's filter on it), the link, Done, ↑ and ↓, then a

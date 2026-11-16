@@ -2,7 +2,16 @@ import { describe, expect, it } from 'vitest'
 import {
   caretAfterFormat,
   codeLength,
+  commitFormat,
   hasTopLevelSemicolon,
+  joinClauses,
+  lineFormats,
+  pressCommentFormat,
+  pressFormat,
+  pressRules,
+  splitFormat,
+  storeFormats,
+  withFormat,
   NO_COMMENT_FORMAT,
   NO_FORMAT,
   readLine,
@@ -449,5 +458,225 @@ describe('writeDisplayUnit (docs/spec-v1.md sections 3 and 5: what the unit slot
     ['# a comment', 'm', '# a comment'],
   ])('%s with %s', (line, unit, written) => {
     expect(writeDisplayUnit(line, unit)).toBe(written)
+  })
+})
+
+// docs/spec-v1.md section 3, Where a line's format lives (M4e, #195).
+describe('a line’s format, stored beside it', () => {
+  describe('splitFormat', () => {
+    it.each([
+      ['U = I * R in V @bold @text-red @yellow # check', 'U = I * R in V # check', '@bold @text-red @yellow'],
+      ['x = 1 @bold', 'x = 1', '@bold'],
+      ['x = 1   @bold   @red   ', 'x = 1', '@bold   @red'],
+      ['v = Q / A @text-red if v > 3 m/s @text-orange if v > 2 m/s', 'v = Q / A', '@text-red if v > 3 m/s @text-orange if v > 2 m/s'],
+      ['@bold @L @text-blue # Pumps and pipes', '# Pumps and pipes', '@bold @L @text-blue'],
+      ['@bold', '', '@bold'],
+      ['@bold #', '#', '@bold'],
+      ['  x = 1 @blod+red', '  x = 1', '@blod+red'],
+    ])('%s', (line, text, clause) => {
+      expect(splitFormat(line)).toEqual({ text, clause })
+    })
+
+    it.each(['x = 1', 'x = 1   # note  ', 's = "a @bold"', 'x = 1 # see @bold', '# call me @home', '', '   ', 'a = 1# n'])(
+      'leaves %j exactly as typed: it holds no clause',
+      (line) => {
+        expect(splitFormat(line)).toEqual({ text: line, clause: '' })
+      },
+    )
+  })
+
+  describe('withFormat: the line as the engine reads it', () => {
+    it.each([
+      ['x = 1', '@bold', 'x = 1 @bold'],
+      ['x = 1 # note', '@bold @red', 'x = 1 @bold @red # note'],
+      ['U = I * R in V # check', '@bold', 'U = I * R in V @bold # check'],
+      ['# Pumps', '@bold @L', '@bold @L # Pumps'],
+      ['', '@bold', '@bold'],
+      ['x = 1', '', 'x = 1'],
+      ['x = 1   # note', '', 'x = 1   # note'],
+    ])('%j with %j', (line, stored, read) => {
+      expect(withFormat(line, stored)).toBe(read)
+    })
+
+    it('puts a clause typed in the text in front of the stored one', () => {
+      expect(withFormat('v = 4 @text-red if v > 3 # speed', '@bold @text-orange if v > 2')).toBe(
+        'v = 4 @text-red if v > 3 @bold @text-orange if v > 2 # speed',
+      )
+    })
+
+    it('reads back what splitFormat took out', () => {
+      for (const line of ['U = I * R in V @bold @yellow # check', '@L @bold # Pumps', 'v = 1 @red if v > 0']) {
+        const { text, clause } = splitFormat(line)
+        expect(readLine(withFormat(text, clause))).toEqual(readLine(line))
+      }
+    })
+  })
+
+  describe('joinClauses: a typed clause in front of a stored one', () => {
+    it.each([
+      ['', '@bold', '@bold'],
+      ['@bold', '', '@bold'],
+      ['@underline', '@bold', '@underline @bold'],
+      // A typed word that clashes with a stored one replaces it.
+      ['@red', '@bold @yellow', '@red @bold'],
+      ['@text-green', '@text-red @yellow', '@text-green @yellow'],
+      ['@bold', '@bold @red', '@bold @red'],
+      ['@S', '@bold @XL @upright', '@S @bold @upright'],
+      ['@yellow', '@bold+red+underline', '@yellow @bold+underline'],
+      ['@text-blue+blue', '@text-red+red', '@text-blue+blue'],
+      // Rules are never dropped, and the typed ones come first, so they win.
+      ['@text-red if v > 3', '@text-orange if v > 2', '@text-red if v > 3 @text-orange if v > 2'],
+      ['@text-red if v > 3', '@text-blue', '@text-red if v > 3 @text-blue'],
+      ['@text-blue', '@text-red if v > 3', '@text-blue @text-red if v > 3'],
+      // A word that isn't a format replaces nothing, and is kept: it is the line's error.
+      ['@blod', '@bold', '@blod @bold'],
+      ['@red', '@blod @yellow', '@red @blod'],
+    ])('%j, then %j', (typed, stored, joined) => {
+      expect(joinClauses(typed, stored)).toBe(joined)
+    })
+  })
+
+  it('commitFormat moves the typed clause out of the text, in front of the stored one', () => {
+    expect(commitFormat('x = 1 @red # n', '@bold @yellow')).toEqual({ text: 'x = 1 # n', stored: '@red @bold' })
+    expect(commitFormat('x = 1 # n', '@bold')).toEqual({ text: 'x = 1 # n', stored: '@bold' })
+    expect(commitFormat('@L # Pumps', '')).toEqual({ text: '# Pumps', stored: '@L' })
+  })
+
+  describe('lineFormats and storeFormats (section 7: customData.formats)', () => {
+    it('reads one entry per line, padded or cut to the lines', () => {
+      expect(lineFormats('@bold\n\n@red if x > 1', 3)).toEqual(['@bold', '', '@red if x > 1'])
+      expect(lineFormats('@bold', 3)).toEqual(['@bold', '', ''])
+      expect(lineFormats('@bold\n@red\n@green', 2)).toEqual(['@bold', '@red'])
+      expect(lineFormats('', 2)).toEqual(['', ''])
+      expect(lineFormats('@bold\r\n@red', 2)).toEqual(['@bold', '@red'])
+    })
+
+    it('reads an entry that isn’t a clause as none, and ends one at a #', () => {
+      expect(lineFormats('bold\n x = 1\n  @red  \n@bold # and more\n# only', 5)).toEqual(['', '', '@red', '@bold', ''])
+    })
+
+    it('stores no text at all when no line has a format', () => {
+      expect(storeFormats(['', '', ''])).toBe('')
+      expect(storeFormats([])).toBe('')
+      expect(storeFormats(['', '@bold', ''])).toBe('\n@bold\n')
+    })
+  })
+
+  describe('pressFormat: a Format tab press on a math line', () => {
+    const bold: LineFormat = { ...NO_FORMAT, bold: true }
+
+    it('writes the plain words to the stored clause and leaves the text exactly as typed', () => {
+      expect(pressFormat('x = 1   # n', '', bold)).toEqual({ text: 'x = 1   # n', stored: '@bold' })
+      expect(pressFormat('x = 1', '@bold @red', { ...NO_FORMAT, color: 'blue' })).toEqual({ text: 'x = 1', stored: '@blue' })
+      expect(pressFormat('x = 1', '@bold', NO_FORMAT)).toEqual({ text: 'x = 1', stored: '' })
+      expect(pressFormat('x = 1', '', { bold: true, underline: true, color: 'yellow', textColor: 'red' })).toEqual({
+        text: 'x = 1',
+        stored: '@bold @underline @text-red @yellow',
+      })
+    })
+
+    it('keeps every stored rule as it is, after the plain words', () => {
+      expect(pressFormat('v = 4', '@red @text-red if v > 3 @bold  if v > 9', bold)).toEqual({
+        text: 'v = 4',
+        stored: '@bold @text-red if v > 3 @bold  if v > 9',
+      })
+    })
+
+    it('moves plain words typed in the line out with the press, and leaves a typed rule in the text', () => {
+      expect(pressFormat('x = 1 @red # n', '@underline', { ...NO_FORMAT, color: 'red', underline: true, bold: true })).toEqual({
+        text: 'x = 1 # n',
+        stored: '@bold @underline @red',
+      })
+      expect(pressFormat('v = 4 @text-red if v > 3 # speed', '', bold)).toEqual({
+        text: 'v = 4 @text-red if v > 3 # speed',
+        stored: '@bold',
+      })
+      expect(pressFormat('v = 4 @yellow @text-red if v >  # speed', '@red if v > 9', bold)).toEqual({
+        text: 'v = 4 @text-red if v > # speed',
+        stored: '@bold @red if v > 9',
+      })
+    })
+
+    it('does nothing on a line with no code', () => {
+      expect(pressFormat('# Pumps', '@L', bold)).toEqual({ text: '# Pumps', stored: '@L' })
+      expect(pressFormat('', '', bold)).toEqual({ text: '', stored: '' })
+    })
+  })
+
+  describe('pressCommentFormat: the same press on a comment line', () => {
+    it('writes the words in their fixed order and leaves the comment text alone', () => {
+      expect(pressCommentFormat('# Pumps', '', { ...NO_COMMENT_FORMAT, size: 'L', bold: true })).toEqual({
+        text: '# Pumps',
+        stored: '@bold @L',
+      })
+      expect(pressCommentFormat('#   Pumps  ', '@bold @L', NO_COMMENT_FORMAT)).toEqual({ text: '#   Pumps  ', stored: '' })
+    })
+
+    it('moves a clause typed in front of the # out with the press', () => {
+      expect(pressCommentFormat('@red # Pumps', '@bold', { ...NO_COMMENT_FORMAT, bold: true, color: 'red', upright: true })).toEqual({
+        text: '# Pumps',
+        stored: '@bold @upright @red',
+      })
+    })
+
+    it('does nothing on a math line or a blank one', () => {
+      expect(pressCommentFormat('x = 1', '@bold', NO_COMMENT_FORMAT)).toEqual({ text: 'x = 1', stored: '@bold' })
+      expect(pressCommentFormat('', '@bold', NO_COMMENT_FORMAT)).toEqual({ text: '', stored: '@bold' })
+    })
+  })
+
+  describe('pressRules: a Rules list press', () => {
+    const rulesOf = (line: string, stored: string) => {
+      const form = readLine(withFormat(line, stored))
+      return form.kind === 'code' ? form.rules.map((rule, from) => ({ ...rule, from })) : []
+    }
+    const STORED = '@bold @text-red if v > 3 @red if v > 1 @bold if v > 9'
+
+    it('reorders, removes and reformats stored rules in the stored clause, the text untouched', () => {
+      const [first, second, third] = rulesOf('v = 4 # speed', STORED)
+      expect(pressRules('v = 4 # speed', STORED, [first, third, second])).toEqual({
+        text: 'v = 4 # speed',
+        stored: '@bold @text-red if v > 3 @bold if v > 9 @red if v > 1',
+      })
+      expect(pressRules('v = 4 # speed', STORED, [second, third])).toEqual({
+        text: 'v = 4 # speed',
+        stored: '@bold @red if v > 1 @bold if v > 9',
+      })
+      // A changed row is one joined word and one condition; the others keep their text.
+      const changed = { ...second, words: [...second.words, { kind: 'text', color: 'blue' } as const], text: null }
+      expect(pressRules('v = 4 # speed', STORED, [first, changed, third])).toEqual({
+        text: 'v = 4 # speed',
+        stored: '@bold @text-red if v > 3 @text-blue+red if v > 1 @bold if v > 9',
+      })
+      expect(pressRules('v = 4', '@red if v > 1', [])).toEqual({ text: 'v = 4', stored: '' })
+    })
+
+    it('keeps a rule still typed in the line in its text, so its condition can go on being typed', () => {
+      const line = 'v = 4 @text-red if v  # speed'
+      const [typed, stored] = rulesOf(line, '@bold @red if v > 1')
+      expect(typed.condition).toBe('v')
+      const green = { ...typed, words: [{ kind: 'text', color: 'green' } as const], text: null }
+      expect(pressRules(line, '@bold @red if v > 1', [green, stored])).toEqual({
+        text: 'v = 4 @text-green if v # speed',
+        stored: '@bold @red if v > 1',
+      })
+      // Removing the stored rule leaves the typed text exactly as it is.
+      expect(pressRules(line, '@bold @red if v > 1', [typed])).toEqual({ text: line, stored: '@bold' })
+      // Removing the typed one takes it out of the text.
+      expect(pressRules(line, '@bold @red if v > 1', [stored])).toEqual({ text: 'v = 4 # speed', stored: '@bold @red if v > 1' })
+    })
+
+    it('moves every rule out when a stored rule goes above a typed one', () => {
+      const line = 'v = 4 @text-red if v > 3 # speed'
+      const [typed, stored] = rulesOf(line, '@bold @red if v > 1')
+      expect(pressRules(line, '@bold @red if v > 1', [stored, typed])).toEqual({
+        text: 'v = 4 # speed',
+        stored: '@bold @red if v > 1 @text-red if v > 3',
+      })
+    })
+
+    it('does nothing on a line with no code', () => {
+      expect(pressRules('# Pumps', '@L', [])).toEqual({ text: '# Pumps', stored: '@L' })
+    })
   })
 })

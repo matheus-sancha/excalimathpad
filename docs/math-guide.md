@@ -351,6 +351,8 @@ dP = f_d * (L_p/D) rho v^2 / 2 in kPa @bold @text-red if dP > 50 kPa # friction 
 
 A line's **format** is a clause of `@` words after its code and its `in <unit>`, before its note. It never changes a value. The easy way to write one is the **Format tab** of the [Sheet panel](#14-the-sheet-panel), which opens when you edit a line.
 
+**A format is kept beside its line, not in its text.** You can still type the words at the end of a line (in front of the `#` on a comment line): they show as you type, and when you leave the line they move out of its text. The next time you open the line it shows the math and the note alone, and the Format tab shows and changes the format. Copying a line's text copies the math; copying or duplicating the element carries every line's format. A sheet saved by version 0.2 opens with its formats as they were; once saved again it no longer opens in 0.2.
+
 | Write | Shows | Note |
 |---|---|---|
 | `R_f = 10 ohm` | — | |
@@ -386,7 +388,7 @@ At 3.4 m/s the line is red; at 2.5 m/s, orange; at 1 m/s, blue.
 
 On a list or a table a rule is tested at each point: a table row whose point is true takes the format, and a list's summary takes it only when every point is true.
 
-**The Format tab.** At its top a sample draws the open line as the sheet will. Below it, one row of buttons per property: **Style** (B and U; I too on a comment line or the title), **Size** (S, M, L, XL, on a comment line or the title), **Align** (the title only), **Text** (six colours or none) and **Highlight** (five or none). Pressing a pressed button takes the format off. On a math line, the **Rules list** shows each rule with its condition, whether it is true now, ↑ ↓ to reorder and ✕ to remove; **+ Add rule** writes a new rule and puts the caret where you type its condition. A title's format is set only here, never typed.
+**The Format tab.** At its top a sample draws the open line as the sheet will. Below it, one row of buttons per property: **Style** (B and U; I too on a comment line or the title), **Size** (S, M, L, XL, on a comment line or the title), **Align** (the title only), **Text** (six colours or none) and **Highlight** (five or none). Pressing a pressed button takes the format off. On a math line, the **Rules list** shows each rule with its condition, whether it is true now, ↑ ↓ to reorder and ✕ to remove; **+ Add rule** types a new rule into the line and puts the caret where you type its condition; like any typed format, it moves out of the line when you leave it. A title's format is set only here, never typed.
 
 ## 13. The Symbols tab
 

@@ -6,7 +6,10 @@ model, the terms and the load-bearing rules, and names every module; the behavio
 touches this module, and keep it true in the pull request that changes the module.
 
 **math** (`src/math/`) — the engine. Interface: `evaluateSheet(blocks)`,
-with blocks `{ id, source }` already in reading order → one `SheetLine` per
+with blocks `{ id, source, formats }` already in reading order (`formats`
+is the anchor's stored formats: each line is read as `withFormat(text,
+entry)`, its stored clause after any clause typed in its text, ADR 0005 step
+2; a line that doesn't parse shows as its text alone) → one `SheetLine` per
 line, keyed by block id; never throws: each line is read inside one guard,
 its parse included (a parse that threw is rethrown there; `statementNames`
 still gives the names it assigns), so a throw from outside a line's own
@@ -30,7 +33,17 @@ composes the plain words back for the Format tab in a fixed order and keeps
 every rule, and `writeCommentFormat` a comment line's (`@bold @upright
 @underline @<size> @text-<name> @<highlight>`, M4d, #144); `caretAfterFormat`
 says where a press leaves the caret (in the code; in a comment's text, with
-its `#`). A math line carries its `LineFormat` (bold, underline, highlight, text
+its `#`). **The stored format** (spec section 3, Where a line's format
+lives, M4e, #195) is also `lineForm.ts`'s, pure: `splitFormat` takes a
+line's clause out of its text, `joinClauses` puts a typed clause in front of
+a stored one (a typed plain word replaces the stored word of the same
+property; rules are all kept), `withFormat` is the line as the engine reads
+it, `commitFormat` is what a line commit writes, and `lineFormats` /
+`storeFormats` read and write `customData.formats` (one entry per line,
+padded or cut; an entry that isn't a clause is none; no text at all for no
+format). `pressFormat`, `pressCommentFormat` and `pressRules` are what a
+Format tab press writes: the stored clause, and the text only where a clause
+typed in it has to move (a rule still being typed stays in the text). A math line carries its `LineFormat` (bold, underline, highlight, text
 colour); an unknown clause word is the line's error, reported after the line
 ran. A clause's first problem is the form's `formatError`, in section 13's
 words (`Unknown format @blod`, and a comment word on a math line, `@L is for

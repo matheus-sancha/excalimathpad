@@ -4,6 +4,7 @@
 - **Date**: 2026-11-03
 - **Amended**: 2026-11-14 (M4d, #124; built in #136): in a vault, the file follows Obsidian's
   autosave; the web app keeps explicit save.
+  2026-11-15 (M4e, #182; built in #195): format 2, the first migration.
 
 ## Context
 
@@ -53,7 +54,8 @@ Amended on 2026-11-14 for M4d, decided by Matheus (#124). Built in #136 (`src/fi
   reloads an idle tab and writes a conflict copy beside a busy one. Nothing Obsidian-specific is
   added to the file, so a sheet moves between the two homes unchanged.
 
-Amended on 2026-11-15 for M4e, decided by Matheus (#182). Not built yet (#195):
+Amended on 2026-11-15 for M4e, decided by Matheus (#182). Built in #195 (`moveFormatsOut` in
+`src/file/sheetFormat.ts`, run by `readSheet`, which every open path goes through):
 
 - **Format 2, the first migration.** A line's format moves out of its text into the anchor's
   `customData.formats` (ADR 0002). On open, a format 1 sheet is migrated in memory, on every

@@ -68,6 +68,9 @@ async function mount() {
     ...undoControls(document),
     sourceOf: (id = 'm1') =>
       api.getSceneElements().find((e) => e.id === id)?.customData?.source as string,
+    /** `customData.formats`: each line's stored format (M4e), undefined when no line has one. */
+    formatsOf: (id = 'm1') =>
+      api.getSceneElements().find((e) => e.id === id)?.customData?.formats as string | undefined,
     sceneCount: () => api.getSceneElements().length,
   }
 }
@@ -341,23 +344,81 @@ describe('MathOverlay on real Excalidraw', () => {
 // docs/spec-v1.md section 6: a format from the bar or its shortcuts is one line commit.
 describe('a line format on real Excalidraw', () => {
   it('each format change is one undo step, and typing after it is the next', async () => {
-    const { sourceOf, undo, canUndo } = await mount()
+    const { sourceOf, formatsOf, undo, canUndo } = await mount()
     openLine(2)
 
+    // From M4e the format is stored beside the line (section 7): its text stays the math.
     press('b', { ctrlKey: true })
-    expect(sourceOf()).toBe('R = 10 kohm\nI = 2 mA @bold')
+    expect(formatsOf()).toBe('\n@bold')
     press('u', { ctrlKey: true })
-    expect(sourceOf()).toBe('R = 10 kohm\nI = 2 mA @bold @underline')
-    type('I = 4 mA @bold @underline')
+    expect(formatsOf()).toBe('\n@bold @underline')
+    expect(sourceOf()).toBe('R = 10 kohm\nI = 2 mA')
+    type('I = 4 mA')
     press('Escape')
-    expect(sourceOf()).toBe('R = 10 kohm\nI = 4 mA @bold @underline')
+    expect(sourceOf()).toBe('R = 10 kohm\nI = 4 mA')
+    expect(formatsOf()).toBe('\n@bold @underline')
 
     undo()
-    await waitFor(() => expect(sourceOf()).toBe('R = 10 kohm\nI = 2 mA @bold @underline'))
+    await waitFor(() => expect(sourceOf()).toBe('R = 10 kohm\nI = 2 mA'))
+    expect(formatsOf()).toBe('\n@bold @underline')
     undo()
-    await waitFor(() => expect(sourceOf()).toBe('R = 10 kohm\nI = 2 mA @bold'))
+    await waitFor(() => expect(formatsOf()).toBe('\n@bold'))
+    undo()
+    await waitFor(() => expect(formatsOf()).toBeUndefined())
+    expect(sourceOf()).toBe('R = 10 kohm\nI = 2 mA')
+    expect(canUndo()).toBe(false)
+  })
+
+  // Section 3, Where a line's format lives: the text and the format are one write.
+  it('a typed clause moves out of the text when the line is committed, as one undo step', async () => {
+    const { sourceOf, formatsOf, undo, redo, canUndo } = await mount()
+    openLine(2)
+
+    type('I = 4 mA @bold @text-red if I > 3 mA # load')
+    expect(elementOf('m1')!.querySelector('[data-line="1"]')).toHaveClass('is-bold')
+    press('Escape')
+    expect(sourceOf()).toBe('R = 10 kohm\nI = 4 mA # load')
+    expect(formatsOf()).toBe('\n@bold @text-red if I > 3 mA')
+    expect(elementOf('m1')!.querySelector('[data-line="1"]')).toHaveClass('is-bold', 'is-text-red')
+    // The line opens on the math alone.
+    expect(openLine(2)).toHaveValue('I = 4 mA # load')
+    press('Escape')
+
     undo()
     await waitFor(() => expect(sourceOf()).toBe('R = 10 kohm\nI = 2 mA'))
+    expect(formatsOf()).toBeUndefined()
+    expect(canUndo()).toBe(false)
+    redo()
+    await waitFor(() => expect(formatsOf()).toBe('\n@bold @text-red if I > 3 mA'))
+    expect(sourceOf()).toBe('R = 10 kohm\nI = 4 mA # load')
+  })
+
+  it('Enter keeps the format on the first half, and a join keeps the upper line’s, each one undo step', async () => {
+    const { sourceOf, formatsOf, undo, canUndo } = await mount()
+    openLine(1)
+    press('b', { ctrlKey: true })
+    // One entry per line.
+    expect(formatsOf()).toBe('@bold\n')
+
+    field().setSelectionRange(1, 1)
+    press('Enter')
+    expect(sourceOf()).toBe('R\n = 10 kohm\nI = 2 mA')
+    expect(formatsOf()).toBe('@bold\n\n')
+
+    atStart()
+    press('Backspace')
+    expect(sourceOf()).toBe('R = 10 kohm\nI = 2 mA')
+    expect(formatsOf()).toBe('@bold\n')
+    press('Escape')
+
+    undo()
+    await waitFor(() => expect(sourceOf()).toBe('R\n = 10 kohm\nI = 2 mA'))
+    expect(formatsOf()).toBe('@bold\n\n')
+    undo()
+    await waitFor(() => expect(sourceOf()).toBe('R = 10 kohm\nI = 2 mA'))
+    expect(formatsOf()).toBe('@bold\n')
+    undo()
+    await waitFor(() => expect(formatsOf()).toBeUndefined())
     expect(canUndo()).toBe(false)
   })
 

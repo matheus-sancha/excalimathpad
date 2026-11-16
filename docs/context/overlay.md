@@ -86,8 +86,18 @@ every source change and every change of order, then hands each
 Excalidraw gets every click and drag. There is no bar beside the open line
 or title (M4d, #144): the Format tab formats them, and the field's Ctrl+B,
 Ctrl+U and Ctrl+I (italic on a comment line and the title; nothing on a math
-line) write the clause into the open line's text; `MathOverlay` commits it
-at once and mounts a new field on the rewritten text (`LineEdit.revision`).
+line) are a Format tab press. **A line's format is stored beside it** (spec
+section 3, M4e, #195): `MathOverlay` hands the engine each anchor's
+`formats` with its source, and a press (`pressLine`) writes the open line's
+typed text and its stored clause in one `writeAnchorSource`, leaving the
+field alone; only when the press changed the line's text (a clause typed in
+it moved out) does it mount a new field on the rewritten text
+(`LineEdit.revision`). `lineEdit.ts` carries the formats through every
+move: `commitTypedLine` moves a typed clause out at the commit, a split
+keeps the format on the first half, a join keeps the upper line's or else
+the lower's. `commitLine` (a save with the line open) writes the typed text
+as it is, clause and all; the clause moves out when the edit leaves the
+line. `EditTarget.stored` is the open line's stored clause, for the panel.
 `MathElementView` exports `LineSample` and `TitleSample`, one row or a
 header drawn as the sheet draws it, for the tab's sample. `useSheetGestures` opens, moves and
 leaves the line edit from the events `listenToCanvas` hands it, starts and
@@ -105,8 +115,9 @@ sheet file commit the line (Ctrl+S keeps it open) or leave it (Open). From M4d (
 panel acts on it too: `setFormat`, `setCommentFormat` (#144),
 `setTitleFormat`, `moveTo('title' | 'first')`, `move('up' | 'down')` and
 `openLast(anchorId)` (#144), `setRules(rows)`, `caretToRule(index)` and
-`addRule(name)` (#145: a caret inside a rule follows it to its condition's
-end, by each row's `from`) and `insert(symbol, anchorId)` (#146: a Symbols
+`addRule(name)` (#145: a caret inside a rule typed in the line follows it to
+its condition's end, by each row's `from`; `addRule` types the new rule into
+the line, where it stays until the commit) and `insert(symbol, anchorId)` (#146: a Symbols
 or Constants button; `symbolInsert.ts`'s pure `planInsert` gives the range,
 the text and the caret by the insert's mode, typed by
 `execCommand('insertText')`, which keeps the field's Ctrl+Z, then

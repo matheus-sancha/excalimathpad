@@ -11,7 +11,8 @@
   the line in `src/math/evaluate.ts`; the one-statement check built (#140), read in
   `src/math/lineForm.ts`; `if()` and text comparisons built (#140), given at setup in
   `src/math/conditionals.ts`; the comment line's format built (#142), read in
-  `src/math/lineForm.ts`
+  `src/math/lineForm.ts`; the stored format built (#195), joined to the line's text in
+  `src/math/lineForm.ts` (`withFormat`) before step 2 reads it
 - **Amended**: 2026-11-11 (#63): the format clause, read after the comment.
   2026-11-13 (M4c; #92, #94): rules in the format clause, a solved value's
   `for` range, and the index. The index (#104), the `for` range (#105) and the rules
@@ -19,6 +20,7 @@
   2026-11-14 (M4d; #119, #123, #132): a comment line's format clause, joined
   words, `if()` and the one-statement check. `if()` and the one-statement check are built
   (#140), the comment line's format (#142) and joined words (#145).
+  2026-11-15 (M4e; #182): the format clause is read from where it is stored. Built (#195).
 - **Date**: 2026-11-03
 
 ## Context
@@ -90,7 +92,8 @@ Engineering rules (Engineer's):
   matrix arithmetic, so `Q_s^2` means each point squared.
 - `table`, `plot` and `solve` are reserved names, and from M4d `if`.
 
-Amended on 2026-11-15 for M4e, decided by Matheus (#182). Not built yet (#195):
+Amended on 2026-11-15 for M4e, decided by Matheus (#182). Built in #195 (`evaluateSheet` takes
+each block's `formats`):
 
 - **Step 2 reads the format clause from the line's stored format,** not from its text
   (ADR 0002's `customData.formats`). A clause found in the line's text (a typed one not yet
