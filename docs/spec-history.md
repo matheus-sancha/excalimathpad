@@ -475,6 +475,11 @@ The items with a recorded result. Those still open are in
   **Found:** a push made with the workflow's own token starts no other workflow, so CI and the hosted
   deploy don't run for the release commit; the next push to `main` deploys as usual. The commit changes
   only version numbers, which the web app doesn't show.
+- (M4e) The sweep test's bounds for slow scalar calls. **Found (2026-11-16, #194):** before the limit, 42 of
+  the 247 functions a line can call failed the sweep on some argument list: froze, died or took over 1 s.
+  The builders and the functions whose result grows are checked on the size they would build; the rest
+  have the bounds listed in [spec section 14](spec-v1.md#14-engineering-constraints), each set where the
+  call measured about 100 ms or less. With them the sweep's 6,669 calls take about 25 s.
 
 ## 18. Decision index
 

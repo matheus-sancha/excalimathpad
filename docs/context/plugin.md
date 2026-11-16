@@ -16,7 +16,12 @@ Toggle Math settings, Open Math guide), whose `checkCallback` offers them only w
 "Excalimathpad needs iOS 16.4 or later."), then `readSheet`; a newer or
 unreadable file shows section 13's message in the view and nothing mounts;
 otherwise it mounts `<App vault=…>` on `contentEl` with React's `createRoot`
-and unmounts on close, with `phone: Platform.isPhone` (the bottom sheet). It holds the tab's `commands` while the app is up and
+and unmounts on close, with `phone: Platform.isPhone` (the bottom sheet) and
+`device` (desktop, phone or tablet, for Copy details). `vault.sheet` is a
+getter that reads the view's `data` at each mount, so a sheet reloaded after
+a failure that kept nothing opens the file as last written, not as first
+read. A failed view (spec section 4, Unexpected failures) hands the view no
+sheet (`connect(null)` as the app unmounts), so its `save` writes nothing. It holds the tab's `commands` while the app is up and
 passes `contentEl.onWindowMigrated` for the bridge. **Autosave** (section 7, A sheet in a vault): the
 vault sheet calls `onUnwritten` when its `saveKey` (plus the settings)
 leaves the key the file holds, and the view calls `requestSave`; `save` is

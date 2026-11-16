@@ -8,9 +8,12 @@ touches this module, and keep it true in the pull request that changes the modul
 **math** (`src/math/`) — the engine. Interface: `evaluateSheet(blocks)`,
 with blocks `{ id, source }` already in reading order → one `SheetLine` per
 line, keyed by block id; never throws: each line is read inside one guard,
-so a throw from outside a line's own handling is that line's error (its
-message, the raw source as its typeset form) and the lines below still run
-(#179; the full rule is #180's). A `SheetLine` is the line's
+its parse included (a parse that threw is rethrown there; `statementNames`
+still gives the names it assigns), so a throw from outside a line's own
+handling is that line's error and the lines below still run (spec section 4,
+Unexpected failures, #193): the message is `UNEXPECTED_LINE`, the result's
+`unexpected` holds the failure's raw text and stack, and the typeset form is
+the raw source. A `SheetLine` is the line's
 `LineResult` (value | error | empty) and its `TypesetLine`, from the same
 parse: blank, comment, math (name, expression and note, as TeX) or unparsed
 (raw source). `lineForm.ts` (pure) reads a line's comment and its format clause
@@ -197,6 +200,23 @@ its message as `data-tip`. Its ⚙ (`data-unit-slot="line:gear"`, the slot
 target's column `GEAR`) opens `PlotSettings.tsx` on the canvas's click, as a
 unit slot does; each change hands back the clause list, which the overlay
 writes with `writePlotClauses` as one line commit.
+**The limit on math.js's own range and builders** (spec section 10, M4e,
+`limits.ts`): `guardEngine(math)`, called last in the engine's setup, wraps
+what a line can call (`math.expression.mathWithTransform`; math.js's own code
+keeps the functions it was built with) so each guarded function checks its
+arguments before it runs: `range` (which `a:b` compiles to) for its points
+and its ends, the builders for the values they would build (`builds`), and
+the slow calls for their bounds (`SLOW_ARGUMENTS`, `SLOW_BIG`, `SLOW_VALUES`,
+`SLOW_PAIRS`, `SLOW_COUNTS`; spec section 14 lists them). A refusal is a
+`LimitError`, a `SheetError` worded from the values; the line's own catch
+words it as typed with `wordLimit`, which finds the call by running each
+candidate node again, innermost first (a refused call stops at its check).
+`iterate` refuses a list line whose points would hold more than the limit
+between them. `MAX_POINTS` in `lists.ts` is the one number. `largeMatrix` in
+`evaluate.ts` shows a matrix of more than 20 values as a list result: a row
+of values through `listSummary`, a matrix by its size, with `listPreview`.
+`engineFunctionNames()` lists what a line can call, for the sweep test
+(`sweep.test.ts`, whose calls run in a child process, `src/test/sweepChild.ts`).
 App code must evaluate only
 through `evaluateSheet`: math.js functions that depend on the disabled
 names (`help`, `rationalize`, a `parser()`'s methods) no longer work. The

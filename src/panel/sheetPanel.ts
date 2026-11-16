@@ -46,6 +46,8 @@ export interface ProblemRow extends PanelTarget {
   message: string
   /** "Pipe flow, line 3 · dP" or "Element 2, line 1". */
   where: string
+  /** Set on a line the app itself failed on (section 4, Unexpected failures): the failure, for the row's actions. */
+  unexpected?: { text: string; stack: string }
 }
 
 /** An element's label: its title, else its position in reading order. */
@@ -117,7 +119,14 @@ export function problemRows(sheet: readonly PanelElement[]): ProblemRow[] {
       const rows: ProblemRow[] = []
       const error = problemOf(line.result)
       if (error !== null) {
-        rows.push({ ...target, key: `${element.anchorId}:${lineIndex}:error`, severity: 'error', message: error })
+        const unexpected = line.result.kind === 'error' ? line.result.unexpected : undefined
+        rows.push({
+          ...target,
+          key: `${element.anchorId}:${lineIndex}:error`,
+          severity: 'error',
+          message: error,
+          ...(unexpected ? { unexpected } : {}),
+        })
       }
       line.warnings.forEach((message, i) =>
         rows.push({ ...target, key: `${element.anchorId}:${lineIndex}:w${i}`, severity: 'warning', message }),

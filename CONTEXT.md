@@ -38,7 +38,13 @@ what to read for an issue and where to write.
   it types the true-position plot line near the window's bottom, presses
   Enter and Esc, and fails if any box around the math was scrolled by the
   browser, if the content isn't drawn where the overlay put it, or if the
-  caret is outside the visible area). CI installs Playwright's Chromium (the
+  caret is outside the visible area). `npm test` holds the **typing test**
+  (`src/typing.test.tsx`, M4e, #193: the guide's examples and the acceptance
+  sheets, a character at a time); `npm run test:probe` is the **odd-values
+  probe** (`src/oddValues.probe.tsx`), by hand before a release. `npm test`
+  also holds the **sweep test** (`src/math/sweep.test.ts`, M4e, #194: every
+  math.js function a line can call, at huge arguments, each inside 1 s, in a
+  child process that Node runs from the TypeScript as it is). CI installs Playwright's Chromium (the
   version `package.json` pins) for the last four. The network-blocked run and the pop-out
   run also open ☰ → Math guide in the built plugin (M4d, #148).
 - `docs/math-guide.md` — the **Math guide** (spec section 8, M4d, #148): every
@@ -92,7 +98,8 @@ an issue touches that module ([`CLAUDE.md`](CLAUDE.md) has the reading route).
   keys of a vault tab and the pop-out bridge.
   [`docs/context/canvas.md`](docs/context/canvas.md)
 - **math** (`src/math/`) — the engine: `evaluateSheet(blocks)` gives each line its result
-  and its typeset form, and never throws. Reads the app's line forms before math.js
+  and its typeset form, and never throws; `limits.ts` refuses a call that would build more
+  than 10,000 values or freeze, before math.js runs it. Reads the app's line forms before math.js
   (ADR 0005). Depends on: `mathjs`. [`docs/context/math.md`](docs/context/math.md)
 - **overlay** (`src/overlay/`) — draws math elements over the canvas as typeset grids, and
   holds the line edit, the unit slot, tables and plots. Depends on: canvas, math, `katex`
@@ -110,6 +117,9 @@ an issue touches that module ([`CLAUDE.md`](CLAUDE.md) has the reading route).
 - **panel** (`src/panel/`) — the Sheet panel's tabs, drawn inside Excalidraw's sidebar:
   Variables, Problems, Format with its Rules list, Symbols, Constants and Settings.
   Depends on: math, overlay (KaTeX). [`docs/context/panel.md`](docs/context/panel.md)
+- **failure** (`src/failure/`) — unexpected failures (spec section 4): the boundary, the
+  failure screen, Copy details and Report this error. `App` wraps the sheet in the view's
+  boundary. Depends on: nothing. [`docs/context/failure.md`](docs/context/failure.md)
 - **shell** (`src/shell/`) — full-viewport layout with three slots: `canvas`,
   `overlay` (stacked exactly over the canvas, pointer-transparent by default)
   and `sidePanel` (docked right). Empty (falsy) slots render nothing. The
@@ -195,7 +205,9 @@ and everything downstream recalculates. Engine: math.js, client-side.
   so undo brings an emptied element back with its text. Scene coordinates
   are the only stored position, and the screen
   position is always derived as `(scene + scroll) * zoom`. Evaluation never
-  throws, and a failed line does not stop the lines after it. A line sees only
+  throws, and a failed line does not stop the lines after it; a throw of the
+  app's own on a line, its parse included, is that line's error (spec section
+  4, Unexpected failures). A line sees only
   names assigned above it in reading order; a later assignment silently
   redefines a name for the lines below, and a failed one removes it (no stale
   values below an error). The same sheet (sources in reading
@@ -368,6 +380,14 @@ and everything downstream recalculates. Engine: math.js, client-side.
   `fileRoutes.excalidraw.test.tsx` holds the contract: the routes are open
   without the takeover and closed with it, and `.main-menu-trigger` and
   `.App-toolbar`, which place the file name, still render.
+- **The view's boundary tells the sheet file of a failure during the render**
+  (`Boundary`'s `onFail`, spec section 14, M4e), before React unmounts anything:
+  Excalidraw empties its scene as it unmounts, so a copy taken in an effect's cleanup would
+  be an empty sheet. `fail` returns the kept sheet and ends that sheet file's writes for
+  good, so the unmount's own cleanups (the recovery copy's flush, the vault's last save)
+  write nothing. React can render one failure twice before it commits: the boundary calls
+  `onFail` once. `src/failure/injected.excalidraw.test.tsx` and
+  `plugin/test/failure.test.ts` hold it.
 - **Excalidraw's `onChange` comes after React commits,** not inside
   `updateScene`. A file flow that has just written a line re-reads the save key
   itself; trusting the last `onChange` misses that line.

@@ -660,12 +660,17 @@ function Gutter({ result, warnings }: { result: LineResult; warnings: readonly s
   return (
     <span
       className={`math-element__gutter${warned ? ' is-warning' : ''}`}
-      data-tip={error ? message : warned ? warnings.join('\n') : undefined}
+      data-tip={error ? problemTip(result, message) : warned ? warnings.join('\n') : undefined}
       data-warnings={warnings.length > 0 ? warnings.join('\n') : undefined}
     >
       {error ? '●' : warned ? '⚠' : ''}
     </span>
   )
+}
+
+/** A problem's hover: its message, and under it the raw text of an unexpected failure. */
+function problemTip(result: LineResult, message: string): string {
+  return result.kind === 'error' && result.unexpected ? `${message}\n${result.unexpected.text}` : message
 }
 
 /**
@@ -744,8 +749,9 @@ function ResultCell({
     <span
       className={`math-element__result is-${result.kind}`}
       data-text={text}
-      data-tip={result.kind === 'error' ? result.message : undefined}
-      data-tip-when={result.kind === 'error' ? 'capped' : undefined}
+      data-tip={result.kind === 'error' ? problemTip(result, result.message) : undefined}
+      // An unexpected failure's raw text is under its words on every hover (section 4, Unexpected failures).
+      data-tip-when={result.kind === 'error' && !result.unexpected ? 'capped' : undefined}
     >
       {content}
       {open && (

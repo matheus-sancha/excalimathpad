@@ -18,7 +18,15 @@ clean-key rule and `keepClean` over the scene and line ports, but it never
 writes itself; the view asks it what is `unwritten()` (an open line
 committed first), tells it what was `written`, asks if it is `busy()`, and
 `reload`s it after an outside change. The line relay's `isOpen` is how it
-knows a line is open. `FileChrome.tsx` shows the name and title, asks the two questions
+knows a line is open. **A failed view** (spec section 4, Unexpected failures, #193): both
+sheets have `fail()`, which returns a `KeptSheet` (the file's text as the
+scene is, without committing the open line; whether it is dirty; on the web
+its name and handle) and ends that sheet's writes for good: the session
+writes the kept text as the recovery copy if it is dirty, then no copy, save
+or clean mark; the vault's `unwritten()` is null from then on. A session
+given `resume` loads it in `start` in place of the recovery offer; a vault
+sheet given `unwrittenAtStart` asks for a save once loaded.
+`FileChrome.tsx` shows the name and title, asks the two questions
 and asks before leaving while dirty; it answers the keys and drops that
 `canvas/fileRoutes.ts` takes. Opening picks the file before it asks about
 unsaved changes: Chromium allows one picker per gesture. Depends on: canvas

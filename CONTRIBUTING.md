@@ -58,6 +58,7 @@ You need **Node.js** `^22.22.2 || ^24.15.0 || >=26` and **npm 10+**. CI runs on 
 | `npm run test:popout` | Open the built plugin in headless Chromium with a sheet tab in a pop-out window, and check it drags, places math, opens Help and the Math guide, pastes and copies there |
 | `npm run test:touch` | Open the built plugin in headless Chromium by touch, at a phone and a tablet viewport, as Android and as iOS, and check the touch gestures, the quick keys and the phone's bottom sheet |
 | `npm run test:follow` | Open the built plugin in headless Chromium, type a long plot line near the window's bottom, press Enter and Esc, and check the math stays drawn on its box and the caret stays in view |
+| `npm run test:probe` | The odd-values probe: about 40,000 sheets of odd values through the engine and the view, about 8 minutes. Not part of `check`: run by hand before a release |
 | `npm run preview` | Serve `dist/` locally |
 | `npm run lint` | Lint with oxlint, then Obsidian's ESLint rules at zero warnings |
 | `npm test` | Run the tests once with Vitest (jsdom) |
@@ -244,6 +245,7 @@ The web app and the Obsidian plugin share **one version**, from `package.json` (
 - [ ] Type a line and see its result
 - [ ] Close and reopen it, and see the line kept
 - [ ] Repeat on one phone or tablet
+- [ ] Run the odd-values probe, `npm run test:probe` (about 8 minutes), and see it pass
 - [ ] The device checklist, on an iPhone, an iPad, an Android phone and an Android tablet, before the first release with `isDesktopOnly: false` and before any release that changes touch, panel or overlay code (otherwise say in the notes that it was skipped): open a sheet from the vault; Add math from More tools, then a tap; double-tap a line and the title, and see the keyboard come up; Done, ↑ ↓ and Edit; format, with a rule; Symbols and the quick keys; a tap's tip, and the unit slots and ⚙ a touch selection shows; save, close and reopen; a sync round trip; on a phone, the bottom sheet stays above the keyboard
 - [ ] Write each device's result, with the device and OS versions, in the release notes. If any device failed, don't publish: set `isDesktopOnly: true` in `manifest.json` and release again
 

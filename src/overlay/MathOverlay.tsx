@@ -64,6 +64,8 @@ import {
 import type { RowBox } from './lineHit.ts'
 import { HoverTip, useHoverTip, type TipTarget } from './HoverTip.tsx'
 import { MathElementView } from './MathElementView.tsx'
+import { FailedElement } from './FailedElement.tsx'
+import { Boundary } from '../failure/Boundary.tsx'
 import { TEXT_COLOR_VALUES } from './textColors.ts'
 import { PlacingGhost } from './PlacingGhost.tsx'
 import { readingOrder } from './readingOrder.ts'
@@ -173,6 +175,12 @@ export interface MathOverlayProps {
    * and null when it ends (section 8, An edit opens the panel on Format, M4d).
    */
   onEdit?: (target: EditTarget | null) => void
+  /**
+   * The open line's or title's text at each change, as it is set and before
+   * it is drawn, and null with none open (section 4, Unexpected failures: the
+   * failure screen shows the line being typed).
+   */
+  onTyped?: (text: string | null) => void
   /** The line a jump from the panel flashes. */
   flash?: FlashLine | null
   /** How results show: the sheet's unit system and Digits (section 5). */
@@ -193,6 +201,8 @@ export interface EvaluatedElement {
   /** How the title looks, for the Format tab's sample (section 4, Title format). */
   titleFormat: TitleFormat
   lines: readonly SheetLine[]
+  /** The element's lines as text, the typed line in place. */
+  source: string
 }
 
 /** A line to flash; a new `key` flashes it again. */
@@ -244,6 +254,7 @@ export function MathOverlay({
   keepClean = runNow,
   onEvaluated,
   onEdit,
+  onTyped,
   flash = null,
   settings = DEFAULT_DISPLAY,
   resultColor = 'blue',
@@ -261,6 +272,8 @@ export function MathOverlay({
   const editRef = useRef(edit)
   const changeEdit = (next: LineEdit | null) => {
     editRef.current = next
+    // Before the render: if that render fails, the failure screen still has the text.
+    onTyped?.(next?.text ?? null)
     setEdit(next)
   }
   // An insert that opened a line waits for its field (section 4, With no line open).
@@ -290,10 +303,11 @@ export function MathOverlay({
   })
   useEffect(() => {
     const titles = new Map(JSON.parse(titlesKey) as [string, { title: string; titleFormat: TitleFormat }][])
-    const order = (JSON.parse(sheetKey) as SheetBlock[]).map(({ id }) => id)
+    const blocks = JSON.parse(sheetKey) as SheetBlock[]
     onEvaluatedRef.current?.(
-      order.map((anchorId) => ({
+      blocks.map(({ id: anchorId, source }) => ({
         anchorId,
+        source,
         title: titles.get(anchorId)?.title || null,
         titleFormat: titles.get(anchorId)?.titleFormat ?? NO_TITLE_FORMAT,
         lines: lines.get(anchorId) ?? [],
@@ -585,29 +599,54 @@ export function MathOverlay({
         } as CSSProperties
       }
     >
-      {anchors.map((anchor) => (
-        <MathElementView
+      {anchors.map((anchor) => {
+        const own = edit?.anchorId === anchor.id ? edit : null
+        const elementSource = typedSourceOf(anchor)
+        const elementLines = lines.get(anchor.id)
+        const onType = (text: string) => {
+          const current = editRef.current
+          if (current) changeEdit({ ...current, text })
+        }
+        const onEscape = () => {
+          moveEdit({ kind: 'leave' })
+          focusCanvas()
+        }
+        const onBlurLine = (lineIndex: number) => leaveLine(anchor.id, lineIndex)
+        return (
+        // Section 4, Unexpected failures: each element has its own boundary,
+        // and tries again when its lines, its results or its edit change.
+        <Boundary
           key={anchor.id}
+          resetKeys={[elementSource, elementLines, own?.lineIndex, anchor.title]}
+          fallback={(failure) => (
+            <FailedElement
+              anchor={anchor}
+              viewport={viewport}
+              source={elementSource}
+              edit={own}
+              failure={failure}
+              onType={onType}
+              onMove={moveEdit}
+              onEscape={onEscape}
+              onBlurLine={onBlurLine}
+            />
+          )}
+        >
+        <MathElementView
           anchor={anchor}
           viewport={viewport}
-          source={typedSourceOf(anchor)}
-          lines={lines.get(anchor.id) ?? []}
-          edit={edit?.anchorId === anchor.id ? edit : null}
-          onType={(text) => {
-            const current = editRef.current
-            if (current) changeEdit({ ...current, text })
-          }}
+          source={elementSource}
+          lines={elementLines ?? []}
+          edit={own}
+          onType={onType}
           onRewrite={rewriteLine}
           onTitleFormat={(format) => {
             // A title format key: one undo step; the title stays open.
             writeAnchorTitleFormat(api, anchor.id, format)
           }}
           onMove={moveEdit}
-          onEscape={() => {
-            moveEdit({ kind: 'leave' })
-            focusCanvas()
-          }}
-          onBlurLine={(lineIndex) => leaveLine(anchor.id, lineIndex)}
+          onEscape={onEscape}
+          onBlurLine={onBlurLine}
           forwardWheel={forwardWheel}
           flash={flash?.anchorId === anchor.id ? flash : null}
           suggest={edit?.anchorId === anchor.id ? suggestForEdit : null}
@@ -622,7 +661,9 @@ export function MathOverlay({
             isUnit: isDisplayUnit,
           }}
         />
-      ))}
+        </Boundary>
+        )
+      })}
       {tip && <HoverTip key={tip.key} tip={tip} room={() => tipRoom(overlayRef.current, canvasRoot)} />}
       {placing && <PlacingGhost canvasRoot={canvasRoot} zoom={viewport.zoom} />}
     </div>

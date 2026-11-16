@@ -118,6 +118,17 @@ open (`EditTarget`: anchor, line or `'title'`, text) on each change, and
 null when the edit ends. The line and title fields carry
 `data-prevent-outside-click`, so a press in them keeps a floating panel, and
 turn off spelling, capitals and corrections.
+**Unexpected failures** (spec section 4, #193): `MathOverlay` wraps each
+`MathElementView` in a `Boundary` (reset by its source, its lines, the open
+line's index and its title), whose fallback is `FailedElement.tsx`: the
+notice with Copy details and Report this error (they take pointer events),
+the title and the lines as plain text, each row with its `data-line` box so
+the gestures still open it, and the open line as `PlainField`, a bare input
+with the line's moves. It imports nothing from `MathElementView`. `PlotChart`
+is a `Boundary` around the chart, whose fallback keeps the chart's box. A
+line's unexpected error shows its raw text under its message in the gutter's
+and the result cell's `data-tip`, on every hover. `onTyped` hands App the
+open text as it is set, before the render that draws it.
 `caretRow.ts` gives the follow rule its row (0.2.1, #191): the open
 field's box, narrowed to the caret, measured on the field's hidden copy,
 when the field is wider than the room. Depends on: canvas (anchor, size, selection and layer contracts, API types),

@@ -5,7 +5,20 @@ model, the terms and the load-bearing rules, and names every module; the behavio
 [the spec](../spec-v1.md), by the section numbers cited here. Read this file when an issue
 touches this module, and keep it true in the pull request that changes the module.
 
-**App** (`src/App.tsx`) — composition root. Decides what fills each shell
+**App** (`src/App.tsx`) — the view's boundary around the composition root
+(spec section 4, Unexpected failures, #193). The default export, `App`, wraps
+`Sheet`, the root itself, in a `Boundary` and gives `FailureContext` its
+home (the version, the stamp, web or plugin with `vault.device`) and the
+sheet's words. A `FailureBox` (`createFailureBox`) passes between them: `Sheet` writes into it
+the open line's text as it is typed (`MathOverlay`'s `onTyped`, before the
+render), the sheet as last evaluated, and the sheet file's `fail`; on a
+failure outside every smaller boundary, `onFail` calls that `fail` during
+the render and notes what was being typed, and `FailureScreen` replaces the
+view. Reload the sheet mounts `Sheet` again (a new `key`) with `resume`, the
+kept sheet: the web's session loads it without asking, and a vault's sheet
+starts from it, unwritten if it held changes. `Sheet` gives each panel tab
+its own boundary (`tab`).
+**Sheet** — the composition root. Decides what fills each shell
 slot and wires the sheet file to the canvas and the line edit, and the
 sheet's evaluation to the Sheet panel (opened at launch on a wide window,
 on Problems only for an error: once the sheet's `start` has resolved and an

@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import type { DisplaySettings } from '../math/display.ts'
 import { listConstants, typesetUnit } from '../math/evaluate.ts'
 import { texToHtml, useKatexReady } from '../overlay/katex.ts'
+import { FailureActions } from '../failure/FailureActions.tsx'
 import {
   problemRows,
   variableGroups,
@@ -98,8 +99,15 @@ export function ProblemsTab({ sheet, onJump }: TabProps) {
                   {row.severity === 'error' ? '●' : '⚠'}
                 </span>
                 <span className="sheet-panel__message">{row.message}</span>
+                {row.unexpected && <span className="sheet-panel__raw">{row.unexpected.text}</span>}
                 <span className="sheet-panel__where">{row.where}</span>
               </button>
+              {/* Section 4, Unexpected failures: the app's own failure can be reported from its row. */}
+              {row.unexpected && (
+                <div className="sheet-panel__report">
+                  <FailureActions what="line" failure={row.unexpected} />
+                </div>
+              )}
             </li>
           ))}
         </ul>

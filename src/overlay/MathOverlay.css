@@ -766,3 +766,71 @@
   bottom: 100%;
   margin: 0 0 3px;
 }
+
+/* Section 4, Unexpected failures: an element whose view failed shows its
+   lines as plain text under the notice. The notice's actions and the open
+   line's plain field take pointer events, as the field does. */
+.math-element__failed {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+  color: var(--math-error);
+  font: 13px/20px system-ui, 'Segoe UI', sans-serif;
+  white-space: nowrap;
+}
+
+.math-element__failed .math-element__gutter {
+  margin-right: 0;
+}
+
+.math-element__failed .failure-actions {
+  gap: 8px;
+  margin-left: 6px;
+  color: var(--math-text);
+  pointer-events: auto;
+}
+
+.math-element__failed .failure-actions__button {
+  padding: 0 6px;
+  border: 1px solid var(--math-quiet);
+  border-radius: 3px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.math-element__failed .failure-actions__report {
+  color: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.math-element__plain-field {
+  grid-column: 2 / 5;
+  box-sizing: border-box;
+  height: 24px;
+  margin: 0;
+  padding: 0 2px 0 0;
+  border: 0;
+  background: transparent;
+  color: var(--math-text);
+  font: inherit;
+  box-shadow: inset 0 -1px 0 #1971c2;
+  outline: none;
+  pointer-events: auto;
+}
+
+/* A chart that failed to draw keeps its box and says so. */
+.math-element__plot.is-failed {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  border: 1px dashed var(--math-rule);
+  color: var(--math-error);
+  font: 13px/20px system-ui, 'Segoe UI', sans-serif;
+  text-align: center;
+  white-space: normal;
+}

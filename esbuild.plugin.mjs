@@ -162,6 +162,8 @@ export async function buildPlugin({ outDir = out, log = console.log } = {}) {
       'import.meta.env.MODE': '"production"',
       // Section 12, Hosted build: the plugin's stamp is its version.
       __BUILD_STAMP__: JSON.stringify(pkg.version),
+      // Section 4, Unexpected failures: Copy details names the version.
+      __APP_VERSION__: JSON.stringify(pkg.version),
     },
     plugins: [mathGuide, trims],
     metafile: true,

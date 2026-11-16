@@ -685,9 +685,16 @@ the file, and offers details to report that hold no sheet content.
   be opened and edited. The other elements, the drawings, the canvas and the panel keep
   working.
 - **A chart** that fails to draw shows `this chart hit an unexpected error in Excalimathpad`
-  in its box; its line stays.
-- **A panel tab** has its own boundary: `this tab hit an unexpected error in Excalimathpad`.
-- A boundary tries again when its element's lines or results change.
+  in its box, which keeps the chart's size; its line stays. The raw text of the failure is on
+  hover.
+- **A panel tab** has its own boundary: `this tab hit an unexpected error in Excalimathpad`,
+  with the raw text of the failure on hover. The other tabs keep working.
+- A boundary tries again when its element's lines or results change: an element's also when
+  a line or the title opens in it, a chart's when its plot changes, and a tab's when the
+  sheet, what is open, the selection or the settings change.
+- **A failed element being edited** shows the open line, or the title, as a plain field in
+  place of the line's own: it takes typing, Enter, ↑, ↓, Backspace at its start and Esc, with
+  no suggestions and no format keys. Each change tries the element's own view again.
 - **The whole view.** A failure outside every boundary replaces the view with a failure
   screen:
 
@@ -705,13 +712,26 @@ the file, and offers details to report that hold no sheet content.
     of the last line commit or scene change; on the web, the recovery copy. A broken scene
     can't overwrite a good one.
   - **Reload the sheet** mounts the sheet again from that kept copy, as an open does: no undo
-    step, history cleared.
+    step, history cleared. On the web nothing is asked, and the sheet keeps its name and is
+    unsaved if it was. In a vault, a kept copy the file doesn't hold is written by autosave
+    from then on, as any change is. If the view failed before its sheet had loaded, there is
+    no kept copy: the web starts as it does on a launch, and a vault's tab opens its file as
+    last written.
   - The line being typed is shown as text to copy, and isn't put back by itself, since it may
     be the cause. With no line open, that part of the screen is left out.
+  - If the reloaded sheet fails too, the screen shows again, and the kept copy stands.
+  - **What counts:** a failure while the view is drawn or laid out. A failure in the app's
+    answer to a key or a press, with nothing being drawn, leaves the view as it was.
 - **Copy details** puts a short text on the clipboard: the version and build stamp, web or
   Obsidian plugin (and desktop, phone or tablet), what failed (a line, an element, a chart, a
   tab, the view), and the error with its stack. It ends `(no sheet content is included)`. It
-  holds no line text, name or value.
+  holds no line text, name or value: every line and title of the sheet, each word and number
+  in them, each name a line defines and each result as shown is cut from the error's text and
+  replaced by `…`, where it stands as a whole word. A one-letter name and any other text
+  under three characters stay, since cutting each `a` or `2` would leave no error to read. A
+  word of the sheet that is also a word of the error is cut too; the stack's frames, which
+  are places in the app's code, are whole. The button reads `Copied` once the text is on the
+  clipboard; where the clipboard refuses, the text shows in a box to copy by hand.
 - **Report this error** is a plain link to the repository's new-issue page, with nothing
   filled in. The app sends nothing by itself.
 - Copy details and Report this error appear on the failure screen, on a failed element, and
@@ -1957,8 +1977,15 @@ passthrough of math.js: small ones (`inv`, `det`, `cross`, `sum(1:100)`) work as
   error: `identity(100)` is allowed, `identity(101)` refused. The 10,000 is one number in the
   code, shared with the sheet's own range.
 - A function whose result can pass the limit from legal arguments (`kron`, `concat`, `resize`,
-  a list times a matrix) is checked on the size its result would have.
-- An end of `a:b` that isn't a finite number is its own error.
+  `diag` of a list, `setCartesian`, `setPowerset`, a column times a row, a list times a matrix)
+  is checked on the size its result would have. A list times a matrix would hold a matrix at
+  every point: its points fail when points × the matrix's values pass the limit.
+- An end of `a:b` that isn't a finite number is its own error. So is its step, in the same
+  words, and a `0/0`: `0/0 is not a number`.
+- **The message names the call as typed** (`zeros(n) has more than 10,000 values`), inside a
+  longer line too. Where the line can't run the call again by itself (inside a function's
+  body, at one point of a list), it is written from its values instead: `zeros(1e8)`, a
+  matrix too large to write as `…`, and a range's end as `the end is ∞`.
 - A call that is slow without building anything large (`combinations(1e9, 5e8)`) is refused
   by a bound on its argument, set at what keeps the call inside the sweep's time limit
   ([section 14](#14-engineering-constraints)); the bounds are listed there as they are found.
@@ -1966,7 +1993,10 @@ passthrough of math.js: small ones (`inv`, `det`, `cross`, `sum(1:100)`) work as
 - **A large matrix is summarised where it is shown.** A matrix or math.js range of up to 20
   values is shown whole. Past that, the result cell and the Variables tab show a one-row
   summary, and the hover shows the first and last few rows with their index, as a list's
-  does. Nothing is refused for being too big to show.
+  does. Nothing is refused for being too big to show. A row of values reads exactly as a
+  list does, in its unit and the line's display unit (`30 values, 2 … 60 mm`); a matrix reads
+  by its size (`3 × 7 matrix`, `10 × 10 × 10 matrix`), and each row of its hover shows three
+  values from each end. A summarised result has no unit slot, as a list has none.
 
   ```text
   1:5               [1, 2, 3, 4, 5]
@@ -2352,7 +2382,8 @@ touch in [section 4](#touch). Research: [`docs/research/obsidian-plugin.md`](res
   it. The workflow may push to `main`.
 - **Before Publish,** Matheus ticks the draft's checklist, kept also in `CONTRIBUTING.md`: install
   the three files in a test vault (by hand or with BRAT), open a sheet, type a line and see its
-  result, close and reopen, and repeat on one phone or tablet.
+  result, close and reopen, repeat on one phone or tablet, and (M4e) run the odd-values probe
+  ([section 14](#14-engineering-constraints)).
 - **Phone and tablet:** `isDesktopOnly: false` ships to strangers only after the CI touch tests
   (Playwright with `hasTouch`, at a phone and a tablet viewport, as Android and as iOS:
   `scripts/touch-run.mjs`, `npm run test:touch`) and Matheus's **device
@@ -2576,6 +2607,7 @@ The wording of every user-facing message. `<…>` is filled in. Numbers follow
 | An unexpected failure in a panel tab | `this tab hit an unexpected error in Excalimathpad` |
 | The view fails as a whole | `This sheet hit an unexpected error in Excalimathpad.` then `Your sheet is kept up to the last finished line.` and, with a line open, `You were typing:` |
 | The screen's actions | `Reload the sheet`, `Copy details`, `Copy`, `Report this error` |
+| A copy button, once its text is on the clipboard | `Copied` |
 | The last line of the copied details | `(no sheet content is included)` |
 
 **Panel** (M4d)
@@ -2905,18 +2937,64 @@ Evidence: [`obsidian-plugin.md`](research/obsidian-plugin.md).
 - **Injected failures,** in `npm run check`: a test makes a line (its parse included), an
   element, a chart, a panel tab and the view throw on purpose, and checks what shows, that the
   rest keeps working, that the failed view writes nothing, and that the copied details hold no
-  sheet text.
+  sheet text (`src/failure/injected.excalidraw.test.tsx` on the web,
+  `plugin/test/failure.test.ts` in a vault).
 - **The typing test,** in `npm run check`: every Math guide example, the true-position sheet
   and the pump sheet, one character at a time, through the engine and the view (4,765 states
   and 59 s on one core when measured). It fails on any throw and on any state that reaches the
-  per-line guard. It reads its lines from the guide and the acceptance sheets.
+  per-line guard. It reads its lines from the guide and the acceptance sheets
+  (`src/typing.test.tsx`: every `docs/acceptance/*.md`, so the true-position sheet is typed
+  once its file is there).
+- **The view's boundary tells the sheet file while React still renders,** before anything is
+  unmounted: Excalidraw empties its scene as it unmounts, so a copy taken later would be an
+  empty sheet. From that call on the sheet file writes nothing (`fail`, on the web's session
+  and the vault's sheet). React can render one failure more than once before it commits; the
+  boundary tells it once.
+- **A boundary is a class component,** the only one: React has no hook that catches a
+  failure. A failure in an effect (a chart's drawing) reaches the same boundary as a
+  render's.
 - **The sweep test,** in `npm run check`: every function math.js exposes is called with huge
   arguments (`1e8`, `(3000, 3000)`, an infinite end such as `1/0`) and with arguments at the
   limit, and the test fails if any call neither answers nor refuses within 1 s. A math.js
   update that adds a builder fails it. One unit test per message row and per shown form of a
-  matrix.
+  matrix (`src/math/limits.test.ts`).
+  - **How it runs** (`src/math/sweep.test.ts`): about 250 functions, each with 27 argument
+    lists, through `evaluateSheet`, under `v = 1:10000`, `m = identity(100)` and `w = 1:100`
+    (6,669 calls, about 25 s). The calls run in a child process, since a call that freezes
+    can't be stopped from inside its own thread: the child says which call it starts, and one
+    still running after 1 s is stopped with its process and fails the test, as one that runs
+    the process out of memory does. A call that only reported more than 1 s is run once more
+    alone. Node runs the child's TypeScript as it is, so `src/math/` keeps to syntax Node can
+    strip (no `enum`, no parameter properties).
+  - **Before the limit,** 42 functions failed it: the builders and the functions of the
+    list above, and the slow calls bounded below.
+  - **The guard wraps what a line can call** (`mathWithTransform`, in `src/math/limits.ts`),
+    not math.js's own namespace: `inv`, `det` and the rest keep calling the builders they
+    were made with. `a:b` compiles to the visible `range`, so the same check covers it.
+  - **The bounds on slow calls,** each refused past it with "is too large to compute". An
+    argument that isn't finite is past every bound.
+
+    | Function | Bound |
+    |---|---|
+    | `bellNumbers`, `stirlingS2` | each argument at most 1,000 |
+    | `bernoulli` | 10,000 |
+    | `catalan`, `combinations`, `combinationsWithRep`, `composition`, `permutations` | each argument at most 1,000,000 |
+    | `isPrime` | a finite number (`isPrime(1/0)` never ended) |
+    | `cosh`, `sinh`, `tanh`, `coth`, `csch`, `sech` | a BigNumber at most 10,000 (a plain number answers `∞` at once) |
+    | `fft`, `ifft` | 4,096 values |
+    | `qr`, `schur`, `mad` | 2,500 values |
+    | `lyap` | 900 values |
+    | `setUnion`, `setIntersect`, `setDifference`, `setSymDifference`, `setIsSubset` | the two sets' sizes multiplied, at most 1,000,000 |
+    | `freqz`, `zpk2tf` | the two arguments' sizes multiplied, at most 10,000; `freqz`'s number of points at most 10,000 |
+    | `format`, `print`, `bin`, `oct`, `hex` | a precision or a word size at most 1,000, as a number or in options |
+    | `quantileSeq` | at most 100 quantiles |
+
+  - **Not bounded:** a legal matrix that is slow for what it holds, not for its size
+    (`eigs` and `sqrtm` of a 60 × 60 matrix of random numbers took over 3 s). The sweep's
+    matrix is the identity; this is the accepted slow line of section 10.
 - **The odd-values probe** (about 8 minutes) is run by hand before a release
-  ([section 12a](#releases)).
+  ([section 12a](#releases)): `npm run test:probe` (`src/oddValues.probe.tsx`, about 40,000
+  sheets), a line of the release checklist. It fails as the typing test does.
 - **The format migration** is tested on every open path, the recovery copy included, and on a
   hand-edited file with a clause both in the text and stored.
 - **`source` and `formats` in one write:** a nested object in `customData` adds an empty undo
@@ -3177,12 +3255,17 @@ M1 to M4d, is in [`docs/spec-history.md`](spec-history.md#17-verify-first), with
   field, and the Settings tab.
 - A table of more than three columns in the sample, scaled with no floor.
 - The typing test's time in CI with the new guide examples (59 s when measured).
-- The sweep test's bounds for slow scalar calls, listed in section 14 as they are found.
 - The savings of the plugin cuts (87 KB, about 148 KB and 109 KB) were probed as separate
   bundles or read from the source, not measured together.
 - The plugin's start-up time in Obsidian, on the work laptop and one phone.
 - That the overlay scrolling (0.2.1) is what Matheus saw as the chart "spilling out of its
   box" is not confirmed: he looks again on the beta.
+- Unexpected failures were tested in jsdom against the fake `obsidian` only. In Obsidian, on
+  the desktop and on a phone: that Report this error opens the browser from a sheet tab and
+  from a pop-out window, and that Copy details and Copy reach the clipboard (where it
+  refuses, the text shows in a box).
+- A failed element's notice is wider than a narrow element, and its two actions take presses
+  over the canvas; how it reads on a small element is seen in the beta.
 
 **M6**
 

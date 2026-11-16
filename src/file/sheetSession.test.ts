@@ -9,7 +9,7 @@ import {
   type SceneFile,
   type SessionDialogs,
 } from './sheetSession.ts'
-import { DEFAULT_SETTINGS, writeSheet, type SheetData } from './sheetFormat.ts'
+import { DEFAULT_SETTINGS, readSheet, writeSheet, type SheetData } from './sheetFormat.ts'
 
 /** A scene that is just a source string with a version, like Excalidraw's. */
 function fakeScene(source = 'seed') {
@@ -610,6 +610,119 @@ describe('commitPending', () => {
 
     session.commitPending()
 
+    expect(session.getState().dirty).toBe(true)
+  })
+})
+
+/** The source a sheet file's text holds, as the fake scene writes it. */
+const sourceIn = (text: string | undefined) => {
+  const read = readSheet(text ?? '')
+  return read.kind === 'sheet' ? (read.scene.elements as { source: string }[])[0]?.source : undefined
+}
+
+describe('a failed view (docs/spec-v1.md section 4, Unexpected failures)', () => {
+  it('fail keeps the sheet as it is, without committing the open line, and writes it as the copy', async () => {
+    const { session, scene, recovery, line } = await setup()
+    scene.edit('committed')
+
+    const kept = session.fail()
+
+    expect(line.commitLine).not.toHaveBeenCalled()
+    expect(kept).toMatchObject({ dirty: true, name: null, handle: null })
+    expect(sourceIn(kept?.text)).toBe('committed')
+    await vi.runAllTimersAsync()
+    expect(recovery.current()).toEqual({ text: kept?.text, name: null, handle: null })
+    expect(recovery.write).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps a clean sheet too, and writes no copy for it', async () => {
+    const { session, scene, files, recovery } = await setup()
+    scene.edit('saved')
+    await session.saveAs()
+    recovery.write.mockClear()
+
+    const kept = session.fail()
+    expect(kept).toMatchObject({ dirty: false, name: 'Untitled.excalimathpad', handle: handleFor('Untitled.excalimathpad') })
+    expect(sourceIn(kept?.text)).toBe('saved')
+    await vi.runAllTimersAsync()
+    expect(recovery.write).not.toHaveBeenCalled()
+    expect(files.disk.size).toBe(1)
+  })
+
+  it('writes nothing after: no copy, no save, no open, not as the view goes away', async () => {
+    const { session, scene, files, recovery, detach } = await setup()
+    scene.edit('good')
+    session.fail()
+    await vi.runAllTimersAsync()
+    recovery.write.mockClear()
+
+    // The scene as Excalidraw leaves it when it unmounts.
+    scene.edit('')
+    session.commitPending()
+    session.flushRecovery()
+    session.keepClean(() => scene.edit('sized'))
+    expect(await session.save()).toBe(false)
+    expect(await session.saveAs()).toBe(false)
+    await session.open()
+    detach()
+    await vi.runAllTimersAsync()
+
+    expect(recovery.write).not.toHaveBeenCalled()
+    expect(recovery.clear).not.toHaveBeenCalled()
+    expect(sourceIn(recovery.current()?.text)).toBe('good')
+    expect(files.saveAs).not.toHaveBeenCalled()
+    expect(files.open).not.toHaveBeenCalled()
+    // Told once: a second call keeps nothing new.
+    expect(session.fail()).toBeNull()
+  })
+
+  it('keeps nothing before the sheet has started, or when the scene can’t be read', async () => {
+    const scene = fakeScene()
+    const early = createSheetSession({ scene, files: fakeFiles(), recovery: fakeRecovery(), dialogs: fakeDialogs(), line: { commitLine: vi.fn(), leaveLine: vi.fn() } })
+    expect(early.fail()).toBeNull()
+
+    const { session, scene: broken, recovery } = await setup()
+    broken.edit('changed')
+    broken.serialize = () => {
+      throw new Error('a broken scene')
+    }
+    expect(session.fail()).toBeNull()
+    await vi.runAllTimersAsync()
+    expect(recovery.write).not.toHaveBeenCalled()
+  })
+
+  it('a session given the kept sheet loads it without asking: dirty, with its name and handle', async () => {
+    const scene = fakeScene()
+    const files = fakeFiles()
+    // The copy the failed view wrote is there, and isn't offered or cleared.
+    const recovery = fakeRecovery({ text: sheetFile('kept'), name: 'pump.excalimathpad', handle: handleFor('pump.excalimathpad') })
+    const dialogs = fakeDialogs()
+    const resume = { text: sheetFile('kept'), dirty: true, name: 'pump.excalimathpad', handle: handleFor('pump.excalimathpad') }
+    const session = createSheetSession({ scene, files, recovery, dialogs, line: { commitLine: vi.fn(), leaveLine: vi.fn() }, resume })
+    session.attach()
+
+    await session.start()
+
+    expect(dialogs.askRestore).not.toHaveBeenCalled()
+    expect(recovery.clear).not.toHaveBeenCalled()
+    expect(scene.source()).toBe('kept')
+    expect(session.getState()).toMatchObject({ name: 'pump.excalimathpad', dirty: true })
+    await session.save()
+    expect(files.save).toHaveBeenCalledWith(resume.handle, expect.any(String))
+    expect(sourceIn(files.disk.get('pump.excalimathpad'))).toBe('kept')
+    expect(session.getState().dirty).toBe(false)
+  })
+
+  it('a kept sheet that was clean comes back clean', async () => {
+    const scene = fakeScene()
+    const resume = { text: sheetFile('kept'), dirty: false, name: 'pump.excalimathpad', handle: handleFor('pump.excalimathpad') }
+    const session = createSheetSession({ scene, files: fakeFiles(), recovery: fakeRecovery(), dialogs: fakeDialogs(), line: { commitLine: vi.fn(), leaveLine: vi.fn() }, resume })
+    session.attach()
+
+    await session.start()
+
+    expect(session.getState()).toMatchObject({ name: 'pump.excalimathpad', dirty: false })
+    scene.edit('changed')
     expect(session.getState().dirty).toBe(true)
   })
 })
