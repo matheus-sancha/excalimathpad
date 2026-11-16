@@ -542,7 +542,8 @@ try {
     row('each key’s width is remembered', remembered?.sheetPanelWidth === 352 && s.variable === 352, JSON.stringify(remembered))
     // The line's commit was the sheet's only change; the width is nowhere in the file.
     const file = await tab.evaluate(() => window.__leaf.view.getViewData())
-    row('the width is never in the file', !/sheetPanel|panelWidth/i.test(file) && !file.includes('352') && file.includes('v = 4 m/s + 1 m'), `${file.length} characters`)
+    // A value of exactly 352, not the digits anywhere: a seed or a nonce Excalidraw draws at random can hold them.
+    row('the width is never in the file', !/sheetPanel|panelWidth/i.test(file) && !/"[^"]*"\s*:\s*"?352"?\s*[,}\]]/.test(file) && file.includes('v = 4 m/s + 1 m'), `${file.length} characters`)
     // No undo step: after one more drag, a single Ctrl+Z still takes back the line's commit, the step before them all.
     await drag(300)
     await tab.evaluate(() => document.querySelector('.excalidraw').focus())
