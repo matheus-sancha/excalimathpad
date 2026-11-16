@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
-import type { PlotClause, PlotSize } from '../math/plotLine.ts'
+import { PLOT_SIZES, SQUARE_SIZES, type PlotClause, type PlotSize } from '../math/plotLine.ts'
 import { vaultKeyRoute } from '../canvas/vaultKeys.ts'
 
 /**
  * The plot's settings popover (docs/spec-v1.md section 10, Plots): Mark,
- * Series names, Points, x axis, y axis, Size and Title. Each change hands back
+ * Point, Circle, Series names, Points, x axis, y axis, Equal scales, Size and
+ * Title (Point, Circle and Equal scales from M4e). Each change hands back
  * the line's whole clause list, which the overlay writes as one line commit;
  * the popover stays open. Esc, or focus leaving it (a click outside), closes it.
  *
@@ -27,6 +28,8 @@ export function PlotSettings({
   }, [])
 
   const marks = clauses.flatMap((clause) => (clause.kind === 'mark' ? [clause.expression] : []))
+  const points = clauses.flatMap((clause) => (clause.kind === 'point' ? [clause.expression] : []))
+  const circles = clauses.flatMap((clause) => (clause.kind === 'circle' ? [clause.expression] : []))
   const has = (kind: PlotClause['kind']) => clauses.some((clause) => clause.kind === kind)
   const log = (axis: 'x' | 'y') => clauses.some((clause) => clause.kind === 'log' && clause.axis === axis)
   const range = (axis: 'x' | 'y') => {
@@ -71,13 +74,31 @@ export function PlotSettings({
           onCommit={(text) =>
             change(
               (clause) => clause.kind === 'mark',
-              text
-                .split(';')
-                .map((part) => part.trim())
-                .filter((part) => part !== '')
-                .map((expression) => ({ kind: 'mark', expression })),
+              parts(text).map((expression) => ({ kind: 'mark', expression })),
             )
           }
+        />
+      </Row>
+      <Row label="Point">
+        <TextSetting
+          label="Point"
+          value={points.join('; ')}
+          placeholder="(Q_d, H_d)"
+          onCommit={(text) =>
+            change(
+              (clause) => clause.kind === 'point',
+              // A pair typed without its brackets gets them.
+              parts(text).map((expression) => ({ kind: 'point', expression: expression.startsWith('(') ? expression : `(${expression})` })),
+            )
+          }
+        />
+      </Row>
+      <Row label="Circle">
+        <TextSetting
+          label="Circle"
+          value={circles.join('; ')}
+          placeholder="r; (x0, y0) r"
+          onCommit={(text) => change((clause) => clause.kind === 'circle', parts(text).map((expression) => ({ kind: 'circle', expression })))}
         />
       </Row>
       <Row label="Series names">
@@ -130,6 +151,16 @@ export function PlotSettings({
           />
         </Row>
       ))}
+      <Row label="Equal scales">
+        {/* A circle brings equal scales, with no way to turn them off (section 10). */}
+        <input
+          type="checkbox"
+          aria-label="Equal scales"
+          checked={has('equal') || circles.length > 0}
+          disabled={circles.length > 0}
+          onChange={(event) => change((clause) => clause.kind === 'equal', event.target.checked ? [{ kind: 'equal' }] : [])}
+        />
+      </Row>
       <Row label="Size">
         <select
           aria-label="Size"
@@ -139,9 +170,11 @@ export function PlotSettings({
             change((clause) => clause.kind === 'size', chosen === 'M' ? [] : [{ kind: 'size', size: chosen }])
           }}
         >
-          <option value="S">S (360 × 220)</option>
-          <option value="M">M (480 × 280)</option>
-          <option value="L">L (640 × 360)</option>
+          {(['S', 'M', 'L'] as const).map((option) => (
+            <option key={option} value={option}>
+              {option} ({sizeText(option, has('equal') || circles.length > 0)})
+            </option>
+          ))}
         </select>
       </Row>
       <Row label="Title">
@@ -215,7 +248,21 @@ function TextSetting({
 }
 
 /** The clauses in the popover's order, so a written line reads the same however it was set. */
-const ORDER: PlotClause['kind'][] = ['mark', 'labels-direct', 'points', 'log', 'range', 'size', 'title', 'unknown']
+const ORDER: PlotClause['kind'][] = ['mark', 'point', 'circle', 'labels-direct', 'points', 'log', 'range', 'equal', 'size', 'title', 'unknown']
+
+/** A size's px, square with equal scales (section 10). */
+function sizeText(size: PlotSize, square: boolean): string {
+  const { width, height } = square ? { width: SQUARE_SIZES[size], height: SQUARE_SIZES[size] } : PLOT_SIZES[size]
+  return `${width} × ${height}`
+}
+
+/** A text box's entries, split at `;`. */
+function parts(text: string): string[] {
+  return text
+    .split(';')
+    .map((part) => part.trim())
+    .filter((part) => part !== '')
+}
 
 function order(clauses: PlotClause[]): PlotClause[] {
   const axis = (clause: PlotClause) => ('axis' in clause && clause.axis === 'y' ? 1 : 0)

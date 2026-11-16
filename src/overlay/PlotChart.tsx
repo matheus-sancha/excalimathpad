@@ -3,7 +3,7 @@ import type { PlotView } from '../math/evaluate.ts'
 import { texToHtml } from './katex.ts'
 import { Boundary } from '../failure/Boundary.tsx'
 import { FAILURE_MESSAGES } from '../failure/details.ts'
-import { drawChart, loadPlot, SERIES_COLORS, type PlotModule } from './plotDrawing.ts'
+import { colorOf, drawChart, loadPlot, type PlotModule } from './plotDrawing.ts'
 
 /**
  * A plot line's chart (docs/spec-v1.md section 10, Plots), under its line and
@@ -62,17 +62,25 @@ function Chart({ plot }: { plot: PlotView }) {
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- `key` stands for `plot`, so an equal plot draws nothing.
   }, [module, key])
 
+  // The legend's rows in the colours' order: curves (named at their ends instead with
+  // `labels direct`), then points with a dot, then circles with a line (section 10).
+  const legend = [
+    ...plot.series.map((s, i) => ({ name: s.name, tex: s.tex, color: i, dot: false })).filter(() => !plot.labelsDirect),
+    ...plot.dots.map((d, i) => ({ name: d.name, tex: d.tex, color: plot.series.length + i, dot: true })),
+    ...plot.circles.map((c, i) => ({ name: c.name, tex: c.tex, color: plot.series.length + plot.dots.length + i, dot: false })),
+  ]
+
   return (
     <div className="math-element__plot" style={{ width: plot.width }}>
       {plot.title !== null && <div className="math-element__plot-title">{plot.title}</div>}
-      {!plot.labelsDirect && (
+      {legend.length > 0 && (
         <div className="math-element__plot-legend">
-          {plot.series.map((series, i) => {
-            const html = texToHtml(series.tex)
+          {legend.map((row, i) => {
+            const html = texToHtml(row.tex)
             return (
               <span key={i} className="math-element__plot-key">
-                <span className="math-element__plot-swatch" style={{ background: SERIES_COLORS[i % SERIES_COLORS.length] }} />
-                {html === null ? series.name : <span className="math-element__tex" dangerouslySetInnerHTML={{ __html: html }} />}
+                <span className={`math-element__plot-swatch${row.dot ? ' is-dot' : ''}`} style={{ background: colorOf(row.color) }} />
+                {html === null ? row.name : <span className="math-element__tex" dangerouslySetInnerHTML={{ __html: html }} />}
               </span>
             )
           })}

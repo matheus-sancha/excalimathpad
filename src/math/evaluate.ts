@@ -38,7 +38,7 @@ import { createSolver, LayeredScope, type CompiledSolve, type SolveDetails, type
 import { readSolve } from './solveLine.ts'
 import { readRange } from './rangeLine.ts'
 import { readTable } from './tableLine.ts'
-import { PLOT_SIZES, readPlot, type PlotClause } from './plotLine.ts'
+import { PLOT_SIZES, readCircle, readPair, readPlot, SQUARE_SIZES, type PlotClause } from './plotLine.ts'
 import { createIndex, INDEX_FN, indexParts, readIndexes, withoutIndexes } from './indexes.ts'
 import { comparisonSignatures, createIf, IF_FN, strictConditionals } from './conditionals.ts'
 import { AGGREGATES, createRanges, isSheetList, listSummary, MAX_POINTS, SheetList, type Point } from './lists.ts'
@@ -430,6 +430,19 @@ export interface PlotView {
   marks: readonly { x: number; label: string }[]
   /** Points where a series failed: a red × on the x axis, with the message on hover. */
   failed: readonly { x: number; message: string }[]
+  /**
+   * Labelled dots (M4e): `plot(x, y)` of two single values, then each `point`
+   * clause, in the axes' units, each with its coordinates' label and its
+   * legend row.
+   */
+  dots: readonly { x: number; y: number; label: string; name: string; tex: string }[]
+  /** Circles (M4e): the centre, and the radius along each axis, in the axes' units. */
+  circles: readonly { cx: number; cy: number; rx: number; ry: number; name: string; tex: string }[]
+  /**
+   * Equal scales (M4e, from `equal` or a circle): how many of the y axis's
+   * units make one of the x axis's (1 when they share a unit). Null without.
+   */
+  equal: number | null
   labelsDirect: boolean
   points: boolean
   width: number
@@ -535,6 +548,10 @@ type ParsedLine =
       /** The clauses' expressions, parsed: each mark, and each range's ends. */
       marks: readonly { node: MathNode; text: string }[]
       ranges: readonly { axis: 'x' | 'y'; start: MathNode; end: MathNode; text: string }[]
+      /** Each `point` clause: its pair, null when the text isn't one (M4e). */
+      points: readonly { pair: readonly [MathNode, MathNode] | null; text: string }[]
+      /** Each `circle` clause: its centre (null for the origin) and radius (M4e). */
+      circles: readonly { centre: readonly [MathNode, MathNode] | null; radius: MathNode; text: string }[]
       defines: readonly string[]
       note: string | null
       format: LineFormat
@@ -1197,8 +1214,10 @@ export function evaluateSheet(
     })
     const [xArg, ...yArgs] = line.args
     const xList = values[0]
-    if (!isSheetList(xList)) throw new SheetError(`x must be a list: ${xArg.text} is a single value`)
-    const length = xList.length
+    // Two single values are one labelled dot (M4e); any other single x is still an error.
+    const single = line.args.length === 2 && !isSheetList(xList) && !isSheetList(values[1])
+    if (!isSheetList(xList) && !single) throw new SheetError(`x must be a list: ${xArg.text} is a single value`)
+    const length = isSheetList(xList) ? xList.length : 1
     values.forEach((value, i) => {
       if (isSheetList(value) && value.length !== length) {
         throw new SheetError(`${xArg.text} has ${length} values, ${line.args[i].text} has ${value.length}`)
@@ -1209,12 +1228,15 @@ export function evaluateSheet(
 
     // Each series' kind: one per plot (section 10).
     const ys = yArgs.map((arg, i) => ({ arg, points: pointsOf(values[i + 1]) }))
-    ys.forEach(({ arg, points }) => {
-      if (points.every((point) => !point.ok)) {
-        const failure = failureOf(new SheetList(points, { name: xArg.text, list: xList }))
-        throw new SheetError(`${arg.text}: every point failed. ${failure?.replace(/^\d+ of \d+ points failed\. /, '') ?? ''}`)
-      }
-    })
+    if (!single) {
+      const xs = xList as SheetList
+      ys.forEach(({ arg, points }) => {
+        if (points.every((point) => !point.ok)) {
+          const failure = failureOf(new SheetList(points, { name: xArg.text, list: xs }))
+          throw new SheetError(`${arg.text}: every point failed. ${failure?.replace(/^\d+ of \d+ points failed\. /, '') ?? ''}`)
+        }
+      })
+    }
     const kinds = ys.map(({ points }) => kindName(points.find((point) => point.ok)!))
     const other = kinds.findIndex((kind) => kind !== kinds[0])
     if (other !== -1) {
@@ -1223,27 +1245,35 @@ export function evaluateSheet(
       )
     }
 
-    const xAxis = axisUnit(xArg, pointsOf(xList))
-    const yAxis = axisUnit(ys[0].arg, ys.flatMap(({ points }) => points))
+    const xPoints = pointsOf(xList)
+    const xAxis = axisUnit(xArg, xPoints, single)
+    const yAxis = axisUnit(ys[0].arg, ys.flatMap(({ points }) => points), single)
     const numbers = (points: readonly Point[], unit: ShownUnit | null) =>
       points.map((point) => (point.ok ? numberIn(point.value, unit) : null))
-    const x = numbers(xList.points, xAxis.unit)
-    const series = ys.map(({ arg, points }) => ({
-      name: arg.text,
-      tex: tableHeaderTex(arg.node, names),
-      values: numbers(points, yAxis.unit),
-    }))
+    const x = single ? [] : numbers(xPoints, xAxis.unit)
+    const series = single
+      ? []
+      : ys.map(({ arg, points }) => ({
+          name: arg.text,
+          tex: tableHeaderTex(arg.node, names),
+          values: numbers(points, yAxis.unit),
+        }))
 
     const failed: { x: number; message: string }[] = []
-    ys.forEach(({ points }) =>
-      points.forEach((point, i) => {
-        const at = x[i]
-        if (!point.ok && at !== null) failed.push({ x: at, message: point.message })
-      }),
-    )
-    const firstFailed = ys.map(({ points }) => new SheetList(points, { name: xArg.text, list: xList }))
-      .map(failureOf)
-      .find((message) => message !== null)
+    let firstFailed: string | null | undefined = null
+    if (!single) {
+      const xs = xList as SheetList
+      ys.forEach(({ points }) =>
+        points.forEach((point, i) => {
+          const at = x[i]
+          if (!point.ok && at !== null) failed.push({ x: at, message: point.message })
+        }),
+      )
+      firstFailed = ys
+        .map(({ points }) => new SheetList(points, { name: xArg.text, list: xs }))
+        .map(failureOf)
+        .find((message) => message !== null)
+    }
 
     const has = (kind: PlotClause['kind']) => line.clauses.some((clause) => clause.kind === kind)
     const logOn = (axis: 'x' | 'y') =>
@@ -1272,14 +1302,88 @@ export function evaluateSheet(
       if (n === null || isSheetList(value)) throw new SheetError(`mark ${text}: one value of x's kind`)
       return { x: n, label: `${text} = ${display.show(value, xAxis.unit, settings)}` }
     })
+
+    // Equal scales (M4e): from `equal` or a circle, on x and y of one kind.
+    const equal = has('equal') || line.circles.length > 0
+    if (equal && !sameKind(xAxis.reference, yAxis.reference)) throw new SheetError('equal scales need x and y of the same kind')
+    if (equal && line.ranges.some((r) => r.axis === 'x') && line.ranges.some((r) => r.axis === 'y')) {
+      throw new SheetError('equal with both x and y ranges typed: leave one out')
+    }
+    /** One value of a clause, or null when it is a list or not of `axis`'s kind. */
+    const single1 = (node: MathNode, axis: typeof xAxis): { value: unknown; n: number } | null => {
+      if (listsIn(node).length > 0) return null
+      const value: unknown = node.compile().evaluate(scope)
+      if (isSheetList(value)) return null
+      const n = numberIn(value, axis.unit, axis.reference)
+      return n === null || !Number.isFinite(n) ? null : { value, n }
+    }
+    const pointLabel = (vx: unknown, vy: unknown): string => {
+      const part = (value: unknown, unit: ShownUnit | null) => {
+        const shown = display.show(value, unit, settings)
+        const split = leadingNumber(shown)
+        const minus = (text: string) => text.replace(/^-/, '\u2212')
+        return split ? { number: minus(split.number), unit: split.rest.trim(), whole: minus(shown) } : { number: shown, unit: '', whole: shown }
+      }
+      const a = part(vx, xAxis.unit)
+      const b = part(vy, yAxis.unit)
+      if (a.unit === b.unit) return `(${a.number}, ${b.number})${a.unit === '' ? '' : ` ${a.unit}`}`
+      return `(${a.whole}, ${b.whole})`
+    }
+    const dots: PlotView['dots'][number][] = []
+    if (single) {
+      const at = { x: numberIn(values[0], xAxis.unit), y: numberIn(values[1], yAxis.unit) }
+      if (at.x === null || !Number.isFinite(at.x)) throw new SheetError(`x must be a list: ${xArg.text} is a single value`)
+      if (at.y === null || !Number.isFinite(at.y)) throw new SheetError(`a plot needs x and at least one y: plot(Q_s, Hs(Q_s))`)
+      dots.push({
+        x: at.x,
+        y: at.y,
+        label: pointLabel(values[0], values[1]),
+        name: `${ys[0].arg.text} against ${xArg.text}`,
+        tex: `${tableHeaderTex(ys[0].arg.node, names)}\\text{ against }${tableHeaderTex(xArg.node, names)}`,
+      })
+    }
+    for (const { pair, text } of line.points) {
+      const wrong = () => new SheetError(`point ${text}: a point is two single values, (x, y)`)
+      if (pair === null) throw wrong()
+      const px = single1(pair[0], xAxis)
+      const py = single1(pair[1], yAxis)
+      if (px === null || py === null) throw wrong()
+      dots.push({
+        x: px.n,
+        y: py.n,
+        label: pointLabel(px.value, py.value),
+        name: text,
+        tex: `\\left(${tableHeaderTex(pair[0], names)},\\;${tableHeaderTex(pair[1], names)}\\right)`,
+      })
+    }
+    const circles = line.circles.map(({ centre, radius, text }) => {
+      let cx = 0
+      let cy = 0
+      if (centre !== null) {
+        const a = single1(centre[0], xAxis)
+        const b = single1(centre[1], yAxis)
+        if (a === null || b === null) throw new SheetError(`circle ${text}: the centre is two single values, (x0, y0)`)
+        cx = a.n
+        cy = b.n
+      }
+      const r = single1(radius, xAxis)
+      const ry = r && numberIn(r.value, yAxis.unit, yAxis.reference)
+      if (r === null || ry === null || !(r.n > 0) || !(ry > 0)) {
+        throw new SheetError(`circle ${text}: the radius is one positive value of the axes' kind`)
+      }
+      const centreTex = centre === null ? '' : `\\left(${tableHeaderTex(centre[0], names)},\\;${tableHeaderTex(centre[1], names)}\\right)\\;`
+      return { cx, cy, rx: r.n, ry, name: `circle ${text}`, tex: `\\text{circle }${centreTex}${tableHeaderTex(radius, names)}` }
+    })
     const size = line.clauses.find((clause) => clause.kind === 'size')
+    const sized = size?.kind === 'size' ? size.size : 'M'
     const title = line.clauses.find((clause) => clause.kind === 'title')
     const bracket = (unit: string) => (unit === '' ? '' : ` [${unit.replace(/ \/ /g, '/')}]`)
+    const yLabel = single ? ys[0].arg.text : series.map((s) => s.name).join(', ')
     return {
       view: {
         x: { label: `${xArg.text}${bracket(xAxis.text)}`, unit: xAxis.text, log: logOn('x'), domain: domain('x'), values: x },
         y: {
-          label: `${series.map((s) => s.name).join(', ')}${bracket(yAxis.text)}`,
+          label: `${yLabel}${bracket(yAxis.text)}`,
           unit: yAxis.text,
           log: logOn('y'),
           domain: domain('y'),
@@ -1287,24 +1391,46 @@ export function evaluateSheet(
         series,
         marks,
         failed,
+        dots,
+        circles,
+        equal: equal ? yUnitsPerX(xAxis, yAxis, [...circles.map((c) => c.rx), ...dots.map((d) => d.x), ...x]) : null,
         labelsDirect: has('labels-direct'),
         points: has('points'),
-        ...PLOT_SIZES[size?.kind === 'size' ? size.size : 'M'],
+        ...(equal ? { width: SQUARE_SIZES[sized], height: SQUARE_SIZES[sized] } : PLOT_SIZES[sized]),
         title: title?.kind === 'title' ? title.text : null,
       },
       failed: firstFailed ?? null,
     }
   }
 
+  /**
+   * How many of the y axis's units make one of the x axis's, for equal scales
+   * (section 10, M4e): read off one non-zero x value, in each axis's unit.
+   */
+  function yUnitsPerX(xAxis: { unit: ShownUnit | null }, yAxis: { unit: ShownUnit | null }, xs: readonly (number | null)[]): number {
+    const at = xs.find((n) => n !== null && n !== 0 && Number.isFinite(n))
+    if (at === undefined || at === null) return 1
+    const value = xAxis.unit === null ? at : xAxis.unit === 'percent' ? at / 100 : math.unit(at, xAxis.unit.formatUnits())
+    const inY = numberIn(value, yAxis.unit)
+    return inY === null || !Number.isFinite(inY) || inY === 0 ? 1 : inY / at
+  }
+
   /** An axis's unit: its argument's `in`, else its list line's, else the system's for its largest value. */
   function axisUnit(
     arg: { node: MathNode; display: DisplayUnit | null },
     points: readonly Point[],
+    single = false,
   ): { unit: ShownUnit | null; text: string; reference: unknown } {
     const ok = points.filter((point): point is Extract<Point, { ok: true }> => point.ok)
     const named = isSymbolNode(arg.node) ? listUnits.get(arg.node.name) : undefined
     let unit: ShownUnit | null =
       arg.display?.kind === 'unit' ? arg.display.unit : arg.display?.kind === 'percent' ? 'percent' : (named?.unit ?? null)
+    // A single value's axis takes the one unit it carries, as `dx = 0.08 mm` was typed (M4e).
+    const own = single ? ok[0]?.value : undefined
+    if (unit === null && math.isUnit(own) && own.units.length === 1 && own.units[0].power === 1) {
+      const target = display.readTarget(own.formatUnits())
+      if (target?.kind === 'unit') unit = target.unit
+    }
     if (unit === null && ok.length > 0) {
       const largest = ok.reduce((a, b) => (magnitude(b.value) > magnitude(a.value) ? b : a))
       const rest = leadingNumber(display.show(largest.value, null, settings))?.rest.trim() ?? ''
@@ -1810,6 +1936,22 @@ function parseLine(text: string): ParsedLine {
             ? [{ axis: clause.axis, start: parseSheet(clause.start), end: parseSheet(clause.end), text: `${clause.start} .. ${clause.end}` }]
             : [],
         ),
+        points: plotForm.clauses.flatMap((clause) => {
+          if (clause.kind !== 'point') return []
+          const pair = readPair(clause.expression)
+          return [{ pair: pair && ([parseSheet(pair[0]), parseSheet(pair[1])] as const), text: clause.expression }]
+        }),
+        circles: plotForm.clauses.flatMap((clause) => {
+          if (clause.kind !== 'circle') return []
+          const { centre, radius } = readCircle(clause.expression)
+          return [
+            {
+              centre: centre && ([parseSheet(centre[0]), parseSheet(centre[1])] as const),
+              radius: parseSheet(radius),
+              text: clause.expression,
+            },
+          ]
+        }),
         defines: [],
         note: form.note,
         format: form.format,

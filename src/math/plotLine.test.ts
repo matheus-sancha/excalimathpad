@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { readPlot, splitClauses, writePlotClauses } from './plotLine.ts'
+import { readCircle, readPair, readPlot, splitClauses, writePlotClauses } from './plotLine.ts'
 
 describe('readPlot (docs/spec-v1.md section 10, Plots)', () => {
   it('reads the arguments, each with its own unit, and the clauses', () => {
@@ -29,6 +29,26 @@ describe('readPlot (docs/spec-v1.md section 10, Plots)', () => {
       { kind: 'size', size: 'L' },
       { kind: 'title', text: 'Pump, system' },
     ])
+  })
+
+  it('reads point, circle and equal (M4e)', () => {
+    expect(readPlot('plot(dx, dy), point (a, b), point(c, d), circle T_p / 2, circle (x0, y0) r, equal, points')?.clauses).toEqual([
+      { kind: 'point', expression: '(a, b)' },
+      { kind: 'point', expression: '(c, d)' },
+      { kind: 'circle', expression: 'T_p / 2' },
+      { kind: 'circle', expression: '(x0, y0) r' },
+      { kind: 'equal' },
+      { kind: 'points' },
+    ])
+  })
+
+  it('reads a pair, and a circle’s centre only when its bracket holds two values', () => {
+    expect(readPair('(dx, max(a, b))')).toEqual(['dx', 'max(a, b)'])
+    expect(readPair('(dx)')).toBeNull()
+    expect(readPair('(a, b) c')).toBeNull()
+    expect(readCircle('(1 m, 2 m) r')).toEqual({ centre: ['1 m', '2 m'], radius: 'r' })
+    expect(readCircle('(T_p) / 2')).toEqual({ centre: null, radius: '(T_p) / 2' })
+    expect(readCircle('T_p / 2')).toEqual({ centre: null, radius: 'T_p / 2' })
   })
 
   it('keeps an unknown clause, for the line’s error', () => {
@@ -64,7 +84,7 @@ describe('writePlotClauses (the ⚙ popover)', () => {
   })
 
   it('writes clauses that read back the same', () => {
-    const clauses = readPlot('plot(x, y), mark a, labels direct, points, y log, x 0 .. 10, size S, title "T, U"')!.clauses
+    const clauses = readPlot('plot(x, y), mark a, point (b, c), circle (0, 1) r, labels direct, points, y log, x 0 .. 10, equal, size S, title "T, U"')!.clauses
     expect(readPlot(writePlotClauses('plot(x, y)', clauses))!.clauses).toEqual(clauses)
   })
 })

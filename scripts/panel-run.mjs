@@ -29,6 +29,14 @@
 //   with no chart; a table of 3 columns and 9 rows whole, and one of 8
 //   columns scaled down to the box (section 17's check); and the sample live
 //   as the line is typed, with its stored format, a true rule and its note.
+// - The charts (section 10, Plots, M4e, #200), in light and dark: the
+//   true-position chart at S, M and L is square, 220, 280 and 360 px, its
+//   circle round to a pixel, framed, with zero lines and no grid; a point's
+//   label stays inside the frame with the point at the circle's edge and at
+//   the chart's edge, left of the dot where the right has no room, haloed;
+//   and no tick number, axis title or mark's label runs past the chart's box,
+//   on these, on the pump sheet's chart (its legend, grid and mark kept) and
+//   on charts made to push text out (a mark at each edge, huge tick numbers).
 //
 // Run: `node scripts/panel-run.mjs` (`npm run test:panel`), after
 // `npm run build`. PANEL_RUN_SHOTS=<folder> keeps a screenshot of each step.
@@ -118,6 +126,38 @@ const READ = `
     })
     const sideways = [side, ...side.querySelectorAll('*')].filter((e) => e.offsetParent && e.scrollWidth > e.clientWidth + 1 && !e.matches('input, textarea, select, .sheet-tab, .sheet-tab__label, svg, svg *, .katex *') && getComputedStyle(e).overflowX !== 'visible')
     return { controls: shown.length, cut: cut.map(name), sideways: sideways.map(name) }
+  }
+  // Each chart as Chromium lays it out (section 10, Plots, M4e).
+  window.__charts = () => {
+    const box = (element) => {
+      if (!element) return null
+      const { left, top, right, bottom, width, height } = element.getBoundingClientRect()
+      return { left, top, right, bottom, width, height }
+    }
+    return [...document.querySelectorAll('.math-overlay > [data-anchor-id]')].filter((e) => e.querySelector('.math-element__plot-chart > svg')).map((element) => {
+      const svg = element.querySelector('.math-element__plot-chart > svg')
+      const frame = svg.querySelector('[aria-label="frame"]')
+      return {
+        id: element.getAttribute('data-anchor-id'),
+        svg: box(svg),
+        body: box(element.querySelector('.math-element__body')),
+        texts: [...svg.querySelectorAll('text')].map((t) => ({ text: t.textContent, box: box(t) })),
+        circles: [...svg.querySelectorAll('ellipse')].map(box),
+        dots: [...svg.querySelectorAll('[aria-label="dot"] circle')].filter((c) => c.getAttribute('r') === '3.5').map(box),
+        labels: [...svg.querySelectorAll('.plot-point-label text')].map((t) => {
+          const g = t.closest('.plot-point-label')
+          return { text: t.textContent, box: box(t), halo: t.getAttribute('stroke') ?? g.getAttribute('stroke'), paint: t.getAttribute('paint-order') ?? g.getAttribute('paint-order') }
+        }),
+        frame: !!frame,
+        frameBox: box(frame) ?? box(svg),
+        zero: svg.querySelectorAll('[aria-label="rule"]').length,
+        grid: !!svg.querySelector('[aria-label="y-grid"]'),
+        lines: svg.querySelectorAll('[aria-label="line"] path').length,
+        legend: [...element.querySelectorAll('.math-element__plot-key')].map((k) => k.textContent),
+        title: element.querySelector('.math-element__plot-title')?.textContent ?? null,
+        filter: getComputedStyle(element.closest('.math-overlay') ?? element).filter,
+      }
+    })
   }
   // The Format tab's sample as it is laid out (section 4, Format tab, M4e).
   window.__sample = () => {
@@ -276,6 +316,35 @@ const sheet = JSON.stringify({
   excalimathpad: { format: 1 },
 })
 
+// The charts' sheet (section 10, Plots, M4e): the true-position chart at each size, a point at
+// the circle's edge and at the chart's edges, the pump sheet's chart, and charts made to push text out.
+const PUMP_LINES = [...(await readFile(join(root, 'docs/acceptance/pump-sizing.md'), 'utf8')).matchAll(/^\| (c|\d+[a-z]?) \| `(.+?)` \|/gm)]
+  .filter(([, id]) => id !== '30')
+  .map(([, , source]) => source)
+const CHARTS = [
+  { id: 'tp-S', x: 40, y: 260, side: 220, source: 'plot(dx, dy), circle T_p / 2, title "True position", size S' },
+  { id: 'tp-M', x: 380, y: 260, side: 280, source: 'plot(dx, dy), circle T_p / 2, title "True position"' },
+  { id: 'tp-L', x: 780, y: 260, side: 360, source: 'plot(dx, dy), circle T_p / 2, title "True position", size L' },
+  { id: 'edge-circle', x: 40, y: 800, side: 280, source: 'plot(e_x, e_y), circle T_p / 2' },
+  { id: 'edge-chart', x: 440, y: 800, side: 280, source: 'plot(e_x, e_y), circle T_p / 2, x -0.125 mm .. 0.125 mm' },
+  { id: 'edge-top', x: 840, y: 800, side: 280, source: 'plot(e_y, e_x), circle T_p / 2, y -0.125 mm .. 0.125 mm' },
+  { id: 'marks', x: 40, y: 1250, source: 't = 0 .. 10\nplot(t, t * 1.2e8 + 3e7), mark 9.9, mark 0.05, size S' },
+  { id: 'direct', x: 500, y: 1250, source: 'u = 0 .. 10\nplot(u, 3 u + 1, u^2), labels direct, point (9.8, 99), size S' },
+  { id: 'pump', x: 1250, y: 40, source: PUMP_LINES.join('\n') },
+]
+const CHART_SHEET = JSON.stringify({
+  type: 'excalidraw',
+  version: 2,
+  elements: [
+    { id: 'calc', type: 'rectangle', x: 40, y: 40, width: 160, height: 60, customData: { kind: 'math', source: 'dx = 0.08 mm\ndy = -0.05 mm\nT_p = 0.25 mm\ne_x = 0.125 mm\ne_y = 0 mm' } },
+    ...CHARTS.map(({ id, x, y, source }) => ({ id, type: 'rectangle', x, y, width: 160, height: 60, customData: { kind: 'math', source } })),
+  ],
+  appState: {},
+  files: {},
+  excalimathpad: { format: 2 },
+})
+const inside = (inner, outer) => !!inner && !!outer && inner.left >= outer.left - 0.5 && inner.right <= outer.right + 0.5 && inner.top >= outer.top - 0.5 && inner.bottom <= outer.bottom + 0.5
+
 const { chromium } = createRequire(import.meta.url)('playwright')
 const browser = await chromium.launch()
 const manifest = JSON.parse(await readFile(join(dist, 'manifest.json'), 'utf8'))
@@ -285,8 +354,8 @@ if (SHOTS) await mkdir(SHOTS, { recursive: true })
 const px = (n) => (n === null || n === undefined ? 'none' : Math.round(n * 10) / 10)
 
 /** A window of `width` px on `url`, and `act` with its checks. */
-async function run(where, width, act, { data = null, url = '/' } = {}) {
-  const context = await browser.newContext({ viewport: { width, height: 800 }, deviceScaleFactor: 1 })
+async function run(where, width, act, { data = null, url = '/', height = 800 } = {}) {
+  const context = await browser.newContext({ viewport: { width, height }, deviceScaleFactor: 1 })
   // The web app asks Excalidraw's CDN for its canvas fonts: nothing leaves this machine.
   await context.route((to) => !to.href.startsWith(origin), (route) => route.abort())
   const tab = await context.newPage()
@@ -657,6 +726,48 @@ try {
     })
   }
 
+
+  // The charts (section 10, Plots, M4e): nothing past the chart, a round circle, a label inside.
+  for (const theme of ['light', 'dark']) {
+    await run(`charts ${theme}`, 2200, async ({ tab, row, start }) => {
+      await start({ theme }, CHART_SHEET)
+      await tab.waitForFunction((n) => document.querySelectorAll('.math-element__plot-chart > svg').length === n, CHARTS.length, { timeout: 60_000 })
+      await tab.waitForTimeout(800)
+      if (SHOTS) await tab.screenshot({ path: join(SHOTS, `charts-${theme}.png`) })
+      const charts = await tab.evaluate(() => window.__charts())
+      const byId = Object.fromEntries(charts.map((c) => [c.id, c]))
+      row('every chart is drawn', CHARTS.every(({ id }) => byId[id]), charts.map((c) => c.id).join(', '))
+      row('in dark, the math darkens through the overlay’s filter', theme === 'light' ? charts.every((c) => c.filter === 'none') : charts.every((c) => c.filter !== 'none'), charts[0]?.filter)
+      for (const { id, side } of CHARTS) {
+        const c = byId[id]
+        if (!c) continue
+        const out = c.texts.filter((t) => !inside(t.box, c.svg))
+        row(`${id}: no text runs past the chart`, out.length === 0, out.length ? out.map((t) => `"${t.text}" ${px(Math.max(c.svg.left - t.box.left, t.box.right - c.svg.right, c.svg.top - t.box.top, t.box.bottom - c.svg.bottom))} px out`).join('; ') : `${c.texts.length} texts in ${px(c.svg.width)} × ${px(c.svg.height)}`)
+        row(`${id}: the chart is inside its element`, inside(c.svg, c.body), `chart ${px(c.svg.left)}–${px(c.svg.right)}, element ${px(c.body.left)}–${px(c.body.right)}`)
+        if (side) {
+          row(`${id}: square, ${side} px a side`, Math.abs(c.svg.width - side) < 0.5 && Math.abs(c.svg.height - side) < 0.5, `${px(c.svg.width)} × ${px(c.svg.height)}`)
+          row(`${id}: the circle is round, its box square to a pixel`, c.circles.length > 0 && c.circles.every((e) => Math.abs(e.width - e.height) <= 1 && e.width > 20), c.circles.map((e) => `${px(e.width)} × ${px(e.height)}`).join(', '))
+          row(`${id}: a frame and zero lines, no grid`, c.frame && c.zero === 2 && !c.grid, `frame ${c.frame}, zero lines ${c.zero}, grid ${c.grid}`)
+          row(`${id}: the point’s label is inside the frame, haloed`, c.labels.length === 1 && c.labels.every((l) => inside(l.box, c.frameBox) && l.halo === '#ffffff' && l.paint === 'stroke'), c.labels.map((l) => `"${l.text}" ${px(l.box.left)}–${px(l.box.right)} in ${px(c.frameBox.left)}–${px(c.frameBox.right)}`).join('; '))
+        }
+      }
+      const tp = byId['tp-M']
+      row('the true-position chart: one point, its coordinates beside it, and one circle', tp && tp.dots.length === 1 && tp.circles.length === 1 && tp.labels[0]?.text === '(0.08, −0.05) mm' && (tp.labels[0].box.left > tp.dots[0].right || tp.labels[0].box.right < tp.dots[0].left) && tp.legend.length === 2 && tp.title === 'True position', tp && `label "${tp.labels[0]?.text}", legend ${tp.legend.length} rows, title ${tp.title}`)
+      row('its axes are titled from its arguments', tp && tp.texts.some((t) => t.text === '↑ dy [mm]') && tp.texts.some((t) => t.text === 'dx [mm] →'), tp && tp.texts.filter((t) => /\[/.test(t.text)).map((t) => t.text).join(', '))
+      // The point at the circle's edge and at the chart's edge: its label turns left, inside the frame.
+      for (const id of ['edge-circle', 'edge-chart']) {
+        const c = byId[id]
+        const dot = c?.dots[0]
+        const label = c?.labels[0]
+        row(`${id}: the label is left of the point, which is at the ${id === 'edge-chart' ? 'chart’s right edge' : 'circle’s edge'}`, dot && label && label.box.right <= dot.left && inside(label.box, c.frameBox) && (id !== 'edge-chart' || Math.abs((dot.left + dot.right) / 2 - c.frameBox.right) < 1.5), dot && label && `dot at ${px((dot.left + dot.right) / 2)}, label ${px(label.box.left)}–${px(label.box.right)}, frame to ${px(c.frameBox.right)}`)
+      }
+      const top = byId['edge-top']
+      row('a point at the chart’s top edge keeps its label inside the frame', top && top.labels[0] && inside(top.labels[0].box, top.frameBox), top?.labels[0] && `label ${px(top.labels[0].box.top)}–${px(top.labels[0].box.bottom)}, frame from ${px(top.frameBox.top)}`)
+      const pump = byId.pump
+      row('the pump chart keeps its size, legend, grid and mark', pump && Math.abs(pump.svg.width - 480) < 0.5 && Math.abs(pump.svg.height - 280) < 0.5 && pump.legend.length === 2 && pump.grid && !pump.frame && pump.texts.some((t) => /^Q_op = /.test(t.text)) && pump.lines === 2, pump && `${px(pump.svg.width)} × ${px(pump.svg.height)}, legend ${pump.legend.length}, grid ${pump.grid}, lines ${pump.lines}`)
+    }, { data: null, height: 1700 })
+  }
+
   // The web app: the width survives a reload, in the browser's own storage.
   await run('web', 1280, async ({ tab, row, read, drag, docked }) => {
     const open = async () => {
@@ -692,4 +803,4 @@ if (failed.length || errors.length || results.length === 0) {
   for (const error of errors) console.error(`  - ${error}`)
   process.exit(1)
 }
-console.log('Panel run passed: 320 px, icon tabs, the drag handle, docking by width, every tab usable at 280 px, and the Format tab’s sample.')
+console.log('Panel run passed: 320 px, icon tabs, the drag handle, docking by width, every tab usable at 280 px, the Format tab’s sample, and the charts.')

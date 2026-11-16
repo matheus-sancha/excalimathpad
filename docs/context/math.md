@@ -209,10 +209,18 @@ slot is `data-unit-slot="line:column"`, and choosing a unit writes it onto
 that argument (`writeArgumentUnit`). A **plot line** (`plotLine.ts`:
 `plot(x, y1, …)`, then clauses) gives `SheetLine.plot`, a `PlotView` of plain
 numbers in each axis's unit (null for a failed point), marks, failed points
-and settings. `PlotChart.tsx` draws it under the line with Observable Plot,
-loaded once behind `import()` (`plotDrawing.ts`), rebuilt only when the view
-changes; legend and title are HTML, typeset; each failed point's × carries
-its message as `data-tip`. Its ⚙ (`data-unit-slot="line:gear"`, the slot
+and settings. From M4e (#200) it also holds `dots` (the two-value form and
+each `point`, with its label), `circles` (centre and radius along each axis)
+and `equal` (y's units per x's unit, for equal scales; the size is then
+square); `readPair` and `readCircle` (`plotLine.ts`) read the clauses' text
+and `runPlot` checks their values (section 13's M4e rows). `PlotChart.tsx`
+draws it under the line with Observable Plot, imported by name in
+`plotMarks.ts` and loaded once behind `import()` (`plotDrawing.ts`), rebuilt
+only when the view changes; `plotLayout.ts` (pure) works out the ranges, the
+equal scales, the ticks and all four margins first, restating D3's ticks and
+tick format so a margin fits the very text Plot draws; legend and title are
+HTML, typeset; each failed point's × carries its message as `data-tip`. The
+panel run holds the charts in Chromium (jsdom lays nothing out). Its ⚙ (`data-unit-slot="line:gear"`, the slot
 target's column `GEAR`) opens `PlotSettings.tsx` on the canvas's click, as a
 unit slot does; each change hands back the clause list, which the overlay
 writes with `writePlotClauses` as one line commit.
