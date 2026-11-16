@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import { TEXT_COLORS, type TextColor } from '../math/lineForm.ts'
+import type { PageSetting } from '../print/pages.ts'
 import {
   isCustom,
   KIND_LABELS,
@@ -13,17 +14,24 @@ import {
 
 /**
  * The Settings tab (docs/spec-v1.md section 8): the unit system, Custom's
- * kind → unit table, Digits and the Result colour. A change goes straight to the sheet: it
- * re-shows every result, is saved with the sheet and isn't part of undo. The
- * Page row arrives in M5.
+ * kind → unit table, Digits, the Result colour and, from M5, the Page (section
+ * 11). A change goes straight to the sheet: it is saved with the sheet and
+ * isn't part of undo.
  */
 
-/** What the tab edits; the sheet's settings carry more (the page). */
+/** What the tab edits. */
 export interface SettingsValue {
   units: UnitSettings
   digits: number
   resultColor: TextColor
+  page: PageSetting
 }
+
+const SIZES: PageSetting['size'][] = ['A4', 'Letter']
+const ORIENTATIONS: { value: PageSetting['orientation']; label: string }[] = [
+  { value: 'portrait', label: 'Portrait' },
+  { value: 'landscape', label: 'Landscape' },
+]
 
 const SYSTEMS: { value: UnitSystemName; label: string }[] = [
   { value: 'si-prefixed', label: 'SI with prefixes' },
@@ -40,6 +48,7 @@ export function SettingsTab<T extends SettingsValue>({
 }) {
   // Custom with nothing chosen yet still shows its table.
   const [customOpen, setCustomOpen] = useState(false)
+  const pageLabel = useId()
   const custom = customOpen || isCustom(settings.units)
   const setUnits = (units: UnitSettings) => onChange({ ...settings, units })
   const base = { ...settings.units, custom: {} }
@@ -130,6 +139,42 @@ export function SettingsTab<T extends SettingsValue>({
           ))}
         </select>
       </label>
+
+      {/* The Page row (section 11): its two choices one under the other, so both fit at 280 px. */}
+      <div className="sheet-settings__field" role="group" aria-labelledby={pageLabel}>
+        <span id={pageLabel}>Page</span>
+        <span className="sheet-settings__page">
+          <select
+            aria-label="Paper size"
+            value={settings.page.size}
+            onChange={(event) =>
+              onChange({ ...settings, page: { ...settings.page, size: event.target.value as PageSetting['size'] } })
+            }
+          >
+            {SIZES.map((size) => (
+              <option key={size} value={size}>
+                {size}
+              </option>
+            ))}
+          </select>
+          <select
+            aria-label="Orientation"
+            value={settings.page.orientation}
+            onChange={(event) =>
+              onChange({
+                ...settings,
+                page: { ...settings.page, orientation: event.target.value as PageSetting['orientation'] },
+              })
+            }
+          >
+            {ORIENTATIONS.map((orientation) => (
+              <option key={orientation.value} value={orientation.value}>
+                {orientation.label}
+              </option>
+            ))}
+          </select>
+        </span>
+      </div>
     </div>
   )
 }

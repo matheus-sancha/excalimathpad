@@ -520,6 +520,21 @@ The items with a recorded result. Those still open are in
   one core of the build machine (4 cores), and 74 s inside `npm test` (the whole run 124 s), well
   under its 900 s limit. It stays in `npm run check`. Not timed on GitHub's runner itself.
 
+**M5**
+
+- Staggered side-by-side elements and the no-clean-gap fallback. **Passed (2026-11-16, #80), on boxes
+  measured in Chromium** (the panel run, the built plugin, rows read from the overlay by `printRows`):
+  two elements of 60 lines side by side, the second 12 units lower, rows 24.2 units tall, have no
+  clean gap, and A4 portrait cuts them at the page's bottom (40 to 1,018.9). **Found:** each element's
+  first row starts below its box's top, so the first build took the empty strip above the rows as a
+  clean gap and broke after 12 units; a gap above the page's first box no longer counts
+  ([section 11](spec-v1.md#11-print), As built). Also there: the pump sheet with its heading and
+  30-row table in one element 2,262 units tall, at 0.7 scale on A4 portrait, breaks once (2 pages), in a gap
+  inside the table, through no row, and the next page repeats the header; A4 landscape and Letter
+  give 4, 2 and 4 pages, every break in a gap. A rectangle taller than a page is cut, and a heading
+  beside the lines moves the break up to the gap between rows above it. Not run on paper: the print
+  view is #81.
+
 ## 18. Decision index
 
 | Ticket | Fed sections |

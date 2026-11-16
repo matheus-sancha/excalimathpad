@@ -6,7 +6,7 @@ a Vite + React + TypeScript app that builds to static files; there is no
 server. v1 target: for anyone, built around Matheus's own engineering work;
 free and best effort. M4d adds an Obsidian community plugin built from this
 source (`docs/spec-v1.md` section 12a, ADR 0006): **one source, two builds**.
-M4d and M4e are built; M5 leads to 1.0.0 (spec section 16).
+M4d and M4e are built; M5, being built, leads to 1.0.0 (spec section 16).
 
 This file holds the model, the terms, the load-bearing rules and where things
 are. It is read by every build session, so it has a budget
@@ -33,14 +33,12 @@ what to read for an issue and where to write.
   (`scripts/touch-run.mjs`, M4d, #147: the built plugin by touch, Playwright's
   `hasTouch`, at a phone and a tablet viewport, each as Android and as iOS;
   the phone with `Platform.isPhone`), and the **follow run** (`scripts/follow-run.mjs`,
-  0.2.1, #191: the built plugin with real keys at 1366 × 768 and 1000 × 800;
-  it types the true-position plot line near the window's bottom, presses
-  Enter and Esc, and fails if any box around the math was scrolled by the
-  browser, if the content isn't drawn where the overlay put it, or if the
-  caret is outside the visible area; and, M4e, the wrapping field, #196, and a
-  rule's condition, #197), and the **panel run** (`scripts/panel-run.mjs`,
+  0.2.1, #191: the built plugin with real keys, the math on its box and the
+  caret in view as a line is typed; its header lists the checks), and the
+  **panel run** (`scripts/panel-run.mjs`,
   M4e, #198: the Sheet panel's widths, docking, drag handle and 280 px, in
-  the built plugin and web app; the sample, #199; the charts, #200). `npm test` holds the **typing test**
+  the built plugin and web app; the sample, #199; the charts, #200; the Page
+  row and the page breaks, M5, #80). `npm test` holds the **typing test**
   (`src/typing.test.tsx`, M4e, #193: the guide's examples and the acceptance
   sheets, a character at a time); `npm run test:probe` is the **odd-values
   probe** (`src/oddValues.probe.tsx`), by hand before a release. `npm test`
@@ -106,7 +104,7 @@ an issue touches that module ([`CLAUDE.md`](CLAUDE.md) has the reading route).
   than 10,000 values or freeze, before math.js runs it. Reads the app's line forms before math.js
   (ADR 0005). Depends on: `mathjs`. [`docs/context/math.md`](docs/context/math.md)
 - **overlay** (`src/overlay/`) — draws math elements over the canvas as typeset grids, and
-  holds the line edit, the unit slot, tables and plots. Depends on: canvas, math, `katex`
+  holds the line edit, the unit slot, tables and plots. Depends on: canvas, math, print, `katex`
   (lazily). [`docs/context/overlay.md`](docs/context/overlay.md)
 - **file** (`src/file/`) — the sheet file (ADR 0004): format 2 and its migration from 1, the
   session (save, open, the clean mark, the recovery copy) over ports, and the vault's
@@ -120,7 +118,10 @@ an issue touches that module ([`CLAUDE.md`](CLAUDE.md) has the reading route).
   [`docs/context/guide.md`](docs/context/guide.md)
 - **panel** (`src/panel/`) — the Sheet panel's tabs, drawn inside Excalidraw's sidebar:
   Variables, Problems, Format with its Rules list, Symbols, Constants and Settings.
-  Depends on: math, overlay (KaTeX). [`docs/context/panel.md`](docs/context/panel.md)
+  Depends on: math, overlay (KaTeX), print. [`docs/context/panel.md`](docs/context/panel.md)
+- **print** (`src/print/`) — the print pages (spec section 11): `printPages`, one pure function
+  from the scene's boxes, the overlay's measured rows (`printRows`) and the Page to the pages and
+  their breaks. Depends on: nothing. [`docs/context/print.md`](docs/context/print.md)
 - **failure** (`src/failure/`) — unexpected failures (spec section 4): the boundary, the
   failure screen, Copy details and Report this error. `App` wraps the sheet in the view's
   boundary. Depends on: nothing. [`docs/context/failure.md`](docs/context/failure.md)

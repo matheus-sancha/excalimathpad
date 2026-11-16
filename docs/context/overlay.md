@@ -188,8 +188,12 @@ is a `Boundary` around the chart, whose fallback keeps the chart's box. A
 line's unexpected error shows its raw text under its message in the gutter's
 and the result cell's `data-tip`, on every hover. `onTyped` hands App the
 open text as it is set, before the render that draws it.
+`printRows.ts` reads a laid-out body's rows for the print pages (spec section
+11, M5, #80; [print](print.md)): the title, a failed element's notice, each
+line and comment, a plot line whole, a table line as its line, header row and
+rows, from the body's top in scene units, the canvas's zoom taken out.
 `caretRow.ts` gives the follow rule its row (0.2.1, #191): the open
 field's box and, in a wrapped field, the row the caret is on; narrowed to
 the caret, measured on the field's hidden copy, when the row is wider than
 the room. Depends on: canvas (anchor, size, selection and layer contracts, API types),
-math, `katex` (lazily).
+math, print (`PrintRow`), `katex` (lazily).
