@@ -264,6 +264,8 @@ A **range** is `from .. to step s`, and makes a **list**. A list shows as one su
 | `n[11]` | ● `n has 10 values` | |
 | `x_h = 0 .. 1 step 0.25` | `5 values, 0 … 1` | |
 | `x_h + n` | ● `x_h has 5 values, n has 10` | Lists on one line pair up point by point, so they need the same length |
+| `n_x = 1 .. 20000` | ● `n_x has more than 10,000 points` | A list holds at most 10,000 values |
+| `1:1e7` | ● `1:1e7 has more than 10,000 points` | math.js's own `a:b`, and its functions that build values such as `zeros(n)`, have the same limit |
 
 - Every function works point by point with no special syntax, solve functions included.
 - A function's body can't reach a list from outside: pass the list as an argument.
@@ -290,7 +292,7 @@ A **range** is `from .. to step s`, and makes a **list**. A list shows as one su
 
 ## 10. Plots
 
-`plot(x, y1, y2, …)` draws a chart **under its line**. `x` must be a list (two single values, `plot(dx, dy)`, draw one point), and every `y` is of one kind. Settings are clauses after it, separated by commas.
+`plot(x, y1, y2, …)` draws a chart **under its line**. `x` must be a list, and every `y` is of one kind; two single values, `plot(dx, dy)`, draw one point. Settings are clauses after it, separated by commas.
 
 | Write | Shows | Note |
 |---|---|---|
@@ -303,18 +305,47 @@ A **range** is `from .. to step s`, and makes a **list**. A list shows as one su
 | `plot(Q_p in m^3/hr, Hp(Q_p) in ft)` | A chart in m³/hr and ft | Each argument can carry its own unit |
 | `plot(2 m, Hp(Q_p))` | ● `x must be a list: 2 m is a single value` | |
 | `plot(Q_p, Hp(Q_p), Q_p)` | ● `Hp(Q_p) is a length, Q_p is a volume flow: one plot shows one kind` | |
+| `plot(Q_p, Hp(Q_p)), point (25 L/s, 23.75 m)` | A chart with the curve and a labelled dot on it | |
+| `dx = 0.08 mm` | — | |
+| `dy = -0.05 mm` | — | |
+| `plot(dx, dy)` | A chart with one dot, labelled (0.08, −0.05) mm | Two single values draw one point. The axes read `dx [mm]` and `dy [mm]`, in the unit the values were typed in |
+| `plot(dx, dy), circle 0.125 mm` | A square chart: the dot inside a circle | A circle is centred on the origin and gives the chart equal scales |
+| `plot(dx, dy), circle 2 s` | ● `circle 2 s: the radius is one positive value of the axes' kind` | |
+| `plot(Q_p, Hp(Q_p)), equal` | ● `equal scales need x and y of the same kind` | |
 
 | Clause | Means | Without it |
 |---|---|---|
 | `mark Q_op` | A dashed guide at that x, a dot on each curve and its value on top. Can repeat | No marks |
 | `labels direct` | Series names at the ends of the lines | A legend above the chart |
 | `points` | A dot at every point | Lines only |
+| `point (x, y)` | A dot at (x, y) with its coordinates beside it, over the curves. Can repeat | No points |
+| `circle r`, `circle (x0, y0) r` | An outline of radius `r` in the axes' units, centred on the origin or on (x0, y0). Gives the chart equal scales. Can repeat | No circles |
+| `equal` | Equal scales: a unit of x is as long as a unit of y. x and y must be of one kind | Each axis fits its own data |
 | `x log`, `y log` | A log axis; every value must be above 0 | Linear |
 | `x 0 L/s .. 40 L/s`, `y 0 m .. 40 m` | An axis range, in the axis's kind | Fits the data |
-| `size S`, `size L` | 360 × 220 or 640 × 360 | M, 480 × 280 |
+| `size S`, `size L` | 360 × 220 or 640 × 360; with equal scales, 220 or 360 square | M, 480 × 280; with equal scales, 280 square |
 | `title "…"` | A title above the chart | None |
 
+- **Equal scales,** from `equal` or a circle, widen the shorter axis around its middle. The chart then has a frame and a line through 0 on each axis, and no grid. With one axis range typed, that range is kept and the other axis widens; typing both is an error.
+- Nothing drawn runs past the chart: the tick numbers, the axis titles, a mark's value and a point's label all stay inside it.
+
 Hover a chart and click its **⚙** to set the same clauses without typing: Mark, Point, Circle, Series names, Points, x axis, y axis, Equal scales, Size and Title. Each change is written into the line. Charts are static: there is no zoom or pan. Double-click a chart to open its line.
+
+**A worked example: true position.** A hole's position tolerance, RFS, to ASME Y14.5: the measured deviations from the true position, the diameter of the zone the hole sits in, a pass or fail against the tolerance, and the point in its tolerance circle.
+
+```sheet
+# True position, RFS (ASME Y14.5)
+dx = 0.08 mm
+dy = -0.05 mm
+T_p = 0.25 mm
+TP = 2 sqrt(dx^2 + dy^2) in mm                    → 0.1887 mm
+check = if(TP <= T_p, "Pass", "Fail") @text-green if result == "Pass" @text-red if result == "Fail"   → Pass
+used = TP / T_p * 100                              → 75.47
+margin = T_p - TP in mm                            → 0.06132 mm
+plot(dx, dy), circle T_p / 2, title "True position"
+```
+
+`check` is green. Change `dx` to `0.12 mm` and it reads Fail, in red, `margin` goes below zero and the dot moves out of the circle. The two rules typed on the `check` line move beside it when you leave the line, and the Format tab's Rules list changes them from then on (see [Formatting](#12-formatting)). The tolerance is a diameter, so the circle's radius is `T_p / 2`; the name is `TP`, not `T`, which is the tesla.
 
 ## 11. Comments and notes
 
@@ -388,7 +419,7 @@ At 3.4 m/s the line is red; at 2.5 m/s, orange; at 1 m/s, blue.
 
 On a list or a table a rule is tested at each point: a table row whose point is true takes the format, and a list's summary takes it only when every point is true.
 
-**The Format tab.** At its top a sample draws the open line as the sheet will. Below it, one row of buttons per property: **Style** (B and U; I too on a comment line or the title), **Size** (S, M, L, XL, on a comment line or the title), **Align** (the title only), **Text** (six colours or none) and **Highlight** (five or none). Pressing a pressed button takes the format off. On a math line, the **Rules list** shows each rule with its condition, whether it is true now, ↑ ↓ to reorder and ✕ to remove; each condition is a text field on its row, with the line's suggestions: type or change it there, and press Enter. The line you are editing stays open meanwhile. **+ Add rule** adds a rule at the end, with the line's name already in its condition. A title's format is set only here, never typed.
+**The Format tab.** At its top a sample draws the open line as the sheet will, a little smaller, and wraps a long line to the panel's width; a plot line shows its line only, since its chart is on the sheet. Below it, one row of buttons per property: **Style** (B and U; I too on a comment line or the title), **Size** (S, M, L, XL, on a comment line or the title), **Align** (the title only), **Text** (six colours or none) and **Highlight** (five or none). Pressing a pressed button takes the format off. On a math line, the **Rules list** shows each rule with its condition, whether it is true now, ↑ ↓ to reorder and ✕ to remove; each condition is a text field on its row, with the line's suggestions: type or change it there, and press Enter. The line you are editing stays open meanwhile. **+ Add rule** adds a rule at the end, with the line's name already in its condition. A title's format is set only here, never typed.
 
 ## 13. The Symbols tab
 
@@ -523,6 +554,7 @@ Messages say what is wrong in plain words, in the result cell and in the Problem
 | `s_1 = solve x^2 = n_1, for x = 0 .. 9` | ● `a range solve can't use the list n_1; use a solve function with a guess` | |
 | `n_1[0]` | ● `n_1[0]: an index is a whole number from 1` | |
 | `T = 20 degC` | — ⚠ `T shadows the unit T` | `T` is the tesla. Name it `T_w` instead |
+| `help(sin)` | ● `help is not supported in a math element` | A few math.js functions are off in a sheet, such as `evaluate`, `config` and `simplify` |
 
 **Opening and saving:**
 
@@ -532,3 +564,15 @@ Messages say what is wrong in plain words, in the result cell and in the Problem
 | This file isn't a sheet, so it wasn't opened. | The file isn't a sheet or a drawing |
 | Couldn't save … | The save failed. Your work is still open: save again |
 | … changed elsewhere. Your version was saved beside it as … | In a vault: sync or another tab changed the sheet while you had unsaved work |
+
+**When the app itself fails.** These messages are a fault in Excalimathpad, not in your sheet. Each stays as small as what failed, and the rest keeps working:
+
+| Message | Means |
+|---|---|
+| this line hit an unexpected error in Excalimathpad | In the line's result cell, with the raw error on hover and in the Problems tab. The line shows as its plain source; the lines below still run |
+| this element hit an unexpected error in Excalimathpad | The element shows its lines as plain text under a red ●. You can still open and edit it |
+| this chart hit an unexpected error in Excalimathpad | In the chart's box. Its line stays |
+| this tab hit an unexpected error in Excalimathpad | In one tab of the Sheet panel. The other tabs keep working |
+| This sheet hit an unexpected error in Excalimathpad. | The whole view stopped. Your sheet is kept up to the last finished line, and the line you were typing, if one was open, is shown with **Copy**. **Reload the sheet** opens the kept sheet again. The failed view never writes the file |
+
+**To report one,** press **Copy details**, then **Report this error**, which opens the project's page for a new issue in your browser, with nothing filled in; paste the details there with the steps that led to it. The details hold the version, where it ran and the error itself, never your sheet's lines, names or values. The app sends nothing by itself. Both buttons are on the failure screen, on a failed element and on a failed line's row in the Problems tab.

@@ -31,7 +31,7 @@ Both read and write the same file, so a sheet moves between them as it is.
 
 Every line form, unit, setting, key and message is in the **[Math guide](docs/math-guide.md)**, with examples you can type as they are. It is also in the app, under **☰ → Math guide**, offline and in Obsidian too.
 
-A complete worked example is the [pump-sizing sheet](docs/acceptance/pump-sizing.md).
+Two complete worked examples are the [pump-sizing sheet](docs/acceptance/pump-sizing.md), with a table, a plot and a solve, and the [true-position sheet](docs/acceptance/true-position.md), a hole's position tolerance with a pass or fail and its point drawn in the tolerance circle.
 
 ## Privacy
 
@@ -39,13 +39,13 @@ A complete worked example is the [pump-sizing sheet](docs/acceptance/pump-sizing
 
 - **No network requests.** The plugin loads nothing from the internet and sends nothing to it. Every font is inside the plugin, embeds are off, and a link on the sheet opens your browser only when you click it.
 - **No telemetry and no account.**
-- **Nothing outside your vault.** Your sheets are files in the vault. The plugin's own memory (whether the panel is open, and light or dark) is in its `data.json`, through Obsidian.
+- **Nothing outside your vault.** Your sheets are files in the vault. The plugin's own memory (whether the panel is open, its width, and light or dark) is in its `data.json`, through Obsidian.
 - **It reads only what you open.** The plugin reads only the sheet open in its tab and an image you pick to place on it. It writes only that sheet, its `data.json`, the new sheets you create and a conflict copy when sync changes a sheet you are editing. It never lists, renames or deletes another note.
 
 **In the browser:**
 
 - The web app is static files, fonts included, served from `excalimathpad.pages.dev`. It has no telemetry and no account, and it sends your sheets nowhere.
-- Your sheets save as files on your own disk. While a sheet has unsaved changes, the browser keeps a recovery copy of it in its own IndexedDB, on your computer.
+- Your sheets save as files on your own disk. While a sheet has unsaved changes, the browser keeps a recovery copy of it in its own IndexedDB, on your computer. Whether the Sheet panel is open, and its width, are kept in the browser's local storage.
 - An embed you add to a sheet, such as a YouTube video, loads from its own site, as in Excalidraw.
 
 ## Support
@@ -53,6 +53,7 @@ A complete worked example is the [pump-sizing sheet](docs/acceptance/pump-sizing
 Excalimathpad is free and best effort. There is no response time, and the roadmap follows the needs of its author's own engineering work.
 
 - **Something wrong?** [Report a bug](https://github.com/matheus-sancha/excalimathpad/issues/new?template=bug.yml) with the version, where you use it, your device and the steps. Attach a sheet only if it holds nothing confidential: issues are public.
+- **The app says it "hit an unexpected error"?** That is a fault in Excalimathpad, not in your sheet, and the rest of the sheet keeps working. Press **Copy details**, then **Report this error**, and paste the details into the report: they hold the version and the error, never your sheet's lines, names or values. The Math guide's Common messages section says what each message means.
 - **Missing something?** [Suggest an idea](https://github.com/matheus-sancha/excalimathpad/issues/new?template=idea.yml).
 - **A security problem?** Please don't open an issue. Report it privately, as [SECURITY.md](SECURITY.md) explains.
 

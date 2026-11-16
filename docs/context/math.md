@@ -96,7 +96,10 @@ A result's `text` is its plain form at 4 significant digits
 `∞`); `resultTex` typesets it (`1.235 \cdot 10^{4}`). Source numbers are
 never reformatted. `pump-sizing.test.ts` runs the acceptance sheet's lines,
 read from `docs/acceptance/pump-sizing.md`, against the reference at 4 s.f.
-(spec section 16). math.js's own unit system stays fixed at SI, so
+(spec section 16); `true-position.test.ts` runs the second sheet's
+(`docs/acceptance/true-position.md`, M4e, #202) with the `check` line's
+format passed as stored (`SheetBlock.formats`), its chart included (spec
+section 15). math.js's own unit system stays fixed at SI, so
 units read elsewhere never change a result (#25, ADR 0003). How a result
 shows is the app's formatter, `display.ts` (`createDisplay`, given the
 instance and the captured `parse`, spec section 5): a trailing `in <unit>`
