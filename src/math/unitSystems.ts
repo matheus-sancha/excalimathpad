@@ -194,7 +194,7 @@ export const SLOT_UNITS: Record<Kind, readonly string[]> = {
   velocity: ['mm/s', 'm/s', 'km/hr', 'ft/s', 'mi/hr'],
   acceleration: ['m/s^2', 'ft/s^2'],
   force: ['N', 'kN', 'MN', 'lbf', 'kgf', 'tonf', 'tf'],
-  pressure: ['Pa', 'kPa', 'MPa', 'mbar', 'bar', 'psi', 'atm'],
+  pressure: ['Pa', 'kPa', 'MPa', 'mbar', 'bar', 'psi', 'ksi', 'atm'],
   // Torque has energy's dimension, so its units are offered here too: a
   // result can't tell the app which of the two it is.
   energy: ['J', 'kJ', 'MJ', 'kWh', 'BTU', 'kcal', 'N m', 'kN m', 'lbf ft', 'lbf in'],

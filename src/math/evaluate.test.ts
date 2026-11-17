@@ -631,6 +631,8 @@ describe('app units (docs/spec-v1.md section 5)', () => {
     ['1 kcal to J', '4184 J'],
     ['1 tonf to lbf', '2000 lbf'],
     ['1 tf to kgf', '1000 kgf'],
+    ['2 ksi to psi', '2000 psi'],
+    ['36 ksi to MPa', '248.2 MPa'],
   ])('%s is %s', (source, shown) => {
     expect(block(source)).toEqual([value(shown)])
   })
@@ -954,7 +956,7 @@ describe('the unit lists per kind (docs/spec-v1.md section 5)', () => {
     const { all, create } = await import('mathjs')
     const { KIND_REFERENCE, SLOT_UNITS, SI_PREFIXED, USCS } = await import('./unitSystems.ts')
     const check = create(all)
-    for (const name of ['cP', 'poise', 'cSt', 'St', 'rpm', 'gpm', 'cfm', 'kcal', 'tonf', 'tf']) {
+    for (const name of ['cP', 'poise', 'cSt', 'St', 'rpm', 'gpm', 'cfm', 'kcal', 'tonf', 'tf', 'ksi']) {
       // The app units, as the engine registers them.
       if (!check.Unit.isValuelessUnit(name)) {
         const { APP_UNITS } = await import('./appUnits.ts')
@@ -1000,6 +1002,7 @@ describe('unit slot (docs/spec-v1.md section 5)', () => {
       { unit: 'mbar', text: '454.3 mbar' },
       { unit: 'bar', text: '0.4543 bar' },
       { unit: 'psi', text: '6.589 psi' },
+      { unit: 'ksi', text: '0.006589 ksi' },
       { unit: 'atm', text: '0.4484 atm' },
     ])
   })

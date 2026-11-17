@@ -117,6 +117,7 @@ Write a unit after a number: `15 L/s`, `102.3 mm`, `1.002 cP`, `20 degC`. Units 
 | `2 cfm in L/s` | `0.9439 L/s` | Flow: `gpm`, `cfm` |
 | `1 kcal in kJ` | `4.184 kJ` | Energy: `kcal` |
 | `3 tf in kN` | `29.42 kN` | Force: `tonf` (2000 lbf), `tf` (1000 kgf) |
+| `36 ksi in MPa` | `248.2 MPa` | Pressure and stress: `ksi` (1000 psi) |
 
 **Units that catch people:**
 
