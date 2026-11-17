@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { auditBundle, MAX_BYTES } from './audit-plugin.mjs'
+import { auditBundle, BUDGET, MAX_BYTES } from './audit-plugin.mjs'
 import allowlist from './plugin-allowlist.json'
 
 /** A bundle that passes; each test breaks one thing. */
@@ -27,6 +27,22 @@ describe('the bundle audit (docs/spec-v1.md section 12a, Data protection)', () =
 
   it('fails on a file over 5,000,000 bytes', () => {
     expect(bundle({ sizes: { 'main.js': MAX_BYTES + 1 } })).toEqual(['main.js is 5,000,001 bytes, over 5,000,000'])
+  })
+
+  it('fails on main.js or styles.css over its budget, and passes one at it', () => {
+    expect(bundle({ sizes: { 'main.js': BUDGET['main.js'] + 1 } })).toEqual([
+      `main.js is ${(BUDGET['main.js'] + 1).toLocaleString('en')} bytes, over its budget of ` +
+        `${BUDGET['main.js'].toLocaleString('en')}. If the growth is meant, raise BUDGET and say why.`,
+    ])
+    expect(bundle({ sizes: { 'styles.css': BUDGET['styles.css'] + 1 } })).toEqual([
+      expect.stringMatching(/^styles\.css is [\d,]+ bytes, over its budget of [\d,]+\. If the growth is meant/),
+    ])
+    expect(bundle({ sizes: { 'main.js': BUDGET['main.js'], 'styles.css': BUDGET['styles.css'] } })).toEqual([])
+  })
+
+  it('keeps each budget under the 5,000,000 cap', () => {
+    expect(Object.keys(BUDGET).sort()).toEqual(['main.js', 'styles.css'])
+    for (const budget of Object.values(BUDGET)) expect(budget).toBeLessThan(MAX_BYTES)
   })
 
   it("fails when the manifest's version isn't package.json's", () => {

@@ -1,6 +1,8 @@
 # Excalimathpad v1 spec
 
-**Status:** agreed 2026-11-03 · living. From 1.0.0, "v1" in this file's name is a name, not a
+**Status:** agreed 2026-11-03 · living · every v1 milestone, M1 to M5, is built, and the next release
+is 1.0.0: v1 is done when Matheus's hand checks of the finish line have passed on that build and 1.0.0
+is published ([section 16](#the-finish-line)). From 1.0.0, "v1" in this file's name is a name, not a
 status: this stays the living spec, at this path and with these section numbers
 
 ## 1. What v1 is, and what it isn't
@@ -2585,7 +2587,11 @@ touch in [section 4](#touch). Research: [`docs/research/obsidian-plugin.md`](res
     outside React DOM's and Radix's own library code, or `http(s)://` host missing from a committed
     allowlist (XML namespaces, licence comments, Excalidraw's Help links and its embed patterns, each
     with why it can't load). **From 1.0.0, a budget per file** beside that cap: the measured
-    size of the 1.0.0 build of `main.js` and of `styles.css`, plus about 5%. Going over fails
+    size of the 1.0.0 build of `main.js` and of `styles.css`, plus about 5%, rounded up to the
+    next 1,000 bytes. The two numbers are `BUDGET` in `scripts/audit-plugin.mjs`, set from the
+    build that becomes 1.0.0 (#203): 3,574,000 for `main.js` (3,403,718 measured) and 584,000
+    for `styles.css` (555,370). The audit prints each size with its budget; a file over the
+    cap is reported against the cap only. Going over fails
     `npm run check` with, for example, `main.js is 3,512,004 bytes, over its budget of
     3,500,000. If the growth is meant, raise BUDGET and say why.` Raising a budget is allowed,
     as a deliberate line in a commit that says what was added.
@@ -2625,7 +2631,7 @@ touch in [section 4](#touch). Research: [`docs/research/obsidian-plugin.md`](res
   the work laptop and his devices, and carry `isDesktopOnly: false` so the device checklist can
   run on them. Fixes ship as `0.1.x`.
 - **To 1.0.0** (M4e): `0.2.1` is a fix release (#179 and #191). M4e ships as the beta `0.3.0` through
-  BRAT, M5 follows, and the release after it is `1.0.0`, the version submitted to the
+  BRAT, M5 follows (both are built), and the release after it is `1.0.0`, the version submitted to the
   community list ([Listing](#listing)). A sheet saved by `0.3.0` or later is format 2, which
   `0.2.x` refuses ([section 7](#the-file)), so every device takes the beta before one saves.
 - **Before `1.0.0` is published,** besides the draft's checklist and the device checklist
@@ -3382,7 +3388,8 @@ Decided in: [acceptance](https://github.com/matheus-sancha/excalimathpad/issues/
 
 v1 is built in nine milestones, each usable on a real sheet, with a saved typeset sheet first. The existing
 spike is M0, done. M4e and M5 are the last two; they are released together as **1.0.0**, which is v1 done.
-M6 is built after 1.0.0.
+M6 is built after 1.0.0. Every milestone of v1, M1 to M5, is built; what is left before 1.0.0 is
+Matheus's, by hand ([The finish line](#the-finish-line)).
 
 | Milestone | What it lets Matheus do | Sections |
 |---|---|---|
@@ -3398,7 +3405,7 @@ M6 is built after 1.0.0.
 | **M6 Offline PWA** (after 1.0.0) | Install the app, work offline, open a `.excalimathpad` file from Windows | [12](#12-offline-pwa) |
 
 The issue orders of the built milestones, M1 to M4d, each with its reasons, and what happened along the way
-are in [`docs/spec-history.md`](spec-history.md#16-milestones-and-finish-line). The orders still being built stay here.
+are in [`docs/spec-history.md`](spec-history.md#16-milestones-and-finish-line). M4e's and M5's, the last two, stay here with the road to 1.0.0.
 
 **M4e's issue order** (added on 2026-11-15 from Matheus's third batch, six items found building a
 true-position sheet on his work laptop, on the map
@@ -3434,7 +3441,9 @@ A source repeat from the size research is removed only by the issue that already
 left, with `evaluate.ts` in four files, the scanner and the palette, is one refactor issue after 1.0.0
 (#204); the spec's change log folded into its body, then one home per fact, is another (#205).
 
-**M5's issue order** (M4's five are built, #74 to #78; M5 follows M4e; changed on 2026-11-15):
+**M5's issue order** (M4's five are built, #74 to #78; M5 follows M4e; changed on 2026-11-15; both
+issues are built, and #81 closes with the hand check of step 4 in both homes, one of the checks before
+`1.0.0` is published):
 
 1. Page row and page breaks (#80)
 2. Print view and Print… (#81), in both homes, closed by the hand check of step 4 in both
@@ -3444,7 +3453,8 @@ still prints is part of the second issue. The breaks come first: they are one pu
 the Page setting, the same in both homes, so every break rule is tested before anything draws a page. The
 second issue starts with the Obsidian check that decides its route ([section 17](#17-verify-first)).
 
-**To 1.0.0** (#203): the budgets per plugin file are set from the build, the release checklist of
+**To 1.0.0** (#203): the budgets per plugin file are set from the build (built: 3,574,000 bytes for
+`main.js` and 584,000 for `styles.css`, [Data protection](#data-protection)), the release checklist of
 [section 12a](#releases) is run, and `1.0.0` is released. Then the history is cleaned and the plugin
 submitted with that version (#150, M4d's sixteenth issue, by hand).
 
@@ -3469,7 +3479,10 @@ lines through `evaluateSheet` and compares with the reference at 4 s.f. It grows
 
 ### The finish line
 
-**v1 is done, and released as 1.0.0, when all three hold** (changed on 2026-11-15):
+**v1 is done, and released as 1.0.0, when all three hold** (changed on 2026-11-15). Every milestone is
+built, so conditions 1 and 2 wait only for Matheus's hand checks on the build the Release button tags
+as `1.0.0`: step 4 in both homes, and the release checklist of [section 12a](#releases). v1 is done
+when they have passed and `1.0.0` is published.
 
 1. The pump sheet passes steps 1-4, step 4 in both homes.
 2. The true-position sheet passes its checks ([section 15](#15-acceptance)), and the release checklist
@@ -3502,6 +3515,9 @@ check goes with it.
 - M5's route in Obsidian rests on the system dialog honouring `@page`, unverified until #81's first step.
 - Whether the overlay fix of `0.2.1` is what Matheus saw as the chart "spilling out of its box" is not
   confirmed until he looks again.
+- The plugin's start-up figure isn't recorded yet. If the work laptop's is over 150 ms, loading the app only
+  when the first sheet opens is built before `1.0.0` ([Start-up](#releases)), and the budgets are set
+  again from that build.
 
 Decided in: [milestones](https://github.com/matheus-sancha/excalimathpad/issues/37),
 [M4c](https://github.com/matheus-sancha/excalimathpad/issues/97),

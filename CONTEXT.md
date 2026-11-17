@@ -6,7 +6,7 @@ a Vite + React + TypeScript app that builds to static files; there is no
 server. v1 target: for anyone, built around Matheus's own engineering work;
 free and best effort. M4d adds an Obsidian community plugin built from this
 source (`docs/spec-v1.md` section 12a, ADR 0006): **one source, two builds**.
-M4d and M4e are built; M5, being built, leads to 1.0.0 (spec section 16).
+M1 to M5 are built; the next release is 1.0.0 (spec section 16).
 
 This file holds the model, the terms, the load-bearing rules and where things
 are. It is read by every build session, so it has a budget
@@ -462,7 +462,7 @@ and everything downstream recalculates. Engine: math.js, client-side.
   default; UI fonts are bundled. Fine online; self-host them if offline use
   matters (`window.EXCALIDRAW_ASSET_PATH`).
 - The production bundle is large. The entry chunk (`index-*.js`) is about
-  2.21 MB (674 kB gzip): math.js `create(all)` is about 170 kB gzip of that
+  2.23 MB (689 kB gzip): math.js `create(all)` is about 170 kB gzip of that
   (accepted for v1; trimming to fewer factories is a later follow-up) and
   nearly all the rest is Excalidraw. A separate ~1.8 MB chunk is loaded only
   by Excalidraw's font-subset worker. Vite's chunk-size warning is expected.
@@ -476,8 +476,9 @@ and everything downstream recalculates. Engine: math.js, client-side.
   names the file.
 - Where the Sheet panel floats (an editor at or below its docking width), it
   covers Excalidraw's More tools; its ✕ closes it.
-- The plugin's `main.js` is about 3.40 MB and `styles.css` 0.56 MB (#81);
-  the audit fails either above 5,000,000 bytes, Obsidian Sync Standard's cap.
+- The plugin's `main.js` is about 3.40 MB and `styles.css` 0.56 MB; the audit
+  fails either over its budget (`BUDGET`, about 5% above, #203) or above
+  5,000,000 bytes, Obsidian Sync Standard's cap.
 - Excalidraw 0.18.1 listens on the global `document` (copy, cut, paste, `keyup`,
   pointer moves and ups, scroll and others) and `window` (resize, blur, focus,
   message, unload) by itself. The plugin's own code adds none
