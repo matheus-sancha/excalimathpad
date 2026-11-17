@@ -1,7 +1,7 @@
 // The bundle audit (docs/spec-v1.md section 12a, Data protection): what an
-// install delivers is exactly `dist-plugin/`, and nothing in it reaches the
-// network or storage outside the vault. Blocks every pull request through
-// `npm run check`, and Release (#138).
+// install delivers is exactly `dist-plugin/`, nothing in it reaches the
+// network or storage outside the vault, and no file outgrows its budget.
+// Blocks every pull request through `npm run check`, and Release (#138).
 //
 // Run: `node scripts/audit-plugin.mjs [dir]` (`npm run audit:plugin`).
 // `auditPlugin` is the same check for tests, which feed it bad bundles.
@@ -17,6 +17,17 @@ export const FILES = ['main.js', 'manifest.json', 'styles.css']
 
 /** Obsidian Sync Standard's per-file cap. */
 export const MAX_BYTES = 5_000_000
+
+/**
+ * Each file's budget, from 1.0.0 (#203): the size of the build that becomes
+ * 1.0.0 plus 5%, rounded up to the next 1,000 bytes (main.js 3,403,718,
+ * styles.css 555,370). Raise one only on purpose, in a commit that says what
+ * was added.
+ */
+export const BUDGET = {
+  'main.js': 3_574_000,
+  'styles.css': 584_000,
+}
 
 /** Text that must not appear in any delivered file, and why. */
 export const FORBIDDEN = [
@@ -44,7 +55,14 @@ export function auditBundle({ files, sizes, packageVersion, allowlist }) {
     problems.push(`dist-plugin/ must hold exactly ${FILES.join(', ')}; it holds ${names.join(', ') || 'nothing'}`)
   }
   for (const [name, size] of Object.entries(sizes)) {
-    if (size > MAX_BYTES) problems.push(`${name} is ${size.toLocaleString('en')} bytes, over ${MAX_BYTES.toLocaleString('en')}`)
+    const count = (bytes) => bytes.toLocaleString('en')
+    if (size > MAX_BYTES) problems.push(`${name} is ${count(size)} bytes, over ${count(MAX_BYTES)}`)
+    else if (Object.hasOwn(BUDGET, name) && size > BUDGET[name]) {
+      problems.push(
+        `${name} is ${count(size)} bytes, over its budget of ${count(BUDGET[name])}. ` +
+          'If the growth is meant, raise BUDGET and say why.',
+      )
+    }
   }
 
   let version = null
@@ -99,12 +117,16 @@ export async function auditPlugin(dir = join(root, 'dist-plugin')) {
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   const { problems, sizes } = await auditPlugin(process.argv[2])
   for (const name of FILES) {
-    if (name in sizes) console.log(`${name.padEnd(14)} ${sizes[name].toLocaleString('en').padStart(11)} bytes`)
+    if (!(name in sizes)) continue
+    const budget = name in BUDGET ? ` (budget ${BUDGET[name].toLocaleString('en')})` : ''
+    console.log(`${name.padEnd(14)} ${sizes[name].toLocaleString('en').padStart(11)} bytes${budget}`)
   }
   if (problems.length) {
     console.error(`\nBundle audit failed (docs/spec-v1.md section 12a, Data protection):`)
     for (const problem of problems) console.error(`  - ${problem}`)
     process.exit(1)
   }
-  console.log('Bundle audit passed: three files, each under 5,000,000 bytes, nothing reaching the network.')
+  console.log(
+    'Bundle audit passed: three files, each under 5,000,000 bytes and within its budget, nothing reaching the network.',
+  )
 }

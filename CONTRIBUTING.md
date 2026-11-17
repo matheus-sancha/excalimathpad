@@ -53,7 +53,7 @@ You need **Node.js** `^22.22.2 || ^24.15.0 || >=26` and **npm 10+**. CI runs on 
 | `npm run build` | Type-check, then build both homes: `build:web` and `build:plugin` |
 | `npm run build:web` | The web app's production build in `dist/` (Vite) |
 | `npm run build:plugin` | The Obsidian plugin in `dist-plugin/`: `main.js`, `styles.css`, `manifest.json` (`esbuild.plugin.mjs`) |
-| `npm run audit:plugin` | Check `dist-plugin/`: three files, each under 5,000,000 bytes, nothing that reaches the network |
+| `npm run audit:plugin` | Check `dist-plugin/`: three files, each under 5,000,000 bytes and within its budget (`BUDGET` in `scripts/audit-plugin.mjs`), nothing that reaches the network |
 | `npm run test:blocked` | Open the built plugin in headless Chromium with the network blocked (Playwright's Chromium: `npx playwright install chromium` once) |
 | `npm run test:popout` | Open the built plugin in headless Chromium with a sheet tab in a pop-out window, and check it drags, places math, opens Help and the Math guide, pastes, copies and prints its own sheet there |
 | `npm run test:touch` | Open the built plugin in headless Chromium by touch, at a phone and a tablet viewport, as Android and as iOS, and check the touch gestures, the quick keys, the phone's bottom sheet and that there is no Print… |
@@ -242,7 +242,7 @@ The web app and the Obsidian plugin share **one version**, from `package.json` (
 - **`main.js` is never committed.** It is built in the workflow and attached to the release.
 - **The plugin's stamp** in the ☰ menu is its version (`0.1.0`); the web app's stamp stays the commit and date.
 - **Betas** are installed through [BRAT](https://github.com/TfTHacker/obsidian42-brat) from this repository until the plugin is listed. Fixes ship as `0.1.x`.
-- **To 1.0.0.** `0.2.1` is a fix release. M4e ships as the beta `0.3.0` through BRAT, M5 follows, and the release after it is `1.0.0`, the version submitted to the community list. A sheet saved by `0.3.0` or later is format 2, which `0.2.x` refuses, so every device takes the beta before one of them saves a sheet.
+- **To 1.0.0.** `0.2.1` is a fix release. M4e ships as the beta `0.3.0` through BRAT, M5 follows (both are built), and the release after it is `1.0.0`, the version submitted to the community list. A sheet saved by `0.3.0` or later is format 2, which `0.2.x` refuses, so every device takes the beta before one of them saves a sheet.
 - **Start-up.** The plugin's own figure in Obsidian's startup-time view is read on the work laptop and recorded on one phone. If the laptop's figure is over 150 ms, loading the app only when the first sheet opens is built before `1.0.0`; otherwise after.
 
 **Before Publish,** tick the draft's checklist. It is this list, kept in `.github/release-checklist.md`:
@@ -268,7 +268,7 @@ The web app and the Obsidian plugin share **one version**, from `package.json` (
 
 ## Roadmap
 
-v1 is built in milestones ([spec section 16](docs/spec-v1.md#16-milestones-and-finish-line)). M1 to M4e are built; M5 is next, and then `1.0.0`. The web app targets Chrome and Edge on desktop; the plugin targets Obsidian 1.7.2 or later.
+v1 is built in milestones ([spec section 16](docs/spec-v1.md#16-milestones-and-finish-line)). M1 to M5 are built; the next release is `1.0.0`, submitted to Obsidian's community list, and v1 is done when its checks below have passed and it is published. The web app targets Chrome and Edge on desktop; the plugin targets Obsidian 1.7.2 or later.
 
 - [x] **M0 Spike.** Live recalculation across math elements.
 - [x] **M1 Keepable sheet.** Typeset lines, line-by-line editing, undo, save and open, recovery copy.
@@ -279,7 +279,7 @@ v1 is built in milestones ([spec section 16](docs/spec-v1.md#16-milestones-and-f
 - [x] **M4c Improvements.** Range solve for every root, indexing, text colours, conditional formats, chosen width, title format.
 - [x] **M4d Plugin & panel.** The Obsidian plugin on desktop, phone and tablet; the Format, Rules and Symbols tabs; checks with `if()` and text; comment-line formats; the Math guide.
 - [x] **M4e Room to work.** Unexpected failures stay small; a line's format stored beside it; the line's field wraps; a wider, resizable Sheet panel; a point in a tolerance circle as one chart; a lighter plugin; the true-position sheet.
-- [ ] **M5 Print.** Print the sheet to clean PDF pages, from the web app and from Obsidian on a computer. Then `1.0.0`, submitted to Obsidian's community list.
+- [x] **M5 Print.** Print the sheet to clean PDF pages, from the web app and from Obsidian on a computer.
 - [ ] **M6 Offline PWA** (after 1.0.0). Install the app, work offline, open a `.excalimathpad` file from the desktop.
 
 **v1 is done, and released as 1.0.0,** when all three hold:
