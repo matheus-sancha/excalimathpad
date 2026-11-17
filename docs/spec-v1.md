@@ -1391,13 +1391,14 @@ file stores nothing about them.
 | Energy and force | `kcal` | `4184 J` (thermochemical) |
 | | `tonf` | `2000 lbf` |
 | | `tf` | `1000 kgf` |
+| Pressure and stress | `ksi` | `1000 psi` |
 
 - Each name is registered as written, with no prefixes. There is no bare `P`, so `P`
   stays free for power or pressure.
 - They join the slot's list for their kind and can be chosen in Custom. Dynamic
   viscosity gains `cP`, `poise`; kinematic viscosity lists m²/s, `cSt`, `St`; frequency
   lists Hz, `rpm`; volume flow gains `gpm`, `cfm`; energy gains `kcal`; force gains
-  `tonf`, `tf`.
+  `tonf`, `tf`; pressure gains `ksi`.
 - An app unit shows only where it is written or chosen. A derived viscosity shows
   through the system (`1.002 mPa·s`) unless a Custom system names it.
 - A unit not on the list can be a plain variable (`bbl2 = 159 L`), but a variable can't

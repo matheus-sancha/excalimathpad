@@ -18,4 +18,6 @@ export const APP_UNITS = [
   { name: 'kcal', definition: '4184 J' },
   { name: 'tonf', definition: '2000 lbf' },
   { name: 'tf', definition: '1000 kgf' },
+  // Pressure and stress
+  { name: 'ksi', definition: '1000 psi' },
 ] as const
