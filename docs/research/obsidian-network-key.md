@@ -270,8 +270,9 @@ What no source settles is at the end, under [Could not verify](#could-not-verify
 | Importer 3.2.0 (by Obsidian) | Passed | `c2.com`, `takeout.google.com`, `www.youtube.com` | 112 |
 | Just Simple Excalidraw | Satisfactory | none listed | 6 |
 
-- Both entries sit under **Disclosures**, at the lowest level. On none of the
-  seven listings is a network entry a warning or an error.
+- Both entries sit under **Disclosures**, at the scorecard's lowest level
+  (`info`). On none of the seven listings is a network entry a warning or an
+  error.
 - **Network use by itself doesn't fail a review.** Obsidian's own Importer
   makes requests and is "Passed".
 - **The count is not the plugin's own calls only (inferred).** Just Simple
@@ -282,14 +283,14 @@ What no source settles is at the end, under [Could not verify](#could-not-verify
 - **The domain list is not the list of hosts a plugin talks to (inferred).**
   Copilot's omits every provider host; Smart Composer's and the Importer's
   name hosts that look like links. How the scanner chooses them is
-  [not verified](#could-not-verify). This repository's bundle names about 20
-  hosts that it never fetches
+  [not verified](#could-not-verify). This repository's bundle names 19 hosts
+  that it never fetches
   ([`plugin-allowlist.json`](../../scripts/plugin-allowlist.json)); some may
   appear on its scorecard.
 - Other entries seen that bear on this plugin:
   - "**Local Storage**: Persists data in `localStorage` or `sessionStorage`
-    instead of the Obsidian plugin data APIs", a disclosure (Just Simple
-    Excalidraw);
+    instead of the Obsidian plugin data APIs", under **Other** (Just Simple
+    Excalidraw). The help page calls these "other notes";
   - "Code uses runtime base64 encode or decode calls", a disclosure, with
     "sometimes used to hide API keys, URLs, or code payloads";
   - "`main.js` … is larger than 5 MB", a warning;
@@ -607,9 +608,9 @@ The lists are the same in 0.6.0 (diffed).
 ### Not candidates
 
 - **`localStorage` or IndexedDB directly.** Per device, but the lint warns on
-  the global, and the scorecard files it as "Local Storage: Persists data in
-  `localStorage` or `sessionStorage` instead of the Obsidian plugin data
-  APIs" (observed, above).
+  the global, and the scorecard notes it under Other as "Local Storage:
+  Persists data in `localStorage` or `sessionStorage` instead of the Obsidian
+  plugin data APIs" (observed, above).
 - **The operating system's keychain through Electron or Node.** Desktop only,
   so it can't serve a plugin with `isDesktopOnly: false`
   ([Mobile development](https://github.com/obsidianmd/obsidian-developer-docs/blob/1c26772ac13d6e9870c865936d389fdfe694e742/en/Plugins/Getting%20started/Mobile%20development.md?plain=1#L66-L68)).
@@ -644,7 +645,8 @@ platform requires.
   sends requests through a `requestUrl` wrapper instead; "When enabled,
   responses arrive only after completion instead of streaming token by token"
   ([settings.md](https://github.com/logancyang/obsidian-copilot/blob/208e0db6f5d5faf37058861aecf10b9eef641ecd/docs/settings.md?plain=1#L180),
-  [chatModelManager.ts](https://github.com/logancyang/obsidian-copilot/blob/208e0db6f5d5faf37058861aecf10b9eef641ecd/src/LLMProviders/chatModelManager.ts#L100-L124)).
+  [chatModelManager.ts](https://github.com/logancyang/obsidian-copilot/blob/208e0db6f5d5faf37058861aecf10b9eef641ecd/src/LLMProviders/chatModelManager.ts#L100-L124),
+  [utils.ts](https://github.com/logancyang/obsidian-copilot/blob/208e0db6f5d5faf37058861aecf10b9eef641ecd/src/utils.ts#L445-L468)).
   This is the trade-off of [The request route](#the-request-route), left to
   the user.
 - **Listing:** review "Satisfactory", payments "Optional".
@@ -821,3 +823,7 @@ untrue or trips. What replaces it is for the decision tickets, not this note.
   but return a page that fills in with scripts, so their text was read from
   the GitHub sources. Whether the published pages are ahead of the
   repositories was not checked.
+- **The GitHub links as web pages.** github.com's file views answered 403
+  from this environment. The repositories were cloned at the commits named,
+  and each link's path and line range was checked against the clone, not
+  opened in a browser.
