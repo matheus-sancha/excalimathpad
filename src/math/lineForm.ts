@@ -273,6 +273,10 @@ function readSegment(segment: string): { words: FormatWord[]; condition: string 
  * split from the expression before it. The last one wins:
  * `a to m in cm` is `a to m`, shown in cm. The engine checks that the target
  * is a pure unit.
+ *
+ * An `in` with `^`, `*` or `/` after it is the inch, part of a target or of the
+ * expression, since the word needs a value after it: `A = L^2 in in^2` is `A =
+ * L^2`, shown in in² (section 3, step 3; #229).
  */
 export function splitDisplayUnit(code: string): { expression: string; displayUnit: string | null } {
   let depth = 0
@@ -289,7 +293,12 @@ export function splitDisplayUnit(code: string): { expression: string; displayUni
       depth++
     } else if (')]}'.includes(char)) {
       depth--
-    } else if (depth === 0 && /^(?:in|to)(?![\w.])/.test(code.slice(i, i + 3)) && /[^\w.]$/.test(code.slice(0, i))) {
+    } else if (
+      depth === 0 &&
+      /^(?:in|to)(?![\w.])/.test(code.slice(i, i + 3)) &&
+      /[^\w.]$/.test(code.slice(0, i)) &&
+      !/^\s*\.?[\^*/]/.test(code.slice(i + 2))
+    ) {
       found.push(i)
     }
   }

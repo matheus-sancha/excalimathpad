@@ -103,7 +103,10 @@ section 15). math.js's own unit system stays fixed at SI, so
 units read elsewhere never change a result (#25, ADR 0003). How a result
 shows is the app's formatter, `display.ts` (`createDisplay`, given the
 instance and the captured `parse`, spec section 5): a trailing `in <unit>`
-(`lineForm.ts` takes it off the text, the formatter checks it is a pure
+(`lineForm.ts` takes it off the text: `splitDisplayUnit`, which the unit
+slot's `writeDisplayUnit` and a table's or plot's arguments share, so they
+read an inch-led unit, `in in^2`, alike, spec section 3, step 3; the
+formatter checks it is a pure
 unit, read outside the sheet's scope) shows the value in that unit,
 balanced if the kind differs; else the kind's unit in the sheet's system
 (`unitSystems.ts`: SI with prefixes by default, SI base, USCS, Custom),
