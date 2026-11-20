@@ -1,0 +1,25 @@
+import { launch, pumpSheet, helpers } from './harness.mjs'
+const OUT = process.env.OUT
+const { tab, start, close, errors } = await launch({ width: 1900, height: 1000 })
+const log = (k, v) => console.log(k + ':', JSON.stringify(v))
+const KEYS = ['zenModeEnabled', 'viewModeEnabled', 'gridModeEnabled', 'objectsSnapModeEnabled', 'isMidpointSnappingEnabled', 'bindingPreference', 'boxSelectionMode', 'inputDevice', 'showHints', 'activeTool', 'stylesPanelMode', 'showMinimap', 'minimap']
+try {
+  const sheet = await pumpSheet()
+  await start(sheet)
+  const h = await helpers(tab)
+  await tab.evaluate(() => window.__api.updateScene({ appState: { scrollX: 60, scrollY: 80, zoom: { value: 1 } } })); await tab.waitForTimeout(300)
+  const panel = () => tab.evaluate(() => [...document.querySelectorAll('.App-menu__left label.control-label, .App-menu__left legend, .App-menu__left h3')].filter((e) => e.offsetParent !== null).map((e) => e.textContent.trim().slice(0, 24)))
+  // control: a math element selected by a click, with the selection tool
+  const r0 = await tab.locator('[data-anchor-id="calc"] [data-line="0"]').boundingBox()
+  await tab.mouse.click(r0.x + 20, r0.y + 12); await tab.waitForTimeout(400)
+  log('control: properties panel for a clicked math element', await panel())
+  log('control: hint', await tab.evaluate(() => { const v = document.querySelector('.HintViewer'); const s = v?.querySelector('span'); return v ? { text: v.textContent.slice(0, 80), after: s ? getComputedStyle(s, '::after').content : null } : null }))
+  await tab.keyboard.press('Escape')
+  const openPrefs = async () => { await tab.click('.main-menu-trigger'); await tab.waitForTimeout(250); const p = tab.locator('.dropdown-menu-item:has-text("Preferences"), [class*=sub-trigger]:has-text("Preferences"), button:has-text("Preferences")').first(); await p.hover(); await p.click().catch(() => {}); await tab.waitForTimeout(350) }
+  await openPrefs()
+  await tab.screenshot({ path: OUT + '/07-prefs-menu.png' })
+  const items = await tab.evaluate(() => [...document.querySelectorAll('.dropdown-menu-item, [role=menuitem], [role=menuitemcheckbox]')].filter((e) => e.offsetParent !== null).map((e) => ({ text: e.textContent.trim().slice(0, 50), role: e.getAttribute('role'), checked: e.getAttribute('aria-checked') ?? (e.querySelector('[class*=check]') ? 'has-check' : null) })))
+  log('menu items visible with Preferences open', items)
+  const all = await tab.evaluate(() => Object.fromEntries(Object.entries(window.__api.getAppState()).filter(([k, v]) => typeof v === 'boolean' || typeof v === 'string').map(([k, v]) => [k, v])))
+  log('boolean and string app state', all)
+} finally { log('ERRORS', errors); await close() }

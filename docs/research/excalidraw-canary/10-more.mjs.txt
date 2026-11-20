@@ -1,0 +1,78 @@
+import { createServer } from 'node:http'
+import { readFile, writeFile } from 'node:fs/promises'
+import { createRequire } from 'node:module'
+import { join, extname } from 'node:path'
+import { launch, pumpSheet, helpers, ROOT } from './harness.mjs'
+const OUT = process.env.OUT
+const log = (k, v) => console.log(k + ':', JSON.stringify(v))
+const KEYS = ['zenModeEnabled', 'viewModeEnabled', 'gridModeEnabled', 'objectsSnapModeEnabled', 'isMidpointSnappingEnabled', 'bindingPreference', 'showHints', 'minimapEnabled', 'boxSelectionMode', 'inputDevice', 'theme']
+const pref = async (tab, label) => { await tab.click('.main-menu-trigger'); await tab.waitForTimeout(250); const p = tab.locator('[role=menuitem]:has-text("Preferences")').first(); await p.hover(); await p.click().catch(() => {}); await tab.waitForTimeout(300); await tab.locator(`[role=menuitem]:has-text("${label}")`).first().click(); await tab.waitForTimeout(400); await tab.keyboard.press('Escape'); await tab.keyboard.press('Escape'); await tab.waitForTimeout(200) }
+if (!process.env.WEB_ONLY) {
+  const { tab, start, close, errors } = await launch({ width: 1900, height: 1000 })
+  try {
+    await start(await pumpSheet())
+    const h = await helpers(tab)
+    await tab.evaluate(() => window.__api.updateScene({ appState: { scrollX: 420, scrollY: 80, zoom: { value: 1 } } })); await tab.waitForTimeout(300)
+    // grid: is it kept, and is it in the file?
+    await pref(tab, 'Toggle grid'); await tab.waitForTimeout(600)
+    log('plugin: grid right after the toggle', await h.state(['gridModeEnabled']))
+    await tab.waitForTimeout(3500)
+    log('plugin: grid 3.5 s later', { ...(await h.state(['gridModeEnabled'])), inFile: JSON.parse(await tab.evaluate(() => window.__leaf.view.getViewData())).appState.gridModeEnabled })
+    await tab.screenshot({ path: OUT + '/10-grid.png' })
+    // view mode: M then a click; a unit slot; a Settings change
+    await pref(tab, 'View mode')
+    const n0 = (await h.els()).length
+    await h.focusCanvas(); await tab.keyboard.press('m'); await tab.waitForTimeout(300)
+    await h.click(700, 150); await tab.waitForTimeout(600)
+    log('plugin, view mode: M then a click on the canvas', { elementsBefore: n0, elementsAfter: (await h.els()).length, lineOpen: await tab.evaluate(() => document.querySelector('.math-element__field')?.value ?? null), tool: (await h.state(['activeTool'])).activeTool })
+    await tab.keyboard.press('Escape'); await tab.keyboard.press('Escape')
+    const r = await tab.locator('[data-anchor-id="calc"] [data-line="1"]').boundingBox()
+    await tab.mouse.click(r.x + 20, r.y + 12); await tab.waitForTimeout(400)
+    log('plugin, view mode: a click on a math element', { ...(await h.state(['selectedElementIds'])), unitSlots: await tab.locator('[data-anchor-id="calc"] [class*=unit-slot], [data-anchor-id="calc"] button').count() })
+    await tab.keyboard.press('Enter'); await tab.waitForTimeout(400)
+    log('plugin, view mode: Enter', { lineOpen: await tab.evaluate(() => document.querySelector('.math-element__field')?.value ?? null) })
+    await tab.keyboard.press('Escape')
+    // Settings tab: Digits
+    const before = JSON.parse(await tab.evaluate(() => window.__leaf.view.getViewData())).excalimathpad
+    await tab.locator('.sheet-sidebar [role=tab]').last().click().catch(() => {}); await tab.waitForTimeout(300)
+    const selects = tab.locator('.sheet-sidebar select'); const count = await selects.count()
+    let changed = null
+    if (count) { const s = selects.first(); const opts = await s.locator('option').allTextContents(); await s.selectOption({ index: opts.length - 1 }); await tab.waitForTimeout(500); changed = opts[opts.length - 1] }
+    const after = JSON.parse(await tab.evaluate(() => window.__leaf.view.getViewData())).excalimathpad
+    log('plugin, view mode: a Settings change', { selects: count, chose: changed, settingsBefore: before.settings.units, settingsAfter: after.settings.units })
+    await tab.screenshot({ path: OUT + '/10-view-mode.png' })
+    await h.focusCanvas(); await tab.keyboard.press('Alt+r'); await tab.waitForTimeout(300)
+    log('plugin: Alt+R leaves view mode', await h.state(['viewModeEnabled']))
+    // save a file with a fill and a diamond anchor, for 0.4.1
+    await tab.keyboard.press('Escape'); await h.focusCanvas(); await tab.keyboard.press('b')
+    const calc = (await h.els()).find((e) => e.id === 'calc'); await h.click(calc.x + calc.w - 12, calc.y + calc.h - 8); await tab.waitForTimeout(600)
+    await tab.keyboard.press('Escape'); await h.focusCanvas(); await tab.keyboard.press('v')
+    await writeFile(OUT + '/../fill.excalimathpad', await tab.evaluate(() => window.__leaf.view.getViewData()))
+    log('ERRORS plugin', errors)
+  } finally { await close() }
+}
+// ---- the web app: Preferences across a reload
+{
+  const require = createRequire(join(ROOT, 'package.json')); const { chromium } = require('playwright')
+  const dist = join(ROOT, 'dist'); const types = { '.js': 'text/javascript', '.css': 'text/css', '.html': 'text/html', '.json': 'application/json', '.woff2': 'font/woff2', '.svg': 'image/svg+xml', '.webmanifest': 'application/manifest+json' }
+  const server = createServer(async (q, a) => { const p = new URL(q.url, 'http://x').pathname; try { const b = await readFile(join(dist, p === '/' ? 'index.html' : p)); a.writeHead(200, { 'content-type': types[extname(p === '/' ? 'index.html' : p)] ?? 'application/octet-stream' }); a.end(b) } catch { a.writeHead(404); a.end() } })
+  await new Promise((r) => server.listen(0, '127.0.0.1', r)); const origin = `http://127.0.0.1:${server.address().port}`
+  const browser = await chromium.launch(); const context = await browser.newContext({ viewport: { width: 1600, height: 900 } })
+  const asked = []; await context.route((to) => !to.href.startsWith(origin), (route) => { asked.push(new URL(route.request().url()).host); route.abort() })
+  const tab = await context.newPage(); const errors = []; tab.on('pageerror', (e) => errors.push(e.message.split('\n')[0]))
+  try {
+    await tab.goto(origin + '/'); await tab.waitForSelector('.main-menu-trigger', { timeout: 30000 }); await tab.waitForTimeout(800)
+    const st = () => tab.evaluate((keys) => { const s = window.__api.getAppState(); return Object.fromEntries(keys.map((k) => [k, s[k]])) }, KEYS)
+    log('web: before', await st())
+    for (const label of ['Toggle grid', 'Snap to objects', 'Minimap', 'Arrow binding', 'Snap to midpoints', 'Toolbar hints']) await pref(tab, label)
+    await tab.click('.main-menu-trigger'); await tab.waitForTimeout(200); await tab.locator('[role=menuitem]:has-text("Dark mode")').first().click(); await tab.waitForTimeout(300); await tab.keyboard.press('Escape')
+    log('web: after six toggles and Dark mode', await st())
+    await tab.waitForTimeout(1500)
+    log('web: localStorage', await tab.evaluate(() => Object.fromEntries(Object.keys(localStorage).map((k) => [k, localStorage.getItem(k).slice(0, 200)]))))
+    log('web: IndexedDB databases', await tab.evaluate(async () => (await indexedDB.databases()).map((d) => d.name)))
+    await tab.reload(); await tab.waitForSelector('.main-menu-trigger', { timeout: 30000 }); await tab.waitForTimeout(1000)
+    log('web: after a reload', await st())
+    log('web: hosts asked for (all refused)', [...new Set(asked)])
+    log('ERRORS web', errors)
+  } finally { await browser.close(); server.close() }
+}

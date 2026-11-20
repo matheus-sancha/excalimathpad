@@ -1,0 +1,27 @@
+import { launch, pumpSheet, ROOT } from './harness.mjs'
+const OUT = process.env.OUT
+const { tab, start, close, errors, requests } = await launch()
+try {
+  await start(await pumpSheet())
+  await tab.screenshot({ path: OUT + '/01-start.png' })
+  const dom = await tab.evaluate(() => ({
+    katexRows: document.querySelectorAll('[data-anchor-id="pump"] [data-line]').length,
+    results: [...document.querySelectorAll('[data-anchor-id="calc"] [data-line]')].map((r) => r.textContent.slice(0, 40)),
+    toolbar: [...document.querySelectorAll('.App-toolbar button, .App-toolbar label, .App-toolbar input')].map((e) => `${e.tagName.toLowerCase()}${e.className ? '.' + String(e.className).split(' ').join('.') : ''}[${e.getAttribute('aria-label') ?? e.getAttribute('title') ?? e.getAttribute('data-testid') ?? ''}]${e.getAttribute('aria-keyshortcuts') ? ' key=' + e.getAttribute('aria-keyshortcuts') : ''}`),
+    trigger: !!document.querySelector('.App-toolbar__extra-tools-trigger'),
+    menuTrigger: !!document.querySelector('.main-menu-trigger'),
+    hint: document.querySelector('.HintViewer')?.textContent,
+  }))
+  console.log(JSON.stringify(dom, null, 1))
+  // More tools
+  const t = tab.locator('.App-toolbar__extra-tools-trigger')
+  if (await t.count()) { await t.first().click(); await tab.waitForTimeout(300)
+    console.log('MORE TOOLS:', JSON.stringify(await tab.evaluate(() => [...document.querySelectorAll('.dropdown-menu .dropdown-menu-item, .dropdown-menu .dropdown-menu-group-title, .dropdown-menu [class*=title]')].map((e) => e.textContent.trim()))))
+    await tab.screenshot({ path: OUT + '/01-more-tools.png' }); await tab.keyboard.press('Escape') }
+  const m = tab.locator('.main-menu-trigger')
+  if (await m.count()) { await m.first().click(); await tab.waitForTimeout(300)
+    console.log('MENU:', JSON.stringify(await tab.evaluate(() => [...document.querySelectorAll('.dropdown-menu .dropdown-menu-item, .dropdown-menu .build-stamp')].map((e) => e.textContent.trim()))))
+    await tab.screenshot({ path: OUT + '/01-menu.png' }); await tab.keyboard.press('Escape') }
+} finally {
+  console.log('ERRORS:', JSON.stringify(errors)); console.log('REQUESTS:', JSON.stringify([...new Set(requests)])); await close()
+}
