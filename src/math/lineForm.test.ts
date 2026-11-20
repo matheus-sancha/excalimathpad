@@ -26,6 +26,7 @@ import {
   type CommentFormat,
   type LineFormat,
 } from './lineForm.ts'
+import { SLOT_UNITS } from './unitSystems.ts'
 
 describe('readLine (docs/spec-v1.md section 3, step 1: the comment)', () => {
   it.each([
@@ -445,6 +446,20 @@ describe('splitDisplayUnit (docs/spec-v1.md section 3, step 3)', () => {
     ['s = "go to bed"', 's = "go to bed"', null],
     ['x_in = 2 in_2', 'x_in = 2 in_2', null],
     ['in = 2', 'in = 2', null],
+    // #229: an `in` with `^`, `*` or `/` after it is the inch of the target.
+    ['A = L^2 in in^2', 'A = L^2', 'in^2'],
+    ['A = 2 in * 3 in in in^2', 'A = 2 in * 3 in', 'in^2'],
+    ['V = L^3 in in^3', 'V = L^3', 'in^3'],
+    ['v = L/t in in/s', 'v = L/t', 'in/s'],
+    ['v = L/t to in / s', 'v = L/t', 'in / s'],
+    ['P = T*w in lbf in/s', 'P = T*w', 'lbf in/s'],
+    ['q = Q/A in in*in', 'q = Q/A', 'in*in'],
+    ['A = 3 in^2 in cm^2', 'A = 3 in^2', 'cm^2'],
+    ['T = F*r in lbf in', 'T = F*r', 'lbf in'],
+    // The last one still wins: here the first `in` is the inch (section 3, step 3).
+    ['T = F*r in in lbf', 'T = F*r in', 'lbf'],
+    ['D = 4 in in mm', 'D = 4 in', 'mm'],
+    ['x = 2 in / 4', 'x = 2 in / 4', null],
   ])('%s', (code, expression, displayUnit) => {
     expect(splitDisplayUnit(code)).toEqual({ expression, displayUnit })
   })
@@ -468,8 +483,24 @@ describe('writeDisplayUnit (docs/spec-v1.md sections 3 and 5: what the unit slot
     ['U = I * R @bold', null, 'U = I * R @bold'],
     ['Q = q to L/s   # flow', 'L/minute', 'Q = q in L/minute # flow'],
     ['# a comment', 'm', '# a comment'],
+    ['A = L^2', 'in^2', 'A = L^2 in in^2'],
+    ['A = L^2 in in^2', 'cm^2', 'A = L^2 in cm^2'],
+    ['A = L^2 in in^2 @bold # area', null, 'A = L^2 @bold # area'],
+    ['v = L/t in in/s', 'ft/s', 'v = L/t in ft/s'],
   ])('%s with %s', (line, unit, written) => {
     expect(writeDisplayUnit(line, unit)).toBe(written)
+  })
+
+  // #229: what the slot writes, the reader takes off whole, for every unit the
+  // slot's list offers, on a line that ends in a name and on one that ends in the inch.
+  const offered = [...new Set(Object.values(SLOT_UNITS).flat())]
+  describe.each(['A = L^2', 'D = 4 in'])('on %s, every unit the slot offers comes back whole', (line) => {
+    it.each(offered)('%s', (unit) => {
+      const written = writeDisplayUnit(line, unit)
+      expect(splitDisplayUnit(written)).toEqual({ expression: line, displayUnit: unit })
+      expect(writeDisplayUnit(written, null)).toBe(line)
+      expect(writeDisplayUnit(written, 'mm')).toBe(`${line} in mm`)
+    })
   })
 })
 

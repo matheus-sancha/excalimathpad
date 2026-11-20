@@ -219,4 +219,26 @@ describe('the unit slot (docs/spec-v1.md section 5)', () => {
       ),
     )
   })
+
+  it('an area takes in² from the list, shows in it, and takes another unit after it (#229)', async () => {
+    const { sourceOf } = await mount({
+      elements: createMathAnchorElements([
+        { id: 'm1', x: 100, y: 50, width: 400, height: 72, source: 'L = 2 in\nA = L^2' },
+      ]),
+    })
+    const result = () => document.querySelectorAll('[data-anchor-id="m1"] .math-element__result')[1]
+
+    clickOnCanvas(onSlot('m1', 2))
+    fireEvent.change(unitField()!, { target: { value: 'in^2' } })
+    fireEvent.keyDown(unitField()!, { key: 'Enter' })
+    expect(sourceOf()).toBe('L = 2 in\nA = L^2 in in^2')
+    await waitFor(() => expect(result()).toHaveAttribute('data-text', '4 in^2'))
+
+    clickOnCanvas(onSlot('m1', 2))
+    expect(unitField()).toHaveValue('in^2')
+    fireEvent.change(unitField()!, { target: { value: 'cm^2' } })
+    fireEvent.keyDown(unitField()!, { key: 'Enter' })
+    expect(sourceOf()).toBe('L = 2 in\nA = L^2 in cm^2')
+    await waitFor(() => expect(result()).toHaveAttribute('data-text', '25.81 cm^2'))
+  })
 })

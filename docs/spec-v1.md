@@ -472,7 +472,12 @@ Q_op = solve Hp(Q) = Hs(Q), for Q = 1 L/s .. 30 L/s in L/s
 3. **Display unit:** take off a trailing top-level `in` or `to` whose target is a
    pure unit. The target is read outside the sheet's scope, so a variable named `K`
    doesn't change what `in K` means. A conversion inside the expression
-   (`(a in bar) + …`) stays math.js's own.
+   (`(a in bar) + …`) stays math.js's own. The last `in` or `to` with text on both sides
+   is the one taken, so `D = 102.3 mm in in` shows in inches. An `in` with `^`, `*` or `/`
+   after it is the inch and never that word, so a target can start with it:
+   `A = L^2 in in^2` shows in in², and `v = L/t in in/s` in in/s. An inch followed by
+   another unit is still read as the word: `T = F*r in in lbf` is `F*r in`, shown in lbf,
+   so torque is written `lbf in`, as the slot's list has it.
 4. **Form:** recognise solve (`= solve`), range (`..`), `table(` and `plot(`, and
    take off their clauses. A solve line's `for … = a .. b` is its clause, not a range line.
 5. **Index:** from M4c, read each `name[…]` as the app's own index. math.js never sees

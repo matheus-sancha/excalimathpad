@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { evaluateSheet, type LineResult, type SheetLine, type TableView } from './evaluate.ts'
-import { NO_COMMENT_FORMAT } from './lineForm.ts'
+import { NO_COMMENT_FORMAT, writeDisplayUnit } from './lineForm.ts'
+import { KIND_REFERENCE, KINDS } from './unitSystems.ts'
 
 /** Evaluates blocks (in reading order) as one sheet; results per block, in order. */
 function sheet(...sources: string[]): LineResult[][] {
@@ -981,6 +982,37 @@ describe('unit slot (docs/spec-v1.md section 5)', () => {
   const slots = (source: string) =>
     evaluateSheet([{ id: 'b', source }]).get('b')!.map((line) => line.unitSlot)
 
+  // #229: `in in^2` was read as the display unit `^2`. What the slot writes for
+  // each unit it offers must show what its list showed, on a line that ends in
+  // a name and on one that ends in the inch.
+  describe.each(KINDS)('choosing each unit the slot offers for a %s', (kind) => {
+    it.each(['q = 1 in', 'y = 2'])('after %s', (above) => {
+      const line = `x = 3 ${KIND_REFERENCE[kind]} * 1`
+      const slot = slots(`${above}\n${line}`)[1]!
+      expect(slot.kind).toBe(kind)
+      expect(slot.options.length).toBeGreaterThan(1)
+      for (const option of slot.options) {
+        const written = writeDisplayUnit(line, option.unit)
+        const [, shown] = evaluateSheet([{ id: 'b', source: `${above}\n${written}` }]).get('b')!
+        expect([written, shown.result]).toEqual([written, { kind: 'value', text: option.text }])
+        expect(shown.unitSlot?.chosen).toBe(option.unit)
+        expect(writeDisplayUnit(written, null)).toBe(line)
+      }
+    })
+  })
+
+  it('shows an area in in², a volume in in³ and a speed in in/s, typed or chosen (#229)', () => {
+    const results = (source: string) => evaluateSheet([{ id: 'b', source }]).get('b')!.map(({ result }) => result)
+    expect(results('L = 2 in\nt = 4 s\nA = L^2 in in^2\nV = L^3 in in^3\nv = L/t in in/s\nB = 2 in * 3 in in in^2')).toEqual([
+      { kind: 'empty' },
+      { kind: 'empty' },
+      { kind: 'value', text: '4 in^2' },
+      { kind: 'value', text: '8 in^3' },
+      { kind: 'value', text: '0.5 in / s' },
+      { kind: 'value', text: '6 in^2' },
+    ])
+  })
+
   it('offers torque units for a torque, which has energy’s dimension', () => {
     const slot = slots('F = 100 N\nr = 0.5 m\nT = F * r')[2]!
     const options = new Map(slot.options.map((option) => [option.unit, option.text]))
@@ -1489,6 +1521,19 @@ describe('tables (docs/spec-v1.md section 10, #76)', () => {
     ])
   })
 
+  it('shows a column in a unit that starts with the inch (#229)', () => {
+    const [, , table] = lines('L = 1 in .. 2 in step 1 in\nA(l) = l^2\ntable(L in in, A(L) in in^2)')
+    expect(table.result).toEqual(empty)
+    expect(table.table?.columns.map((column) => [column.unit, column.slot?.chosen ?? null])).toEqual([
+      ['in', 'in'],
+      ['in^2', 'in^2'],
+    ])
+    expect(cells(table.table)).toEqual([
+      ['1', '1'],
+      ['2', '4'],
+    ])
+  })
+
   it('shows each column in its argument’s unit, else its list line’s, else one system unit', () => {
     const [, , table] = lines('Q = 1 L/s .. 2 L/s step 1 L/s in L/minute\nH = 500 mm .. 1500 mm step 1000 mm\ntable(Q, H, Q in L/s)')
     expect(table.table?.columns.map((column) => [column.unit, column.slot?.chosen ?? null])).toEqual([
@@ -1543,6 +1588,15 @@ describe('plots (docs/spec-v1.md section 10, #77)', () => {
     return lines[lines.length - 1]
   }
   const base = 'x = 1 m .. 3 m step 1 m\nsq(t) = t^2 / (1 m)\n'
+
+  it('draws an axis in a unit that starts with the inch (#229)', () => {
+    const line = plotOf('L = 1 in .. 3 in step 1 in\nA(l) = l^2\nplot(L in in, A(L) in in^2)')
+    expect(line.result).toEqual(empty)
+    expect(line.plot).toMatchObject({ x: { label: 'L [in]', unit: 'in' }, y: { label: 'A(L) [in^2]', unit: 'in^2' } })
+    // The values are the axes' units', to the float: 3 in is 0.0762 m, and back.
+    line.plot!.x.values.forEach((x, i) => expect(x).toBeCloseTo(i + 1, 12))
+    line.plot!.series[0].values.forEach((y, i) => expect(y).toBeCloseTo((i + 1) ** 2, 12))
+  })
 
   it('gives the chart its x values, series and automatic axis titles, in the axes’ units', () => {
     const line = plotOf(`${base}plot(x in cm, sq(x), x)`)
