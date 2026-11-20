@@ -6,7 +6,7 @@ a Vite + React + TypeScript app that builds to static files; there is no
 server. v1 target: for anyone, built around Matheus's own engineering work;
 free and best effort. M4d adds an Obsidian community plugin built from this
 source (`docs/spec-v1.md` section 12a, ADR 0006): **one source, two builds**.
-M1 to M5 are built; the next release is 1.0.0 (spec section 16).
+M1 to M5 are built; the betas 0.5.0 and 0.6.0 come before 1.0.0 (spec section 16).
 
 This file holds the model, the terms, the load-bearing rules and where things
 are. It is read by every build session, so it has a budget
