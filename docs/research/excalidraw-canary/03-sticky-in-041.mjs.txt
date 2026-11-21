@@ -1,0 +1,26 @@
+// The file the canary saved with a sticky note, opened by the plugin built from main (0.4.1, Excalidraw 0.18.1).
+import { readFile } from 'node:fs/promises'
+import { launch } from './harness.mjs'
+const OUT = process.env.OUT
+const { tab, start, close, errors } = await launch()
+const log = (k, v) => console.log(k + ':', JSON.stringify(v))
+try {
+  const saved = await readFile(OUT + '/../sticky.excalimathpad', 'utf8')
+  log('saved by the canary', JSON.parse(saved).elements.map((e) => e.type + (e.containerId ? '(in ' + e.containerId.slice(0, 6) + ')' : '')))
+  await start(saved)
+  await tab.screenshot({ path: OUT + '/03-sticky-in-041.png' })
+  const now = await tab.evaluate(() => window.__file())
+  log('held by 0.4.1 right after opening', now.elements.map((e) => e.type + (e.isDeleted ? '(deleted)' : '') + (e.containerId ? '(in ' + e.containerId.slice(0, 6) + ')' : '')))
+  log('the note\'s text element in 0.4.1', now.elements.filter((e) => e.type === 'text').map((e) => ({ text: e.text, containerId: e.containerId, x: Math.round(e.x), y: Math.round(e.y) })))
+  // An edit, so the view writes: what does the vault's file hold afterwards?
+  const row = await tab.locator('[data-anchor-id="pump"] [data-line="3"]').boundingBox()
+  await tab.mouse.click(row.x + 30, row.y + row.height / 2)
+  await tab.waitForTimeout(200)
+  await tab.mouse.dblclick(row.x + 30, row.y + row.height / 2)
+  await tab.waitForTimeout(500)
+  log('line open', await tab.evaluate(() => document.querySelector('.math-element__field')?.value))
+  await tab.keyboard.press('End'); await tab.keyboard.type(' '); await tab.keyboard.press('Escape')
+  await tab.waitForTimeout(3500)
+  const disk = await tab.evaluate(async (path) => { const app = window.__leaf.view.app; const f = app.vault.getAbstractFileByPath?.(path) ?? app.vault.getFileByPath?.(path); try { return await app.vault.read(f) } catch (e) { return 'ERR ' + e.message } }, 'Calcs/pump.excalimathpad')
+  log('the vault file after an edit in 0.4.1', disk.startsWith('ERR') ? disk : JSON.parse(disk).elements.map((e) => e.type + (e.containerId ? '(in ' + e.containerId.slice(0, 6) + ')' : '')))
+} finally { log('ERRORS', errors); await close() }

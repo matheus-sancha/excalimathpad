@@ -1,0 +1,62 @@
+import { launch, pumpSheet, helpers } from './harness.mjs'
+const OUT = process.env.OUT
+const { tab, start, close, errors } = await launch({ width: 1900, height: 1000 })
+const log = (k, v) => console.log(k + ':', JSON.stringify(v))
+const KEYS = ['zenModeEnabled', 'viewModeEnabled', 'gridModeEnabled', 'objectsSnapModeEnabled', 'isMidpointSnappingEnabled', 'bindingPreference', 'showHints', 'minimapEnabled', 'boxSelectionMode', 'inputDevice']
+try {
+  const sheet = await pumpSheet()
+  await start(sheet)
+  const h = await helpers(tab)
+  const view = () => tab.evaluate(() => window.__api.updateScene({ appState: { scrollX: 420, scrollY: 80, zoom: { value: 1 } } }))
+  await view(); await tab.waitForTimeout(300)
+  const st = () => h.state(KEYS)
+  const pref = async (label) => { await tab.click('.main-menu-trigger'); await tab.waitForTimeout(250); const p = tab.locator('[role=menuitem]:has-text("Preferences")').first(); await p.hover(); await p.click().catch(() => {}); await tab.waitForTimeout(300); await tab.locator(`[role=menuitem]:has-text("${label}")`).first().click(); await tab.waitForTimeout(400) }
+  const openLine = async (line = 1) => { const r = await tab.locator(`[data-anchor-id="calc"] [data-line="${line}"]`).boundingBox(); await tab.mouse.click(r.x + 20, r.y + 12); await tab.waitForTimeout(800); await tab.mouse.dblclick(r.x + 20, r.y + 12); await tab.waitForTimeout(600); return tab.evaluate(() => document.querySelector('.math-element__field')?.value ?? null) }
+  const lineOpen = () => tab.evaluate(() => document.querySelector('.math-element__field')?.value ?? null)
+  const ui = () => tab.evaluate(() => ({ toolbar: !!document.querySelector('.App-toolbar') && document.querySelector('.App-toolbar').getBoundingClientRect().height > 0 && getComputedStyle(document.querySelector('.App-toolbar').closest('.App-toolbar-container, .Island, section') ?? document.querySelector('.App-toolbar')).opacity, menuTrigger: !!document.querySelector('.main-menu-trigger')?.offsetParent, moreTools: !!document.querySelector('.App-toolbar__extra-tools-trigger')?.offsetParent, sheetPanel: !!document.querySelector('.sheet-sidebar')?.offsetParent, minimap: [...document.querySelectorAll('[class*=inimap]')].map((e) => { const r = e.getBoundingClientRect(); return e.className.toString().slice(0, 40) + ' ' + Math.round(r.left) + ',' + Math.round(r.top) + ' ' + Math.round(r.width) + 'x' + Math.round(r.height) }).slice(0, 4) }))
+  log('before', await st())
+
+  // --- each toggle, pressed with a line open
+  for (const label of ['Zen mode', 'View mode', 'Minimap', 'Toggle grid', 'Snap to objects', 'Tool lock', 'Canvas & Shape properties', 'Arrow binding', 'Snap to midpoints', 'Toolbar hints']) {
+    const opened = await openLine(1)
+    if (opened !== null) await tab.keyboard.type(' + 7 m')
+    const typed = await lineOpen()
+    let err = null
+    try { await pref(label) } catch (e) { err = e.message.split('\n')[0].slice(0, 120) }
+    const s = await st()
+    const afterToggle = await lineOpen()
+    log(`[${label}] pressed with a line open`, { opened, typed, lineStillOpen: afterToggle, committed: await tab.evaluate(() => window.__api.getSceneElements().find((e) => e.id === 'calc')?.customData.source.split('\n')[1]), err, on: Object.fromEntries(Object.entries(s).filter(([k, v]) => v === true || (typeof v === 'string' && !['enabled', 'contain', 'auto'].includes(v)))), ui: await ui() })
+    await tab.screenshot({ path: `${OUT}/08-${label.replace(/[^a-z]/gi, '').toLowerCase()}.png` })
+    if (label === 'Zen mode' || label === 'View mode' || label === 'Minimap') {
+      // what the app does while it is on
+      await tab.keyboard.press('Escape'); await tab.keyboard.press('Escape'); await tab.waitForTimeout(200)
+      const reopen = await openLine(2)
+      if (reopen !== null) { await tab.keyboard.type(' + 1 m/s'); }
+      const typed2 = await lineOpen()
+      await tab.keyboard.press('Escape'); await tab.waitForTimeout(400)
+      await h.focusCanvas(); await tab.keyboard.press('m'); await tab.waitForTimeout(300)
+      const placing = (await h.state(['activeTool'])).activeTool
+      await tab.keyboard.press('Escape')
+      log(`   while [${label}] is on`, { doubleClickOpensALine: reopen, typedInto: typed2, sourceNow: await tab.evaluate(() => window.__api.getSceneElements().find((e) => e.id === 'calc')?.customData.source), MStartsPlacing: placing, ui: await ui() })
+      // off again: by its key where the menu is gone
+      const key = { 'Zen mode': 'Alt+z', 'View mode': 'Alt+r' }[label]
+      if (key && !(await tab.evaluate(() => !!document.querySelector('.main-menu-trigger')?.offsetParent))) { await h.focusCanvas(); await tab.keyboard.press(key); await tab.waitForTimeout(400); log(`   [${label}] off by ${key}`, Object.fromEntries(Object.entries(await st()).filter(([k]) => /zen|view/.test(k)))) }
+      else if (label !== 'Minimap') { await pref(label); }
+    }
+    // restore the line's text
+    await tab.keyboard.press('Escape'); await tab.keyboard.press('Escape')
+    await tab.evaluate(() => { const el = window.__api.getSceneElements().find((e) => e.id === 'calc'); window.__api.updateScene({ elements: window.__api.getSceneElements().map((e) => e.id === 'calc' ? { ...e, customData: { ...e.customData, source: 'a = 2 m\nb = a * 3\nc = b / 4 s' }, version: e.version + 1 } : e) }) })
+    await tab.waitForTimeout(300)
+  }
+  log('state at the end', await st())
+  log('localStorage keys written', await tab.evaluate(() => Object.fromEntries(Object.keys(localStorage).map((k) => [k, localStorage.getItem(k).slice(0, 120)]))))
+  log('data.json', await tab.evaluate(() => window.__plugin.dataJson ?? window.__plugin.data ?? null))
+  const data = await tab.evaluate(() => window.__plugin.dataJson ?? null)
+  const fileAppState = JSON.parse(await tab.evaluate(() => window.__leaf.view.getViewData())).appState
+  log('appState in the sheet file', fileAppState)
+  // reload: same browser storage, same data.json, the file as saved
+  const saved = await tab.evaluate(() => window.__leaf.view.getViewData())
+  await start(saved, data)
+  log('after a reload', await (await helpers(tab)).state(KEYS))
+  log('localStorage after reload', await tab.evaluate(() => Object.keys(localStorage)))
+} finally { log('ERRORS', errors); await close() }

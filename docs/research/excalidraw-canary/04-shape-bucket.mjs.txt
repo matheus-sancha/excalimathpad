@@ -1,0 +1,70 @@
+import { launch, pumpSheet, helpers } from './harness.mjs'
+const OUT = process.env.OUT
+const { tab, start, close, errors } = await launch({ width: 1900, height: 1000 })
+const log = (k, v) => console.log(k + ':', JSON.stringify(v))
+const view = () => tab.evaluate(() => window.__api.updateScene({ appState: { scrollX: 60, scrollY: 80, zoom: { value: 1 } } }))
+try {
+  await start(await pumpSheet())
+  const h = await helpers(tab)
+  await view(); await tab.waitForTimeout(300)
+  const drawn = async () => (await h.els()).filter((e) => !e.math)
+
+  // ---- Draw to shape: a rough rectangle beside the small element (scene 400..560 x 100..200)
+  await h.moreTool('Draw to shape')
+  log('tool after More tools > Draw to shape', await h.state(['activeTool']))
+  await h.drag([[400, 100], [480, 97], [562, 101], [565, 150], [561, 203], [480, 199], [402, 202], [398, 150], [400, 102]], { steps: 8 })
+  await tab.waitForTimeout(1200)
+  log('after a rough rectangle', await drawn())
+  log('tool afterwards', await h.state(['activeTool']))
+  // a stroke from the recognised shape to the math element (calc: x 40..243, y 120..217)
+  if ((await h.state(['activeTool'])).activeTool !== 'autoshape') await h.moreTool('Draw to shape')
+  await h.drag([[400, 150], [360, 152], [320, 155], [280, 158], [250, 160], [230, 162]], { steps: 8 })
+  await tab.waitForTimeout(1200)
+  log('after a stroke from the shape into the math element', await drawn())
+  log('the math anchor afterwards', (await h.els()).filter((e) => e.id === 'calc'))
+  await tab.keyboard.press('Escape'); await h.focusCanvas(); await tab.keyboard.press('v')
+  await tab.screenshot({ path: OUT + '/04-draw-to-shape.png' })
+
+  // The bound arrow against a size write: make the math element wider by editing a line.
+  const before = (await h.els()).filter((e) => e.type === 'arrow' || e.type === 'line')
+  const row = await tab.locator('[data-anchor-id="calc"] [data-line="0"]').boundingBox()
+  await tab.mouse.click(row.x + 20, row.y + 12); await tab.waitForTimeout(200)
+  await tab.mouse.dblclick(row.x + 20, row.y + 12); await tab.waitForTimeout(500)
+  log('line open', await tab.evaluate(() => document.querySelector('.math-element__field')?.value))
+  await tab.keyboard.press('End'); await tab.keyboard.type(' + 30 m + 400 m + 5000 m + 60000 m'); await tab.keyboard.press('Escape')
+  await tab.waitForTimeout(900)
+  log('math anchor after the edit', (await h.els()).filter((e) => e.id === 'calc').map((e) => ({ x: e.x, w: e.w, h: e.h, bound: e.bound })))
+  log('arrow before/after the anchor grew', { before, after: (await h.els()).filter((e) => e.type === 'arrow' || e.type === 'line') })
+  await tab.keyboard.press('Escape'); await tab.keyboard.press('Escape')
+  await tab.screenshot({ path: OUT + '/04-arrow-after-size-write.png' })
+
+  // ---- Bucket fill
+  await h.focusCanvas(); await tab.keyboard.press('b')
+  log('tool after B', await h.state(['activeTool']))
+  const n0 = (await drawn()).length
+  await h.click(480, 150); await tab.waitForTimeout(600)   // inside the recognised rectangle
+  log('click inside the drawn rectangle', (await drawn()).slice(n0))
+  const n1 = (await drawn()).length
+  await h.click(1200, 150); await tab.waitForTimeout(600)  // open canvas, no enclosing strokes
+  log('click on open canvas', { added: (await drawn()).slice(n1), toast: await tab.evaluate(() => document.querySelector('.Toast')?.textContent ?? null) })
+  const n2 = (await drawn()).length
+  const calc = (await h.els()).find((e) => e.id === 'calc')
+  await h.click(calc.x + calc.w - 12, calc.y + calc.h - 8); await tab.waitForTimeout(600) // inside the math element, off its text
+  const fills = (await drawn()).slice(n2)
+  log('click inside the math element', { added: fills, toast: await tab.evaluate(() => document.querySelector('.Toast')?.textContent ?? null), anchor: (await h.els()).filter((e) => e.id === 'calc').map((e) => ({ bg: e.bg, stroke: e.stroke, w: e.w, h: e.h })) })
+  log('tool afterwards', await h.state(['activeTool']))
+  await tab.keyboard.press('Escape'); await h.focusCanvas(); await tab.keyboard.press('v')
+  await tab.screenshot({ path: OUT + '/04-bucket.png' })
+  // the fill against a size write: shorten the line again
+  const row2 = await tab.locator('[data-anchor-id="calc"] [data-line="0"]').boundingBox()
+  await tab.mouse.click(row2.x + 20, row2.y + 12); await tab.waitForTimeout(200)
+  await tab.mouse.dblclick(row2.x + 20, row2.y + 12); await tab.waitForTimeout(500)
+  log('after the fill: what a double-click on a math line opens', { lineOpen: await tab.evaluate(() => document.querySelector('.math-element__field')?.value ?? null), ...(await h.state(['selectedElementIds'])), editingText: await tab.evaluate(() => !!window.__api.getAppState().editingTextElement) })
+  if (await tab.evaluate(() => !!document.querySelector('.math-element__field'))) {
+    await tab.keyboard.press('Control+a'); await tab.keyboard.type('a = 2 m'); await tab.keyboard.press('Escape'); await tab.waitForTimeout(900)
+  }
+  log('anchor and fill after the anchor shrank', (await h.els()).filter((e) => e.id === 'calc' || fills.some((f) => f.id === e.id)).map((e) => ({ type: e.type, x: e.x, y: e.y, w: e.w, h: e.h })))
+  await tab.keyboard.press('Escape'); await tab.keyboard.press('Escape')
+  await tab.screenshot({ path: OUT + '/04-bucket-after-size-write.png' })
+  log('scene order', (await h.els()).map((e) => e.id.slice(0, 5) + ':' + e.type))
+} finally { log('ERRORS', errors); await close() }

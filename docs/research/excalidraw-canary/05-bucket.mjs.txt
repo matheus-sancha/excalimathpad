@@ -1,0 +1,45 @@
+import { launch, pumpSheet, helpers } from './harness.mjs'
+const OUT = process.env.OUT
+const { tab, start, close, errors } = await launch({ width: 1900, height: 1000 })
+const log = (k, v) => console.log(k + ':', JSON.stringify(v))
+try {
+  // A drawn rectangle beside the small element, as a control.
+  await start(await pumpSheet([{ id: 'box', type: 'rectangle', x: 400, y: 100, width: 160, height: 100, strokeColor: '#1e1e1e', backgroundColor: 'transparent' }]))
+  const h = await helpers(tab)
+  await tab.evaluate(() => window.__api.updateScene({ appState: { scrollX: 60, scrollY: 80, zoom: { value: 1 } } })); await tab.waitForTimeout(300)
+  const fills = async () => tab.evaluate(() => window.__api.getSceneElements().filter((e) => !['calc', 'pump', 'box'].includes(e.id)).map((e) => ({ id: e.id.slice(0, 5), type: e.type, x: Math.round(e.x), y: Math.round(e.y), w: Math.round(e.width), h: Math.round(e.height), bg: e.backgroundColor, stroke: e.strokeColor, sw: e.strokeWidth, polygon: e.polygon, pts: e.points?.length, custom: e.customData ?? null, index: e.index })))
+  const order = () => tab.evaluate(() => window.__api.getSceneElements().map((e) => e.id.slice(0, 5) + ':' + e.type))
+  await h.focusCanvas(); await tab.keyboard.press('b')
+  await h.click(480, 150); await tab.waitForTimeout(700)
+  log('1. click inside the drawn rectangle', await fills())
+  await h.click(1300, 150); await tab.waitForTimeout(700)
+  log('2. click on open canvas', { fills: (await fills()).length, toast: await tab.evaluate(() => [...document.querySelectorAll('.Toast, .excalidraw-toast, [class*=toast]')].map((e) => e.textContent).join('|') || null) })
+  await tab.screenshot({ path: OUT + '/05-bucket-open-canvas.png' })
+  const calc = (await h.els()).find((e) => e.id === 'calc')
+  await h.click(calc.x + calc.w - 12, calc.y + calc.h - 8); await tab.waitForTimeout(700)
+  log('3. click inside the small math element', await fills())
+  log('   its anchor', (await h.els()).filter((e) => e.id === 'calc').map((e) => ({ bg: e.bg, stroke: e.stroke, x: e.x, y: e.y, w: e.w, h: e.h })))
+  // on the math text itself
+  const row = await tab.locator('[data-anchor-id="pump"] [data-line="5"]').boundingBox()
+  await tab.mouse.click(row.x + 40, row.y + row.height / 2); await tab.waitForTimeout(700)
+  log('4. click on a line of the pump element', (await fills()).map((f) => ({ id: f.id, w: f.w, h: f.h })))
+  log('scene order', await order())
+  await tab.keyboard.press('Escape'); await h.focusCanvas(); await tab.keyboard.press('v'); await tab.waitForTimeout(200)
+  await tab.screenshot({ path: OUT + '/05-bucket.png' })
+  // gestures on the filled math element
+  const r0 = await tab.locator('[data-anchor-id="calc"] [data-line="0"]').boundingBox()
+  await tab.mouse.click(r0.x + 20, r0.y + 12); await tab.waitForTimeout(300)
+  log('5. a click on the filled math element selects', await h.state(['selectedElementIds']))
+  await tab.mouse.dblclick(r0.x + 20, r0.y + 12); await tab.waitForTimeout(500)
+  log('   a double-click opens', { line: await tab.evaluate(() => document.querySelector('.math-element__field')?.value ?? null) })
+  if (await tab.evaluate(() => !!document.querySelector('.math-element__field'))) { await tab.keyboard.press('End'); await tab.keyboard.type(' + 30 m + 400 m + 5000 m + 60000 m'); await tab.keyboard.press('Escape'); await tab.waitForTimeout(900) }
+  log('6. after the math element grew', { anchor: (await h.els()).filter((e) => e.id === 'calc').map((e) => ({ x: e.x, y: e.y, w: e.w, h: e.h })), fills: (await fills()).map((f) => ({ id: f.id, x: f.x, y: f.y, w: f.w, h: f.h })) })
+  await tab.keyboard.press('Escape'); await tab.keyboard.press('Escape'); await tab.waitForTimeout(200)
+  await tab.screenshot({ path: OUT + '/05-bucket-after-growth.png' })
+  // a second bucket click on an existing fill restyles it?
+  await tab.evaluate(() => window.__api.updateScene({ appState: { currentItemBackgroundColor: '#ffc9c9' } }))
+  await h.focusCanvas(); await tab.keyboard.press('b'); await h.click(480, 150); await tab.waitForTimeout(700)
+  log('7. a second click on the first fill, another colour', (await fills()).map((f) => ({ id: f.id, bg: f.bg })))
+  const file = JSON.parse(await tab.evaluate(() => window.__leaf.view.getViewData()))
+  log('file: a fill as saved', file.elements.find((e) => e.type === 'line'))
+} finally { log('ERRORS', errors); await close() }

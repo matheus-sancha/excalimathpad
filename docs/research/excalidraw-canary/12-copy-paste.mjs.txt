@@ -1,0 +1,18 @@
+// Copy and paste of a math element with real keys, DOM only, so it runs on both builds.
+import { launch, pumpSheet } from './harness.mjs'
+const { tab, start, close, errors, origin } = await launch({ width: 1900, height: 1000 })
+try {
+  await tab.context().grantPermissions(['clipboard-read', 'clipboard-write'], { origin })
+  await start(await pumpSheet())
+  const count = () => tab.evaluate(() => document.querySelectorAll('[data-anchor-id]').length)
+  const before = await count()
+  const r = await tab.locator('[data-anchor-id="calc"] [data-line="0"]').boundingBox()
+  await tab.mouse.click(r.x + 20, r.y + 12); await tab.waitForTimeout(500)
+  await tab.keyboard.press('Control+c'); await tab.waitForTimeout(500)
+  let clip = null; try { clip = (await tab.evaluate(() => navigator.clipboard.readText())).slice(0, 80) } catch (e) { clip = 'ERR ' + e.message.slice(0, 60) }
+  await tab.mouse.move(r.x + 500, r.y - 60)
+  await tab.keyboard.press('Control+v'); await tab.waitForTimeout(900)
+  const afterPaste = await count()
+  await tab.keyboard.press('Control+d'); await tab.waitForTimeout(600)
+  console.log(JSON.stringify({ mathElementsBefore: before, afterCtrlCV: afterPaste, afterCtrlD: await count(), clipboardStartsWith: clip }))
+} finally { console.log(JSON.stringify(errors)); await close() }

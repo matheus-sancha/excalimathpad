@@ -1,0 +1,178 @@
+# The least change that lets Excalimathpad build and start on @excalidraw/excalidraw@0.18.0-9fbeaed.
+# Against main at dccc624. Apply with: npm i --save-exact @excalidraw/excalidraw@0.18.0-9fbeaed && git apply canary.patch.txt
+# (package-lock.json is left out: the install writes it, 1,445 lines added and 1,186 removed.)
+# A throwaway: it is not the upgrade, and nothing here is merged.
+diff --git a/package.json b/package.json
+index ab38d7b..f0f80df 100644
+--- a/package.json
++++ b/package.json
+@@ -29,7 +29,7 @@
+     "version": "node scripts/version.mjs"
+   },
+   "dependencies": {
+-    "@excalidraw/excalidraw": "^0.18.1",
++    "@excalidraw/excalidraw": "0.18.0-9fbeaed",
+     "@observablehq/plot": "0.6.17",
+     "katex": "^0.16.47",
+     "mathjs": "^15.2.0",
+diff --git a/src/canvas/SheetCanvas.tsx b/src/canvas/SheetCanvas.tsx
+index 8172a72..3ca85b4 100644
+--- a/src/canvas/SheetCanvas.tsx
++++ b/src/canvas/SheetCanvas.tsx
+@@ -399,7 +399,7 @@ export function SheetCanvas({
+       style={{ width: '100%', height: '100%', ['--sheet-panel-width' as string]: `${panelWidth}px` }}
+     >
+       <Excalidraw
+-        excalidrawAPI={setApi}
++        onExcalidrawAPI={setApi}
+         initialData={initialData}
+         UIOptions={uiOptions}
+         aiEnabled={!vault}
+@@ -713,7 +713,7 @@ function SheetMenu({
+       <MainMenu.DefaultItems.Help />
+       <MainMenu.DefaultItems.ClearCanvas />
+       <MainMenu.Separator />
+-      <MainMenu.DefaultItems.ToggleTheme />
++      <MainMenu.DefaultItems.ToggleTheme allowSystemTheme={false} />
+       <MainMenu.DefaultItems.ChangeCanvasBackground />
+       {/* Text, not an item: it takes no focus and no click (section 12, Hosted build). */}
+       <div className="build-stamp" data-testid="build-stamp" title="This build">
+diff --git a/src/canvas/anchorSize.ts b/src/canvas/anchorSize.ts
+index 4388e35..c77d301 100644
+--- a/src/canvas/anchorSize.ts
++++ b/src/canvas/anchorSize.ts
+@@ -100,7 +100,7 @@ export function sizeWritesWait(app: AppState): boolean {
+       app.newElement ||
+       app.multiElement ||
+       app.editingTextElement ||
+-      app.editingLinearElement,
++      app.selectedLinearElement?.isEditing,
+   )
+ }
+ 
+diff --git a/src/canvas/printScene.ts b/src/canvas/printScene.ts
+index f21faa8..03998df 100644
+--- a/src/canvas/printScene.ts
++++ b/src/canvas/printScene.ts
+@@ -1,6 +1,6 @@
+-import { exportToSvg as excalidrawExportToSvg, getCommonBounds } from '@excalidraw/excalidraw'
++import { exportScene, getCommonBounds } from '@excalidraw/excalidraw'
+ import type { ExcalidrawElement, NonDeletedExcalidrawElement } from '@excalidraw/excalidraw/element/types'
+-import type { BinaryFiles, ExcalidrawImperativeAPI } from '@excalidraw/excalidraw/types'
++import type { ExcalidrawImperativeAPI } from '@excalidraw/excalidraw/types'
+ import { isMathAnchor } from './mathAnchor.ts'
+ 
+ /**
+@@ -8,13 +8,7 @@ import { isMathAnchor } from './mathAnchor.ts'
+  * its `.d.ts` imports types the package doesn't ship, so the type-aware lint
+  * reads it as an error type (CONTEXT.md, Load-bearing).
+  */
+-const exportToSvg = excalidrawExportToSvg as (options: {
+-  elements: readonly NonDeletedExcalidrawElement[]
+-  appState: { exportBackground: boolean; exportWithDarkMode: boolean; exportScale: number; exportEmbedScene: boolean }
+-  files: BinaryFiles | null
+-  exportPadding: number
+-  skipInliningFonts?: true
+-}) => Promise<SVGSVGElement>
++// CANARY PROBE: `exportToSvg` is gone; `exportScene({ type: 'svg' })` replaces it.
+ 
+ /**
+  * The scene's half of the print view (docs/spec-v1.md section 11, Print, and
+@@ -83,12 +77,10 @@ export async function drawingsSvg(
+   })
+   if (elements.length === 0) return null
+   const [x, y] = getCommonBounds(elements)
+-  const svg = await exportToSvg({
+-    elements,
+-    appState: { exportBackground: false, exportWithDarkMode: false, exportScale: 1, exportEmbedScene: false },
+-    files: api.getFiles(),
+-    exportPadding: 0,
+-    ...(inlineFonts ? {} : { skipInliningFonts: true as const }),
++  const svg = await exportScene({
++    type: 'svg',
++    data: { elements, files: api.getFiles() },
++    config: { canvasBackgroundColor: false, theme: 'light', scale: 1, padding: 0, ...(inlineFonts ? {} : { skipInliningFonts: true as const }) },
+   })
+   return { svg, x, y }
+ }
+diff --git a/src/canvas/sceneFile.ts b/src/canvas/sceneFile.ts
+index b71c49e..12cebd1 100644
+--- a/src/canvas/sceneFile.ts
++++ b/src/canvas/sceneFile.ts
+@@ -1,7 +1,8 @@
+ import {
+   CaptureUpdateAction,
+   hashElementsVersion,
+-  restore,
++  restoreAppState,
++  restoreElements,
+   serializeAsJSON,
+ } from '@excalidraw/excalidraw'
+ import type { AppState, ExcalidrawImperativeAPI } from '@excalidraw/excalidraw/types'
+@@ -21,7 +22,7 @@ export type SceneFileApi = Pick<
+   | 'updateScene'
+   | 'addFiles'
+   | 'history'
+-  | 'scrollToContent'
++  | 'setViewport'
+   | 'onChange'
+ >
+ 
+@@ -101,9 +102,13 @@ export function loadScene(
+   scene: Record<string, unknown>,
+   { keepView = false }: { keepView?: boolean } = {},
+ ) {
+-  const restored = restore(scene, api.getAppState(), null, {
+-    repairBindings: true,
+-  })
++  // CANARY PROBE: `restore` is gone; its two halves are still exported.
++  const data = scene as { elements?: never[]; appState?: never; files?: Record<string, never> }
++  const restored = {
++    elements: restoreElements(data.elements, null, { repairBindings: true }),
++    appState: restoreAppState(data.appState, api.getAppState()),
++    files: data.files ?? {},
++  }
+   api.updateScene({
+     elements: restored.elements,
+     appState: {
+@@ -118,7 +123,7 @@ export function loadScene(
+   if (files.length > 0) api.addFiles(files)
+   clearHistory(api)
+   if (!keepView && restored.elements.length > 0) {
+-    api.scrollToContent(undefined, { fitToViewport: false, animate: false })
++    api.setViewport({ target: restored.elements, fit: 'none', animation: false })
+   }
+ }
+ 
+diff --git a/src/canvas/selection.ts b/src/canvas/selection.ts
+index 097f330..09d6e1e 100644
+--- a/src/canvas/selection.ts
++++ b/src/canvas/selection.ts
+@@ -20,12 +20,12 @@ export function deselectAll(api: Pick<ExcalidrawImperativeAPI, 'updateScene'>) {
+  * the second Esc's deselect, so a jump adds no undo step.
+  */
+ export function jumpToAnchor(
+-  api: Pick<ExcalidrawImperativeAPI, 'getSceneElements' | 'scrollToContent' | 'updateScene'>,
++  api: Pick<ExcalidrawImperativeAPI, 'getSceneElements' | 'setViewport' | 'updateScene'>,
+   anchorId: string,
+ ) {
+   const anchor = api.getSceneElements().find((element) => element.id === anchorId)
+   if (!anchor) return
+-  api.scrollToContent(anchor, { fitToContent: false, animate: true })
++  api.setViewport({ target: anchor, fit: 'none', animation: true })
+   api.updateScene({
+     appState: { selectedElementIds: { [anchorId]: true }, selectedGroupIds: {}, editingGroupId: null },
+     captureUpdate: CaptureUpdateAction.NEVER,
+diff --git a/src/overlay/useSheetGestures.ts b/src/overlay/useSheetGestures.ts
+index 3a365dc..df81e5f 100644
+--- a/src/overlay/useSheetGestures.ts
++++ b/src/overlay/useSheetGestures.ts
+@@ -297,7 +297,7 @@ function canvasState(app: AppState, elements: readonly ExcalidrawElement[]): Can
+     placing: isPlacing(app),
+     busy: Boolean(
+       app.editingTextElement ||
+-        app.editingLinearElement ||
++        app.selectedLinearElement?.isEditing ||
+         app.newElement ||
+         app.multiElement ||
+         app.openMenu ||

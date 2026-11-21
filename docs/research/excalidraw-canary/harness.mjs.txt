@@ -1,0 +1,98 @@
+// Canary probe harness: the built plugin (dist-plugin/) of the checkout at ROOT, in headless
+// Chromium against the repo's fake `obsidian`, as the repo's own runs start it.
+import { createServer } from 'node:http'
+import { readFile } from 'node:fs/promises'
+import { createRequire } from 'node:module'
+import { join } from 'node:path'
+
+export const ROOT = process.env.ROOT
+const require = createRequire(join(ROOT, 'package.json'))
+const { build } = require('esbuild')
+const { chromium } = require('playwright')
+export const FILE = 'Calcs/pump.excalimathpad'
+
+export async function pumpSheet(extra = []) {
+  const lines = [...(await readFile(join(ROOT, 'docs/acceptance/pump-sizing.md'), 'utf8')).matchAll(/^\| (c|\d+[a-z]?) \| `(.+?)` \|/gm)].map(([, , s]) => s)
+  return JSON.stringify({
+    type: 'excalidraw', version: 2,
+    elements: [
+      { id: 'calc', type: 'rectangle', x: 40, y: 120, width: 160, height: 60, customData: { kind: 'math', source: 'a = 2 m\nb = a * 3\nc = b / 4 s' } },
+      { id: 'pump', type: 'rectangle', x: 40, y: 320, width: 160, height: 60, customData: { kind: 'math', source: lines.join('\n') } },
+      ...extra,
+    ],
+    appState: {}, files: {}, excalimathpad: { format: 2 },
+  })
+}
+
+export async function launch({ width = 1500, height = 900, touch = false } = {}) {
+  const dist = join(ROOT, 'dist-plugin')
+  const fake = await build({ absWorkingDir: ROOT, entryPoints: ['plugin/test/obsidian.ts'], bundle: true, format: 'iife', globalName: 'FakeObsidian', write: false, target: ['es2022'] })
+  const page = `<!doctype html><html lang="en"><head><meta charset="utf-8"><link rel="stylesheet" href="/styles.css">
+<style>html,body{margin:0;height:100%}.workspace,.workspace-leaf,.workspace-leaf-content,.view-content{height:100%}</style></head><body>
+<script src="/fake-obsidian.js"></script>
+<script>var module = { exports: {} }, exports = module.exports
+window.require = (name) => { if (name === 'obsidian') return FakeObsidian; throw new Error('main.js required ' + name) }</script>
+<script src="/main.js"></script>
+<script>
+window.__start = async (sheet, manifest, data) => {
+  const app = new FakeObsidian.App()
+  app.vault.add(${JSON.stringify(FILE)}, sheet)
+  const plugin = new module.exports.default(app, manifest)
+  if (data) plugin.dataJson = data
+  await plugin.onload()
+  const leaf = app.workspace.getLeaf()
+  await leaf.openFile(new FakeObsidian.TFile(${JSON.stringify(FILE)}))
+  window.__leaf = leaf; window.__plugin = plugin
+}
+window.__file = () => JSON.parse(window.__leaf.view.getViewData())
+</script></body></html>`
+  const types = { '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json' }
+  const server = createServer(async (request, response) => {
+    const path = new URL(request.url, 'http://127.0.0.1').pathname
+    try {
+      let body
+      if (path === '/') body = page
+      else if (path === '/fake-obsidian.js') body = fake.outputFiles[0].text
+      else if (['/main.js', '/styles.css', '/manifest.json'].includes(path)) body = await readFile(join(dist, path))
+      else throw new Error('not found')
+      response.writeHead(200, { 'content-type': types[path.slice(path.lastIndexOf('.'))] ?? 'text/html' })
+      response.end(body)
+    } catch { response.writeHead(404); response.end() }
+  })
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
+  const origin = `http://127.0.0.1:${server.address().port}`
+  const browser = await chromium.launch()
+  const context = await browser.newContext({ viewport: { width, height }, deviceScaleFactor: 1, hasTouch: touch })
+  const requests = []
+  await context.route((to) => !to.href.startsWith(origin), (route) => { requests.push(route.request().url()); route.abort() })
+  const tab = await context.newPage()
+  const errors = []
+  tab.on('pageerror', (e) => errors.push(e.message.split('\n')[0]))
+  tab.on('console', (m) => { if (m.type() === 'error') errors.push('console: ' + m.text().slice(0, 200)) })
+  const manifest = JSON.parse(await readFile(join(dist, 'manifest.json'), 'utf8'))
+  const start = async (sheet, data = null) => {
+    await tab.goto(origin + '/')
+    await tab.evaluate(([s, m, d]) => window.__start(s, m, d), [sheet, manifest, data])
+    await tab.waitForSelector('[data-anchor-id="calc"] .katex', { timeout: 30_000 })
+    await tab.waitForTimeout(800)
+  }
+  const close = async () => { await browser.close(); server.close() }
+  return { tab, start, close, errors, requests, origin }
+}
+
+/** Page helpers for probes on the probe build (window.__api). */
+export async function helpers(tab) {
+  const pt = (x, y) => tab.evaluate(([x, y]) => { const s = window.__api.getAppState(); return { x: (x + s.scrollX) * s.zoom.value + s.offsetLeft, y: (y + s.scrollY) * s.zoom.value + s.offsetTop } }, [x, y])
+  const els = () => tab.evaluate(() => window.__api.getSceneElements().map((e) => ({ id: e.id, type: e.type, x: Math.round(e.x), y: Math.round(e.y), w: Math.round(e.width), h: Math.round(e.height), math: e.customData?.kind === 'math', locked: e.locked, bg: e.backgroundColor, stroke: e.strokeColor, fill: e.fillStyle, bound: e.boundElements?.map((b) => b.type + ':' + b.id), start: e.startBinding?.elementId, end: e.endBinding?.elementId, text: e.text, containerId: e.containerId, pts: e.points?.length })))
+  const state = (keys) => tab.evaluate((keys) => { const s = window.__api.getAppState(); return Object.fromEntries(keys.map((k) => [k, k === 'activeTool' ? s.activeTool.type : k === 'selectedElementIds' ? Object.keys(s.selectedElementIds) : s[k]])) }, keys)
+  const focusCanvas = async () => { await tab.evaluate(() => document.querySelector('.excalidraw').focus()) }
+  const click = async (x, y, opts) => { const p = await pt(x, y); await tab.mouse.click(p.x, p.y, opts) }
+  const drag = async (points, { steps = 6 } = {}) => {
+    const first = await pt(...points[0]); await tab.mouse.move(first.x, first.y); await tab.mouse.down()
+    for (const q of points.slice(1)) { const p = await pt(...q); await tab.mouse.move(p.x, p.y, { steps }) }
+    await tab.mouse.up()
+  }
+  const moreTool = async (label) => { await tab.click('.App-toolbar__extra-tools-trigger'); await tab.waitForTimeout(200); await tab.click(`.dropdown-menu-item:has-text("${label}")`); await tab.waitForTimeout(200) }
+  const undoDepth = () => tab.evaluate(() => { const h = window.__api.history; return { undo: !h.isUndoStackEmpty?.(), redo: !h.isRedoStackEmpty?.() } })
+  return { pt, els, state, focusCanvas, click, drag, moreTool, undoDepth }
+}

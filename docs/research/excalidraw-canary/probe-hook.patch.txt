@@ -1,0 +1,23 @@
+# On top of canary.patch.txt, for the probes only: the Preferences submenu in the menu, and the API on window.__api.
+--- a/src/canvas/SheetCanvas.tsx	2026-11-20 23:38:05.179616122 +0000
++++ b/src/canvas/SheetCanvas.tsx	2026-11-20 23:37:30.000000000 +0000
+@@ -277,6 +277,10 @@
+   // this container is attached. So the handle goes out from an effect, once both
+   // exist, rather than from that callback.
+   const [api, setApi] = useState<ExcalidrawImperativeAPI | null>(null)
++  // CANARY PROBE: the API on the window, so a probe can read app state. Never in the app.
++  useEffect(() => {
++    ;(window as unknown as { __api: unknown }).__api = api
++  }, [api])
+   const onReadyRef = useRef(onReady)
+   useLayoutEffect(() => {
+     onReadyRef.current = onReady
+@@ -714,6 +718,8 @@
+       <MainMenu.DefaultItems.ClearCanvas />
+       <MainMenu.Separator />
+       <MainMenu.DefaultItems.ToggleTheme allowSystemTheme={false} />
++      {/* CANARY PROBE: the Preferences submenu, as excalidraw.com shows it. */}
++      <MainMenu.DefaultItems.Preferences />
+       <MainMenu.DefaultItems.ChangeCanvasBackground />
+       {/* Text, not an item: it takes no focus and no click (section 12, Hosted build). */}
+       <div className="build-stamp" data-testid="build-stamp" title="This build">
