@@ -174,7 +174,10 @@ acceptance sheet* (pump sheet). From M4d: *format bar* and *title's bar* (Format
 - Everything visible in an upright element is inside its anchor, so it can be
   clicked and dragged.
 - After every scene change, an anchor has the fixed style. Only `opacity` varies. A
-  restored style adds no undo step.
+  restored style adds no undo step. From the Excalidraw upgrade an anchor is also always a
+  rectangle: one found as another shape is put back the same way
+  ([section 8](#the-excalidraw-upgrade)).
+- While Excalidraw's View mode is on, nothing the app offers changes the sheet (the upgrade).
 - An element's math, on screen and in print, has its anchor's opacity.
 - Hover content is never printed or saved.
 - Comments and notes never change a result. They live only in the line's source,
@@ -809,6 +812,10 @@ function's definition show none. Hover is screen-only.
   bound to the right or bottom edge stays where it was until the element next moves.
 - **Enter** on one selected math element edits its **last line**, with the caret at
   the end.
+- **From the Excalidraw upgrade** ([section 8](#the-excalidraw-upgrade)): the lasso
+  selects as the selection tool does, so Enter and a double-click on a line edit under it
+  too; Tab opens no shape switch while a math element is selected; and the bucket fills
+  nothing inside a math element.
 - The rotate handle works. Until M4c, **resize handles snap back** to the fit, in place.
   **Known limit:** the resize still marks the sheet dirty, though nothing changes: Excalidraw
   changes the scene while the handle moves.
@@ -1743,6 +1750,27 @@ app and a vault unchanged.
 - **A format 2 sheet is refused by 0.2.x** with "This sheet was saved by a newer
   Excalimathpad. Update the app.", so an older app never overwrites it. In a vault synced
   between devices, every device needs 1.0.0 before one of them saves.
+
+**From the Excalidraw upgrade the file's format rises again,** for every sheet
+([section 8](#the-excalidraw-upgrade)):
+
+- **Why.** The upgrade's Excalidraw writes elements an older build doesn't know. A sticky
+  note is a new element type, and a build on Excalidraw 0.18.1 was seen to open a sheet
+  that holds one with no message, show the note's text with no note, and write the file
+  without the note at its next save. Raising the format for a sheet only while it holds a
+  note would make the format depend on the content, and wouldn't cover what else an older
+  build drops.
+- **Every sheet the upgraded build saves is written at the new format,** so an older build
+  refuses it with the same message and never writes it. In a vault synced between
+  devices, every device takes the upgraded build before one of them saves, and a sheet
+  doesn't go back.
+- **A sheet at the format before it opens as it is,** with nothing to change in it, and is
+  written at the new format at its next save. Opening alone doesn't make it dirty.
+- **The number is the next free one when the upgrade is released.** Formats are a plain
+  sequence, each build opens every lower format and refuses every higher one, and two
+  changes are on the road: this one, and the saved conversation of `0.6.0`. Whichever is
+  released first is format 3 and the other is format 4. Neither waits for the other.
+- A bucket fill is not a reason: it is a `line` element, which an older build keeps.
 - The example below shows format 2. In format 1 the block says `"format": 1`, there is no
   `formats` key, and the first line's text is `D = 102.3 mm @bold`.
 
@@ -1891,7 +1919,8 @@ command and first ☰ item. There is no app bar: the chrome lives inside Excalid
   items stay: Find on canvas, Help, Reset the canvas, dark mode, canvas background. From M4b the
   menu's last line is the [build stamp](#hosted-build), which is text, not an item. From M4d
   **Math guide** sits just above Excalidraw's Help ([Math guide](#math-guide)). From 0.5.0 a
-  **Language** row sits just below Dark mode ([Language](#language)).
+  **Language** row sits just below Dark mode ([Language](#language)). From the Excalidraw
+  upgrade **Preferences** sits below Language ([The Excalidraw upgrade](#the-excalidraw-upgrade)).
 - **File name** beside the ☰ button, with `●` while dirty.
 - **Window title:** the name without its extension, with `●` while dirty: `● pump-sizing`.
   An unsaved sheet reads `● Untitled`. While printing, the title drops the mark, so the PDF is
@@ -2061,12 +2090,101 @@ From 0.5.0, in both homes, on Excalidraw 0.18.1.
   request. The web app fetches them from its own address when first chosen, as it fetches
   its other chunks.
 
+### The Excalidraw upgrade
+
+The app moves from Excalidraw 0.18.1 to a pinned canary build, `0.18.0-9fbeaed`, because no
+release holds the five items the testers asked for. It is `0.5.0`'s last piece and slides
+alone: in `0.5.0` if it is green on the day, otherwise a `0.6.x`
+([The test period](#the-test-period)). Until it is merged, everything below is not built,
+and the rest of this spec describes the app on 0.18.1. What the canary was seen to do is in
+[`docs/research/excalidraw-canary.md`](research/excalidraw-canary.md).
+
+**What it adds, in both homes.** All five show:
+
+| Item | Where | Key |
+|---|---|---|
+| Sticky note | Excalidraw's toolbar | N |
+| Draw to shape | More tools | Shift+X |
+| Bucket fill | More tools | B |
+| Lasso selection | More tools | none |
+| Preferences | ☰, below Language | each entry's own |
+
+- **The image tool moves** from the toolbar into More tools, as "Insert image" (key 9):
+  Excalidraw's own change. In a vault it still opens the vault's image picker
+  ([section 12a](#data-protection)).
+- **More tools** then holds Excalidraw's Insert image, Frame tool, Web Embed (web only),
+  Draw to shape, Laser pointer, Bucket fill, Lasso selection and Mermaid to Excalidraw (web
+  only), then the **Math** heading with Add math and Math settings, as today.
+- **The new keys are the sheet's,** as Excalidraw's other keys are, and in an open line
+  they are typed: N, B, Shift+X, Q, Alt+Z, Alt+R, Alt+S, Alt+/ and Ctrl+'.
+- **Under Português,** Sticky note, Draw to shape and Bucket fill show in English: the
+  canary's Portuguese has no text for them.
+
+**With a math element.** The rules of [section 4](#gestures) stand; these are added:
+
+- **A sticky note is a drawing.** It is drawn under the math, as every drawing is, so it
+  never hides math, and its text can show through where the two overlap. Where a note lies
+  on top of a math element in Excalidraw's order, a double-click there is the note's, by
+  the rule for a drawing on top.
+- **Draw to shape makes drawings,** never a math element. An arrow it draws into a math
+  element binds to it as any arrow does, with the known limit of a bound arrow's end
+  ([Gestures](#gestures)).
+- **The bucket fills nothing inside a math element.** With the bucket tool active, a click
+  on a point a math element owns does nothing: the app takes it before Excalidraw. A click
+  beside math or inside a drawing is Excalidraw's, a drawing on top of a math element
+  included. Colour on math is the [Format tab](#format-tab)'s. (Left to Excalidraw, the
+  fill covered the whole element and kept its size when the element grew.)
+- **The lasso counts as selecting.** With one math element selected by a lasso, and the
+  lasso still the active tool, Enter and a double-click on a line edit, and the hint for a
+  selected math element shows, as under the selection tool. A lasso skips a locked
+  element, as Excalidraw's marquee does. A drag begun inside a math element under the
+  lasso draws the lasso and doesn't move the element.
+- **Tab opens no shape switch on math.** With a math element in the selection, alone or
+  with drawings, the app takes Tab before Excalidraw. With only drawings selected Tab is
+  Excalidraw's. (Left to Excalidraw, a second Tab turned the anchor into a diamond and the
+  math was no longer drawn.)
+- **An anchor is always a rectangle.** One found as another shape, by any route, is put
+  back to a rectangle with its fixed style, with no undo step and without making a clean
+  sheet dirty, and its math is drawn as before
+  ([Selected math element](#selected-math-element)).
+- **One selected math element still shows Opacity, Layers and Actions only,** and its hint,
+  as [Selected math element](#selected-math-element) says. The canary shows the whole
+  panel until the upgrade puts this back.
+
+**Preferences.** ☰ → Preferences is Excalidraw's submenu, with all twelve entries: Select on
+(Wrap or Overlap), Input (Trackpad or Mouse), Tool lock, Snap to objects, Toggle grid, Zen
+mode, View mode, Minimap, Canvas & Shape properties, Arrow binding, Snap to midpoints and
+Toolbar hints. Opening ☰ leaves an open line, as any press outside it does, and what was
+typed is committed.
+
+- **View mode is read-only for the math too.** Excalidraw's View mode already opens no
+  line: nothing selects, and a double-click and Enter do nothing. While it is on, the
+  app's own ways to change the sheet do nothing either: Add math (M, and the Obsidian
+  command), renaming a name (the ✎ is dimmed), and the Settings tab, whose controls are
+  dimmed. The Sheet panel says so at its top ([section 13](#13-messages)). Reading is
+  whole: Variables, Problems, the Math guide, a jump, pan and zoom, and Print….
+- **Zen mode** changes nothing of the math: lines open, M places, and the Sheet panel and
+  More tools stay.
+- **The minimap** draws a math element as a box, with no math in it. It sits over the
+  sheet's bottom left.
+- **The grid** is Excalidraw's, drawn under the math. Math isn't aligned to it.
+- **Where each is remembered:**
+
+  | Entry | Remembered |
+  |---|---|
+  | Select on, Input, Tool lock, Snap to objects, Minimap, Canvas & Shape properties, Arrow binding, Snap to midpoints, Toolbar hints | Per device and never in the file, as Dark mode and Language are: the plugin's `data.json`, browser storage on the web. Every sheet opened afterwards starts with them |
+  | Zen mode, View mode | Never: off at every start, so no sheet opens read-only or bare by surprise |
+  | Toggle grid | In the sheet file, as today: Excalidraw saves it with the scene |
+
+- A change of preference is no undo step and, the grid apart, never makes a sheet dirty.
+
 ### Inside an Obsidian tab
 
 From M4d, in the plugin. The web app's chrome above is unchanged.
 
 - **☰ menu:** Math guide, Find on canvas (Ctrl+F), Help (`?`), Reset the canvas, a separator,
-  Dark mode (Alt+Shift+D), from 0.5.0 [Language](#language), Canvas background, then the
+  Dark mode (Alt+Shift+D), from 0.5.0 [Language](#language), from the Excalidraw upgrade
+  [Preferences](#the-excalidraw-upgrade), Canvas background, then the
   version stamp (`0.1.0`) as text. The
   file items are gone ([A sheet in a vault](#a-sheet-in-a-vault)). From M5, on a computer,
   **Print…** is the first item, with no key, and a separator follows it; on a phone or tablet
@@ -2091,7 +2209,8 @@ From M4d, in the plugin. The web app's chrome above is unchanged.
   and floating when narrower, so a split pane floats it. Each tab has its
   own panel. Its open or closed memory is kept in the plugin's `data.json`.
 - **Hidden in the plugin:** Web Embed and Mermaid to Excalidraw in More tools, with the
-  Generate heading over them, and Excalidraw's AI items; Browse libraries (the library keeps
+  Generate heading over them, and Excalidraw's AI items (after the Excalidraw upgrade too:
+  its new items are all shown, and these stay hidden); Browse libraries (the library keeps
   the session's items); Copy to clipboard as SVG (Copy as PNG stays); Excalidraw's command
   palette, whose keys (Ctrl+/, Ctrl+Shift+P) are swallowed.
 - **Obsidian's entries:** the commands **New sheet** (always), **Add math**, **Toggle Math
@@ -2139,7 +2258,9 @@ Decided in: [chrome](https://github.com/matheus-sancha/excalimathpad/issues/17),
 [phone and tablet](https://github.com/matheus-sancha/excalimathpad/issues/127),
 [listing](https://github.com/matheus-sancha/excalimathpad/issues/130),
 [the nine Excalidraw items](https://github.com/matheus-sancha/excalimathpad/issues/234),
-[how a rename starts](https://github.com/matheus-sancha/excalimathpad/issues/232).
+[how a rename starts](https://github.com/matheus-sancha/excalimathpad/issues/232),
+[the canary run](https://github.com/matheus-sancha/excalimathpad/issues/255),
+[the upgrade's rules](https://github.com/matheus-sancha/excalimathpad/issues/256).
 
 ## 9. Solve
 
@@ -2710,6 +2831,11 @@ touch in [section 4](#touch). Research: [`docs/research/obsidian-plugin.md`](res
   Brazilian Portuguese (`pt-BR`, about 22 kB on 0.18.1), for [Language](#language); every
   other locale stays stubbed. It fits `main.js`'s budget as it stands (about 170 kB free);
   if it doesn't on the day, the budget is raised by the rule below, in a commit that says so.
+- **The Excalidraw package is pinned** from [the upgrade](#the-excalidraw-upgrade):
+  `"@excalidraw/excalidraw": "0.18.0-9fbeaed"`, exact, with no caret. It moves only twice: to
+  a newer canary when a bug that blocks the app is fixed there, in a commit that names the
+  bug; and to Excalidraw's next release that holds the five items, as an issue of its own.
+  The plugin's trims and rewrites are redone against that build's text.
 - **Scripts:** `build:web` (`vite build` → `dist/`), `build:plugin` (→ `dist-plugin/`: `main.js`,
   `styles.css`, a copy of `manifest.json`), and `build` runs `tsc -b` and both, so
   `npm run check` proves both homes on every pull request. `main.js` is not committed (see
@@ -2742,7 +2868,10 @@ touch in [section 4](#touch). Research: [`docs/research/obsidian-plugin.md`](res
   [Spec for 0.6.0](https://github.com/matheus-sancha/excalimathpad/issues/238); until that
   map's spec change lands, nothing here changes and the bundle audit is as below.
 - **Storage only in the vault:** sheets in their files; the plugin's memory (the panel's open or
-  closed state, light or dark and, from 0.5.0, the language) in `data.json` through `loadData`/`saveData`. No IndexedDB, `localStorage` or
+  closed state, light or dark, from 0.5.0 the language and, from the Excalidraw upgrade, nine
+  preferences) in `data.json` through `loadData`/`saveData`. The canary's own two uses of
+  `localStorage` (a setting of its properties panel, and its feature flags) are taken out of
+  the plugin's bundle, as its other storage is. No IndexedDB, `localStorage` or
   `App#saveLocalStorage`.
 - **Reach:** it reads only the sheet open in the view and one image the user picks from a vault
   image picker (image files listed by name; the picked image is copied into the sheet, as
@@ -2771,7 +2900,11 @@ touch in [section 4](#touch). Research: [`docs/research/obsidian-plugin.md`](res
     cap is reported against the cap only. Going over fails
     `npm run check` with, for example, `main.js is 3,512,004 bytes, over its budget of
     3,500,000. If the growth is meant, raise BUDGET and say why.` Raising a budget is allowed,
-    as a deliberate line in a commit that says what was added.
+    as a deliberate line in a commit that says what was added. The Excalidraw upgrade is
+    such a commit: with only the package changed, `main.js` was 4,206,778 bytes and
+    `styles.css` 605,569. Both budgets are set again from the upgraded build by this
+    rule, after what the plugin doesn't use is trimmed, and the 5,000,000 cap holds. The
+    allowlist gains the canary's two new embed hosts, with why neither can load.
   - **Network-blocked run:** the built bundle loads in headless Chromium against the fake
     `obsidian`, with every non-local request blocked and logged, and opens a sample sheet with
     math, a plot, an image and CJK text. Any attempted request fails, and so does any `<style>` or
@@ -2874,7 +3007,8 @@ Decided in: [work laptop](https://github.com/matheus-sancha/excalimathpad/issues
 [listing](https://github.com/matheus-sancha/excalimathpad/issues/130),
 [M4d](https://github.com/matheus-sancha/excalimathpad/issues/125),
 [the test period](https://github.com/matheus-sancha/excalimathpad/issues/233),
-[the nine Excalidraw items](https://github.com/matheus-sancha/excalimathpad/issues/234).
+[the nine Excalidraw items](https://github.com/matheus-sancha/excalimathpad/issues/234),
+[the upgrade's rules](https://github.com/matheus-sancha/excalimathpad/issues/256).
 
 ## 13. Messages
 
@@ -3060,6 +3194,13 @@ The wording of every user-facing message. `<…>` is filled in. Numbers follow
 | The offer's row on a phone, with more than one waiting | `1 of 2` |
 | After a rename (toast) | `Renamed rho to rho_w in 7 lines. Ctrl+Z takes it back.` (on touch: `… Undo takes it back.`) |
 | ☰'s row and its two choices | `Language`, `English`, `Português (Brasil)` |
+
+**The Excalidraw upgrade**
+
+| When | Message |
+|---|---|
+| The Sheet panel's top, while View mode is on | `View mode is on: the sheet can't be changed.` |
+| A sheet at the upgrade's format, opened by an older build | `This sheet was saved by a newer Excalimathpad. Update the app.`, the message of M1 |
 
 **In a vault** (M4d)
 
@@ -3604,6 +3745,69 @@ Evidence: [`obsidian-plugin.md`](research/obsidian-plugin.md).
   again in the Playwright runs, and the network-blocked run chooses Português and still
   sees no request.
 
+**The Excalidraw upgrade**
+
+Measured on a throwaway copy of `main` at `dccc624`
+([`docs/research/excalidraw-canary.md`](research/excalidraw-canary.md)). With only the package
+changed and the six API changes below, both builds start; 35 of 2,196 unit tests, three of
+the six Playwright runs and the bundle audit fail. Each group below is one issue of
+[the upgrade's order](#the-test-period).
+
+- **The pin** is an exact version in `package.json`, since a canary's tag isn't ordered
+  against the next one's. ADR 0001's "upgrades are `npm update`" no longer holds while the
+  app is on a canary.
+- **The API that changed,** each to be read against the canary's types, not only made to
+  compile: `excalidrawAPI` is `onExcalidrawAPI`; `ToggleTheme` needs `allowSystemTheme`;
+  `scrollToContent` is `setViewport({ target, fit, animation })` (a jump and an opened
+  sheet land where they did); `restore` is gone and `restoreElements` and
+  `restoreAppState` stay; `exportToSvg` is `exportScene({ type: 'svg', data, config })`,
+  which draws the drawings of a printed page; `appState.editingLinearElement` is
+  `selectedLinearElement?.isEditing`. The scene's saved state gains a key,
+  `lockedMultiSelections`.
+- **Undo:** [Scene writes](#14-engineering-constraints) already says the version
+  comparison goes at this upgrade. 18 contract tests on undo steps fail on the canary. Every
+  rule of [section 6](#6-undo) is to hold as written; one that can't is brought back to
+  Matheus before a test is changed.
+- **Excalidraw's DOM,** each a contract in `src/canvas/` with its test against the installed
+  package: tools are `<button>`s with no radio, and the image tool is "Insert image" in More
+  tools, which the vault's picker takes over; More tools' own items are more, in another
+  order; the reduced panel's CSS no longer matches, so the whole panel shows; the hint's
+  markup changed, though the app's hint still shows; the docking width's four checks
+  fail; the pop-out bridge's copy and paste fail (with real keys in one window they work);
+  the view adds one listener on `document` beyond Excalidraw's; the touch run stops on a
+  phone. The z-indexes are unchanged.
+- **The plugin's bundle:** the canary's two `localStorage` uses are removed by the build;
+  CodeMirror, a new dependency that makes a `<style>` at run time, and the larger Mermaid to
+  Excalidraw are trimmed if the plugin never mounts them; the two new embed hosts go on the
+  allowlist with why they can't load; then the budgets are set from the build.
+- **The format rise** is one constant and one migration step that changes no data, so the
+  number can be set on the day the branch merges.
+- **Gestures taken before Excalidraw,** in the capture phase, as the others are: Tab's
+  `keydown` while a math element is selected; a press with the bucket tool on a point a
+  math element owns, by the same ownership rule a double-click uses. The lasso is one more
+  tool for which the selection's gestures and the hint hold. Each has the control of what
+  Excalidraw does without the app.
+- **An anchor's type is restored with its style:** in the same write, from `onChange`, with
+  `NEVER` and `keepClean`, so it adds no undo step and leaves a clean sheet clean. The app
+  reads an element as an anchor by its kind, so a converted one is found and put back.
+- **View mode** is read from Excalidraw's own state (`viewModeEnabled`). Every way the app
+  writes the scene or the sheet's settings checks it; the list is made before it is built,
+  and a writer found beyond the spec's is stopped and added to the spec.
+- **The preferences' memory** is a port beside the theme's and the language's, so the
+  plugin's bundle names no browser storage. The nine values are given to Excalidraw at
+  start, and read back from its state as they change. Seven were read from the canary's
+  state (`boxSelectionMode`, `inputDevice`, `objectsSnapModeEnabled`, `minimapEnabled`,
+  `bindingPreference`, `isMidpointSnappingEnabled`, `showHints`); where Tool lock and Canvas
+  & Shape properties are held was not.
+- **The probes become checks.** What the run saw by hand is in the Playwright runs
+  afterwards: a sticky note saved and reopened, Tab twice on a math element, the bucket
+  inside one, the lasso and Enter, M in View mode, and the preferences after a restart. So
+  the next move of the pin fails CI if one of them changes.
+- **`CONTEXT.md`'s Load-bearing list** is rewritten by the issue that changes each entry:
+  source writes, the reduced panel and the hint, the docking width, the pop-out bridge, the
+  plugin's bundle, and the typings Excalidraw gives as `any`. Its first paragraph and its
+  sizes say the canary once the branch is merged.
+
 ## 15. Acceptance
 
 v1 is judged on the [pump sheet](acceptance/pump-sizing.md), with
@@ -3754,9 +3958,9 @@ with the next. The releases, by version:
 |---|---|---|---|
 | `0.4.0` | M4e and M5, v1's last two milestones | 2026-11-17 | Week 1: two testers, the plugin on a Windows 11 PC. Its feedback: [Bugs Week 1](https://github.com/matheus-sancha/excalimathpad/issues/227), [Ideas from week 1](https://github.com/matheus-sancha/excalimathpad/issues/228) |
 | `0.4.1` | Week 1's bug: a display unit that starts with `in` ([#229](https://github.com/matheus-sancha/excalimathpad/issues/229)) | 2026-11-20 | Week 1 |
-| `0.5.0` | Week 1's ideas: [renaming a name](#renaming-a-name), [Language](#language), and the Excalidraw upgrade if it is green by the day | Due by Sunday 2026-11-22 | None of its own: `0.6.0` is due the same day |
+| `0.5.0` | Week 1's ideas: [renaming a name](#renaming-a-name), [Language](#language), and [the Excalidraw upgrade](#the-excalidraw-upgrade) if its branch is green and merged before the release | Due by Sunday 2026-11-22 | None of its own: `0.6.0` is due the same day |
 | `0.6.0` | The AI features, in both homes, on their own map, [Spec for 0.6.0](https://github.com/matheus-sancha/excalimathpad/issues/238). The last beta | Due by Sunday 2026-11-22 | Week 2, 2026-11-23 to 2026-11-29 |
-| `0.6.x` | What slid from `0.5.0` or `0.6.0`, and fixes | During week 2 | The quiet week is counted from the release that completes `0.6.0`'s list |
+| `0.6.x` | What slid from `0.5.0` or `0.6.0` (the Excalidraw upgrade, if it wasn't green), and fixes | During week 2 | The quiet week is counted from the release that completes `0.6.0`'s list |
 | `1.0.0` | The last beta's code, the documents and the version (#203) | After a quiet week; at the earliest about 2026-11-30 | None |
 
 - **A test week** is Monday to Sunday. It counts when the beta was used on real sheets, by the
@@ -3783,7 +3987,7 @@ issues are closed with them when `0.5.0` is released ([#264](https://github.com/
 |---|---|
 | Can't select area in in^2 | Fixed in `0.4.1` (#229) |
 | Autoswap variables | `0.5.0`: [renaming a name](#renaming-a-name) |
-| Sticky notes, draw to shape, bucket fill, lasso selection, Excalidraw's preferences | `0.5.0`, through the Excalidraw upgrade: no release after 0.18.1 holds them, so the app moves to a pinned canary build, with all five shown. Built last, on its own branch; if it isn't green by Sunday it ships alone as a `0.6.x`. Its rules are written by its own tickets ([#255](https://github.com/matheus-sancha/excalimathpad/issues/255), [#256](https://github.com/matheus-sancha/excalimathpad/issues/256), [#257](https://github.com/matheus-sancha/excalimathpad/issues/257)) and aren't in this spec yet |
+| Sticky notes, draw to shape, bucket fill, lasso selection, Excalidraw's preferences | `0.5.0`, through [the Excalidraw upgrade](#the-excalidraw-upgrade): no release after 0.18.1 holds them, so the app moves to a pinned canary build, with all five shown. Built on its own branch; if it isn't green by Sunday it ships alone as a `0.6.x` |
 | Language select | `0.5.0`: [Language](#language), English and Português (Brasil), Excalidraw's own text only |
 | Web embed | Refused in the plugin through 1.0.0; it is in the web app ([section 1](#1-what-v1-is-and-what-it-isnt)) |
 | Live collaboration | Refused: not planned ([section 1](#1-what-v1-is-and-what-it-isnt)) |
@@ -3809,6 +4013,38 @@ touches none of these and can be built in a parallel session at any point; it is
 the list has an order. The fifth describes what was built, so it is last, and it releases. The
 Excalidraw upgrade's issues come after all five, from their own ticket, and slide alone: nothing
 above waits for them, and `0.6.0` is built on 0.18.1 and carried across.
+
+**The Excalidraw upgrade's issue order** (added on 2026-11-21, on the same map, from
+[the canary run](https://github.com/matheus-sancha/excalimathpad/issues/255) and [its rules](https://github.com/matheus-sancha/excalimathpad/issues/256); Matheus kept it for Sunday after the run,
+against the recommendation to plan it as a `0.6.x`):
+
+1. Excalidraw pinned to 0.18.0-9fbeaed, its renamed API, and both builds starting (#266)
+2. Undo steps hold on the canary (#267)
+3. Excalidraw's toolbar, panel, hint, docking, pop-out and touch contracts (#268)
+4. The plugin's bundle on the canary: storage, the audit and the budgets (#269)
+5. The file's format rises for every sheet (#270)
+6. Tab, the bucket and the lasso with math elements (#271)
+7. Preferences: twelve entries, View mode read-only, nine remembered (#272)
+8. The Math guide, the checks by hand, and the merge (#273)
+
+The upgrade can't reach `main` until all of it is green, so it is built on one branch,
+`excalidraw-upgrade`, which the first issue makes from `main`, and it starts at once, beside
+0.5.0's five issues, not after them: the date leaves no room for a queue. The first issue is
+alone because nothing compiles before it. The next six touch different files (the undo
+write; Excalidraw's DOM and the runs; the plugin's build and its audit; the file; the
+gestures; the menu and the memory), so they run in parallel sessions as pull requests into
+that branch, where `npm run check` stays red until all six are in. Three of them make what
+exists green again and three add the rules, and neither group is enough alone: the canary
+green without the rules could turn a math element into a diamond or lose a note on an older
+device, so it can't ship. The eighth merges `main` in, with rename and Language, sets the
+format's number against `main` as it is that day, and opens the one pull request.
+
+**Green** is `npm run check` on that pull request, and then by hand: the five items and the
+new keys in Obsidian on the work laptop, the sheet refused by the build before it on a
+second device, and the device checklist, since the upgrade changes touch, panel and
+overlay code ([section 12a](#releases)). Merged before 0.5.0's release issue runs the
+Release button, the upgrade is in `0.5.0`; otherwise the branch waits and it is a `0.6.x`.
+The file's format rises in whichever release that is ([section 7](#the-file)).
 
 ### The finish line
 
@@ -3863,8 +4099,14 @@ check goes with it.
 - `0.6.0` is the first release that sends sheet content to a host. Its rule is written by its own
   map, and whether Obsidian's review asks for a disclosure, and in what words, is that map's.
 - The Excalidraw upgrade moves the app to unreleased code, chosen against the recommendation to
-  wait for a release. With only the package swapped, the canary gave 50 type errors, failed 351
-  of 2,196 tests and didn't build the plugin; none of its five items has been run in this app.
+  wait for a release, and kept for Sunday against the recommendation to plan it as a `0.6.x`.
+  With the least change that starts the app, 35 of 2,196 tests, three of the six runs and the
+  bundle audit are red, and its rules add a format rise, four gestures, a read-only rule and a
+  preferences memory on top, with one day left and rename, Language and `0.6.0` on the same day.
+- Two format rises can fall in one week, the upgrade's and `0.6.0`'s, each needing every
+  tester's device updated before one saves.
+- View mode's read-only is the first such rule in the app: a writer it misses still writes.
+- Nothing of the upgrade was run inside Obsidian or on a device.
 - Language leaves a mixed screen under Português, chosen knowing it: Excalidraw's part
   translated, the app's own text English.
 - While a new name is typed in its line and until the offer is answered, every line that reads
@@ -3876,7 +4118,8 @@ Decided in: [milestones](https://github.com/matheus-sancha/excalimathpad/issues/
 [M4e, M5 and 1.0.0](https://github.com/matheus-sancha/excalimathpad/issues/187),
 [the test period](https://github.com/matheus-sancha/excalimathpad/issues/233),
 [the nine Excalidraw items](https://github.com/matheus-sancha/excalimathpad/issues/234),
-[0.5.0](https://github.com/matheus-sancha/excalimathpad/issues/235).
+[0.5.0](https://github.com/matheus-sancha/excalimathpad/issues/235),
+[the Excalidraw upgrade](https://github.com/matheus-sancha/excalimathpad/issues/257).
 
 ## 17. Verify first
 
@@ -3956,6 +4199,25 @@ M1 to M5, is in [`docs/spec-history.md`](spec-history.md#17-verify-first), with 
 - In Obsidian, by hand: the language is still chosen after a restart, on the work laptop
   and one phone.
 
+**The Excalidraw upgrade**
+
+- Whether the canary converts a shape by a route other than Tab (a menu item, a command, a
+  paste of a converted element): the restore of an anchor's type covers them, but which
+  exist wasn't read.
+- Every way the app writes the scene or the sheet's settings, each tried in View mode. The
+  run saw M place a math element there; a Settings change was tried and not established.
+- Where Tool lock and Canvas & Shape properties keep their state, and whether each of the
+  nine preferences can be given to Excalidraw at start.
+- What Zen mode hides, with a line open and with the Sheet panel docked.
+- Whether CodeMirror and Mermaid to Excalidraw 3.6.0 can be trimmed from the plugin, and the
+  two sizes afterwards.
+- Why the 18 undo tests fail, beyond their messages, and whether a nudge and the next line
+  can still be two steps.
+- A sticky note and a fill on a printed page.
+- Under Português, that an empty text shows in English on screen: read from the package only.
+- In Obsidian, by hand: the new keys against Obsidian's own; copy and paste in a real
+  pop-out window; the five items by touch on a device; a sheet refused on a second device.
+
 **M6**
 
 - Installing, the Windows "Open with" association, and saving back to an opened file.
@@ -3968,6 +4230,42 @@ Each section above ends with its own tickets.
 
 ## Changes since agreed
 
+- 2026-11-21, [sections 8](#the-excalidraw-upgrade), [7](#the-file), [4](#gestures) and
+  [12a](#12a-obsidian-plugin) (the Excalidraw upgrade, from the map
+  [Spec for 0.5.0, from the first test week's feedback](https://github.com/matheus-sancha/excalimathpad/issues/230)).
+  Not built until its branch is merged. Agreed rules that change, each chosen by Matheus:
+  - **Excalidraw is a pinned canary, not a release.** `^0.18.1` becomes the exact
+    `0.18.0-9fbeaed`, so an upgrade is no longer `npm update` (ADR 0001).
+  - **The file's format rises for every sheet,** to the next free number. Until now a format
+    changed only when the app's own data did.
+  - **"M works from any tool" has an exception:** not while View mode is on, where Add math,
+    a rename and Settings do nothing.
+  - **Enter and a double-click edit under a second tool,** the lasso, not only the selection
+    tool.
+  - **The app takes two more of Excalidraw's gestures on math:** Tab's shape switch and the
+    bucket's click. "Only opacity varies" gains the anchor's type: it is always a rectangle.
+  - **The plugin's memory gains nine preferences,** and both budgets are set again from the
+    upgraded build.
+  - **The image tool is in More tools,** not the toolbar: Excalidraw's own change.
+
+  Read by the session where the tickets were silent, **for Matheus to confirm on the pull
+  request:**
+  - The reduced panel (Opacity, Layers, Actions) and the hint are agreed rules that stand;
+    the canary showing the whole panel is a contract to redo, not a choice.
+  - "Inside a math element", for the bucket, is a point the element owns by the double-click's
+    rule, so a drawing on top keeps Excalidraw's fill.
+  - View mode's read-only covers Add math (M and the Obsidian command), both ways of renaming
+    and the Settings tab; the Sheet panel says "View mode is on: the sheet can't be changed."
+    at its top; reading, a jump and Print… stay.
+  - A sheet at the format before opens unchanged and clean, and is written at the new format
+    at its next save.
+  - The new keys are the sheet's, and typed in an open line.
+  - Sticky note, Draw to shape and Bucket fill show in English under Português.
+  - Preferences sits below Language in ☰; the grid is not aligned with math; a change of
+    preference is no undo step and, the grid apart, never makes a sheet dirty.
+  - The upgrade's branch is `excalidraw-upgrade`, it starts beside 0.5.0's issues and not
+    after them, and "green" is `npm run check` on its pull request plus the hand checks of
+    section 16.
 - 2026-11-20, [sections 16](#the-finish-line), [12a](#12a-obsidian-plugin) and
   [8](#8-app-chrome) (0.5.0, from the map
   [Spec for 0.5.0, from the first test week's feedback](https://github.com/matheus-sancha/excalimathpad/issues/230)).
