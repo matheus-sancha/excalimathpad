@@ -241,8 +241,8 @@ The web app and the Obsidian plugin share **one version**, from `package.json` (
 - **Publish the workflow's draft.** Open the draft it made on the Releases page, click **Edit**, then **Publish release**. Don't use **Draft a new release**: a release made by hand on the same tag has no files, and BRAT refuses it.
 - **`main.js` is never committed.** It is built in the workflow and attached to the release.
 - **The plugin's stamp** in the ☰ menu is its version (`0.1.0`); the web app's stamp stays the commit and date.
-- **Betas** are installed through [BRAT](https://github.com/TfTHacker/obsidian42-brat) from this repository until the plugin is listed. Fixes ship as `0.1.x`.
-- **To 1.0.0.** `0.2.1` is a fix release. M4e ships as the beta `0.3.0` through BRAT, M5 follows (both are built), and the release after it is `1.0.0`, the version submitted to the community list. A sheet saved by `0.3.0` or later is format 2, which `0.2.x` refuses, so every device takes the beta before one of them saves a sheet.
+- **Betas** are installed through [BRAT](https://github.com/TfTHacker/obsidian42-brat) from this repository until the plugin is listed. Fixes ship as patches of the beta they fix (`0.1.x`, `0.4.1`, `0.6.x`).
+- **To 1.0.0.** `0.2.1` is a fix release. M4e ships as the beta `0.3.0` through BRAT and M5 follows (both are built, and out as `0.4.0`). Then come the betas of the test period ([spec section 16](docs/spec-v1.md#the-test-period)): `0.4.1`, `0.5.0` and `0.6.0`, the last beta, and after a quiet test week on it `1.0.0`, the version submitted to the community list. A sheet saved by `0.3.0` or later is format 2, which `0.2.x` refuses, so every device takes the beta before one of them saves a sheet.
 - **Start-up.** The plugin's own figure in Obsidian's startup-time view is read on the work laptop and recorded on one phone. If the laptop's figure is over 150 ms, loading the app only when the first sheet opens is built before `1.0.0`; otherwise after.
 
 **Before Publish,** tick the draft's checklist. It is this list, kept in `.github/release-checklist.md`:
@@ -251,6 +251,8 @@ The web app and the Obsidian plugin share **one version**, from `package.json` (
 - [ ] Open a sheet
 - [ ] Type a line and see its result
 - [ ] Close and reopen it, and see the line kept
+- [ ] Rename a name from the ✎ on its Variables row, see every line that used it change, and take it all back with one Ctrl+Z
+- [ ] Choose ☰ → Language → Português (Brasil), restart Obsidian, see it still chosen, then choose English again
 - [ ] Repeat on one phone or tablet
 - [ ] Run the odd-values probe, `npm run test:probe` (about 8 minutes), and see it pass
 - [ ] The device checklist, on an iPhone, an iPad, an Android phone and an Android tablet, before the first release with `isDesktopOnly: false` and before any release that changes touch, panel or overlay code (otherwise say in the notes that it was skipped): open a sheet from the vault; Add math from More tools, then a tap; double-tap a line and the title, and see the keyboard come up; Done, ↑ ↓ and Edit; format, with a rule; Symbols and the quick keys; a tap's tip, and the unit slots and ⚙ a touch selection shows; save, close and reopen; a sync round trip; on a phone, the bottom sheet stays above the keyboard
@@ -268,7 +270,7 @@ The web app and the Obsidian plugin share **one version**, from `package.json` (
 
 ## Roadmap
 
-v1 is built in milestones ([spec section 16](docs/spec-v1.md#16-milestones-and-finish-line)). M1 to M5 are built; the next release is `1.0.0`, submitted to Obsidian's community list, and v1 is done when its checks below have passed and it is published. The web app targets Chrome and Edge on desktop; the plugin targets Obsidian 1.7.2 or later.
+v1 is built in milestones ([spec section 16](docs/spec-v1.md#16-milestones-and-finish-line)). M1 to M5 are built; the betas `0.5.0` and `0.6.0` come next ([the test period](docs/spec-v1.md#the-test-period)), then `1.0.0`, submitted to Obsidian's community list, and v1 is done when its checks below have passed and it is published. The web app targets Chrome and Edge on desktop; the plugin targets Obsidian 1.7.2 or later.
 
 - [x] **M0 Spike.** Live recalculation across math elements.
 - [x] **M1 Keepable sheet.** Typeset lines, line-by-line editing, undo, save and open, recovery copy.
@@ -292,7 +294,7 @@ What v1 deliberately leaves out is listed in [spec section 1](docs/spec-v1.md#1-
 
 ## Reporting Issues
 
-Support is free and best effort, with no response time. Open an issue from one of the two [forms](https://github.com/matheus-sancha/excalimathpad/issues/new/choose); blank issues are off.
+Support is free and best effort, with no response time. Open an issue from the Bug or the Idea [form](https://github.com/matheus-sancha/excalimathpad/issues/new/choose); blank issues are off. A third form, **Test week**, is the maintainer's weekly record during the test period before `1.0.0`.
 
 - **[Bug](https://github.com/matheus-sancha/excalimathpad/issues/new?template=bug.yml):** the version from the last line of the ☰ menu, the home (Obsidian or the browser), the device, and the steps, with the sheet lines that show the problem. Attach a `.excalimathpad` file only if it holds nothing confidential.
 - **[Idea](https://github.com/matheus-sancha/excalimathpad/issues/new?template=idea.yml):** the calculation you are trying to do, what is missing, and the approach you propose, if you have one.
