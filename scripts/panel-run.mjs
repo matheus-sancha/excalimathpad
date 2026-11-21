@@ -65,6 +65,15 @@
 //   With the element under the docked panel at its right, and on a 640 px
 //   editor, the card is under its line, clear of the open line, inside the
 //   visible area; on a 2560 px window it is beside its line (section 17).
+// - The Português pass (0.6.0, #293; section 8, Sheet panel, and section 14,
+//   0.6.0): the 280 px panel again with Português in data.json, every tab by
+//   its place, nothing cut and nothing scrolling sideways, each heading in
+//   Português; Settings → Custom's options whole in their selects (in English
+//   too, at 280 and 320 px: the system is named once, in Starts from); the
+//   Format tab's link with its arrow on its last word's line, as Add title ↑
+//   and as First line ↓ on the title; and a rule's note with its condition
+//   on one line. It presses by class, role and place, never by English text,
+//   and the run prints the time it adds.
 // - ☰ → Language on the web (section 8, Language, 0.5.0): English at first;
 //   Português shows at once with the menu still open, its texts fetched from
 //   the app's own address, remembered in `localStorage`, the sheet not dirty;
@@ -88,6 +97,8 @@ const FILE = 'Calcs/panel.excalimathpad'
 const SHOTS = process.env.PANEL_RUN_SHOTS
 const ONLY = process.env.PANEL_RUN_ONLY
 const TABS = ['Format', 'Symbols', 'Variables', 'Problems', 'Constants', 'Settings']
+// The same tabs in Português, read to check, never pressed by (0.6.0).
+const TABS_PT = ['Formato', 'Símbolos', 'Variáveis', 'Problemas', 'Constantes', 'Configurações']
 
 const fake = await build({
   absWorkingDir: root,
@@ -501,6 +512,7 @@ const browser = await chromium.launch()
 const manifest = JSON.parse(await readFile(join(dist, 'manifest.json'), 'utf8'))
 const results = []
 const errors = []
+const timings = []
 if (SHOTS) await mkdir(SHOTS, { recursive: true })
 const px = (n) => (n === null || n === undefined ? 'none' : Math.round(n * 10) / 10)
 
@@ -557,6 +569,7 @@ async function run(where, width, act, { data = null, url = '/', height = 800 } =
     saves: () => tab.evaluate(() => window.__saves()),
     dataJson: () => tab.evaluate(() => window.__plugin.dataJson),
   }
+  const began = Date.now()
   try {
     await act(tools)
   } catch (error) {
@@ -564,6 +577,7 @@ async function run(where, width, act, { data = null, url = '/', height = 800 } =
     if (SHOTS) await tab.screenshot({ path: join(SHOTS, `${where}-stopped.png`.replaceAll(' ', '-')) }).catch(() => {})
   } finally {
     await context.close()
+    timings.push({ where, ms: Date.now() - began })
   }
 }
 
@@ -721,14 +735,16 @@ try {
     row('where it docks, an edit opens it on Format', s.field?.focused && s.tab === 'Format' && docked(s), `tab ${s.tab}`)
   })
 
-  // The least width (section 17, M4e): every tab's content usable at 280 px.
-  for (const least of [280, 320]) {
-    await run(`${least} px panel`, 1280, async ({ tab, row, read, start, edit }) => {
-      await start({ sheetPanelWidth: least })
+  // The least width (section 17, M4e): every tab's content usable at 280 px;
+  // from 0.6.0 again in Português (#293), each tab and control found by its place or class.
+  for (const [least, language] of [[280, 'en'], [320, 'en'], [280, 'pt-BR']]) {
+    const names = language === 'pt-BR' ? TABS_PT : TABS
+    await run(`${least} px panel${language === 'en' ? '' : ` ${language}`}`, 1280, async ({ tab, row, read, start, edit }) => {
+      await start({ sheetPanelWidth: least, ...(language === 'en' ? {} : { language }) })
       await edit()
       // A rule, its controls open, and a condition longer than its field.
-      await tab.locator('.sheet-sidebar [aria-label="+ Add rule"]').scrollIntoViewIfNeeded()
-      await tab.click('.sheet-sidebar [aria-label="+ Add rule"]')
+      await tab.locator('.sheet-sidebar .sheet-rules__add').scrollIntoViewIfNeeded()
+      await tab.click('.sheet-sidebar .sheet-rules__add')
       await tab.keyboard.type('> v_max and v < 1000000 m/s and v > 0 m/s')
       let s = await read('format')
       const size = least === 280 ? 28 : 32
@@ -748,14 +764,14 @@ try {
         return { inside: box.left >= panel.left && box.right <= panel.right, width: box.width, scrolls: field.scrollWidth > field.clientWidth, focused: document.activeElement === field, wrapped: rows.filter((n) => n > 1).length, rows: rows.length }
       })
       row('a rule’s condition field is inside the panel, and a long condition scrolls inside it', format.inside && format.scrolls && format.focused && format.width >= 120, `field ${px(format.width)} px wide; ${format.wrapped} of ${format.rows} rows wrap`)
-      for (const name of TABS) {
-        await tab.click(`.sheet-sidebar .sheet-tab[title="${name}"]`)
-        if (name === 'Settings') {
+      for (const [index, name] of names.entries()) {
+        await tab.click(`.sheet-sidebar .sheet-tab >> nth=${index}`)
+        if (index === 5) {
           // Custom shows the kind → unit table, the widest thing in Settings.
-          await tab.locator('.sheet-sidebar select').first().selectOption({ label: 'Custom' })
+          await tab.locator('.sheet-sidebar select').first().selectOption('custom')
           // The Page row (section 11, M5): its longest choices, whole in their boxes.
-          await tab.locator('.sheet-sidebar select[aria-label="Paper size"]').selectOption('Letter')
-          await tab.locator('.sheet-sidebar select[aria-label="Orientation"]').selectOption('landscape')
+          await tab.locator('.sheet-sidebar .sheet-settings__page select').first().selectOption('Letter')
+          await tab.locator('.sheet-sidebar .sheet-settings__page select').nth(1).selectOption('landscape')
           const fit = await tab.evaluate(() => {
             const measure = document.createElement('canvas').getContext('2d')
             return [...document.querySelectorAll('.sheet-sidebar .sheet-settings__page select')].map((select) => {
@@ -771,6 +787,23 @@ try {
             fit.length === 2 && fit.every((f) => f.inside && f.width >= f.text + 36),
             fit.map((f) => `${f.label} ${px(f.width)} px for ${px(f.text)} px of text`).join(', '),
           )
+          // Custom's options (0.6.0, section 5, Unit systems): each kind's units only, whole in its select.
+          const kinds = await tab.evaluate(() => {
+            const measure = document.createElement('canvas').getContext('2d')
+            const panel = document.querySelector('.excalidraw .sidebar.sheet-sidebar').getBoundingClientRect()
+            return [...document.querySelectorAll('.sheet-sidebar .sheet-settings__kinds select')].map((select) => {
+              measure.font = getComputedStyle(select).font
+              const box = select.getBoundingClientRect()
+              const option = select.options[0].textContent
+              return { option, text: measure.measureText(option).width, width: select.clientWidth, inside: box.left >= panel.left && box.right <= panel.right }
+            })
+          })
+          const cut = kinds.filter((k) => !k.inside || k.width < k.text + 36)
+          row(
+            'Custom: every kind’s default option shows its units only, whole in its select',
+            kinds.length === 18 && cut.length === 0 && kinds.every((k) => !/:/.test(k.option)),
+            cut.length ? cut.map((k) => `${k.option} ${px(k.text)} px in ${k.width} px`).join(', ') : `${kinds.length} selects, the narrowest ${Math.min(...kinds.map((k) => k.width))} px`,
+          )
         }
         s = await read(name)
         const cut = await tab.evaluate(() => window.__cut())
@@ -780,6 +813,53 @@ try {
           `${cut.controls} controls${cut.cut.length ? `; cut: ${cut.cut.join(' | ')}` : ''}${cut.sideways.length ? `; scrolls: ${cut.sideways.join(' | ')}` : ''}`,
         )
       }
+      if (language === 'en') return
+      // The Format tab's link row and a rule's note (section 8, Longer text wraps), in Português at 280 px.
+      await tab.click('.sheet-sidebar .sheet-tab >> nth=0')
+      // The rule's condition, shorter, so the note can hold it on one line: `v > 3 m/s`, true.
+      const condition = tab.locator('.sheet-sidebar .sheet-rules__field').first()
+      await condition.click()
+      await tab.keyboard.press('ControlOrMeta+a')
+      await tab.keyboard.type('v > 3 m/s')
+      await tab.keyboard.press('Enter')
+      await tab.waitForTimeout(500)
+      const fits = () =>
+        tab.evaluate(() => {
+          const panel = document.querySelector('.excalidraw .sidebar.sheet-sidebar').getBoundingClientRect()
+          const button = document.querySelector('.sheet-sidebar .sheet-format__link')
+          const text = button.firstChild
+          const rectOf = (from, to) => {
+            const range = document.createRange()
+            range.setStart(text, from)
+            range.setEnd(text, to)
+            return range.getBoundingClientRect()
+          }
+          const value = text.textContent
+          const link = button.getBoundingClientRect()
+          const p = document.querySelector('.sheet-sidebar .sheet-format__override')
+          const whole = p?.querySelector('.sheet-panel__whole')
+          const lineHeight = p ? parseFloat(getComputedStyle(p).lineHeight) || parseFloat(getComputedStyle(p).fontSize) * 1.3 : 0
+          return {
+            link: value,
+            together: Math.abs(rectOf(value.length - 1, value.length).top - rectOf(value.length - 3, value.length - 2).top) < 2,
+            linkInside: link.left >= panel.left - 0.5 && link.right <= panel.right + 0.5,
+            note: p?.textContent ?? null,
+            noteLines: whole ? Math.round(whole.getBoundingClientRect().height / lineHeight) : 0,
+            noteInside: whole ? whole.getBoundingClientRect().right <= panel.right + 0.5 : false,
+          }
+        })
+      let f = await fits()
+      row('the link keeps its arrow with its last word: Adicionar título ↑', f.link === 'Adicionar título\u00a0↑' && f.together && f.linkInside, f.link)
+      row(
+        'a rule’s note keeps its condition on one line: … enquanto v > 3 m/s.',
+        /^Uma regra define .+ enquanto v > 3 m\/s\.$/.test(f.note ?? '') && f.noteLines === 1 && f.noteInside,
+        `${f.note} (${f.noteLines} line)`,
+      )
+      // The link moves the edit to the title, whose link is First line ↓.
+      await tab.click('.sheet-sidebar .sheet-format__link')
+      await tab.waitForTimeout(500)
+      f = await fits()
+      row('on the title, the link keeps its arrow too: Primeira linha ↓', f.link === 'Primeira linha\u00a0↓' && f.together && f.linkInside, f.link)
     }, { data: null })
   }
 
@@ -1390,4 +1470,5 @@ if (failed.length || errors.length || results.length === 0) {
   for (const error of errors) console.error(`  - ${error}`)
   process.exit(1)
 }
-console.log('Panel run passed: 320 px, icon tabs, the drag handle, docking by width, every tab usable at 280 px, the Format tab’s sample, the charts, the Page row, the page breaks, a rename from a Variables row, the offer on a committed line and Language on the web.')
+for (const { where, ms } of timings.filter(({ where }) => where.includes('pt-BR'))) console.log(`${where}: the Português pass took ${(ms / 1000).toFixed(1)} s`)
+console.log('Panel run passed: 320 px, icon tabs, the drag handle, docking by width, every tab usable at 280 px, the Format tab’s sample, the charts, the Page row, the page breaks, a rename from a Variables row, the offer on a committed line, the Português pass and Language on the web.')

@@ -1,12 +1,14 @@
 import { useState, type MouseEvent, type ReactNode } from 'react'
-import { filterSymbols, SYMBOL_GROUPS, symbolHover, type SymbolEntry, type SymbolInsert } from '../math/symbols.ts'
+import { filterSymbols, SYMBOL_GROUPS, symbolHover, SYMBOLS, type SymbolEntry, type SymbolInsert } from '../math/symbols.ts'
+import { useWords, type Words } from '../text/words.ts'
 
 /**
  * The Symbols tab (docs/spec-v1.md section 4, Symbols tab, M4d): a filter
  * box, then the catalogue's five groups of buttons. Every button types, at
  * the open line's caret, text the engine already reads. With nothing to
  * insert into, the buttons are dimmed under the hint, and their hovers still
- * show each spelling, so the tab works as a reference.
+ * show each spelling, so the tab works as a reference. Its words, the hints
+ * included, are the text table's, in the language shown (0.6.0).
  */
 
 /** Where a press can go: what App knows from the open edit and the selection. */
@@ -16,11 +18,10 @@ export interface InsertProps {
   onInsert: (insert: SymbolInsert) => void
 }
 
-export const OPEN_A_LINE = 'Open a line to insert'
-
 export function SymbolsTab({ canInsert, onInsert }: InsertProps) {
   const [filter, setFilter] = useState('')
-  const shown = filterSymbols(filter)
+  const w = useWords()
+  const shown = filterSymbols(filter, SYMBOLS, w)
   return (
     <div className="sheet-panel sheet-symbols">
       <input
@@ -29,33 +30,34 @@ export function SymbolsTab({ canInsert, onInsert }: InsertProps) {
         // inputs as fields, and runs its shortcuts on keys from any other.
         type="text"
         role="searchbox"
-        placeholder="Filter symbols"
-        aria-label="Filter symbols"
+        placeholder={w.panel.symbols.filter}
+        aria-label={w.panel.symbols.filter}
         value={filter}
         onChange={(event) => setFilter(event.target.value)}
       />
-      {!canInsert && <p className="sheet-panel__hint">{OPEN_A_LINE}</p>}
+      {!canInsert && <p className="sheet-panel__hint">{w.panel.openALine}</p>}
       {shown.length === 0 ? (
-        <p className="sheet-panel__empty">No symbol matches.</p>
+        <p className="sheet-panel__empty">{w.panel.symbols.noMatch}</p>
       ) : (
         SYMBOL_GROUPS.map((group) => {
-          const entries = shown.filter((entry) => entry.group === group.id)
+          const entries = shown.filter((entry) => entry.group === group)
           if (entries.length === 0) return null
           // Greek keeps its rows: the letters, the variants, the capitals.
-          const rows = group.id === 'greek' ? ([1, 2, 3] as const).map((row) => entries.filter((e) => e.row === row)) : [entries]
+          const rows = group === 'greek' ? ([1, 2, 3] as const).map((row) => entries.filter((e) => e.row === row)) : [entries]
           return (
-            <section key={group.id} className="sheet-panel__group" aria-label={group.label}>
-              <h3 className="sheet-panel__group-label">{group.label}</h3>
+            <section key={group} className="sheet-panel__group" aria-label={w.symbols.groups[group]}>
+              <h3 className="sheet-panel__group-label">{w.symbols.groups[group]}</h3>
               {rows
                 .filter((row) => row.length > 0)
                 .map((row, index) => (
-                  <div key={index} className={`sheet-symbols__buttons is-${group.id}`}>
+                  <div key={index} className={`sheet-symbols__buttons is-${group}`}>
                     {row.map((entry) => (
                       <SymbolButton
                         key={`${entry.group}:${entry.spelling}`}
                         entry={entry}
                         dimmed={!canInsert}
                         onInsert={onInsert}
+                        w={w}
                       />
                     ))}
                   </div>
@@ -68,12 +70,22 @@ export function SymbolsTab({ canInsert, onInsert }: InsertProps) {
   )
 }
 
-function SymbolButton({ entry, dimmed, onInsert }: { entry: SymbolEntry; dimmed: boolean; onInsert: InsertProps['onInsert'] }) {
+function SymbolButton({
+  entry,
+  dimmed,
+  onInsert,
+  w,
+}: {
+  entry: SymbolEntry
+  dimmed: boolean
+  onInsert: InsertProps['onInsert']
+  w: Words
+}) {
   return (
     <InsertButton
       className={`sheet-symbols__button${entry.constant ? ' is-constant' : ''}`}
       label={entry.spelling}
-      hover={symbolHover(entry)}
+      hover={symbolHover(entry, w)}
       dimmed={dimmed}
       onPress={() => onInsert(entry.insert)}
     >

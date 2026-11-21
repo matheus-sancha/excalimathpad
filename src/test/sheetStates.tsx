@@ -6,7 +6,7 @@ import { readLine } from '../math/lineForm.ts'
 import { readPlot } from '../math/plotLine.ts'
 import { LineSample } from '../overlay/MathElementView.tsx'
 import { drawChart, loadPlot } from '../overlay/plotDrawing.ts'
-import { constantSuggestions, FUNCTION_SUGGESTIONS, sheetNames, suggest, unitSuggestions } from '../overlay/suggest.ts'
+import { constantSuggestions, functionSuggestions, sheetNames, suggest, unitSuggestions } from '../overlay/suggest.ts'
 import { FormatTab, type FormatActions } from '../panel/FormatTab.tsx'
 import { problemRows, variableGroups } from '../panel/sheetPanel.ts'
 
@@ -143,7 +143,7 @@ export async function sheetChecker() {
           const sources = {
             sheet: sheetNames([{ id: 'a', lines }], { anchorId: 'a', lineIndex: typed }),
             constants,
-            functions: FUNCTION_SUGGESTIONS,
+            functions: functionSuggestions(),
             units,
           }
           suggest(text, 0, sources)

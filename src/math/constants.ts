@@ -1,7 +1,9 @@
 /**
  * The built-in constants (docs/spec-v1.md section 5, Constants): every
- * constant math.js has, in groups, each with what it is. Pure data, with no
- * math.js: `name` is the name math.js gives it, as a line reads it.
+ * constant math.js has, in groups. Pure data, with no math.js and no words:
+ * `name` is the name math.js gives it, as a line reads it, and the text
+ * tables say what each one is (`constants.description`, by `name`) and name
+ * each group (`constants.groups`, by `id`), in the language shown (0.6.0).
  *
  * A constant with a `short` name can also be written that way, as in Mathcad
  * (`c`, `k`, `R`): the engine registers the short names once at setup, beside
@@ -13,111 +15,112 @@ export interface ConstantEntry {
   name: string
   /** The short name it can also be written by. */
   short?: string
-  /** What it is, in a few words. */
-  label: string
 }
 
+/** A group's key in the text tables' `constants.groups`. */
+export type ConstantGroupId = 'mathematical' | 'universal' | 'adopted' | 'physicoChemical' | 'electromagnetic' | 'atomic' | 'planck'
+
 export interface ConstantGroup {
-  label: string
+  id: ConstantGroupId
   constants: readonly ConstantEntry[]
 }
 
 export const CONSTANT_GROUPS: readonly ConstantGroup[] = [
   {
-    label: 'Mathematical',
+    id: 'mathematical',
     constants: [
-      { name: 'pi', label: 'Circle circumference over diameter' },
-      { name: 'tau', label: '2π' },
-      { name: 'e', label: "Euler's number" },
-      { name: 'phi', label: 'Golden ratio' },
-      { name: 'i', label: 'Imaginary unit' },
-      { name: 'Infinity', label: 'Infinity' },
-      { name: 'SQRT2', label: 'Square root of 2' },
-      { name: 'SQRT1_2', label: 'Square root of ½' },
-      { name: 'LN2', label: 'Natural logarithm of 2' },
-      { name: 'LN10', label: 'Natural logarithm of 10' },
-      { name: 'LOG2E', label: 'Base-2 logarithm of e' },
-      { name: 'LOG10E', label: 'Base-10 logarithm of e' },
+      { name: 'pi' },
+      { name: 'tau' },
+      { name: 'e' },
+      { name: 'phi' },
+      { name: 'i' },
+      { name: 'Infinity' },
+      { name: 'SQRT2' },
+      { name: 'SQRT1_2' },
+      { name: 'LN2' },
+      { name: 'LN10' },
+      { name: 'LOG2E' },
+      { name: 'LOG10E' },
     ],
   },
   {
-    label: 'Universal',
+    id: 'universal',
     constants: [
-      { name: 'speedOfLight', short: 'c', label: 'Speed of light in vacuum' },
-      { name: 'gravitationConstant', short: 'G', label: 'Newtonian constant of gravitation' },
-      { name: 'planckConstant', short: 'h', label: 'Planck constant' },
-      { name: 'reducedPlanckConstant', short: 'hbar', label: 'Reduced Planck constant' },
+      { name: 'speedOfLight', short: 'c' },
+      { name: 'gravitationConstant', short: 'G' },
+      { name: 'planckConstant', short: 'h' },
+      { name: 'reducedPlanckConstant', short: 'hbar' },
     ],
   },
   {
-    label: 'Adopted values',
+    id: 'adopted',
     constants: [
-      { name: 'gravity', label: 'Standard acceleration of gravity' },
-      { name: 'molarMass', label: 'Molar mass constant' },
-      { name: 'molarMassC12', label: 'Molar mass of carbon-12' },
+      { name: 'gravity' },
+      { name: 'molarMass' },
+      { name: 'molarMassC12' },
     ],
   },
   {
-    label: 'Physico-chemical',
+    id: 'physicoChemical',
     constants: [
-      { name: 'gasConstant', short: 'R', label: 'Molar gas constant' },
-      { name: 'boltzmann', short: 'k', label: 'Boltzmann constant' },
-      { name: 'avogadro', short: 'N_A', label: 'Avogadro constant' },
-      { name: 'stefanBoltzmann', short: 'sigma', label: 'Stefan–Boltzmann constant' },
-      { name: 'atomicMass', short: 'm_u', label: 'Atomic mass constant' },
-      { name: 'faraday', label: 'Faraday constant' },
-      { name: 'molarVolume', label: 'Molar volume of an ideal gas (273.15 K, 101.325 kPa)' },
-      { name: 'loschmidt', label: 'Loschmidt constant (273.15 K, 101.325 kPa)' },
-      { name: 'molarPlanckConstant', label: 'Molar Planck constant' },
-      { name: 'firstRadiation', label: 'First radiation constant' },
-      { name: 'secondRadiation', label: 'Second radiation constant' },
-      { name: 'wienDisplacement', label: 'Wien displacement law constant' },
-      { name: 'sackurTetrode', label: 'Sackur–Tetrode constant (1 K, 100 kPa)' },
+      { name: 'gasConstant', short: 'R' },
+      { name: 'boltzmann', short: 'k' },
+      { name: 'avogadro', short: 'N_A' },
+      { name: 'stefanBoltzmann', short: 'sigma' },
+      { name: 'atomicMass', short: 'm_u' },
+      { name: 'faraday' },
+      { name: 'molarVolume' },
+      { name: 'loschmidt' },
+      { name: 'molarPlanckConstant' },
+      { name: 'firstRadiation' },
+      { name: 'secondRadiation' },
+      { name: 'wienDisplacement' },
+      { name: 'sackurTetrode' },
     ],
   },
   {
-    label: 'Electromagnetic',
+    id: 'electromagnetic',
     constants: [
-      { name: 'elementaryCharge', short: 'e_c', label: 'Elementary charge' },
-      { name: 'electricConstant', short: 'epsilon_0', label: 'Vacuum electric permittivity' },
-      { name: 'magneticConstant', short: 'mu_0', label: 'Vacuum magnetic permeability' },
-      { name: 'vacuumImpedance', short: 'Z_0', label: 'Characteristic impedance of vacuum' },
-      { name: 'coulomb', label: 'Coulomb constant' },
-      { name: 'bohrMagneton', label: 'Bohr magneton' },
-      { name: 'nuclearMagneton', label: 'Nuclear magneton' },
-      { name: 'magneticFluxQuantum', label: 'Magnetic flux quantum' },
-      { name: 'conductanceQuantum', label: 'Conductance quantum' },
-      { name: 'inverseConductanceQuantum', label: 'Inverse conductance quantum' },
-      { name: 'klitzing', label: 'Von Klitzing constant' },
+      { name: 'elementaryCharge', short: 'e_c' },
+      { name: 'electricConstant', short: 'epsilon_0' },
+      { name: 'magneticConstant', short: 'mu_0' },
+      { name: 'vacuumImpedance', short: 'Z_0' },
+      { name: 'coulomb' },
+      { name: 'bohrMagneton' },
+      { name: 'nuclearMagneton' },
+      { name: 'magneticFluxQuantum' },
+      { name: 'conductanceQuantum' },
+      { name: 'inverseConductanceQuantum' },
+      { name: 'klitzing' },
     ],
   },
   {
-    label: 'Atomic and nuclear',
+    id: 'atomic',
     constants: [
-      { name: 'electronMass', short: 'm_e', label: 'Electron mass' },
-      { name: 'protonMass', short: 'm_p', label: 'Proton mass' },
-      { name: 'neutronMass', short: 'm_n', label: 'Neutron mass' },
-      { name: 'deuteronMass', label: 'Deuteron mass' },
-      { name: 'bohrRadius', short: 'a_0', label: 'Bohr radius' },
-      { name: 'fineStructure', short: 'alpha', label: 'Fine-structure constant' },
-      { name: 'rydberg', short: 'R_inf', label: 'Rydberg constant' },
-      { name: 'classicalElectronRadius', label: 'Classical electron radius' },
-      { name: 'hartreeEnergy', label: 'Hartree energy' },
-      { name: 'quantumOfCirculation', label: 'Quantum of circulation' },
-      { name: 'thomsonCrossSection', label: 'Thomson cross section' },
-      { name: 'fermiCoupling', label: 'Fermi coupling constant' },
-      { name: 'weakMixingAngle', label: 'Weak mixing angle' },
-      { name: 'efimovFactor', label: 'Efimov factor' },
+      { name: 'electronMass', short: 'm_e' },
+      { name: 'protonMass', short: 'm_p' },
+      { name: 'neutronMass', short: 'm_n' },
+      { name: 'deuteronMass' },
+      { name: 'bohrRadius', short: 'a_0' },
+      { name: 'fineStructure', short: 'alpha' },
+      { name: 'rydberg', short: 'R_inf' },
+      { name: 'classicalElectronRadius' },
+      { name: 'hartreeEnergy' },
+      { name: 'quantumOfCirculation' },
+      { name: 'thomsonCrossSection' },
+      { name: 'fermiCoupling' },
+      { name: 'weakMixingAngle' },
+      { name: 'efimovFactor' },
     ],
   },
   {
-    label: 'Planck units',
+    id: 'planck',
     constants: [
-      { name: 'planckLength', label: 'Planck length' },
-      { name: 'planckMass', label: 'Planck mass' },
-      { name: 'planckTime', label: 'Planck time' },
-      { name: 'planckCharge', label: 'Planck charge' },
-      { name: 'planckTemperature', label: 'Planck temperature' },
+      { name: 'planckLength' },
+      { name: 'planckMass' },
+      { name: 'planckTime' },
+      { name: 'planckCharge' },
+      { name: 'planckTemperature' },
     ],
   },
 ]

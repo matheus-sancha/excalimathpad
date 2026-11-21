@@ -2090,7 +2090,9 @@ As built (#198):
   words; nothing is cut and nothing ends in an ellipsis, the widths above stay, and no word is
   shortened to fit. A link's arrow stays with its last word ("Primeira linha ↓"), and a
   condition or a name quoted in running text never breaks inside ("… enquanto `u > 3 m/s`."),
-  so the line wraps before it. The on-sheet error's cap of [section 4](#problems) is unchanged:
+  so the line wraps before it; only a condition wider than the panel itself wraps inside, so
+  nothing is cut (#293). In Settings → Custom the kinds' column is as wide as its longest
+  word, so a kind's name wraps and its select keeps the room for its units. The on-sheet error's cap of [section 4](#problems) is unchanged:
   the full message is in Problems.
 
 - **An edit opens the panel on Format.** When a line or the title opens and none was open,
@@ -4541,7 +4543,6 @@ M1 to M5, is in [`docs/spec-history.md`](spec-history.md#17-verify-first), with 
 - `main.js`'s size with the Portuguese table and guide, against its budget.
 - In Obsidian, by hand: the command palette, the ribbon's tooltip and the folder item after a
   language change and a restart, and whether reloading the plugin alone is enough.
-- The time the Português passes of the panel and touch runs add to `npm run check`.
 
 **M6**
 

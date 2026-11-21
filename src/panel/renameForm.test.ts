@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest'
+import { en } from '../text/en.ts'
+import { ptBR } from '../text/ptBR.ts'
 import { RENAME_WORDS, renameBlocks, renameFormView, type RenameElement } from './renameForm.ts'
 
 /**
@@ -33,7 +35,7 @@ describe('the rename form’s view', () => {
       'Fluid and pipe, line 3: m_dot = [rho] * 2 L/s',
       'Element 2, line 1: P = [rho] * 9.81 m/s^2 * 3 m',
     ])
-    expect(RENAME_WORDS.lines(view.lines.length)).toBe('Changes 3 lines:')
+    expect(en.panel.rename.lines(view.lines.length)).toBe('Changes 3 lines:')
     expect(view.canRename).toBe(true)
     expect(view.reason).toBeNull()
     expect(view.changes).toEqual([])
@@ -101,7 +103,7 @@ describe('the rename form’s view', () => {
 
     expect(view.canRename).toBe(true)
     expect(view.changes.map(({ where, text }) => `${where}: ${shown(text)}`)).toEqual(['Pipe, line 2: d = 3 m * L'])
-    expect(RENAME_WORDS.results(view.changes.length)).toBe('This changes 1 result:')
+    expect(en.panel.rename.results(view.changes.length)).toBe('This changes 1 result:')
   })
 
   it('a name assigned twice has two forms, each with its own reach', () => {
@@ -129,10 +131,23 @@ describe('the rename form’s view', () => {
 
 describe('the rename’s words (section 13)', () => {
   it('names the ✎, the field and the counts', () => {
-    expect(RENAME_WORDS.start('rho')).toBe('Rename rho')
-    expect(RENAME_WORDS.field('rho')).toBe('Rename rho to')
-    expect([RENAME_WORDS.lines(7), RENAME_WORDS.lines(1)]).toEqual(['Changes 7 lines:', 'Changes 1 line:'])
-    expect([RENAME_WORDS.results(2), RENAME_WORDS.results(1)]).toEqual(['This changes 2 results:', 'This changes 1 result:'])
+    expect(en.panel.rename.start('rho')).toBe('Rename rho')
+    expect(en.panel.rename.field('rho')).toBe('Rename rho to')
+    expect([en.panel.rename.lines(7), en.panel.rename.lines(1)]).toEqual(['Changes 7 lines:', 'Changes 1 line:'])
+    expect([en.panel.rename.results(2), en.panel.rename.results(1)]).toEqual(['This changes 2 results:', 'This changes 1 result:'])
+  })
+
+  it('in Português, with each count in its own form (0.6.0)', () => {
+    const pt = ptBR.panel.rename
+    expect([pt.start('rho'), pt.field('rho')]).toEqual(['Renomear rho', 'Renomear rho para'])
+    expect([pt.lines(7), pt.lines(1)]).toEqual(['Altera 7 linhas:', 'Altera 1 linha:'])
+    expect([pt.results(2), pt.results(1)]).toEqual(['Isto altera 2 resultados:', 'Isto altera 1 resultado:'])
+    expect([pt.rename, pt.cancel]).toEqual(['Renomear', 'Cancelar'])
+  })
+
+  it('names each line in the language it is given', () => {
+    const view = renameFormView([element('a', 'rho = 1\ny = rho')], { id: 'a', line: 0, name: 'rho' }, 'rho_w', undefined, ptBR)
+    expect(view?.lines.map(({ where }) => where)).toEqual(['Bloco 1, linha 1', 'Bloco 1, linha 2'])
   })
 
   it('the toast names Ctrl+Z, and Undo on touch', () => {

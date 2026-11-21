@@ -10,6 +10,7 @@ import {
   type RenamePlan,
   type RenameTarget,
 } from '../math/rename.ts'
+import { words, type Words } from '../text/words.ts'
 import { elementLabel, type PanelElement } from './sheetPanel.ts'
 
 /**
@@ -24,16 +25,11 @@ export interface RenameElement extends PanelElement {
   formats?: string
 }
 
-/** Section 13, Rename and Language: the form's and the toast's words. */
+/**
+ * Section 13, Rename and Language: the toast's words. The form's own are the
+ * text table's (`panel.rename`, 0.6.0).
+ */
 export const RENAME_WORDS = {
-  /** A Variables row's ✎: its name and its tooltip. */
-  start: (name: string) => `Rename ${name}`,
-  /** The field's name; the heading over it shows the old name as code. */
-  field: (name: string) => `Rename ${name} to`,
-  lines: (count: number) => (count === 1 ? 'Changes 1 line:' : `Changes ${count} lines:`),
-  results: (count: number) => (count === 1 ? 'This changes 1 result:' : `This changes ${count} results:`),
-  rename: 'Rename',
-  cancel: 'Cancel',
   /** After a rename; on touch there is no Ctrl+Z to name. */
   renamed: (from: string, to: string, count: number, touch: boolean) =>
     `Renamed ${from} to ${to} in ${count === 1 ? '1 line' : `${count} lines`}. ${touch ? 'Undo' : 'Ctrl+Z'} takes it back.`,
@@ -78,6 +74,7 @@ export function renameFormView(
   target: RenameTarget,
   newName: string,
   settings?: DisplaySettings,
+  w: Words = words(),
 ): RenameFormView | null {
   const plan = planRename(renameBlocks(sheet), target, newName.trim(), settings)
   if (plan === null) return null
@@ -90,7 +87,7 @@ export function renameFormView(
       id: ref.id,
       line: ref.line,
       key: `${ref.id}:${ref.line}`,
-      where: `${elementLabel(element, index)}, line ${ref.line + 1}`,
+      where: w.panel.line(elementLabel(element, index, w), ref.line + 1),
       text: markParts(sources[ref.line] ?? '', uses),
       stored: storedUses.length > 0 ? markParts(stored, storedUses) : [],
     }

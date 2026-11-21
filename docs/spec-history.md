@@ -646,6 +646,14 @@ The items with a recorded result. Those still open are in
   - Excalidraw also writes the language into the window's `<html lang>` (and `dir`), as it already wrote `en`
     at every mount; in Obsidian that is Obsidian's own page.
 
+**0.6.0**
+
+- The time the Português passes of the panel and touch runs add to `npm run check`. **Measured (#293)** in
+  headless Chromium on the built plugin, each pass timed by its run: the panel run's 280 px panel in Português
+  took 6.9 s, and the touch run's three phone passes (Português at 360 and 320 px, English at 320 px) 6.1 to
+  6.3 s each, about 19 s. Together about 26 s added to a check of about 25 minutes. Each run prints its passes'
+  times at its end.
+
 ## 18. Decision index
 
 | Ticket | Fed sections |

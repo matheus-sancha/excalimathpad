@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { en } from '../text/en.ts'
 import { evaluateSheet } from './evaluate.ts'
 import { filterSymbols, SYMBOL_GROUPS, symbolHover, SYMBOLS, type SymbolGroupId } from './symbols.ts'
 import { nameTex } from './typeset.ts'
@@ -8,7 +9,7 @@ const spellings = (group: SymbolGroupId) => tab.filter((entry) => entry.group ==
 
 describe('the Symbols catalogue (docs/spec-v1.md section 4, Symbols tab)', () => {
   it('holds the five groups, top to bottom', () => {
-    expect(SYMBOL_GROUPS.map((group) => group.label)).toEqual(['Greek', 'Operators', 'Functions', 'Logic', 'Sheet forms'])
+    expect(SYMBOL_GROUPS.map((group) => en.symbols.groups[group])).toEqual(['Greek', 'Operators', 'Functions', 'Logic', 'Sheet forms'])
   })
 
   it('Greek: 23 letters (no omicron), the 6 variants on a second row, the 11 capitals unlike Latin', () => {

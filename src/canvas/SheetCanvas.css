@@ -380,6 +380,12 @@
   height: 1.125rem;
 }
 
+/* The active tab shows its name only if it fits (0.6.0, `nameFits` in BottomSheet.tsx); otherwise its icon alone. */
+.excalidraw .sheet-bottom__tabs.is-icons .sheet-tab[data-state='active'] {
+  flex: 1 1 0;
+}
+
+.excalidraw .sheet-bottom__tabs.is-icons .sheet-tab .sheet-tab__label,
 .excalidraw .sheet-bottom .sheet-tab:not([data-state='active']) .sheet-tab__label {
   position: absolute;
   width: 1px;
