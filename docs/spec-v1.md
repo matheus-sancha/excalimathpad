@@ -1,7 +1,7 @@
 # Excalimathpad v1 spec
 
 **Status:** agreed 2026-11-03 · living · every v1 milestone, M1 to M5, is built, and the betas
-`0.5.0` and `0.6.0` come before 1.0.0 ([the test period](#the-test-period)): v1 is done when the
+`0.5.0`, `0.6.0` (Português) and `0.7.0` (the Math assistant) come before 1.0.0 ([the test period](#the-test-period)): v1 is done when the
 finish line's four conditions hold and 1.0.0 is published ([section 16](#the-finish-line)). From 1.0.0, "v1" in this file's name is a name, not a
 status: this stays the living spec, at this path and with these section numbers
 
@@ -14,9 +14,11 @@ see it typeset with results and units, edit an input and everything below
 recalculates, save the sheet to a file, and print it to PDF. It runs on Chrome and
 Edge on desktop. Installing it as an offline app is M6, built after 1.0.0
 ([section 16](#16-milestones-and-finish-line)). "No server" and the plugin's no-network rule
-([section 12a](#data-protection)) stand as written through `0.5.0`; `0.6.0`'s AI features reopen
+([section 12a](#data-protection)) stand as written through `0.6.0`; `0.7.0`'s AI features reopen
 them, on their own map,
-[Spec for 0.6.0](https://github.com/matheus-sancha/excalimathpad/issues/238), not here.
+[Spec for 0.7.0: the Math assistant](https://github.com/matheus-sancha/excalimathpad/issues/238), not here.
+From `0.6.0` the app's own text reads in English or in Português (Brasil), chosen in ☰
+([Language](#language)).
 
 From M4d it has a second home: an **Obsidian community plugin** that opens
 `.excalimathpad` files from a vault in its own tab, on desktop, phone and tablet,
@@ -53,7 +55,7 @@ Both homes read and write the same file.
 | Print | Printing a selection, frame or viewport; a scale setting; page guides on the canvas; Print on a phone or tablet; a preview inside Obsidian |
 | Editing | Cancelling a line edit; placing the caret at the clicked character; Greek or operator characters in the source (`ρ`, `≤`) and new operators (integral, derivative): the Symbols tab types the text the engine already reads; renaming a function's parameter, and a rename started from the open line with F2 ([Renaming a name](#renaming-a-name)) |
 | Help | A Help tab in the panel, an example sheet, or a PDF guide: the Math guide is one Markdown file shown in a dialog |
-| Language | A translation of the app's own text (Add math, the Sheet panel, the messages, the Math guide): Language translates Excalidraw's tools and menus only ([section 8](#8-app-chrome)); languages other than English and Brazilian Portuguese; following the browser's or Obsidian's language |
+| Language | Languages other than English and Brazilian Portuguese; following the browser's or Obsidian's language; translating the math (keywords, function names, units and the decimal `.` read and show the same in both, [Language](#language)); a Portuguese README, listing or issue forms; Excalidraw's own text where its Portuguese has none (until `0.6.0` this row also left out a translation of the app's own text) |
 | Files | Excalidraw's image export; a supported round trip through plain Excalidraw; several sheets in one window; embedding a sheet in an Obsidian note (`![[…]]`, as a picture or a live sheet); resolving links between sheets, or to notes, from inside a sheet |
 | Platforms | The installed offline app (M6, after 1.0.0); touch and mobile layouts in the web app; browsers other than Chrome and Edge on desktop (a save and open fallback exists, untested); the plugin on iOS below 16.4; Excalidraw's embeds and library browsing in the plugin (an embed loads a third-party page when a sheet opens, unasked: refused through 1.0.0, and it stays in the web app); live collaboration (it needs a relay server, storage and an account; a sheet is shared as a file or through a shared vault); the Sheet panel as a view in Obsidian's sidebar; a plugin settings tab |
 
@@ -66,84 +68,92 @@ Decided in: [map](https://github.com/matheus-sancha/excalimathpad/issues/8),
 [spec contents](https://github.com/matheus-sancha/excalimathpad/issues/38),
 [the community listing](https://github.com/matheus-sancha/excalimathpad/issues/130),
 [phone and tablet](https://github.com/matheus-sancha/excalimathpad/issues/127),
-[the nine Excalidraw items](https://github.com/matheus-sancha/excalimathpad/issues/234).
+[the nine Excalidraw items](https://github.com/matheus-sancha/excalimathpad/issues/234),
+[the app's own text in Português](https://github.com/matheus-sancha/excalimathpad/issues/284).
 
 ## 2. Terms and invariants
 
-One name per concept, used the same in conversation, code, tests, docs and the UI.
+One name per concept, used the same in conversation, code, tests, docs and the UI. From 0.6.0
+the **Português** column is the word the app's Portuguese text and its Portuguese guide use for
+it, matched to Excalidraw's own pt-BR words where it has one (the canvas is **tela**); "—" marks
+a term that never reaches the screen. The words were agreed in
+[What are the Portuguese words for Excalimathpad's terms?](https://github.com/matheus-sancha/excalimathpad/issues/286).
 
 ### Terms
 
-| Term | Means |
-|---|---|
-| **Sheet** | All live math elements in reading order, plus drawings and settings. The unit of evaluation |
-| **Reading order** | By the top of each anchor's visual bounds, then its left, then its id. Derived, never stored |
-| **Math element** | A block of source lines anchored at a scene position, shown as a typeset grid |
-| **Anchor** | The marked Excalidraw rectangle that carries a math element. Its `customData` holds `kind`, `source` and, each optional, `title`, `titleFormat`, `width` and, from M4e, `formats` |
-| **Line** | One string of an element's source: one statement. See [section 3](#3-sheet-lines-every-form) for its forms |
-| **Typeset row** | One line on screen: *gutter · equation (name · `≔` · expression, plus guess, search range or step) · result · note* |
-| **Line edit** | The one line shown as raw source, held as *anchor id + line index*. UI state |
-| **Line commit** | The moment an edit leaves a line whose text differs from the scene. Writes the source once and, from M4e, the line's stored format with it |
-| **Result** | What a line computes: a value with unit, a list, an error, or empty |
-| **Shown result** | A result as displayed: in its display unit, else in the unit system, with Digits applied |
-| **Plain input** | A line whose right side is a literal (`D = 102.3 mm`). Its result cell stays empty |
-| **Problem** | An error or warning on a line, with its element and line. Derived |
-| **Unit slot** | The clickable unit in a result cell or table header. The UI for a display unit |
-| **Display unit** | Optional, per line, stored as a trailing `in <unit>`. Display-only |
-| **Unit system** | One per sheet: SI with prefixes, SI base, USCS, plus optional per-kind overrides (Custom) |
-| **Kind** | A dimension from a fixed list, such as pressure or volume flow |
-| **App units** | The fixed list of extra units every sheet has, such as `cP` |
-| **Digits** | Significant digits for every number shown. One per sheet |
-| **Function definition** | A line that defines one name with parameters |
-| **Solve line** | A line with `= solve`. Defines a **solved value**, searched over a range, or, with parameters, a **solve function**, started from a guess |
-| **Equation, residual** | `lhs = rhs` on a solve line. The solver sees `lhs - rhs` |
-| **Unknown** | A name bound only inside its own solve line's equation |
-| **Guess** | A solve function's `guess <unknown> = <expr>`, evaluated each time the solve runs. It gives the search's start and the unknown's dimension |
-| **Search range** | A solved value's `for <unknown> = <from> .. <to>`, evaluated each time the solve runs. It gives the span searched and the unknown's dimension |
-| **Roots** | What a solved value holds: the roots found in its search range, ascending. One root is a single value; several are a list |
-| **Solve details** | For a guess: method, iterations, final residual and bracket. For a range: method, range, points, the residual at each root and the crossings rejected. Shown on hover, never saved |
-| **Range** | `a .. b step s`. Evaluates to a list |
-| **List** | An ordered sequence of point results (value or error), all of one kind. It comes from a range, an iterating line or a solved value with several roots |
-| **Iterating line** | A line that mentions a list outside an aggregate or an index. Runs once per point |
-| **Index** | `x_r[2]`: one value taken out of a list, counting from 1 |
-| **Aggregate** | `min`, `max`, `sum`, `mean`, `count`. Takes a list, gives one value |
-| **Table line, plot line** | `table(…)` and `plot(…)`. Display only; each defines no name and draws under itself |
-| **Clause** | A comma-separated setting after a plot line or solve line, such as `mark Q_op`, `guess f = 0.02` or `for Q = 1 L/s .. 30 L/s` |
-| **Series, mark** | One list drawn on a plot; a value of the x kind drawn as a guide, dot and label |
-| **Comment line, note** | A line starting with `#`; the text after `#` on a line with code |
-| **Formatted comment line** | A line whose code is only a format clause, followed by comment text: `@bold @L # Pumps` (M4d) |
-| **Format** | A line's `@` words, after its code and before its note: bold, underline, one text colour, one highlight. A comment line's also take italic off and a size (M4d). From M4e it is stored beside the line, not in its text ([section 3](#3-sheet-lines-every-form)) |
-| **Plain format, rule** | A format word with no `if`, which always applies; `@word if <condition>`, which applies while its condition is true |
-| **Joined word** | Several format words joined by `+` with no spaces, read as one word: `@text-red+red+bold` (M4d). One rule with one condition |
-| **Conditional** | `cond ? a : b` or `if(cond, a, b)`: a value chosen by a condition, only the branch taken run (M4d) |
-| **Text value** | A result that is text, such as `"Approved"`. Shown plain, without quotes (M4d) |
-| **Text colour, highlight** | One of six colours for a line's or title's text; one of five soft bands behind a row or a header |
-| **Result colour** | One per sheet: the text colour of every result's number and unit. Blue by default |
-| **Sheet file** | Excalidraw scene JSON + the `excalimathpad` block. The sheet's only durable form |
-| **Dirty** | The scene or settings changed since the last save or open |
-| **Recovery copy** | The whole sheet file, its name and its file handle in IndexedDB. Exists only while dirty |
-| **Sheet panel** | Excalidraw's sidebar, labelled **Math settings**, with the tabs Variables, Problems, Settings and Constants. From M4d: Format, Symbols, Variables, Problems, Constants, Settings |
-| **Format tab** | The Sheet panel's tab that formats the open line or title (M4d). The only place to format; it replaced the format bar and the title's bar |
-| **Symbols tab** | The Sheet panel's tab of buttons that type, at the caret, text the engine reads (M4d) |
-| **Sample** | The top of the Format tab: the open line or title drawn as the sheet draws it (M4d) |
-| **No-focus control** | A panel button that prevents `mousedown` and has `tabIndex={-1}`, so a press acts on the open line without leaving it (M4d) |
-| **Math guide** | `docs/math-guide.md`, every form, key and setting with examples, shown in a dialog from ☰ (M4d) |
-| **Plugin, vault sheet** | The Obsidian community plugin (`plugin/`); a `.excalimathpad` file opened from a vault in its view (M4d) |
-| **Conflict copy** | `<name> (conflict YYYY-MM-DD HHmm).excalimathpad`, written beside a vault sheet when an outside change meets unwritten work (M4d) |
-| **Quick keys** | The pinned row of no-focus keys above the panel's tab icons, on touch, while a line or title is open (M4d) |
-| **Title** | A math element's optional name: plain text on one line, shown in a header above its lines. Never evaluated |
-| **Title format** | How a title looks: bold, italic, underline, alignment, size, text colour and highlight. Stored beside the title, never in its text |
-| **Chosen width** | A math element's optional width, set with the resize handles. Without one the element is **automatic** |
-| **Floor** | The width an element's math lines and title need. Comments don't count toward it |
-| **Laid-out width** | The larger of the chosen width and the floor |
-| **Placing** | The UI mode between Add math and the click that creates the anchor |
-| **Rename** | One name changed in the line that assigns it and in every use in its reach, in one write (0.5.0). Started from the **form** on a Variables row or from the **offer** on a committed line ([section 4](#renaming-a-name)) |
-| **Reach** | The lines one assignment feeds: from the line that assigns the name down to the next line that assigns the same name, in reading order (0.5.0) |
-| **Use** | A place in a reach's lines where the engine reads the name as that assignment: never a text, a note, a unit after `in`, a parameter or a solve's unknown (0.5.0) |
-| **Offer** | The card beside a line committed with its name changed, asking whether its uses are renamed too. UI state, never saved (0.5.0) |
-| **Print pages** | The sheet laid out for its Page setting. Computed at print time, never stored |
-| **Unbreakable box** | A math line, table row, plot, or drawing that fits a page. A break doesn't pass through one |
-| **Pump sheet** | The [acceptance sheet](acceptance/pump-sizing.md) |
+| Term | Means | Português |
+|---|---|---|
+| **Sheet** | All live math elements in reading order, plus drawings and settings. The unit of evaluation | folha |
+| **Reading order** | By the top of each anchor's visual bounds, then its left, then its id. Derived, never stored | ordem de leitura (guide only) |
+| **Math element** | A block of source lines anchored at a scene position, shown as a typeset grid | bloco de cálculo; short form bloco ("bloco 2, linha 3") |
+| **Anchor** | The marked Excalidraw rectangle that carries a math element. Its `customData` holds `kind`, `source` and, each optional, `title`, `titleFormat`, `width` and, from M4e, `formats` | — |
+| **Line** | One string of an element's source: one statement. See [section 3](#3-sheet-lines-every-form) for its forms | linha |
+| **Typeset row** | One line on screen: *gutter · equation (name · `≔` · expression, plus guess, search range or step) · result · note* | — |
+| **Line edit** | The one line shown as raw source, held as *anchor id + line index*. UI state | — |
+| **Line commit** | The moment an edit leaves a line whose text differs from the scene. Writes the source once and, from M4e, the line's stored format with it | — |
+| **Result** | What a line computes: a value with unit, a list, an error, or empty | resultado |
+| **Shown result** | A result as displayed: in its display unit, else in the unit system, with Digits applied | resultado exibido |
+| **Plain input** | A line whose right side is a literal (`D = 102.3 mm`). Its result cell stays empty | entrada simples |
+| **Problem** | An error or warning on a line, with its element and line. Derived | problema: erro, aviso |
+| **Unit slot** | The clickable unit in a result cell or table header. The UI for a display unit | seletor de unidade |
+| **Display unit** | Optional, per line, stored as a trailing `in <unit>`. Display-only | unidade de exibição |
+| **Unit system** | One per sheet: SI with prefixes, SI base, USCS, plus optional per-kind overrides (Custom) | sistema de unidades; SI com prefixos, SI, unidades de base, USCS, Personalizado |
+| **Kind** | A dimension from a fixed list, such as pressure or volume flow | grandeza, each with its article (uma pressão, uma vazão volumétrica) |
+| **App units** | The fixed list of extra units every sheet has, such as `cP` | unidades do app |
+| **Digits** | Significant digits for every number shown. One per sheet | Dígitos |
+| **Function definition** | A line that defines one name with parameters | definição de função |
+| **Solve line** | A line with `= solve`. Defines a **solved value**, searched over a range, or, with parameters, a **solve function**, started from a guess | linha solve; valor resolvido; função solve |
+| **Equation, residual** | `lhs = rhs` on a solve line. The solver sees `lhs - rhs` | equação, resíduo |
+| **Unknown** | A name bound only inside its own solve line's equation | incógnita |
+| **Guess** | A solve function's `guess <unknown> = <expr>`, evaluated each time the solve runs. It gives the search's start and the unknown's dimension | estimativa inicial |
+| **Search range** | A solved value's `for <unknown> = <from> .. <to>`, evaluated each time the solve runs. It gives the span searched and the unknown's dimension | intervalo de busca |
+| **Roots** | What a solved value holds: the roots found in its search range, ascending. One root is a single value; several are a list | raízes |
+| **Solve details** | For a guess: method, iterations, final residual and bracket. For a range: method, range, points, the residual at each root and the crossings rejected. Shown on hover, never saved | detalhes da resolução |
+| **Range** | `a .. b step s`. Evaluates to a list | intervalo |
+| **List** | An ordered sequence of point results (value or error), all of one kind. It comes from a range, an iterating line or a solved value with several roots | lista |
+| **Iterating line** | A line that mentions a list outside an aggregate or an index. Runs once per point | — |
+| **Index** | `x_r[2]`: one value taken out of a list, counting from 1 | índice |
+| **Aggregate** | `min`, `max`, `sum`, `mean`, `count`. Takes a list, gives one value | agregado |
+| **Table line, plot line** | `table(…)` and `plot(…)`. Display only; each defines no name and draws under itself | linha table, linha plot; tabela, gráfico |
+| **Clause** | A comma-separated setting after a plot line or solve line, such as `mark Q_op`, `guess f = 0.02` or `for Q = 1 L/s .. 30 L/s` | — |
+| **Series, mark** | One list drawn on a plot; a value of the x kind drawn as a guide, dot and label | série, marca |
+| **Comment line, note** | A line starting with `#`; the text after `#` on a line with code | comentário, nota |
+| **Formatted comment line** | A line whose code is only a format clause, followed by comment text: `@bold @L # Pumps` (M4d) | comentário formatado |
+| **Format** | A line's `@` words, after its code and before its note: bold, underline, one text colour, one highlight. A comment line's also take italic off and a size (M4d). From M4e it is stored beside the line, not in its text ([section 3](#3-sheet-lines-every-form)) | formato |
+| **Plain format, rule** | A format word with no `if`, which always applies; `@word if <condition>`, which applies while its condition is true | formato fixo, regra |
+| **Joined word** | Several format words joined by `+` with no spaces, read as one word: `@text-red+red+bold` (M4d). One rule with one condition | — |
+| **Conditional** | `cond ? a : b` or `if(cond, a, b)`: a value chosen by a condition, only the branch taken run (M4d) | condicional |
+| **Text value** | A result that is text, such as `"Approved"`. Shown plain, without quotes (M4d) | valor de texto |
+| **Text colour, highlight** | One of six colours for a line's or title's text; one of five soft bands behind a row or a header | cor do texto, realce |
+| **Result colour** | One per sheet: the text colour of every result's number and unit. Blue by default | Cor dos resultados |
+| **Sheet file** | Excalidraw scene JSON + the `excalimathpad` block. The sheet's only durable form | arquivo da folha |
+| **Dirty** | The scene or settings changed since the last save or open | alterações não salvas |
+| **Recovery copy** | The whole sheet file, its name and its file handle in IndexedDB. Exists only while dirty | cópia de recuperação |
+| **Sheet panel** | Excalidraw's sidebar, labelled **Math settings**, with the tabs Variables, Problems, Settings and Constants. From M4d: Format, Symbols, Variables, Problems, Constants, Settings | painel de cálculo, labelled Configurações de cálculo; tabs Formato, Símbolos, Variáveis, Problemas, Constantes, Configurações |
+| **Format tab** | The Sheet panel's tab that formats the open line or title (M4d). The only place to format; it replaced the format bar and the title's bar | aba Formato |
+| **Symbols tab** | The Sheet panel's tab of buttons that type, at the caret, text the engine reads (M4d) | aba Símbolos |
+| **Sample** | The top of the Format tab: the open line or title drawn as the sheet draws it (M4d) | amostra |
+| **No-focus control** | A panel button that prevents `mousedown` and has `tabIndex={-1}`, so a press acts on the open line without leaving it (M4d) | — |
+| **Math guide** | `docs/math-guide.md`, every form, key and setting with examples, shown in a dialog from ☰ (M4d) | Guia de cálculo, `docs/math-guide.pt-BR.md` (0.6.0) |
+| **Plugin, vault sheet** | The Obsidian community plugin (`plugin/`); a `.excalimathpad` file opened from a vault in its view (M4d) | plugin, folha do cofre |
+| **Conflict copy** | `<name> (conflict YYYY-MM-DD HHmm).excalimathpad`, written beside a vault sheet when an outside change meets unwritten work (M4d) | `<name> (conflito YYYY-MM-DD HHmm).excalimathpad`, when created in Português (0.6.0) |
+| **Quick keys** | The pinned row of no-focus keys above the panel's tab icons, on touch, while a line or title is open (M4d) | teclas rápidas |
+| **Title** | A math element's optional name: plain text on one line, shown in a header above its lines. Never evaluated | título |
+| **Title format** | How a title looks: bold, italic, underline, alignment, size, text colour and highlight. Stored beside the title, never in its text | formato do título |
+| **Chosen width** | A math element's optional width, set with the resize handles. Without one the element is **automatic** | largura escolhida |
+| **Floor** | The width an element's math lines and title need. Comments don't count toward it | — |
+| **Laid-out width** | The larger of the chosen width and the floor | — |
+| **Placing** | The UI mode between Add math and the click that creates the anchor | — |
+| **Rename** | One name changed in the line that assigns it and in every use in its reach, in one write (0.5.0). Started from the **form** on a Variables row or from the **offer** on a committed line ([section 4](#renaming-a-name)) | renomear; o formulário, a sugestão |
+| **Reach** | The lines one assignment feeds: from the line that assigns the name down to the next line that assigns the same name, in reading order (0.5.0) | alcance |
+| **Use** | A place in a reach's lines where the engine reads the name as that assignment: never a text, a note, a unit after `in`, a parameter or a solve's unknown (0.5.0) | uso |
+| **Offer** | The card beside a line committed with its name changed, asking whether its uses are renamed too. UI state, never saved (0.5.0) | sugestão |
+| **Print pages** | The sheet laid out for its Page setting. Computed at print time, never stored | páginas impressas |
+| **Unbreakable box** | A math line, table row, plot, or drawing that fits a page. A break doesn't pass through one | — |
+| **Language** | ☰'s choice of English or Português (Brasil), per device, never in the file. From 0.6.0 it sets the app's own text as well as Excalidraw's | Idioma |
+| **Text table** | One TypeScript module per language with the same keys, holding the app's own words (0.6.0, [section 14](#14-engineering-constraints)) | — |
+| **Message code** | What the engine returns for an error or a warning in place of words: a code and its arguments, worded by the text table of the language shown (0.6.0) | — |
+| **Pump sheet** | The [acceptance sheet](acceptance/pump-sizing.md) | — |
 
 **Retired names:** *placeholder* (unit slot or display unit), *sheet default*
 (unit system), *solve block* (solve line), *side panel* (Sheet panel), *pipe-flow
@@ -763,8 +773,10 @@ the file, and offers details to report that hold no sheet content.
   - **What counts:** a failure while the view is drawn or laid out. A failure in the app's
     answer to a key or a press, with nothing being drawn, leaves the view as it was.
 - **Copy details** puts a short text on the clipboard: the version and build stamp, web or
-  Obsidian plugin (and desktop, phone or tablet), what failed (a line, an element, a chart, a
-  tab, the view), and the error with its stack. It ends `(no sheet content is included)`. It
+  Obsidian plugin (and desktop, phone or tablet), from 0.6.0 the language shown
+  (`Language: English` or `Language: Português (Brasil)`), what failed (a line, an element, a
+  chart, a tab, the view), and the error with its stack. The text is English in both languages,
+  since the maintainer reads it; a message in the error's text stays as it was shown. It ends `(no sheet content is included)`. It
   holds no line text, name or value: every line and title of the sheet, each word and number
   in them, each name a line defines and each result as shown is cut from the error's text and
   replaced by `…`, where it stands as a whole word. A one-letter name and any other text
@@ -1544,7 +1556,7 @@ Set in the Settings tab. Switching re-shows every result without a chosen unit.
 | **SI with prefixes** (default) | A prefix keeps the number between 1 and 1000 where the kind has prefixed units: `45.43 kPa`, `5.412 kW`, `1.002 mPa·s` |
 | **SI base units** | No prefixes: `4.543·10⁴ Pa`, `5412 W` |
 | **USCS** | ft, ft², ft³/s, ft/s, psi, hp, lb/ft³ and so on |
-| **Custom** | Starts from one of the three and changes the unit for chosen kinds. Others follow the system it started from |
+| **Custom** | Starts from one of the three and changes the unit for chosen kinds. Others follow the system it started from. From 0.6.0 each kind's default option shows its unit or range only (`m … km`, `kg/m^3`): the system is named once, in Starts from, so a narrow panel never cuts the unit, in either language |
 
 **Kinds:** length, area, volume, volume flow, mass flow, velocity, acceleration, force,
 pressure, energy, power, density, dynamic viscosity, kinematic viscosity, frequency,
@@ -1601,7 +1613,7 @@ file stores nothing about them.
 | Typeset form | `1.235 \cdot 10^{4}` in KaTeX. Plain-text places (a line being edited, hover, messages) use `1.235·10⁴`. `1.86e5` never shows |
 | Trailing zeros | Dropped in a result cell (`25 m`, `5.4`). Kept in a table column (`20.00`, `24.80`) |
 | Whole-number table column | Stays whole (`1`, `19`, `30`). Numbers line up on the decimal point. Scientific values keep their zeros (`1.860·10⁵`). Zero stays `0` |
-| Separators | A decimal point, no thousands separator |
+| Separators | A decimal point, no thousands separator, in both languages. Only the app's own words group thousands: `10,000` in English and `10 000` in Português, with a narrow no-break space (U+202F), in a limit's message and on a plot's ticks ([Language](#language)) |
 | Counts | No special treatment: `n = 123456` shows `1.235·10⁵` |
 | Other values | `∞`, `-∞`, `NaN`; `-0` shows `0`; a complex result formats each part (`2 + 3i`) |
 | Source | Never reformatted: `D = 102.30 mm` stays as typed |
@@ -1641,7 +1653,9 @@ a short name, as in Mathcad:
   the name is the sheet's on every line: used above its line it is `R is defined below`,
   and after a failed definition `R has an error above`, never the constant.
 - A constant shows as any result does, in the sheet's unit system and Digits.
-- The list is in the Sheet panel's [Constants tab](#sheet-panel).
+- The list is in the Sheet panel's [Constants tab](#sheet-panel). From 0.6.0 its descriptions
+  follow the language (`Constante de Planck`, `Velocidade da luz no vácuo`); math.js's names
+  and the short names stay, and a row's `<short> or <name>` reads `<short> ou <name>`.
 
 ### Warnings
 
@@ -1929,14 +1943,15 @@ Obsidian's views do.
 - **New sheet:** the command "New sheet", a ribbon icon, and "New sheet" in a folder's
   menu in the file explorer (in that folder). The command and the ribbon follow Obsidian's
   *Default location for new notes*. It is named `Untitled.excalimathpad`, then `Untitled 1`,
-  `Untitled 2`…, holds an empty sheet (format 1, default settings) and opens in a new tab on
+  `Untitled 2`… (from 0.6.0, in Português, `Sem título.excalimathpad`, `Sem título 1`…: the
+  language at creation names it, and a file that exists keeps its name), holds an empty sheet (format 1, default settings) and opens in a new tab on
   the welcome screen.
 - **An outside change** (sync, git, another app, a second tab on the same file):
   - an idle tab (nothing unwritten, no line open) reloads in place, keeping scroll and zoom,
     with no undo step and the history cleared;
   - a busy tab keeps the outside version in the file, writes its own beside it as
     `<name> (conflict YYYY-MM-DD HHmm).excalimathpad` (never overwriting a file, in the same
-    folder), shows a notice naming the copy, then reloads.
+    folder; in Português `<name> (conflito YYYY-MM-DD HHmm)`), shows a notice naming the copy, then reloads.
 - **Each tab** has its own view, scene, undo history and file adapter. A rename or move keeps
   the tab open, and Obsidian updates links. A wikilink to the sheet opens it; an embed shows
   Obsidian's default.
@@ -1991,7 +2006,10 @@ command and first ☰ item. There is no app bar: the chrome lives inside Excalid
   warnings); the More tools button carries the same badge, so the count shows with the
   dropdown closed. A sheet with warnings alone shows no badge.
 - An empty untitled sheet shows Excalidraw's welcome screen: the app's name, the hint
-  "Press M, or choose Add math under More tools, then click the sheet to place math", and Open… (Ctrl+O).
+  "Press M, or choose Add math under More tools, then click the sheet to place math" (from 0.6.0
+  in Português "Pressione M, ou escolha Adicionar cálculo em Mais ferramentas, e clique na tela
+  para inserir um cálculo"; on touch, section 13's touch hint, which 0.6.0 also builds), and
+  Open… (Ctrl+O).
   Excalidraw's own logo and collaboration items are left out.
 
 ### Add math
@@ -2060,11 +2078,20 @@ As built (#198):
   the element, open Math settings, and press the Format tab's Edit. On a tablet held upright
   the [quick keys](#touch) show with the panel, so only once it is open.
 - **The bottom sheet on a phone is unchanged:** its active tab still shows its name, and it
-  has no heading and no handle. An edit opens it as before.
+  has no heading and no handle. An edit opens it as before. From 0.6.0 the active tab shows
+  its name **only if it fits** the room the other icons and Close leave; otherwise it shows its
+  icon alone, like the other tabs, and the 40 px touch targets stay. This also fixes English
+  at 320 px, where every name ran out of its pill.
 - **Room at 280 px:** a rule's ↑ ↓ ✕ sit under its condition, beside its state, so the
   condition's field has the row; a constant's value too long for its row goes under its
   symbol. Checked in Chromium at 280 px, tab by tab
   ([spec history](spec-history.md#17-verify-first)).
+- **Longer text wraps** (0.6.0, both languages): a label longer in Português wraps between
+  words; nothing is cut and nothing ends in an ellipsis, the widths above stay, and no word is
+  shortened to fit. A link's arrow stays with its last word ("Primeira linha ↓"), and a
+  condition or a name quoted in running text never breaks inside ("… enquanto `u > 3 m/s`."),
+  so the line wraps before it. The on-sheet error's cap of [section 4](#problems) is unchanged:
+  the full message is in Problems.
 
 - **An edit opens the panel on Format.** When a line or the title opens and none was open,
   the panel opens on Format, or switches to it. Moving within the edit keeps whichever tab
@@ -2117,43 +2144,103 @@ Excalidraw's Help). It is the same on the web, offline and in a vault, and makes
   math carry a marker the test skips: a Write cell in italics.
 - The dialog closes on Esc, ✕ or a click outside, and is as wide as the view allows up to
   about 760 px.
+- **Two files, one shape** (0.6.0): `docs/math-guide.pt-BR.md` is the guide in Português, with
+  the same 17 sections in the same order and the same Write cells, row for row and character
+  for character: only the titles, the prose, the Notes and the Shows cells that hold the app's
+  words are translated. ☰ → Math guide (Guia de cálculo) opens the one for the language shown,
+  and a language chosen while it is open changes it at once. Both builds carry both, and the
+  test runs each against the engine in its own language: an error from math.js that isn't in
+  the [known list](#13-messages) reads the same English in both guides. A CI test fails if the
+  two files differ in sections, rows or Write cells, so a form added to one is added to the
+  other in the same pull request. Each stays within the 600 lines.
 
 ### Language
 
-From 0.5.0, in both homes, on Excalidraw 0.18.1.
+From 0.5.0 for Excalidraw's own text, and from 0.6.0 for the app's, in both homes.
 
-- **☰ → Language** is a row just below Dark mode, with two choices: **English** and
-  **Português (Brasil)**. On a phone it is in the same menu, in Excalidraw's bottom bar. The
-  Settings tab stays the sheet's settings only.
-- **It translates Excalidraw's own text:** its toolbar and tool names, its menus and its own
+- **☰ → Language** (Idioma) is a row just below Dark mode, with two choices: **English** and
+  **Português (Brasil)**, each written in its own language. On a phone it is in the same menu,
+  in Excalidraw's bottom bar. The Settings tab stays the sheet's settings only.
+- **Excalidraw's own text** follows it: its toolbar and tool names, its menus and its own
   ☰ items (Find on canvas, Help, Reset the canvas, Dark mode, Canvas background), the
-  properties panel, the right-click menu, its dialogs, Help and toasts.
-- **The app's own text stays English:** Add math, Math settings, the Sheet panel, every
-  message of [section 13](#13-messages), the canvas hint for a selected math element, the
-  Math guide, the app's ☰ items (Open…, Save, Save as…, Print…, Math guide) and the Language
-  row's own label. A screen in Portuguese is mixed, and that was chosen.
+  properties panel, the right-click menu, its dialogs, Help and toasts. Where Excalidraw's
+  Portuguese has no text, its English shows ("Find on canvas", the flowchart hint, and labels
+  the [Excalidraw upgrade](#the-excalidraw-upgrade) adds without Portuguese): that is
+  Excalidraw's text ([ADR 0001](adr/0001-wrap-excalidraw-unforked.md)), and the app neither
+  patches nor covers it. The image-too-big toast is Excalidraw's own `errors.fileTooBig` from
+  0.6.0, not the app's English copy of it.
+- **The app's own text follows it too, from 0.6.0:** the app's ☰ items (Abrir…, Salvar,
+  Salvar como…, Imprimir…, Guia de cálculo), More tools' **Cálculo** heading, **∑ Adicionar
+  cálculo  M** and **Configurações de cálculo**, the welcome hint and the selection hint,
+  the Sheet panel and its six tabs, the cards, the unit slot, the plot settings, the toasts,
+  the dialogs and every message of [section 13](#13-messages), the failure screen, the print
+  view's own words and the Math guide. The words are spec section 2's Português column, and
+  the messages section 13's Português column. Until 0.6.0 the app's text stayed English, and
+  a screen in Portuguese was mixed.
+- **The math reads the same; the app's words follow the language.** A sheet's source, its
+  names, numbers, units and keywords (`solve`, `for`, `guess`, `step`, `table`, `plot`, `if`,
+  `in`, and `min`, `max`, `sum`, `mean`, `count`) read and show the same in either language,
+  `.` stays the decimal mark typed and shown, and numbers keep [section 5](#numbers)'s form.
+  The words the app writes around them follow ☰ → Language, on the sheet and in print: a
+  list's summary (`30 valores, 12.04 … 33.18 m`), a matrix's size (`matriz 2 × 3`), a plot's
+  default title and legend (`H_s em função de Q_s`, in its text and its TeX), a rule's count on
+  a list (`4 de 30 pontos`), the failed-points line, and solve details. A title, a note, a
+  comment or a plot title the user typed is never changed.
+- **What stays English in both:** an error from math.js outside the known list of
+  [section 13](#13-messages), which reads as math.js words it; a reason the browser or
+  Obsidian gives (`<reason>`), in the language it arrives in; the text Copy details puts on
+  the clipboard ([section 4](#unexpected-failures)); the guide's build errors, the console and
+  command ids; the README, the listing and the issue forms.
+- **Forms that change with the language:** the app's own grouped numbers (`10,000` in English,
+  `10 000` in Português with a narrow no-break space, in a limit's message and on plot ticks);
+  file names written at creation (`Sem título.excalimathpad`, `<name> (conflito …)`,
+  [section 7](#a-sheet-in-a-vault)); the save picker's file type (`Folha do Excalimathpad`);
+  the browser's own Print line (`Use Imprimir… no menu do app`); the print footer's `de` (the
+  date stays ISO). Keys stay the same and only their names translate (`Negrito (Ctrl+B)`), and
+  key names are written as the keyboard prints them (Ctrl, Shift, Alt, Enter, Esc, Tab,
+  Delete, ↑ ↓), as Excalidraw's pt-BR writes them. A language never changes what a key does.
+- **No Portuguese text is built from English pieces.** Each kind carries its article in the
+  table (`um comprimento`, `uma potência`, `uma vazão volumétrica`), every count has a singular
+  and a plural form (`1 linha`, `6 linhas`), and the plugin's paper notice words the stored
+  `portrait`/`landscape` and `A4`/`Letter` through the table (`retrato`, `paisagem`, `A4`,
+  `Carta`).
 - **English until chosen,** as Dark mode is light until chosen. Nothing reads the browser's
   or Obsidian's language.
 - **Remembered per device and never in the file:** browser storage on the web, beside the
   panel's memory; the plugin's `data.json` in a vault, beside the theme. Every sheet opened
   after a choice opens in it, after a restart too, and the sheet it was chosen in changes at
-  once, with ☰ still open. In a vault every sheet tab already open changes with it too, unlike
-  Dark mode: Excalidraw keeps one language for every editor in the window.
+  once, with ☰ still open: the app's text with Excalidraw's, the Sheet panel, the hint and a
+  card on the sheet included. In a vault every sheet tab already open changes with it too,
+  unlike Dark mode: Excalidraw keeps one language for every editor in the window.
+- **In Obsidian** (0.6.0): the plugin's commands, the ribbon's tooltip, the folder menu's New
+  sheet and its notices use the language in `data.json`. A notice is worded when it shows, so
+  it follows a choice at once; the command palette's names, the ribbon and the folder item are
+  registered when the plugin loads, so they change after Obsidian restarts (or the plugin is
+  reloaded). The language chosen in one vault is that vault's.
 - **Choosing leaves an open line first:** ☰ is a press on the sheet's own chrome, so a line
   open when it is pressed is left (committed) before the row is reached.
 - **Choosing a language** is no undo step, never makes the sheet dirty, changes no result
-  and nothing a sheet file holds: a sheet reads and shows the same in either language, and
-  numbers keep [section 5](#numbers)'s form.
+  and nothing a sheet file holds: a file that exists keeps its name, and a sheet saved in one
+  language opens the same in the other.
 - **The plugin stays offline:** its build carries Excalidraw's Brazilian Portuguese texts
-  beside the English ones ([section 12a](#one-source-two-builds)), so choosing it makes no
-  request. The web app fetches them from its own address when first chosen, as it fetches
-  its other chunks.
+  beside the English ones ([section 12a](#one-source-two-builds)), and the app's two text tables
+  and two guides are in `main.js`, so choosing it makes no request. The web app fetches
+  Excalidraw's texts from its own address when first chosen, as it fetches its other chunks;
+  the app's own tables are in its entry.
+
+Decided in: [Which of the nine Excalidraw items go in 0.5.0, which wait, and which are
+refused?](https://github.com/matheus-sancha/excalimathpad/issues/234) (0.5.0), and on the map
+[Spec for 0.6.0: Excalimathpad's own text in Português (Brasil)](https://github.com/matheus-sancha/excalimathpad/issues/284):
+[the inventory](https://github.com/matheus-sancha/excalimathpad/issues/285),
+[the words](https://github.com/matheus-sancha/excalimathpad/issues/286),
+[the edges](https://github.com/matheus-sancha/excalimathpad/issues/287) and
+[the fit](https://github.com/matheus-sancha/excalimathpad/issues/288).
 
 ### The Excalidraw upgrade
 
 The app moves from Excalidraw 0.18.1 to a pinned canary build, `0.18.0-9fbeaed`, because no
 release holds the five items the testers asked for. It was `0.5.0`'s last piece and slid
-alone: it wasn't green on the day, so it ships as a `0.6.x` during test week 2
+alone: it wasn't green on the day, so it ships in the first release after it merges, `0.6.0` or a `0.6.x`
 ([The test period](#the-test-period)). Until it is merged, everything below is not built,
 and the rest of this spec describes the app on 0.18.1. What the canary was seen to do is in
 [`docs/research/excalidraw-canary.md`](research/excalidraw-canary.md).
@@ -2653,7 +2740,8 @@ Built in M5. Print fits the sheet to the page width and flows down onto as many 
 - **Page:** A4 or Letter, portrait or landscape, in Settings; default A4 portrait. The app needs it
   to compute breaks, so paper size is changed there, not in the browser's dialog.
 - **Furniture:** margins of 15 mm. A small grey footer on each page has the file name, the print
-  date (`YYYY-MM-DD`) and `2 of 3`. An unsaved sheet reads "Untitled". No URL prints.
+  date (`YYYY-MM-DD`, in both languages) and `2 of 3` (in Português `2 de 3`). An unsaved sheet
+  reads "Untitled" ("Sem título"). No URL prints.
 
 **Page breaks:**
 
@@ -2890,6 +2978,9 @@ touch in [section 4](#touch). Research: [`docs/research/obsidian-plugin.md`](res
   Brazilian Portuguese (`pt-BR`, about 22 kB on 0.18.1), for [Language](#language); every
   other locale stays stubbed. It fits `main.js`'s budget as it stands: 3,447,773 bytes with it,
   23,822 more, against 3,574,000, so the budget isn't raised (#263).
+  From 0.6.0 `main.js` also carries the app's Portuguese text table and the Portuguese
+  guide (about 8,200 words; an estimated 60 to 90 kB, not measured); the build prints its size against the
+  budget, and a raise is made on purpose in the commit that needs it, saying by how much.
 - **The Excalidraw package is pinned** from [the upgrade](#the-excalidraw-upgrade):
   `"@excalidraw/excalidraw": "0.18.0-9fbeaed"`, exact, with no caret. It moves only twice: to
   a newer canary when a bug that blocks the app is fixed there, in a commit that names the
@@ -3074,206 +3165,239 @@ Decided in: [work laptop](https://github.com/matheus-sancha/excalimathpad/issues
 The wording of every user-facing message. `<…>` is filled in. Numbers follow
 [section 5](#numbers), in the plain-text form.
 
+From 0.6.0 every table has a **Português** column: the message as it shows with ☰ → Language
+on Português (Brasil) ([Language](#language)). The code a message quotes, a name, a unit and
+a keyword stay as typed in both; `<reason>` passes through in the language it arrives in.
+
+- **Counts** have a singular and a plural form in both languages (`1 linha`, `6 linhas`;
+  `1 de 30 pontos falhou`, `2 de 30 pontos falharam`), and a kind carries its article
+  (`H_s é um comprimento, P é uma potência`). No message is built from English pieces.
+- **Key names** are written as the keyboard prints them (Ctrl, Shift, Alt, Enter, Esc, Tab,
+  Delete, ↑ ↓), and a key's name in a label translates while the key stays (`Negrito (Ctrl+B)`,
+  `Editar (Enter)`, `Fechar (Esc)`).
+- **Grouped numbers** in the app's own words are `10,000` in English and `10 000` in
+  Português, with a narrow no-break space.
+
+**math.js's own errors.** An error math.js words reaches the line as math.js writes it, after
+the app's prefix (`in k(1 s): …`). In Português, the known ones are matched by pattern and
+worded from the table; ` (char N)` becomes ` (caractere N)`. Anything else passes through in
+math.js's English in both languages. The list is fixed by the engine's issue from the
+inventory's probe and the Math guide's Shows cells, about fifteen patterns; each has a test,
+so a math.js upgrade that rewords one fails CI. Those seen so far on math.js 15.2:
+
+| math.js writes | Português |
+|---|---|
+| `Parenthesis ) expected (char 11)` | `Parêntese ) esperado (caractere 11)` |
+| `Unexpected end of expression` | `Fim inesperado da expressão` |
+| `Unexpected operator …` | `Operador inesperado …` |
+| `Units do not match` | `As unidades não correspondem` |
+| `Too many arguments in function sin (expected: 1, actual: 2)` | `Argumentos demais na função sin (esperado: 1, recebido: 2)` |
+| `Too few arguments in function pow (…)` | `Argumentos de menos na função pow (…)` |
+| `Dimension mismatch …` | `Dimensões incompatíveis …` |
+| `Cannot convert "x" to a number` | `Não é possível converter "x" em número` |
+| `Matrix must be square` | `A matriz deve ser quadrada` |
+| `Parameters in function gcd must be integer numbers` | `Os parâmetros da função gcd devem ser números inteiros` |
+
 **Reading and names**
 
-| When | Message | Arrives |
-|---|---|---|
-| A name used above its definition | `x is defined below` | M0 |
-| A name whose assignment failed | `x has an error above` | M0 |
-| `table`, `plot` or `solve` assigned to | `table is a line form: choose another name` | M2 |
-| `if` assigned to | `if is a function: choose another name` | M4d |
-| A `;` at a line's top level | `one statement per line: split the line at the ;` | M4d |
-| A name shadows a unit or built-in (warning) | `K shadows the unit K` | M2 |
-| A use that falls back to the unit (warning) | `V reads as the unit V here: the variable is defined below` or `… its definition failed` | M2 |
-| A body name not defined above (warning) | `y isn't defined above this line` | M2 |
+| When | Message | Português | Arrives |
+|---|---|---|---|
+| A name used above its definition | `x is defined below` | `x é definido abaixo` | M0 |
+| A name whose assignment failed | `x has an error above` | `x tem um erro acima` | M0 |
+| `table`, `plot` or `solve` assigned to | `table is a line form: choose another name` | `table é uma forma de linha: escolha outro nome` | M2 |
+| `if` assigned to | `if is a function: choose another name` | `if é uma função: escolha outro nome` | M4d |
+| A `;` at a line's top level | `one statement per line: split the line at the ;` | `uma instrução por linha: divida a linha no ;` | M4d |
+| A name shadows a unit or built-in (warning) | `K shadows the unit K` | `K encobre a unidade K` | M2 |
+| A use that falls back to the unit (warning) | `V reads as the unit V here: the variable is defined below` or `… its definition failed` | `V é lido como a unidade V aqui: a variável é definida abaixo` ou `… sua definição falhou` | M2 |
+| A body name not defined above (warning) | `y isn't defined above this line` | `y não está definido acima desta linha` | M2 |
 
 **Functions**
 
-| When | Message | Arrives |
-|---|---|---|
-| A value called like a function | `f_d is a value, not a function: write f_d * (...) to multiply` | M2 |
-| A function used as a number | `q is a function: call it with q(...)` | M2 |
-| Wrong argument count | `h needs 2 arguments, got 1` | M2 |
-| Recursion with no end | `loop calls itself without end` | M2 |
-| An error inside a body, on the calling line | `in k(1 s): Units do not match` | M2 |
-| `in <unit>` on a definition | `Set a function's display unit on the line that calls it` | M2 |
-| A function the app turns off, such as `help(sin)` | `help is not supported in a math element` (the same for `evaluate`, `config`, `simplify` and the others) | M4e |
+| When | Message | Português | Arrives |
+|---|---|---|---|
+| A value called like a function | `f_d is a value, not a function: write f_d * (...) to multiply` | `f_d é um valor, não uma função: escreva f_d * (...) para multiplicar` | M2 |
+| A function used as a number | `q is a function: call it with q(...)` | `q é uma função: chame-a com q(...)` | M2 |
+| Wrong argument count | `h needs 2 arguments, got 1` | `h precisa de 2 argumentos, recebeu 1` (`precisa de 1 argumento`) | M2 |
+| Recursion with no end | `loop calls itself without end` | `loop chama a si mesma sem fim` | M2 |
+| An error inside a body, on the calling line | `in k(1 s): Units do not match` | `em k(1 s): As unidades não correspondem` | M2 |
+| `in <unit>` on a definition | `Set a function's display unit on the line that calls it` | `Defina a unidade de exibição de uma função na linha que a chama` | M2 |
+| A function the app turns off, such as `help(sin)` | `help is not supported in a math element` (the same for `evaluate`, `config`, `simplify` and the others) | `help não é aceito em um bloco de cálculo` (o mesmo para os outros) | M4e |
 
 **Units**
 
-| When | Message | Arrives |
-|---|---|---|
-| Unknown `in xyz` in source | `Unknown unit xyz` | M2 |
-| A complex value with a unit, alone or in a list | `a complex value with a unit can't be shown` | 0.2.1 |
-| A clause word that isn't a format | `Unknown format @bolt`, `Unknown format @text-purple` | #63, M4c |
-| A part of a joined word that isn't a format | `Unknown format @blod in @text-red+blod` | M4d |
-| A comment word on a math line | `@L is for comment lines`, `@upright is for comment lines` | M4d |
-| A rule on a comment line | `rules need a math line` | M4d |
+| When | Message | Português | Arrives |
+|---|---|---|---|
+| Unknown `in xyz` in source | `Unknown unit xyz` | `Unidade desconhecida xyz` | M2 |
+| A complex value with a unit, alone or in a list | `a complex value with a unit can't be shown` | `um valor complexo com unidade não pode ser exibido` | 0.2.1 |
+| A clause word that isn't a format | `Unknown format @bolt`, `Unknown format @text-purple` | `Formato desconhecido @bolt`, `Formato desconhecido @text-purple` | #63, M4c |
+| A part of a joined word that isn't a format | `Unknown format @blod in @text-red+blod` | `Formato desconhecido @blod em @text-red+blod` | M4d |
+| A comment word on a math line | `@L is for comment lines`, `@upright is for comment lines` | `@L é para comentários`, `@upright é para comentários` | M4d |
+| A rule on a comment line | `rules need a math line` | `regras precisam de uma linha de cálculo` | M4d |
 
 **Conditionals and text**
 
-| When | Message | Arrives |
-|---|---|---|
-| Text compared with a number or a unit | `can't compare text with a number` | M4d |
-| `<` or `>` on text | `text can only be compared with == or !=` | M4d |
-| `if()` with other than three arguments | `if needs 3 arguments: if(cond, a, b)` | M4d |
-| A condition that isn't true or false | `if: the condition must be true or false` (the same for `? :`) | M4d |
-| A condition that is a list or a matrix | `if: the condition must be one value; use a list line instead` | M4d |
-| A unit compared with a bare number | `can't compare 3 m/s with 0: give the 0 a unit` | M4d |
-| `in <unit>` on a text | `text has no unit: take off "in kPa"` | M4d |
+| When | Message | Português | Arrives |
+|---|---|---|---|
+| Text compared with a number or a unit | `can't compare text with a number` | `não é possível comparar texto com um número` | M4d |
+| `<` or `>` on text | `text can only be compared with == or !=` | `texto só pode ser comparado com == ou !=` | M4d |
+| `if()` with other than three arguments | `if needs 3 arguments: if(cond, a, b)` | `if precisa de 3 argumentos: if(cond, a, b)` | M4d |
+| A condition that isn't true or false | `if: the condition must be true or false` (the same for `? :`) | `if: a condição deve ser verdadeira ou falsa` | M4d |
+| A condition that is a list or a matrix | `if: the condition must be one value; use a list line instead` | `if: a condição deve ser um único valor; use uma linha de lista` | M4d |
+| A unit compared with a bare number | `can't compare 3 m/s with 0: give the 0 a unit` | `não é possível comparar 3 m/s com 0: dê uma unidade ao 0` | M4d |
+| `in <unit>` on a text | `text has no unit: take off "in kPa"` | `texto não tem unidade: retire "in kPa"` | M4d |
 
 **Rules** (all warnings)
 
-| When | Message | Arrives |
-|---|---|---|
-| A condition that fails to evaluate | `if v > v_max: <message>`, such as `if v > 3 kg: Units do not match` | M4c |
-| A condition that isn't true or false | `if v: not true or false` | M4c |
-| An assignment in a condition | `if v = 3: a rule can't assign; write ==` | M4c |
-| `result` on a line with no single value | `if result > 3: a rule needs a value` | M4c |
-| `result` on a table line | `if result > 3: a table has no result; use its list names` | M4c |
+| When | Message | Português | Arrives |
+|---|---|---|---|
+| A condition that fails to evaluate | `if v > v_max: <message>`, such as `if v > 3 kg: Units do not match` | `if v > v_max: <mensagem>`, como `if v > 3 kg: As unidades não correspondem` | M4c |
+| A condition that isn't true or false | `if v: not true or false` | `if v: nem verdadeiro nem falso` | M4c |
+| An assignment in a condition | `if v = 3: a rule can't assign; write ==` | `if v = 3: uma regra não pode atribuir; escreva ==` | M4c |
+| `result` on a line with no single value | `if result > 3: a rule needs a value` | `if result > 3: uma regra precisa de um valor` | M4c |
+| `result` on a table line | `if result > 3: a table has no result; use its list names` | `if result > 3: uma tabela não tem resultado; use os nomes das suas listas` | M4c |
 
 **Solve**
 
-| When | Message | Arrives |
-|---|---|---|
-| A solved value with `guess`, or with no clause | `solve needs a range: ", for Q = <from> .. <to>"` | M4c |
-| A solve function with `for` | `a solve function takes a guess: ", guess f = <value>"` | M4c |
-| No root in the range | `no root found for x in -10 .. 10`, `no root found for Q in 1 .. 30 L/s` | M4c |
-| No root, and no point of the range had a value | `no root found for Q in 1 .. 30 L/s (the equation has no value in the range)` | M4c |
-| No root after inner failures | `no root found for Q in 1 .. 30 L/s; last inner error: <message>` | M4c |
-| More than 100 roots | `more than 100 roots for x in 0 .. 1000: narrow the range` | M4c |
-| A range solve that mentions a list | `a range solve can't use the list a_s; use a solve function with a guess` | M4c |
-| A missing end, or a step | `for Q needs two ends and no step: "for Q = <from> .. <to>"` | M4c |
-| `from` not below `to` | `for Q = 30 L/s .. 1 L/s: from must be below to` | M4c |
-| Ends of different kinds | `for Q = 1 L/s .. 30 m: the ends must be the same kind` | M4c |
-| An end fails | `for Q: <message>` | M4c |
-| Units of the two sides differ, with a range | `for Q = 1 m .. 30 m: Hp(Q) - Hs(Q) units do not match` | M4c |
-| No guess (a solve function, from M4c) | `solve needs a guess: ", guess Q = <value>"` | M3 |
-| No root | `no root near Q = 15 L/s (searched 0.9 .. 240 L/s)` | M3 |
-| No root, on a call | `in f(1.86·10⁵, 4.399·10⁻⁴): no root near f = 0.02 (searched <range>)` | M3 |
-| Outer solve fails after inner failures | `no root near Q = 15 L/s (searched <range>); last inner error: <message>` | M3 |
-| Units of the two sides differ | `guess Q = 15 m: Hp(Q) - Hs(Q) units do not match` | M3 |
-| Iteration cap | `no convergence for Q after 100 iterations` | M3 |
-| The guess fails | `guess Q: <message>` | M3 |
-| The guess isn't a number or a quantity | `guess Q: not a number or a quantity` | #70 |
-| No equation, or more than one `=` | `solve needs one equation: "<left side> = <right side>"` | #70 |
-| No root, and no point near the guess had a value | `no root near Q = 15 L/s (the equation has no value near the guess)` | #70 |
-| A side isn't a number or a quantity | `a side of the equation is not a number or a quantity` | #70 |
+| When | Message | Português | Arrives |
+|---|---|---|---|
+| A solved value with `guess`, or with no clause | `solve needs a range: ", for Q = <from> .. <to>"` | `solve precisa de um intervalo: ", for Q = <from> .. <to>"` | M4c |
+| A solve function with `for` | `a solve function takes a guess: ", guess f = <value>"` | `uma função solve usa uma estimativa inicial: ", guess f = <value>"` | M4c |
+| No root in the range | `no root found for x in -10 .. 10`, `no root found for Q in 1 .. 30 L/s` | `nenhuma raiz encontrada para x em -10 .. 10`, `nenhuma raiz encontrada para Q em 1 .. 30 L/s` | M4c |
+| No root, and no point of the range had a value | `no root found for Q in 1 .. 30 L/s (the equation has no value in the range)` | `nenhuma raiz encontrada para Q em 1 .. 30 L/s (a equação não tem valor no intervalo)` | M4c |
+| No root after inner failures | `no root found for Q in 1 .. 30 L/s; last inner error: <message>` | `nenhuma raiz encontrada para Q em 1 .. 30 L/s; último erro interno: <mensagem>` | M4c |
+| More than 100 roots | `more than 100 roots for x in 0 .. 1000: narrow the range` | `mais de 100 raízes para x em 0 .. 1000: estreite o intervalo` | M4c |
+| A range solve that mentions a list | `a range solve can't use the list a_s; use a solve function with a guess` | `um solve com intervalo não pode usar a lista a_s; use uma função solve com estimativa inicial` | M4c |
+| A missing end, or a step | `for Q needs two ends and no step: "for Q = <from> .. <to>"` | `for Q precisa de duas extremidades e nenhum passo: "for Q = <from> .. <to>"` | M4c |
+| `from` not below `to` | `for Q = 30 L/s .. 1 L/s: from must be below to` | `for Q = 30 L/s .. 1 L/s: o início deve ser menor que o fim` | M4c |
+| Ends of different kinds | `for Q = 1 L/s .. 30 m: the ends must be the same kind` | `for Q = 1 L/s .. 30 m: as extremidades devem ser da mesma grandeza` | M4c |
+| An end fails | `for Q: <message>` | `for Q: <mensagem>` | M4c |
+| Units of the two sides differ, with a range | `for Q = 1 m .. 30 m: Hp(Q) - Hs(Q) units do not match` | `for Q = 1 m .. 30 m: as unidades de Hp(Q) - Hs(Q) não correspondem` | M4c |
+| No guess (a solve function, from M4c) | `solve needs a guess: ", guess Q = <value>"` | `solve precisa de uma estimativa inicial: ", guess Q = <value>"` | M3 |
+| No root | `no root near Q = 15 L/s (searched 0.9 .. 240 L/s)` | `nenhuma raiz perto de Q = 15 L/s (buscado em 0.9 .. 240 L/s)` | M3 |
+| No root, on a call | `in f(1.86·10⁵, 4.399·10⁻⁴): no root near f = 0.02 (searched <range>)` | `em f(1.86·10⁵, 4.399·10⁻⁴): nenhuma raiz perto de f = 0.02 (buscado em <range>)` | M3 |
+| Outer solve fails after inner failures | `no root near Q = 15 L/s (searched <range>); last inner error: <message>` | `nenhuma raiz perto de Q = 15 L/s (buscado em <range>); último erro interno: <mensagem>` | M3 |
+| Units of the two sides differ | `guess Q = 15 m: Hp(Q) - Hs(Q) units do not match` | `guess Q = 15 m: as unidades de Hp(Q) - Hs(Q) não correspondem` | M3 |
+| Iteration cap | `no convergence for Q after 100 iterations` | `sem convergência para Q após 100 iterações` | M3 |
+| The guess fails | `guess Q: <message>` | `guess Q: <mensagem>` | M3 |
+| The guess isn't a number or a quantity | `guess Q: not a number or a quantity` | `guess Q: não é um número nem um valor com unidade` | #70 |
+| No equation, or more than one `=` | `solve needs one equation: "<left side> = <right side>"` | `solve precisa de uma equação: "<lado esquerdo> = <lado direito>"` | #70 |
+| No root, and no point near the guess had a value | `no root near Q = 15 L/s (the equation has no value near the guess)` | `nenhuma raiz perto de Q = 15 L/s (a equação não tem valor perto da estimativa inicial)` | #70 |
+| A side isn't a number or a quantity | `a side of the equation is not a number or a quantity` | `um lado da equação não é um número nem um valor com unidade` | #70 |
 
 **Ranges, tables, plots**
 
-| When | Message | Arrives |
-|---|---|---|
-| Ends with units and no step | `a range with units needs a step, such as "step 1 L/s"` | M4 |
-| Zero step, or one pointing away | `step 0 m never reaches the end` | M4 |
-| Start, end and step of different kinds | `start, end and step must be the same kind` | M4 |
-| Too many points | `Q_s has more than 10,000 points` | M4 |
-| Lists of different lengths | `Q_s has 30 values, x has 11` | M4 |
-| A body reaching an outside list | `pass Q_s as an argument` | M4 |
-| Failed points on a line | `1 of 30 points failed. At Q_s = 0 L/s: solve found no root` | M4 |
-| Aggregate over a failed point | `H_s has a failed point` | M4 |
-| Mixed kinds on a plot | `H_s is a length, P is a power: one plot shows one kind` | M4 |
-| Unknown clause | `Unknown plot setting xyz` | M4 |
-| Log axis with zero or negative | `x log needs values above 0` | M4 |
-| All of a series' points failed | `H_s: every point failed. At Q_s = 1 L/s: <message>` | M4 |
-| A plot with no y | `a plot needs x and at least one y: plot(Q_s, Hs(Q_s))` | #77 |
-| A plot's x that isn't a list | `x must be a list: 2 m is a single value` | #77 |
-| A mark that isn't one value of x's kind | `mark 2 s: one value of x's kind` | #77 |
-| An axis range of another kind | `y 0 s .. 4 s: the range must be the axis's kind` | #77 |
-| `in <unit>` after a whole plot line | `a plot takes its units on its arguments: plot(Q_s in L/s, …)` | #77 |
-| A table with no list among its arguments | `a table needs a list, such as table(Q_s)` | #76 |
-| `in <unit>` after a whole table line | `a table takes its units on its arguments: table(Q_s in L/s)` | #76 |
-| A range's start, end or step isn't a single number or quantity | `the range's step must be a number or a quantity`, `a range takes single values, not a list` | #74 |
-| An index past the end | `x_r has 2 values` | M4c |
-| An index that isn't a whole number from 1 | `x_r[0]: an index is a whole number from 1` | M4c |
-| An index on something that isn't a name | `an index goes on a name: x_r[2]` | M4c |
-| `a:b` with too many points | `1:1e7 has more than 10,000 points`, `0:1e-7:1 has more than 10,000 points` | M4e |
-| A math.js builder with too many values | `zeros(1e8) has more than 10,000 values`, `ones(3000, 3000) has more than 10,000 values`, `nthRoots(2, 1e7) has more than 10,000 values` | M4e |
-| An end of `a:b` that isn't a finite number | `a range's ends must be finite numbers: log(0) is -∞`, `a range's ends must be finite numbers: 1/0 is ∞` | M4e |
-| A call that is slow without building anything large | `combinations(1e9, 5e8) is too large to compute` | M4e |
-| One single value against a list in a plot | `x must be a list: 2 m is a single value` (two single values draw a point) | M4e |
-| A `point` that isn't two single values of the axes' kinds | `point (Q_s, 2 m): a point is two single values, (x, y)` | M4e |
-| A circle's radius that isn't one positive value of the axes' kind | `circle 2 s: the radius is one positive value of the axes' kind` | M4e |
-| A circle's centre that isn't two single values | `circle (Q_s, 0 m) r: the centre is two single values, (x0, y0)` | M4e |
-| `equal`, or a circle, with x and y of different kinds | `equal scales need x and y of the same kind` | M4e |
-| `equal` with both ranges typed | `equal with both x and y ranges typed: leave one out` | M4e |
+| When | Message | Português | Arrives |
+|---|---|---|---|
+| Ends with units and no step | `a range with units needs a step, such as "step 1 L/s"` | `um intervalo com unidades precisa de um passo, como "step 1 L/s"` | M4 |
+| Zero step, or one pointing away | `step 0 m never reaches the end` | `step 0 m nunca chega ao fim` | M4 |
+| Start, end and step of different kinds | `start, end and step must be the same kind` | `início, fim e passo devem ser da mesma grandeza` | M4 |
+| Too many points | `Q_s has more than 10,000 points` | `Q_s tem mais de 10 000 pontos` | M4 |
+| Lists of different lengths | `Q_s has 30 values, x has 11` | `Q_s tem 30 valores, x tem 11` | M4 |
+| A body reaching an outside list | `pass Q_s as an argument` | `passe Q_s como argumento` | M4 |
+| Failed points on a line | `1 of 30 points failed. At Q_s = 0 L/s: solve found no root` | `1 de 30 pontos falhou. Em Q_s = 0 L/s: o solve não encontrou raiz` (`2 de 30 pontos falharam`) | M4 |
+| Aggregate over a failed point | `H_s has a failed point` | `H_s tem um ponto com falha` | M4 |
+| Mixed kinds on a plot | `H_s is a length, P is a power: one plot shows one kind` | `H_s é um comprimento, P é uma potência: um gráfico mostra uma grandeza` | M4 |
+| Unknown clause | `Unknown plot setting xyz` | `Configuração de gráfico desconhecida xyz` | M4 |
+| Log axis with zero or negative | `x log needs values above 0` | `x log precisa de valores acima de 0` | M4 |
+| All of a series' points failed | `H_s: every point failed. At Q_s = 1 L/s: <message>` | `H_s: todos os pontos falharam. Em Q_s = 1 L/s: <mensagem>` | M4 |
+| A plot with no y | `a plot needs x and at least one y: plot(Q_s, Hs(Q_s))` | `um gráfico precisa de x e de pelo menos um y: plot(Q_s, Hs(Q_s))` | #77 |
+| A plot's x that isn't a list | `x must be a list: 2 m is a single value` | `x deve ser uma lista: 2 m é um valor único` | #77 |
+| A mark that isn't one value of x's kind | `mark 2 s: one value of x's kind` | `mark 2 s: um valor da grandeza de x` | #77 |
+| An axis range of another kind | `y 0 s .. 4 s: the range must be the axis's kind` | `y 0 s .. 4 s: o intervalo deve ser da grandeza do eixo` | #77 |
+| `in <unit>` after a whole plot line | `a plot takes its units on its arguments: plot(Q_s in L/s, …)` | `um gráfico recebe as unidades nos seus argumentos: plot(Q_s in L/s, …)` | #77 |
+| A table with no list among its arguments | `a table needs a list, such as table(Q_s)` | `uma tabela precisa de uma lista, como table(Q_s)` | #76 |
+| `in <unit>` after a whole table line | `a table takes its units on its arguments: table(Q_s in L/s)` | `uma tabela recebe as unidades nos seus argumentos: table(Q_s in L/s)` | #76 |
+| A range's start, end or step isn't a single number or quantity | `the range's step must be a number or a quantity`, `a range takes single values, not a list` | `o passo do intervalo deve ser um número ou um valor com unidade`, `um intervalo recebe valores únicos, não uma lista` | #74 |
+| An index past the end | `x_r has 2 values` | `x_r tem 2 valores` | M4c |
+| An index that isn't a whole number from 1 | `x_r[0]: an index is a whole number from 1` | `x_r[0]: um índice é um número inteiro a partir de 1` | M4c |
+| An index on something that isn't a name | `an index goes on a name: x_r[2]` | `um índice vai em um nome: x_r[2]` | M4c |
+| `a:b` with too many points | `1:1e7 has more than 10,000 points`, `0:1e-7:1 has more than 10,000 points` | `1:1e7 tem mais de 10 000 pontos`, `0:1e-7:1 tem mais de 10 000 pontos` | M4e |
+| A math.js builder with too many values | `zeros(1e8) has more than 10,000 values`, `ones(3000, 3000) has more than 10,000 values`, `nthRoots(2, 1e7) has more than 10,000 values` | `zeros(1e8) tem mais de 10 000 valores`, `ones(3000, 3000) tem mais de 10 000 valores`, `nthRoots(2, 1e7) tem mais de 10 000 valores` | M4e |
+| An end of `a:b` that isn't a finite number | `a range's ends must be finite numbers: log(0) is -∞`, `a range's ends must be finite numbers: 1/0 is ∞` | `as extremidades de um intervalo devem ser números finitos: log(0) é -∞`, `… 1/0 é ∞` | M4e |
+| A call that is slow without building anything large | `combinations(1e9, 5e8) is too large to compute` | `combinations(1e9, 5e8) é grande demais para calcular` | M4e |
+| One single value against a list in a plot | `x must be a list: 2 m is a single value` (two single values draw a point) | `x deve ser uma lista: 2 m é um valor único` | M4e |
+| A `point` that isn't two single values of the axes' kinds | `point (Q_s, 2 m): a point is two single values, (x, y)` | `point (Q_s, 2 m): um ponto são dois valores únicos, (x, y)` | M4e |
+| A circle's radius that isn't one positive value of the axes' kind | `circle 2 s: the radius is one positive value of the axes' kind` | `circle 2 s: o raio é um valor positivo da grandeza dos eixos` | M4e |
+| A circle's centre that isn't two single values | `circle (Q_s, 0 m) r: the centre is two single values, (x0, y0)` | `circle (Q_s, 0 m) r: o centro são dois valores únicos, (x0, y0)` | M4e |
+| `equal`, or a circle, with x and y of different kinds | `equal scales need x and y of the same kind` | `escalas iguais precisam de x e y da mesma grandeza` | M4e |
+| `equal` with both ranges typed | `equal with both x and y ranges typed: leave one out` | `equal com os intervalos de x e de y digitados: deixe um de fora` | M4e |
 
 **App**
 
-| When | Message | Arrives |
-|---|---|---|
-| Newer file | `This sheet was saved by a newer Excalimathpad. Update the app.` | M1 |
-| File that doesn't parse | `This file isn't a sheet, so it wasn't opened.` | M1 |
-| Recovery copy | `Restore unsaved changes to pump-sizing.excalimathpad?` or `… to an untitled sheet?` | M1 |
-| Opening with unsaved changes | `Save changes to pump-sizing.excalimathpad?` Save, Don't save, Cancel | M1 |
-| A save that fails | `Couldn't save pump-sizing.excalimathpad: <reason>` | M1 |
-| The picker or the file read fails | `Couldn't open the file: <reason>` | M1 |
-| Hint, one math element selected | `Double-click a line or press Enter to edit` (on touch: `Double-tap a line, or tap Edit in Math settings`, M4d) | M1 |
-| Browser's Print, on the web | `Use Print… from the app's menu` | M5 |
-| The pages couldn't be built (notice) | `The pages couldn't be built, so nothing was printed.` | M5 |
+| When | Message | Português | Arrives |
+|---|---|---|---|
+| Newer file | `This sheet was saved by a newer Excalimathpad. Update the app.` | `Esta folha foi salva por um Excalimathpad mais novo. Atualize o app.` | M1 |
+| File that doesn't parse | `This file isn't a sheet, so it wasn't opened.` | `Este arquivo não é uma folha, então não foi aberto.` | M1 |
+| Recovery copy | `Restore unsaved changes to pump-sizing.excalimathpad?` or `… to an untitled sheet?` | `Restaurar as alterações não salvas de pump-sizing.excalimathpad?` ou `… de uma folha sem título?` | M1 |
+| Opening with unsaved changes | `Save changes to pump-sizing.excalimathpad?` Save, Don't save, Cancel | `Salvar as alterações em pump-sizing.excalimathpad?` Salvar, Não salvar, Cancelar | M1 |
+| A save that fails | `Couldn't save pump-sizing.excalimathpad: <reason>` | `Não foi possível salvar pump-sizing.excalimathpad: <reason>` | M1 |
+| The picker or the file read fails | `Couldn't open the file: <reason>` | `Não foi possível abrir o arquivo: <reason>` | M1 |
+| Hint, one math element selected | `Double-click a line or press Enter to edit` (on touch: `Double-tap a line, or tap Edit in Math settings`, M4d) | `Clique duas vezes em uma linha ou pressione Enter para editar` (no toque: `Toque duas vezes em uma linha, ou toque em Editar em Configurações de cálculo`) | M1 |
+| Browser's Print, on the web | `Use Print… from the app's menu` | `Use Imprimir… no menu do app` | M5 |
+| The pages couldn't be built (notice) | `The pages couldn't be built, so nothing was printed.` | `Não foi possível montar as páginas, então nada foi impresso.` | M5 |
 
 **Unexpected failures** (M4e)
 
-| When | Message |
-|---|---|
-| An unexpected failure while a line is read | `this line hit an unexpected error in Excalimathpad` |
-| An unexpected failure while an element is drawn | `this element hit an unexpected error in Excalimathpad` |
-| An unexpected failure while a chart is drawn | `this chart hit an unexpected error in Excalimathpad` |
-| An unexpected failure in a panel tab | `this tab hit an unexpected error in Excalimathpad` |
-| The view fails as a whole | `This sheet hit an unexpected error in Excalimathpad.` then `Your sheet is kept up to the last finished line.` and, with a line open, `You were typing:` |
-| The screen's actions | `Reload the sheet`, `Copy details`, `Copy`, `Report this error` |
-| A copy button, once its text is on the clipboard | `Copied` |
-| The last line of the copied details | `(no sheet content is included)` |
+| When | Message | Português |
+|---|---|---|
+| An unexpected failure while a line is read | `this line hit an unexpected error in Excalimathpad` | `esta linha encontrou um erro inesperado no Excalimathpad` |
+| An unexpected failure while an element is drawn | `this element hit an unexpected error in Excalimathpad` | `este bloco encontrou um erro inesperado no Excalimathpad` |
+| An unexpected failure while a chart is drawn | `this chart hit an unexpected error in Excalimathpad` | `este gráfico encontrou um erro inesperado no Excalimathpad` |
+| An unexpected failure in a panel tab | `this tab hit an unexpected error in Excalimathpad` | `esta aba encontrou um erro inesperado no Excalimathpad` |
+| The view fails as a whole | `This sheet hit an unexpected error in Excalimathpad.` then `Your sheet is kept up to the last finished line.` and, with a line open, `You were typing:` | `Esta folha encontrou um erro inesperado no Excalimathpad.` então `Sua folha está guardada até a última linha concluída.` e, com uma linha aberta, `Você estava digitando:` |
+| The screen's actions | `Reload the sheet`, `Copy details`, `Copy`, `Report this error` | `Recarregar a folha`, `Copiar detalhes`, `Copiar`, `Relatar este erro` |
+| A copy button, once its text is on the clipboard | `Copied` | `Copiado` |
+| The last line of the copied details | `(no sheet content is included)` | `(no sheet content is included)`: the copied text stays English in both |
 
 **Panel** (M4d)
 
-| When | Message | Arrives |
-|---|---|---|
-| Format tab, nothing open | `Open a line or a title to format it: double-click it, or select its element and press Enter.` (on touch: `Double-tap a line, or tap Edit`) | M4d |
-| Format tab, a blank line | `This line takes no format.` | M4d |
-| A true rule overriding a pressed property | `A rule sets the text colour while v > 3 m/s.` | M4d |
-| Symbols tab, no line open | `Open a line to insert` | M4d |
-| Format tab's sample, a plot line | `Its chart is drawn on the sheet.` | M4e |
-| Rules list, a rule with an empty condition | `a rule needs a condition` | M4e |
+| When | Message | Português | Arrives |
+|---|---|---|---|
+| Format tab, nothing open | `Open a line or a title to format it: double-click it, or select its element and press Enter.` (on touch: `Double-tap a line, or tap Edit`) | `Abra uma linha ou um título para formatá-lo: clique duas vezes nele, ou selecione seu bloco e pressione Enter.` (no toque: `Toque duas vezes em uma linha, ou toque em Editar`) | M4d |
+| Format tab, a blank line | `This line takes no format.` | `Esta linha não aceita formato.` | M4d |
+| A true rule overriding a pressed property | `A rule sets the text colour while v > 3 m/s.` | `Uma regra define a cor do texto enquanto v > 3 m/s.` | M4d |
+| Symbols tab, no line open | `Open a line to insert` | `Abra uma linha para inserir` | M4d |
+| Format tab's sample, a plot line | `Its chart is drawn on the sheet.` | `Seu gráfico é desenhado na folha.` | M4e |
+| Rules list, a rule with an empty condition | `a rule needs a condition` | `uma regra precisa de uma condição` | M4e |
 
 **Rename and Language** (0.5.0)
 
-| When | Message |
-|---|---|
-| A Variables row's ✎ (its name and tooltip) | `Rename rho` |
-| The form's heading, over its field | ``Rename `rho` to`` |
-| The form's list of lines | `Changes 7 lines:`, `Changes 1 line:` |
-| A name the sheet already assigns | `mu is already a name on this sheet.` |
-| Text that isn't a name | `2x isn't a name.` |
-| A reserved word | `plot is reserved.` |
-| A unit's or a built-in's name (amber, allowed) | `⚠ m shadows the unit m`, the warning's own words |
-| A rename that would change results (amber, allowed), over those lines | `This changes 2 results:`, `This changes 1 result:` |
-| The form's actions | `Rename`, `Cancel` |
-| The offer's card | ``Rename `rho` to `rho_w` in 6 lines?`` (`in 1 line?`), then `Rename` and `Keep rho` |
-| The offer's row on a phone, with more than one waiting | `1 of 2` |
-| After a rename (toast) | `Renamed rho to rho_w in 7 lines. Ctrl+Z takes it back.` (on touch: `… Undo takes it back.`) |
-| ☰'s row and its two choices | `Language`, `English`, `Português (Brasil)` |
+| When | Message | Português |
+|---|---|---|
+| A Variables row's ✎ (its name and tooltip) | `Rename rho` | `Renomear rho` |
+| The form's heading, over its field | ``Rename `rho` to`` | ``Renomear `rho` para`` |
+| The form's list of lines | `Changes 7 lines:`, `Changes 1 line:` | `Altera 7 linhas:`, `Altera 1 linha:` |
+| A name the sheet already assigns | `mu is already a name on this sheet.` | `mu já é um nome nesta folha.` |
+| Text that isn't a name | `2x isn't a name.` | `2x não é um nome.` |
+| A reserved word | `plot is reserved.` | `plot é reservado.` |
+| A unit's or a built-in's name (amber, allowed) | `⚠ m shadows the unit m`, the warning's own words | `⚠ m encobre a unidade m` |
+| A rename that would change results (amber, allowed), over those lines | `This changes 2 results:`, `This changes 1 result:` | `Isto altera 2 resultados:`, `Isto altera 1 resultado:` |
+| The form's actions | `Rename`, `Cancel` | `Renomear`, `Cancelar` |
+| The offer's card | ``Rename `rho` to `rho_w` in 6 lines?`` (`in 1 line?`), then `Rename` and `Keep rho` | ``Renomear `rho` para `rho_w` em 6 linhas?`` (`em 1 linha?`), então `Renomear` e `Manter rho` |
+| The offer's row on a phone, with more than one waiting | `1 of 2` | `1 de 2` |
+| After a rename (toast) | `Renamed rho to rho_w in 7 lines. Ctrl+Z takes it back.` (on touch: `… Undo takes it back.`) | `rho foi renomeado para rho_w em 7 linhas. Ctrl+Z desfaz.` (no toque: `… Toque em Desfazer para voltar.`) |
+| ☰'s row and its two choices | `Language`, `English`, `Português (Brasil)` | `Idioma`, `English`, `Português (Brasil)` |
 
 **The Excalidraw upgrade**
 
-| When | Message |
-|---|---|
-| The Sheet panel's top, while View mode is on | `View mode is on: the sheet can't be changed.` |
-| A sheet at the upgrade's format, opened by an older build | `This sheet was saved by a newer Excalimathpad. Update the app.`, the message of M1 |
+| When | Message | Português |
+|---|---|---|
+| The Sheet panel's top, while View mode is on | `View mode is on: the sheet can't be changed.` | `O modo de visualização está ativo: a folha não pode ser alterada.` |
+| A sheet at the upgrade's format, opened by an older build | `This sheet was saved by a newer Excalimathpad. Update the app.`, the message of M1 | `Esta folha foi salva por um Excalimathpad mais novo. Atualize o app.` |
 
 **In a vault** (M4d)
 
-| When | Message | Arrives |
-|---|---|---|
-| An outside change met unwritten work (notice) | `pump-sizing changed elsewhere. Your version was saved beside it as pump-sizing (conflict 2026-11-14 1532).` | M4d |
-| A write that fails (notice) | `Couldn't save pump-sizing.excalimathpad: <reason>. Your work is still open.` | M4d |
-| New sheet's file can't be created (notice) | `Couldn't create Untitled.excalimathpad: <reason>.` | M4d |
-| The vault image picker's field | `Pick an image from the vault to place on the sheet` | M4d |
-| A picked image over 4 MB (Excalidraw's own toast) | `File is too big. Maximum allowed size is 4MB.` | M4d |
-| A newer or unreadable file | The two file messages above, in the view; it never writes the file | M4d |
-| Print…, on a computer, before the system's print dialog opens (notice, until it closes) | `Choose A4, portrait in the print dialog.`, with the sheet's Page: `Choose Letter, landscape in the print dialog.` | M5 |
-| No regex lookbehind (iOS below 16.4) | `Excalimathpad needs iOS 16.4 or later.` | M4d |
-| Welcome hint, on touch | `Tap More tools, then Add math, then tap the sheet` | M4d |
+| When | Message | Português | Arrives |
+|---|---|---|---|
+| An outside change met unwritten work (notice) | `pump-sizing changed elsewhere. Your version was saved beside it as pump-sizing (conflict 2026-11-14 1532).` | `pump-sizing foi alterado em outro lugar. Sua versão foi salva ao lado como pump-sizing (conflito 2026-11-14 1532).` | M4d |
+| A write that fails (notice) | `Couldn't save pump-sizing.excalimathpad: <reason>. Your work is still open.` | `Não foi possível salvar pump-sizing.excalimathpad: <reason>. Seu trabalho continua aberto.` | M4d |
+| New sheet's file can't be created (notice) | `Couldn't create Untitled.excalimathpad: <reason>.` | `Não foi possível criar Sem título.excalimathpad: <reason>.` | M4d |
+| The vault image picker's field | `Pick an image from the vault to place on the sheet` | `Escolha uma imagem do cofre para colocar na folha` | M4d |
+| A picked image over 4 MB (Excalidraw's own toast) | `File is too big. Maximum allowed size is 4MB.` | `O arquivo é muito grande. O tamanho máximo permitido é 4MB.` (Excalidraw's `errors.fileTooBig`, from 0.6.0) | M4d |
+| A newer or unreadable file | The two file messages above, in the view; it never writes the file | The two file messages above, in Português | M4d |
+| Print…, on a computer, before the system's print dialog opens (notice, until it closes) | `Choose A4, portrait in the print dialog.`, with the sheet's Page: `Choose Letter, landscape in the print dialog.` | `Escolha A4, retrato na janela de impressão.`, `Escolha Carta, paisagem na janela de impressão.` | M5 |
+| No regex lookbehind (iOS below 16.4) | `Excalimathpad needs iOS 16.4 or later.` | `O Excalimathpad precisa do iOS 16.4 ou mais recente.` | M4d |
+| Welcome hint, on touch | `Tap More tools, then Add math, then tap the sheet` | `Toque em Mais ferramentas, depois em Adicionar cálculo, e então toque na folha` | M4d |
 
 Decided in: [solve](https://github.com/matheus-sancha/excalimathpad/issues/19),
 [functions](https://github.com/matheus-sancha/excalimathpad/issues/27),
@@ -3288,7 +3412,11 @@ The M4d wordings not quoted in a ticket were written for this spec and are for M
 confirm on its pull request. 0.5.0's are from
 [how a rename starts](https://github.com/matheus-sancha/excalimathpad/issues/232) and
 [what a rename changes](https://github.com/matheus-sancha/excalimathpad/issues/237), where
-four of them were proposed, not chosen.
+four of them were proposed, not chosen. The Português column (0.6.0) was written for this spec
+from [the glossary](https://github.com/matheus-sancha/excalimathpad/issues/286) and
+[the edges](https://github.com/matheus-sancha/excalimathpad/issues/287), for Matheus to review on
+its pull request; a build issue that needs a wording not here drafts it from the same two, and
+he reviews it on that pull request.
 
 ## 14. Engineering constraints
 
@@ -3845,6 +3973,60 @@ Evidence: [`obsidian-plugin.md`](research/obsidian-plugin.md).
   again in the Playwright runs, and the network-blocked run chooses Português and still
   sees no request.
 
+
+**0.6.0: the app's own text in Português**
+
+Measured at `7664027` (Release 0.5.0) in
+[`docs/research/app-text-inventory.md`](research/app-text-inventory.md): about 600 strings in 62
+files, thirteen routes to the screen, five of them outside a React component in Excalidraw's
+tree. Each group below is built by the issues of [0.6.0's order](#the-test-period).
+
+- **Two text tables, one shape:** one TypeScript module per language, with the same keys. The
+  Português module is typed against the English one's keys, so a missing or extra key fails
+  `tsc -b`. A message with arguments is a function of them in each table, so the plural, the
+  article and the order of words belong to the language. No dependency is added.
+- **One answer to "which language":** the language Excalidraw shows (its public `useI18n`,
+  as each canvas already follows), read through one reader that React code and the code
+  outside React both use. A component reads its words while it renders, so a choice changes
+  it at once. Nothing translated is held in a module constant built at import (the welcome
+  hint, the Symbols and Constants catalogues, the kinds, the sheet commands, the failure
+  messages, the rename words): each becomes a key read when it is shown.
+- **The engine returns codes, never words** ([ADR 0007](adr/0007-engine-returns-message-codes.md)):
+  every error, warning and rule warning `evaluateSheet` gives, every refusal `planRename` gives,
+  and the words inside a result (a list's summary, a matrix's size, a plot's default title,
+  the failed points, solve details) are a code and its arguments. The overlay, the panel, the
+  print view and the guide's test word them through the table of the language shown. A
+  math.js error is a code with math.js's raw text as its argument, and the known-pattern table
+  of [section 13](#13-messages) words it or passes it through. A sheet's results, and every
+  test of them that compares codes, are the same in both languages.
+- **The app's own English is never read back.** The two regexes that read the app's own words
+  (`N of M points failed.`, and `N values` turned into `N roots`) are replaced by codes. The
+  four that read math.js's English (`Undefined symbol`, `is not a function`, `Cannot compare
+  units`, ` (char N)`) stay, since math.js doesn't translate, each with its test.
+- **Outside React:** CSS `content` (the selection hint and the browser's Print line) is set
+  from the language as `--math-hint` is; the tab title, the save picker's file type and a
+  notice are worded when they are made; Obsidian's commands, ribbon and folder item are
+  registered at `onload` from `data.json`'s language ([Language](#language)).
+- **Grouped numbers come from the language:** one formatter gives `10,000` or `10 000`
+  (U+202F). `plotLayout.ts` measures tick labels by character widths, so the narrow space has
+  its own width there, or the tick margin is too small in Português.
+- **Engine tests keep their English** through the English table: the 129 expected errors of
+  `evaluate.test.ts`, and the 413 test lines that find things by English names, work as they
+  are while English is the default. New tests compare codes where they can.
+- **Tests that hold both languages,** in `npm run check`: the type check (every key in both
+  tables); one test per known math.js pattern, against math.js's own text; `math-guide.test.ts`
+  runs each guide against the engine in its own language and a second test checks the two
+  guides have the same sections, rows and Write cells; the typing test runs the English
+  guide's examples, which are the Portuguese guide's too. The **panel run** and the **touch
+  run** each run a second time under Português and check the fit rules of
+  [section 8](#sheet-panel) where they are at risk: nothing cut at 280 px, the bottom sheet's
+  active tab at 360 px and 320 px, Settings → Custom's options, the Format tab's link row and
+  a rule's note. Those passes find what they press by role, class or `data-testid`, never by
+  English text. The other four runs stay English only; the network-blocked run already
+  chooses Português. The added time is measured in the issue that adds the passes.
+- **The plugin's size:** `main.js` gains the Portuguese table and the Portuguese guide; the
+  audit prints both sizes against their budgets ([section 12a](#one-source-two-builds)).
+
 **The Excalidraw upgrade**
 
 Measured on a throwaway copy of `main` at `dccc624`
@@ -3954,8 +4136,8 @@ Decided in: [acceptance](https://github.com/matheus-sancha/excalimathpad/issues/
 v1 is built in nine milestones, each usable on a real sheet, with a saved typeset sheet first. The existing
 spike is M0, done. M4e and M5 are the last two, out together as the beta `0.4.0`. M6 is built after
 1.0.0. Every milestone of v1, M1 to M5, is built. From 2026-11-20 betas come before **1.0.0**, which
-is v1 done: `0.5.0` and `0.6.0` go to the testers first ([The test period](#the-test-period)), and
-1.0.0 follows a quiet test week on the last of them ([The finish line](#the-finish-line)). Neither
+is v1 done: `0.5.0`, `0.6.0` and `0.7.0` go to the testers first ([The test period](#the-test-period)), and
+1.0.0 follows a quiet test week on the last of them ([The finish line](#the-finish-line)). No
 beta is a milestone or has a milestone's name.
 
 | Milestone | What it lets Matheus do | Sections |
@@ -4023,7 +4205,7 @@ second issue starts with the Obsidian check that decides its route ([section 17]
 **To 1.0.0** (#203; the road changed on 2026-11-20): the budgets per plugin file are set from the
 build (built: 3,574,000 bytes for `main.js` and 584,000 for `styles.css`,
 [Data protection](#data-protection)). The betas of [the test period](#the-test-period) come next:
-`0.5.0`, then `0.6.0`, the last beta. When a test week on it has been quiet, the release checklist of
+`0.5.0`, `0.6.0`, then `0.7.0`, the last beta. When a test week on it has been quiet, the release checklist of
 [section 12a](#releases) is run and `1.0.0` is released: the last beta's code plus what #203 lists
 (the documents and the version), so it needs no further quiet week. Then the history is cleaned and
 the plugin submitted with that version (#150, M4d's sixteenth issue, by hand). Nothing is submitted
@@ -4058,10 +4240,11 @@ with the next. The releases, by version:
 |---|---|---|---|
 | `0.4.0` | M4e and M5, v1's last two milestones | 2026-11-17 | Week 1: two testers, the plugin on a Windows 11 PC. Its feedback: [Bugs Week 1](https://github.com/matheus-sancha/excalimathpad/issues/227), [Ideas from week 1](https://github.com/matheus-sancha/excalimathpad/issues/228) |
 | `0.4.1` | Week 1's bug: a display unit that starts with `in` ([#229](https://github.com/matheus-sancha/excalimathpad/issues/229)) | 2026-11-20 | Week 1 |
-| `0.5.0` | Week 1's ideas: [renaming a name](#renaming-a-name), the form and the offer (#260 to #262), and [Language](#language) (#263), on Excalidraw 0.18.1. [The Excalidraw upgrade](#the-excalidraw-upgrade) wasn't green on the day (#270 to #273 open) and slid to a `0.6.x` | 2026-11-21 | None of its own: `0.6.0` is due the next day |
-| `0.6.0` | The AI features, in both homes, on their own map, [Spec for 0.6.0](https://github.com/matheus-sancha/excalimathpad/issues/238). The last beta | Due by Sunday 2026-11-22 | Week 2, 2026-11-23 to 2026-11-29 |
-| `0.6.x` | What slid from `0.5.0` or `0.6.0`, and fixes. From `0.5.0`: the Excalidraw upgrade, its eight issues together (#266 to #273) | During week 2 | The quiet week is counted from the release that completes `0.6.0`'s list |
-| `1.0.0` | The last beta's code, the documents and the version (#203) | After a quiet week; at the earliest about 2026-11-30 | None |
+| `0.5.0` | Week 1's ideas: [renaming a name](#renaming-a-name), the form and the offer (#260 to #262), and [Language](#language) for Excalidraw's own text (#263), on Excalidraw 0.18.1. [The Excalidraw upgrade](#the-excalidraw-upgrade) wasn't green on the day (#270 to #273 open) and slid | 2026-11-21 | Week 2, 2026-11-23 to 2026-11-29 |
+| `0.6.0` | The app's own text in Português (Brasil), in both homes, on the map [Spec for 0.6.0: Excalimathpad's own text in Português (Brasil)](https://github.com/matheus-sancha/excalimathpad/issues/284): [Language](#language) for the app's text, the messages in both languages and the Portuguese Math guide ([its issue order](#the-test-period) below), #290 to #296 | Due by Sunday 2026-11-29 | Week 3, 2026-11-30 to 2026-12-06: the testers judge the Portuguese |
+| `0.6.x` | What slid from `0.5.0` or `0.6.0`, and fixes. From `0.5.0`: the Excalidraw upgrade, its eight issues together (#266 to #273). A release is made from `main`, which holds 0.6.0's issues as they merge, so the upgrade is in `0.6.0` if it merges before 2026-11-29, and a `0.6.x` after | During week 3 | Counted in the week it ships |
+| `0.7.0` | The AI features, in both homes, on their own map, [Spec for 0.7.0: the Math assistant](https://github.com/matheus-sancha/excalimathpad/issues/238), built on the text tables from its first issue, so its text is in both languages. The last beta | Set on its map | Its own test week; the quiet week is counted from the release that completes `0.7.0`'s list |
+| `1.0.0` | The last beta's code, the documents and the version (#203) | After a quiet week on the last beta | None |
 
 - **A test week** is Monday to Sunday. It counts when the beta was used on real sheets, by the
   testers or by Matheus on the work laptop, and the week's issue says who. Silence alone is not a
@@ -4070,15 +4253,21 @@ with the next. The releases, by version:
   opening. A fix released in that week is a new last beta, so the week starts again. A bug of
   another kind doesn't hold 1.0.0: it waits for after it, unless Matheus pulls it in.
 - **The date holds, and unfinished items slide.** Sunday releases whatever is built and passes
-  `npm run check` and the release checklist. An item that isn't ready ships as a `0.6.x` during
-  week 2. The Release button is never bypassed.
+  `npm run check` and the release checklist. An item that isn't ready ships as a patch of that beta during
+  its test week. The Release button is never bypassed.
 - **Feedback** is one issue a week, written by Matheus on the Test week form
   ([section 12a](#listing)): "Test week N (version)", who used the beta, on which sheets, and what
   they found. A bug becomes its own Bug-form issue the day it is sorted and ships as a patch, as
   the `in²` bug did. Ideas stay as lines in the week's issue. The quiet week is read from it.
 - **Ideas from week 2 on wait for after 1.0.0,** in their weekly issues. Matheus can pull one in
-  by name as a `0.6.x`, which starts the quiet week again. `0.5.0` holds week 1's ideas and
-  `0.6.0` the AI features; nothing else is added before 1.0.0.
+  by name, which starts the quiet week again. `0.5.0` holds week 1's ideas, `0.6.0` the app's
+  own text in Português (pulled in by name on 2026-11-21, from his use of 0.5.0's Language) and
+  `0.7.0` the AI features; nothing else is added before 1.0.0.
+- **Why Português comes before the AI features** (changed on 2026-11-21): `0.6.0` was the AI
+  features, due 2026-11-22, but none of their map's questions was answered by then, while the
+  Português map was decided. So the two swapped numbers: Português is `0.6.0`, and the Math
+  assistant is `0.7.0` and is built on the text tables from the start, so its text never
+  needs translating afterwards.
 
 **Where week 1's lines went.** Every line of the two feedback issues has one of these, and the
 issues are closed with them when `0.5.0` is released ([#264](https://github.com/matheus-sancha/excalimathpad/issues/264)):
@@ -4088,11 +4277,11 @@ issues are closed with them when `0.5.0` is released ([#264](https://github.com/
 | Can't select area in in^2 | Fixed in `0.4.1` (#229) |
 | Autoswap variables | `0.5.0`: [renaming a name](#renaming-a-name) |
 | Sticky notes, draw to shape, bucket fill, lasso selection, Excalidraw's preferences | A `0.6.x` during week 2, through [the Excalidraw upgrade](#the-excalidraw-upgrade): no release after 0.18.1 holds them, so the app moves to a pinned canary build, with all five shown. Built on its own branch, it wasn't green by `0.5.0`'s release, so it ships alone |
-| Language select | `0.5.0`: [Language](#language), English and Português (Brasil), Excalidraw's own text only |
+| Language select | `0.5.0`: [Language](#language), English and Português (Brasil), Excalidraw's own text only; the app's own text in `0.6.0` |
 | Web embed | Refused in the plugin through 1.0.0; it is in the web app ([section 1](#1-what-v1-is-and-what-it-isnt)) |
 | Live collaboration | Refused: not planned ([section 1](#1-what-v1-is-and-what-it-isnt)) |
 | Change from Print to Export | Waits for after 1.0.0, in [#221](https://github.com/matheus-sancha/excalimathpad/issues/221), which now covers the whole sheet as well as a selected area. Until then Print… to PDF is the export |
-| AI features (a calculation from an image or a PDF, a tutor, a drafted sheet) | `0.6.0`, on its own map ([#238](https://github.com/matheus-sancha/excalimathpad/issues/238)) |
+| AI features (a calculation from an image or a PDF, a tutor, a drafted sheet) | `0.7.0`, on its own map ([#238](https://github.com/matheus-sancha/excalimathpad/issues/238)); `0.6.0` until 2026-11-21 |
 
 **0.5.0's issue order** (added on 2026-11-20, on the map
 [Spec for 0.5.0, from the first test week's feedback](https://github.com/matheus-sancha/excalimathpad/issues/230); built on Excalidraw 0.18.1):
@@ -4112,7 +4301,7 @@ Sunday is tight, since it adds a second way in and the card's rules, not a new a
 touches none of these and can be built in a parallel session at any point; it is fourth only so
 the list has an order. The fifth describes what was built, so it is last, and it releases. The
 Excalidraw upgrade's issues come after all five, from their own ticket, and slide alone: nothing
-above waits for them, and `0.6.0` is built on 0.18.1 and carried across.
+above waits for them, and `0.6.0` and `0.7.0` are built on 0.18.1 and carried across.
 
 **The Excalidraw upgrade's issue order** (added on 2026-11-21, on the same map, from
 [the canary run](https://github.com/matheus-sancha/excalimathpad/issues/255) and [its rules](https://github.com/matheus-sancha/excalimathpad/issues/256); Matheus kept it for Sunday after the run,
@@ -4146,6 +4335,38 @@ overlay code ([section 12a](#releases)). Merged before 0.5.0's release issue run
 Release button, the upgrade is in `0.5.0`; otherwise the branch waits and it is a `0.6.x`.
 The file's format rises in whichever release that is ([section 7](#the-file)). It wasn't:
 `0.5.0` was released on 2026-11-21 with #270 to #273 open, so the upgrade is a `0.6.x`.
+
+
+**0.6.0's issue order** (added on 2026-11-21, on the map
+[Spec for 0.6.0: Excalimathpad's own text in Português (Brasil)](https://github.com/matheus-sancha/excalimathpad/issues/284),
+from [the inventory](https://github.com/matheus-sancha/excalimathpad/issues/285),
+[the words](https://github.com/matheus-sancha/excalimathpad/issues/286),
+[the edges](https://github.com/matheus-sancha/excalimathpad/issues/287) and
+[the fit](https://github.com/matheus-sancha/excalimathpad/issues/288); built on Excalidraw 0.18.1):
+
+1. The text tables, the reader, and the chrome in Português (#290)
+2. The engine returns codes, and math.js's known errors (#291)
+3. The words inside results, and the app's grouped numbers (#292)
+4. The Sheet panel in Português, its fit fixes, and the Português passes (#293)
+5. On the sheet, the file, print and the failure screen in Português (#294)
+6. The plugin in Português: commands, notices and new file names (#295)
+7. The Portuguese Math guide, the hand check and the release (#296)
+
+The tables come first and alone: every other issue writes its words into them, and the reader
+has to answer for code outside React before anything moves there. The chrome is in it because
+it is small and covers both routes, React and CSS `content`, so the shape is proven on screen.
+Issues 2, 4, 5 and 6 then touch different modules (math; panel; overlay, file, print and
+failure; plugin) and run in parallel sessions. The third follows the second, since a result's
+words are worded from its codes and the plot's ticks from the same formatter. The Português
+passes of the panel and touch runs are in the fourth, beside the fit fixes they hold. The
+guide describes the finished text, so it is last, with Matheus's hand check of each screen in
+Português in both homes, and it releases.
+
+**What slides.** Each issue is useful alone: what is merged by Sunday 2026-11-29 ships in
+`0.6.0`, and the rest is a `0.6.x` in week 3, as the date rule says. A screen still partly
+English in `0.6.0` is what `0.5.0` already showed, not a regression. The upgrade's issues
+are independent of these; the one merged second words the other's new text (the View mode
+line) in both tables.
 
 ### The finish line
 
@@ -4310,6 +4531,18 @@ M1 to M5, is in [`docs/spec-history.md`](spec-history.md#17-verify-first), with 
 - In Obsidian, by hand: the new keys against Obsidian's own; copy and paste in a real
   pop-out window; the five items by touch on a device; a sheet refused on a second device.
 
+**0.6.0**
+
+- How many Portuguese messages reach the on-sheet error's cap (about 320 px) that the English
+  didn't, measured in Chromium once the engine's issue has worded them. The cap stays; the
+  number is for Matheus to judge.
+- That each math.js message of [section 13](#13-messages)'s known list is math.js 15.2's exact
+  text, read from the package and the inventory's probe, and the final list of about fifteen.
+- `main.js`'s size with the Portuguese table and guide, against its budget.
+- In Obsidian, by hand: the command palette, the ribbon's tooltip and the folder item after a
+  language change and a restart, and whether reloading the plugin alone is enough.
+- The time the Português passes of the panel and touch runs add to `npm run check`.
+
 **M6**
 
 - Installing, the Windows "Open with" association, and saving back to an opened file.
@@ -4321,6 +4554,29 @@ The table of the tickets this spec came from, and the sections each fed, is in [
 Each section above ends with its own tickets.
 
 ## Changes since agreed
+
+- 2026-11-21, [sections 1](#1-what-v1-is-and-what-it-isnt), [8](#language), [13](#13-messages),
+  [14](#14-engineering-constraints) and [16](#the-test-period) (the map
+  [Spec for 0.6.0: Excalimathpad's own text in Português (Brasil)](https://github.com/matheus-sancha/excalimathpad/issues/284),
+  each chosen by Matheus):
+  - **The app's own text follows ☰ → Language.** Section 1 left a translation of the app's own
+    text out of v1, and section 8 said it stays English, with a mixed screen chosen. On 0.5.0
+    Matheus reported "The language is only changing in the side panel, not changing the
+    language in the whole application", and chose "Full translation before 1.0.0". Every
+    screen, message and the Math guide read in Português when it is chosen; the README, the
+    listing and the issue forms stay English.
+  - **"A sheet reads and shows the same in either language" now holds for the math only:**
+    the source, names, numbers, units and keywords. The words the app writes around them (a
+    list's summary, a matrix's size, a plot's default title) follow the language, print
+    included, and so do the app's own grouped numbers (`10 000`) and new file names
+    (`Sem título`).
+  - **The engine returns codes, not English** ([ADR 0007](adr/0007-engine-returns-message-codes.md)).
+  - **The Math guide is two files**, `docs/math-guide.md` and `docs/math-guide.pt-BR.md`, with
+    the same rows; ☰ opens the one for the language.
+  - **Português is `0.6.0` and the AI features are `0.7.0`,** the last beta; until now `0.6.0`
+    was the AI features, due 2026-11-22. `0.5.0` gets week 2 as its test week.
+  - **Two fit fixes also change English:** the phone's active tab shows its name only if it
+    fits, and Settings → Custom's default options show units only.
 
 - 2026-11-21, [sections 4](#renaming-a-name) and [14](#14-engineering-constraints) (#260, found
   while building, for Matheus to confirm on the PR):
