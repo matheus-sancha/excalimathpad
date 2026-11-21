@@ -62,10 +62,22 @@
 
 /* The reduced panel (docs/spec-v1.md section 4, Selected math element): while
    only math is selected, the properties panel keeps Opacity, Layers, Align and
-   Actions. Opacity is the one child of `.panelColumn` with a class of its own,
-   and the style sections all come before it, so they are the children with
-   Opacity after them. `mathSelection.excalidraw.test.tsx` pins that order. */
-[data-math-selection] .App-menu__left .panelColumn > :has(~ label.control-label) {
+   Actions. Opacity is the one child of the panel's list with a class of its
+   own, and the style sections all come before it, so they are the children
+   with Opacity after them. `mathSelection.excalidraw.test.tsx` pins that order.
+   The list is `.selected-shape-actions` since the canary (`.panelColumn` on 0.18.1). */
+[data-math-selection] .App-menu__left .selected-shape-actions > :has(~ label.control-label) {
+  display: none;
+}
+
+/* The same on a tablet and a phone, where Excalidraw's panel is compact since
+   the canary: a row of buttons (`.compact-shape-actions`) whose first two are
+   the stroke and background colours, then one that opens the style sections
+   with Opacity last (`.properties-content`), then Actions. The colours go, and
+   in the opened sections everything before Opacity. The touch run holds it,
+   with a drawing as the control. */
+[data-math-selection] .compact-shape-actions .compact-action-item:has(.color-picker-container),
+[data-math-selection] .properties-content :has(~ label.control-label) {
   display: none;
 }
 
@@ -269,13 +281,16 @@
    bottom of the view, above the overlay and Excalidraw's own bottom bar, just
    above the on-screen keyboard (`bottom`, set inline from visualViewport). About
    half of what the keyboard leaves visible (`--sheet-visible`); while a line is
-   open, short: the quick keys, the tab icons and a few rows, scrolling inside. */
+   open, short: the quick keys, the tab icons and a few rows, scrolling inside.
+   Since the canary Excalidraw's bottom bar has a layer of its own
+   (`--zIndex-ui-bottom`, 60), above the 5 the sheet had: the sheet sits one
+   above it, under Excalidraw's menus and dialogs (`layers.test.ts`). */
 .excalidraw .sheet-bottom {
   position: absolute;
   left: 0;
   right: 0;
   bottom: 0;
-  z-index: 5;
+  z-index: calc(var(--zIndex-ui-bottom) + 1);
   display: flex;
   flex-direction: column;
   height: calc(var(--sheet-visible, 100%) * 0.5);

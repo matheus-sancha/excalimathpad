@@ -39,6 +39,18 @@ describe('overlay z-index vs Excalidraw layers', () => {
   })
 })
 
+// The bottom sheet's `z-index: calc(var(--zIndex-ui-bottom) + 1)` (`SheetCanvas.css`).
+describe("the bottom sheet vs Excalidraw's phone layout", () => {
+  it("has Excalidraw's bottom bar under it, and its menus, context menu and dialogs over it", () => {
+    const sheet = zIndex('ui-bottom') + 1
+    expect(sheet).toBeGreaterThan(zIndex('layerUI'))
+    expect(sheet).toBeLessThan(zIndex('ui-context-menu'))
+    expect(sheet).toBeLessThan(zIndex('ui-main-menu'))
+    expect(sheet).toBeLessThan(zIndex('modal'))
+    expect(sheet).toBeLessThan(zIndex('popup'))
+  })
+})
+
 describe('the dark theme', () => {
   it("is Excalidraw's own filter, which the overlay copies (#50)", () => {
     const filters = [...css.matchAll(/--theme-filter:\s*([^;}]+)/g)].map(([, value]) => value.trim())

@@ -5,10 +5,11 @@ import { IMAGE_TOO_BIG, IMAGE_TOOL_SELECTOR, insertImage, MAX_IMAGE_BYTES, type 
 import { sceneLoaded } from '../test/excalidraw.ts'
 
 /**
- * Contracts with Excalidraw 0.18's image tool (ADR 0001; docs/spec-v1.md
- * section 12a, Reach): its radio is `[data-testid="toolbar-image"]` inside a
- * `label.ToolIcon`, a click on it or the key 9 starts the tool and its file
- * picker, and the takeover stops both before Excalidraw hears them. An upgrade
+ * Contracts with Excalidraw's image tool (ADR 0001; docs/spec-v1.md section
+ * 12a, Reach), on the canary `0.18.0-9fbeaed`: it is the menu item
+ * `[data-testid="toolbar-image"]` of More tools, a click on it or the key 9
+ * starts the tool and its file picker, and the takeover stops both before
+ * Excalidraw hears them. An upgrade
  * that changes any of these fails here. Each takeover check has a control
  * without it, showing the press really does start Excalidraw's own tool.
  */
@@ -31,23 +32,32 @@ function slot(image: PickedImage | null = null) {
   return { pick, slot: { keys: document.body, pick } satisfies ImageToolSlot }
 }
 
-const tool = () => document.querySelector<HTMLInputElement>(IMAGE_TOOL_SELECTOR)
+const tool = () => document.querySelector<HTMLElement>(IMAGE_TOOL_SELECTOR)
+const MORE_TOOLS = '.App-toolbar__extra-tools-dropdown'
+/** Opens More tools, where the item is. */
+const openMoreTools = () =>
+  act(() => {
+    document.querySelector<HTMLElement>('.App-toolbar__extra-tools-trigger')!.click()
+  })
 const pressKey9 = () =>
   fireEvent.keyDown(document.querySelector('.excalidraw')!, { key: '9', code: 'Digit9' })
 
 describe("Excalidraw's image tool (the seam)", () => {
-  it('is a radio marked toolbar-image inside a label.ToolIcon', async () => {
+  it('is a menu item marked toolbar-image in More tools, and not on the toolbar', async () => {
     await mount()
+    expect(tool()).toBeNull()
+    openMoreTools()
     expect(tool()).not.toBeNull()
-    expect(tool()!.type).toBe('radio')
-    expect(tool()!.closest('label.ToolIcon')).not.toBeNull()
+    expect(tool()!.getAttribute('role')).toBe('menuitem')
+    expect(tool()!.closest(MORE_TOOLS)).not.toBeNull()
   })
 
   it('control: a click on it starts the tool and its file picker', async () => {
     const { api } = await mount()
     const fileInput = vi.spyOn(HTMLInputElement.prototype, 'click')
+    openMoreTools()
     act(() => {
-      fireEvent.click(tool()!.closest('label')!)
+      fireEvent.click(tool()!)
     })
     await waitFor(() => expect(api.getAppState().activeTool.type).toBe('image'))
     expect(fileInput.mock.contexts.some((input) => (input as HTMLInputElement).type === 'file')).toBe(true)
@@ -67,12 +77,16 @@ describe('the takeover (in a vault)', () => {
     const { pick, slot: imageTool } = slot()
     const { api } = await mount(imageTool)
     const fileInput = vi.spyOn(HTMLInputElement.prototype, 'click')
+    openMoreTools()
     act(() => {
-      fireEvent.click(tool()!.closest('label')!)
+      // On the item's text, as a press lands: the takeover finds the item around it.
+      fireEvent.click(tool()!.querySelector('.dropdown-menu-item__text')!)
     })
     expect(pick).toHaveBeenCalledTimes(1)
     await act(() => new Promise((resolve) => setTimeout(resolve, 20)))
     expect(api.getAppState().activeTool.type).toBe('selection')
+    // More tools closes, as it does when one of its items is chosen.
+    expect(document.querySelector(`${MORE_TOOLS} .dropdown-menu-container`)).toBeNull()
     expect(fileInput.mock.contexts.filter((input) => (input as HTMLInputElement).type === 'file')).toEqual([])
   })
 
@@ -106,8 +120,9 @@ describe('the takeover (in a vault)', () => {
     vi.stubGlobal('Image', image)
     const { slot: imageTool } = slot(PNG)
     const { api } = await mount(imageTool)
+    openMoreTools()
     act(() => {
-      fireEvent.click(tool()!.closest('label')!)
+      fireEvent.click(tool()!)
     })
     await waitFor(() => expect(api.getSceneElements()).toHaveLength(1))
     const [element] = api.getSceneElements()

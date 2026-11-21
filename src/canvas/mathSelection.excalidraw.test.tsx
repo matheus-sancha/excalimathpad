@@ -9,7 +9,7 @@ import { clickOnCanvas } from '../test/gestures.ts'
 
 /**
  * The reduced panel and the hint (docs/spec-v1.md sections 4 and 14) rest on
- * Excalidraw 0.18.1's own DOM, which isn't public API. jsdom doesn't apply the
+ * Excalidraw's own DOM (the canary, `0.18.0-9fbeaed`), which isn't public API. jsdom doesn't apply the
  * stylesheet, so these pin what `SheetCanvas.css` relies on: the order of the
  * panel's children, the one class among them, and where the hint's text is.
  * An upgrade that moves them fails here.
@@ -68,7 +68,7 @@ function shiftClick(point: { clientX: number; clientY: number }) {
 
 /** The panel's sections, by their titles, in order. Opacity's has the class. */
 function panelSections() {
-  const column = document.querySelector('.App-menu__left .panelColumn')!
+  const column = document.querySelector('.App-menu__left .selected-shape-actions')!
   return Array.from(column.children).map((child) => ({
     title: child.querySelector('legend, h3')?.textContent?.trim() ?? child.textContent?.trim() ?? '',
     isOpacity: child.matches('label.control-label'),
@@ -182,7 +182,7 @@ describe('Excalidraw’s hint, as its replacement needs it (section 14)', () => 
     expect(hint.children).toHaveLength(1)
     expect(hint.firstElementChild!.tagName).toBe('SPAN')
     // What it says by itself, which is wrong for a math element.
-    expect(hint).toHaveTextContent('Press Enter to add text')
+    expect(hint).toHaveTextContent('Enter to add text')
   })
 
   it('isn’t shown for several elements, so there is nothing to replace', async () => {

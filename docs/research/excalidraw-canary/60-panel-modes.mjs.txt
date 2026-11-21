@@ -1,0 +1,28 @@
+// What Excalidraw's properties panel shows for one selected math element, by window size. DOM only.
+import { launch } from './harness.mjs'
+const sheet = JSON.stringify({ type: 'excalidraw', version: 2, elements: [
+  { id: 'calc', type: 'rectangle', x: 20, y: 280, width: 160, height: 60, customData: { kind: 'math', source: 'a = 2 m\nb = a * 3' } },
+  { id: 'box', type: 'rectangle', x: 20, y: 480, width: 160, height: 60, strokeColor: '#1e1e1e', backgroundColor: 'transparent' },
+], appState: {}, files: {}, excalimathpad: { format: 2 } })
+for (const [w, h, touch] of [[1500, 900, false], [1180, 820, true], [820, 1180, true], [390, 844, true]]) {
+  const { tab, start, close, errors } = await launch({ width: w, height: h, touch })
+  try {
+    await start(sheet)
+    const read = () => tab.evaluate(() => {
+      const vis = (e) => !!e && e.getClientRects().length > 0 && getComputedStyle(e).visibility !== 'hidden'
+      const full = [...document.querySelectorAll('.App-menu__left .selected-shape-actions > *')].filter(vis).map((c) => c.querySelector('legend, h3')?.textContent?.trim() ?? (c.matches('label.control-label') ? 'Opacity' : c.tagName))
+      const compact = [...document.querySelectorAll('.compact-shape-actions > *')].filter(vis).map((c) => (c.className ? String(c.className).split(' ').slice(0, 2).join('.') : c.tagName) + '[' + ([...c.querySelectorAll('button')].map((b) => b.getAttribute('title') ?? b.getAttribute('aria-label') ?? b.getAttribute('data-testid') ?? b.className.split(' ')[0]).join(',')) + ']')
+      return { mode: document.querySelector('.excalidraw')?.className.replace(/excalidraw(-container)?|notranslate/g, '').trim(), selection: document.querySelector('[data-math-selection]')?.getAttribute('data-math-selection') ?? null, full, compact }
+    })
+    const tapOn = async (sel) => { const b = await tab.locator(sel).first().boundingBox(); if (touch) await tab.touchscreen.tap(b.x + 20, b.y + 10); else await tab.mouse.click(b.x + 20, b.y + 10); await tab.waitForTimeout(500) }
+    await tapOn('[data-anchor-id="calc"] [data-line="0"]')
+    console.log(`${w}x${h} math:`, JSON.stringify(await read()))
+    await tab.keyboard.press('Escape'); await tab.waitForTimeout(200)
+    // control: a drawing
+    const b = await tab.locator('[data-anchor-id="calc"]').boundingBox()
+    if (touch) await tab.touchscreen.tap(b.x + 5, b.y + 200 + 5); else await tab.mouse.click(b.x + 5, b.y + 200 + 5)
+    await tab.waitForTimeout(500)
+    console.log(`${w}x${h} drawing:`, JSON.stringify(await read()))
+    if (errors.length) console.log(JSON.stringify(errors))
+  } finally { await close() }
+}

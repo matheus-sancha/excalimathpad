@@ -1,0 +1,23 @@
+// A synthetic paste and copy in the main window, as the pop-out run makes them. DOM only.
+import { launch, pumpSheet } from './harness.mjs'
+const { tab, start, close, errors, origin } = await launch({ width: 1500, height: 900 })
+try {
+  await tab.context().grantPermissions(['clipboard-read', 'clipboard-write'], { origin })
+  await start(await pumpSheet())
+  const count = () => tab.evaluate(() => window.__file().elements.filter((e) => !e.isDeleted).length)
+  const paste = () => tab.evaluate(() => { const data = new DataTransfer(); data.setData('text/plain', 'pasted text'); const target = document.activeElement ?? document.body; const ev = new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true }); target.dispatchEvent(ev); return { target: target.tagName + '.' + String(target.className).slice(0, 40), prevented: ev.defaultPrevented } })
+  const at = { x: 400, y: 700 }
+  const under = () => tab.evaluate(([x, y]) => { const e = document.elementFromPoint(x, y); return e ? e.tagName + '.' + String(e.className).slice(0, 40) : null }, [at.x, at.y])
+  for (const how of ['click only', 'click, then focus the container', 'move, click']) {
+    if (how === 'move, click') { await tab.mouse.move(at.x - 30, at.y - 30); await tab.mouse.move(at.x, at.y, { steps: 5 }) }
+    await tab.mouse.click(at.x, at.y); await tab.waitForTimeout(200)
+    if (how.includes('focus')) await tab.evaluate(() => document.querySelector('.excalidraw').focus())
+    const before = await count(); const p = await paste(); await tab.waitForTimeout(600)
+    console.log(how, '|', JSON.stringify(p), '| under the pointer:', await under(), '|', before, '→', await count())
+  }
+  // copy: where does the data go?
+  const b = await tab.locator('[data-anchor-id="calc"]').boundingBox(); await tab.mouse.click(b.x + 20, b.y + 12); await tab.waitForTimeout(300)
+  await tab.evaluate(() => navigator.clipboard.writeText(''))
+  const copied = await tab.evaluate(async () => { const data = new DataTransfer(); const target = document.activeElement ?? document.body; const ev = new ClipboardEvent('copy', { clipboardData: data, bubbles: true, cancelable: true }); target.dispatchEvent(ev); const inEvent = data.getData('text/plain'); await new Promise((r) => setTimeout(r, 300)); return { target: target.tagName + '.' + String(target.className).slice(0, 30), prevented: ev.defaultPrevented, inEvent: inEvent.slice(0, 40), types: [...data.types], viaApi: (await navigator.clipboard.readText()).slice(0, 40) } })
+  console.log('copy |', JSON.stringify(copied))
+} finally { console.log(JSON.stringify(errors)); await close() }

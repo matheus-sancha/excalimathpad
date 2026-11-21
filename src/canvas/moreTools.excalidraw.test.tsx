@@ -36,8 +36,18 @@ describe("Excalidraw's More tools dropdown", () => {
     const menu = document.querySelector('.App-toolbar__extra-tools-dropdown .dropdown-menu-container')!
     expect(menu.lastElementChild).toHaveClass('math-tools')
     const labels = Array.from(menu.querySelectorAll('.dropdown-menu-item__text'), (item) => item.textContent)
-    expect(labels.slice(0, 3)).toEqual(['Frame tool', 'Web Embed', 'Laser pointer'])
-    expect(labels.at(-1)).toBe('Add math')
+    // Excalidraw's own, in its order on the canary (spec section 8, The Excalidraw upgrade), then the app's.
+    expect(labels).toEqual([
+      'Insert image',
+      'Frame tool',
+      'Web Embed',
+      'Draw to shape',
+      'Laser pointer',
+      'Bucket fill',
+      'Lasso selection',
+      'Mermaid to Excalidraw',
+      'Add math',
+    ])
 
     // Choosing the hand tool re-renders the toolbar with the dropdown open.
     act(() => {

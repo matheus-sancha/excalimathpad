@@ -1,0 +1,28 @@
+import { launch } from './harness.mjs'
+const sheet = JSON.stringify({ type: 'excalidraw', version: 2, elements: [
+  { id: 'calc', type: 'rectangle', x: 20, y: 280, width: 160, height: 60, customData: { kind: 'math', source: 'a = 2 m\nb = a * 3' } },
+], appState: {}, files: {}, excalimathpad: { format: 2 } })
+for (const [w, h] of [[820, 1180], [390, 844]]) {
+  const { tab, start, close } = await launch({ width: w, height: h, touch: true })
+  try {
+    await start(sheet)
+    const b = await tab.locator('[data-anchor-id="calc"] [data-line="0"]').first().boundingBox()
+    await tab.touchscreen.tap(b.x + 20, b.y + 10); await tab.waitForTimeout(500)
+    const tree = await tab.evaluate(() => {
+      const t = (el, d = 0, max = 4) => '  '.repeat(d) + el.tagName.toLowerCase() + (typeof el.className === 'string' && el.className ? '.' + el.className.split(' ').join('.') : '') + ['data-testid', 'title', 'aria-label', 'type'].map((a) => el.getAttribute(a) ? ` [${a}=${el.getAttribute(a)}]` : '').join('') + (d < max && el.tagName !== 'svg' && el.tagName !== 'BUTTON' ? '\n' + [...el.children].map((c) => t(c, d + 1, max)).join('\n') : '')
+      const root = document.querySelector('.compact-shape-actions')
+      return root ? [...root.querySelectorAll('.compact-action-item')].filter((e) => e.getClientRects().length).map((e) => e.querySelector('button')?.getAttribute('title') ?? e.querySelector('button')?.getAttribute('aria-label')).join(' | ') : 'none'
+    })
+    console.log(`==== ${w}x${h}\n` + tree.split('\n').filter((l) => l.trim()).slice(0, 40).join('\n'))
+    // open each popup and list what it holds
+    for (const title of ['Stroke', 'Actions']) {
+      const btn = tab.locator(`.compact-shape-actions button[title="${title}"]`).first()
+      if (!(await btn.count())) continue
+      await btn.tap(); await tab.waitForTimeout(400)
+      const pop = await tab.evaluate(() => { const p = [...document.querySelectorAll('[data-radix-popper-content-wrapper], .properties-content, [role=dialog]')].filter((e) => e.getClientRects().length).pop(); return p ? { cls: p.className || p.getAttribute('data-radix-popper-content-wrapper'), inner: p.firstElementChild?.className, parts: [...p.querySelectorAll('legend, h3, label.control-label')].filter((e) => e.getClientRects().length).map((e) => e.tagName === 'BUTTON' ? 'btn:' + (e.getAttribute('title') ?? e.getAttribute('aria-label')) : e.tagName.toLowerCase() + (e.className ? '.' + String(e.className).split(' ')[0] : '') + ':' + e.textContent.trim().slice(0, 16)).slice(0, 30) } : null })
+      console.log(`popup [${title}]:`, JSON.stringify(pop))
+      await tab.keyboard.press('Escape'); await tab.waitForTimeout(300)
+      await tab.touchscreen.tap(b.x + 20, b.y + 10); await tab.waitForTimeout(400)
+    }
+  } finally { await close() }
+}

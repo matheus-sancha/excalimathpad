@@ -272,6 +272,9 @@ try {
     // headless Ctrl+V fires none, so the event is made here. Excalidraw hears
     // paste on the code's \`document\`, so this checks where it listens.
     await tab.mouse.click(box.x + 60, box.y + box.height - 160)
+    // Excalidraw pastes only with a canvas under the pointer, and since the canary it reads the
+    // pointer's place a frame late: a paste in the click's own instant still sees the place before it.
+    await tab.waitForTimeout(200)
     const count = (await scene(which)).count
     await tab.evaluate(() => {
       const data = new DataTransfer()
@@ -286,15 +289,21 @@ try {
     // A copy with the math element selected writes Excalidraw's clipboard data.
     const now = await at()
     await tab.mouse.click(box.x + now.x + 40, box.y + now.y + 20)
-    await tab.evaluate(() => navigator.clipboard.writeText(''))
-    await tab.evaluate(() => {
+    // Since the canary Excalidraw writes a copy into the event itself, as the browser then takes
+    // it, and stops the event (0.18.1 wrote with the Clipboard API). In a pop-out the event it
+    // hears is the bridge's copy, which carries this event's data and passes the stop back.
+    const copy = await tab.evaluate(() => {
+      const data = new DataTransfer()
       const target = document.activeElement ?? document.body
-      target.dispatchEvent(new ClipboardEvent('copy', { clipboardData: new DataTransfer(), bubbles: true, cancelable: true }))
+      const event = new ClipboardEvent('copy', { clipboardData: data, bubbles: true, cancelable: true })
+      target.dispatchEvent(event)
+      return { text: data.getData('text/plain'), stopped: event.defaultPrevented }
     })
-    await tab.waitForTimeout(300)
-    // Excalidraw writes a copy with the Clipboard API, not into the event.
-    const copied = await tab.evaluate(() => navigator.clipboard.readText())
-    row('a copy writes the selected element', copied.includes('excalidraw/clipboard'), copied ? `${copied.length} characters` : 'nothing')
+    row(
+      'a copy writes the selected element into the event, and stops it',
+      copy.text.includes('excalidraw/clipboard') && copy.stopped,
+      copy.text ? `${copy.text.length} characters, stopped: ${copy.stopped}` : 'nothing',
+    )
     await tab.keyboard.press('Escape')
 
     // Print… (section 11, M5): the frame is made in this tab's own window and prints this tab's sheet.

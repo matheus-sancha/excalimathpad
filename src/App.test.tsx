@@ -66,8 +66,8 @@ describe('App', () => {
     await waitFor(() => {
       expect(container.querySelector('.excalidraw')).toBeInTheDocument()
     })
-    // The editor's own UI is up, not just an empty wrapper.
-    expect(await screen.findAllByRole('radio')).not.toHaveLength(0)
+    // The editor's own UI is up, not just an empty wrapper: its toolbar's tools (buttons since the canary).
+    await waitFor(() => expect(container.querySelectorAll('.App-toolbar button.ToolIcon')).not.toHaveLength(0))
   })
 
   it('evaluates a sheet across its elements', async () => {

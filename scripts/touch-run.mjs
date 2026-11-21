@@ -317,11 +317,39 @@ try {
       await tab.mouse.click(first.x, first.y)
       await pause()
       const byMouse = await canvasHint()
+      // Since the Excalidraw upgrade a phone has no canvas hint: Excalidraw's hint is in its
+      // toolbar, which its phone layout doesn't draw (section 4, Touch). The Format tab's hint,
+      // checked above, says the same there.
+      if (device.phone) {
+        row('a phone shows no canvas hint, after a tap or a click', byTouch === null && byMouse === null, `tap: ${byTouch}, click: ${byMouse}`)
+      } else {
+        row(
+          'the canvas hint names the taps after a tap, and the keys after a click',
+          byTouch === JSON.stringify('Double-tap a line, or tap Edit in Math settings') &&
+            byMouse === JSON.stringify('Double-click a line or press Enter to edit'),
+          `tap: ${byTouch}, click: ${byMouse}`,
+        )
+      }
+
+      // The reduced panel (section 4, Selected math element) where Excalidraw's panel is compact, as on
+      // a tablet and a phone since the canary: its two colours are there and hidden, and the button
+      // that opens the style sections shows Opacity alone. That each is found in the DOM is the
+      // control: a move of Excalidraw's markup leaves nothing to hide, and fails here.
+      const shown = `(e) => e.getClientRects().length > 0`
+      const colours = await tab.evaluate(
+        `(() => { const all = [...document.querySelectorAll('.compact-shape-actions .compact-action-item .color-picker-container')]; return { found: all.length, shown: all.filter(${shown}).length } })()`,
+      )
+      await tap(await pointOf('.compact-shape-actions .compact-action-button.properties-trigger', 1000))
+      await pause()
+      const sections = await tab.evaluate(
+        `(() => { const box = document.querySelector('.properties-content'); if (!box) return null; const styles = [...box.querySelectorAll('legend')]; const opacity = [...box.querySelectorAll('label.control-label')]; return { styles: styles.length, stylesShown: styles.filter(${shown}).length, opacityShown: opacity.filter(${shown}).length } })()`,
+      )
+      await tab.keyboard.press('Escape')
+      await pause()
       row(
-        'the canvas hint names the taps after a tap, and the keys after a click',
-        byTouch === JSON.stringify('Double-tap a line, or tap Edit in Math settings') &&
-          byMouse === JSON.stringify('Double-click a line or press Enter to edit'),
-        `tap: ${byTouch}, click: ${byMouse}`,
+        'the compact panel of one math element has no colours, and its style sections are Opacity alone',
+        colours.found === 2 && colours.shown === 0 && !!sections && sections.styles >= 5 && sections.stylesShown === 0 && sections.opacityShown === 1,
+        `colours ${colours.shown} of ${colours.found} shown; sections ${sections ? `${sections.stylesShown} of ${sections.styles} shown, Opacity ${sections.opacityShown}` : 'not opened'}`,
       )
 
       // A tap on a gutter mark shows its message at once; the next tap anywhere closes it.

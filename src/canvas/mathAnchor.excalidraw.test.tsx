@@ -489,7 +489,14 @@ describe('a copied anchor keeps its source', () => {
         return [...clipboard.keys()]
       },
       files: [],
-      items: [],
+      // Since the canary Excalidraw reads a paste from the clipboard's items, as a browser lists them.
+      get items() {
+        return [...clipboard.keys()].map((type) => ({
+          kind: 'string',
+          type,
+          getAsString: (done: (value: string) => void) => done(clipboard.get(type) ?? ''),
+        }))
+      },
     }
     const clipboardEvent = (type: string) =>
       Object.defineProperty(new Event(type, { bubbles: true, cancelable: true }), 'clipboardData', {

@@ -104,29 +104,49 @@ describe('the lookbehind check (section 12a; iOS below 16.4)', () => {
   })
 })
 
-/** Each listener added to the global window or document while `run` runs. */
-async function globalListeners(run: () => Promise<void>): Promise<string[]> {
-  const added: string[] = []
+/**
+ * The listeners on the global window, document and body once `run` has run:
+ * each one added and not taken off again. Excalidraw's menus mount more than
+ * once while a view settles (since the canary each mount adds a `keydown` on
+ * the document and takes it off when it goes), so a count of every add would
+ * count a remount as a listener. `run` may return what to do afterwards, such
+ * as an unmount, which is not measured.
+ */
+async function globalListeners(run: () => Promise<(() => void) | void>): Promise<string[]> {
+  const live: { name: string; type: string; listener: unknown; capture: boolean }[] = []
+  const captures = (options: boolean | AddEventListenerOptions | EventListenerOptions | undefined) =>
+    typeof options === 'boolean' ? options : !!options?.capture
   const spies = (
     [
       ['window', window],
       ['document', document],
       ['body', document.body],
     ] as const
-  ).map(([name, target]) => {
-    const original = target.addEventListener.bind(target)
-    return vi.spyOn(target, 'addEventListener').mockImplementation((type, listener, options) => {
-      const capture = typeof options === 'boolean' ? options : !!options?.capture
-      added.push(`${name} ${type}${capture ? ' capture' : ''}`)
-      original(type, listener, options)
-    })
+  ).flatMap(([name, target]) => {
+    const add = target.addEventListener.bind(target)
+    const remove = target.removeEventListener.bind(target)
+    return [
+      vi.spyOn(target, 'addEventListener').mockImplementation((type, listener, options) => {
+        live.push({ name, type, listener, capture: captures(options) })
+        add(type, listener, options)
+      }),
+      vi.spyOn(target, 'removeEventListener').mockImplementation((type, listener, options) => {
+        const capture = captures(options)
+        const at = live.findIndex((l) => l.name === name && l.type === type && l.listener === listener && l.capture === capture)
+        if (at >= 0) live.splice(at, 1)
+        remove(type, listener, options)
+      }),
+    ]
   })
+  let listeners: string[] = []
   try {
-    await run()
+    const afterwards = await run()
+    listeners = live.map(({ name, type, capture }) => `${name} ${type}${capture ? ' capture' : ''}`).sort()
+    afterwards?.()
   } finally {
     spies.forEach((spy) => spy.mockRestore())
   }
-  return added.sort()
+  return listeners
 }
 
 /** `listeners` without one of each in `control`: what isn't Excalidraw's or React's own. */
@@ -150,8 +170,10 @@ describe('no global listener (section 12a: the view is confined to itself)', () 
       await act(async () => root.render(createElement(Excalidraw, { handleKeyboardGlobally: false })))
       await waitFor(() => expect(host.querySelector('.excalidraw')).not.toBeNull())
       await act(() => new Promise((resolve) => setTimeout(resolve, 50)))
-      act(() => root.unmount())
-      host.remove()
+      return () => {
+        act(() => root.unmount())
+        host.remove()
+      }
     })
 
   it('the plugin’s view adds none beyond Excalidraw’s own', async () => {

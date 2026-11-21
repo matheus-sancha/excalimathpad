@@ -326,15 +326,26 @@ export function SheetCanvas({
     [api, root],
   )
 
-  // Excalidraw reads a new docking width after its render (`componentDidUpdate`)
-  // and draws nothing again by itself, so the panel would dock or float one
-  // render late: its public `refresh` draws it again. No scene change, no undo step.
+  // Excalidraw decides whether its sidebar fits (docks) from the docking width
+  // only when its window or its box is resized: since the canary a new
+  // `UIOptions.dockedSidebarBreakpoint` alone changes nothing (0.18.1 read it
+  // again in `componentDidUpdate`). So when a new width takes the panel across
+  // the docking width, Excalidraw is told with the `resize` it listens for, on
+  // the view's window and, for a tab moved to a pop-out, the code's own. One
+  // event for each crossing, none for a drag that stays on one side. Its public
+  // `refresh` then draws it. No scene change, no undo step (the panel run).
   const drawnWidth = useRef(panelWidth)
   useEffect(() => {
     if (!api || drawnWidth.current === panelWidth) return
+    const docked = (width: number) => !!root && root.clientWidth > docksAbove(width)
+    const crossed = docked(drawnWidth.current) !== docked(panelWidth)
     drawnWidth.current = panelWidth
+    if (crossed && root) {
+      const view = root.ownerDocument.defaultView
+      for (const target of new Set([view, window])) target?.dispatchEvent(new Event('resize'))
+    }
     api.refresh()
-  }, [api, panelWidth])
+  }, [api, panelWidth, root])
 
   // A change of light or dark (☰ Dark mode, Alt+Shift+D) is remembered.
   useEffect(() => {
