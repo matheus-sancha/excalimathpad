@@ -108,6 +108,11 @@ export interface SheetPanelSlot {
    * open (section 4, Touch, M4d); unset, there is none.
    */
   quickKeys?: ReactNode
+  /**
+   * On a phone, the rename's offer as a row at the top of the bottom sheet,
+   * above the quick keys (section 8, On a phone, 0.5.0); unset, there is none.
+   */
+  offer?: ReactNode
   /** A line or the title is open: on a phone the bottom sheet is short (section 8, On a phone). */
   compact?: boolean
   /** Opened, closed, or moved to another tab. */
@@ -538,6 +543,7 @@ export function SheetCanvas({
             active={bottom.tab}
             compact={sheetPanel.compact ?? false}
             quickKeys={sheetPanel.quickKeys}
+            offer={sheetPanel.offer}
             onTab={(tab) => showBottom({ open: true, tab })}
             onClose={() => showBottom({ open: false, tab: bottom.tab })}
           />,

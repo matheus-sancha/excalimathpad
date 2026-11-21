@@ -137,6 +137,129 @@ export function planRename(
 }
 
 /**
+ * The one name a line assigns, read as the engine reads it, or null: a line
+ * that assigns nothing, or more than one name (section 4, The offer).
+ */
+export function assignedName(text: string, stored = ''): string | null {
+  const line = readSheetLine(text, stored)
+  return line.kind !== 'blank' && line.defines.length === 1 ? line.defines[0] : null
+}
+
+/** An offer's question: the line, which now assigns `to`, and the name `from` it assigned. */
+export interface RenameOfferTarget extends RenameLineRef {
+  from: string
+  to: string
+}
+
+/**
+ * What the offer on a committed line writes (section 4, The offer, on a
+ * committed line): the line at `target` now assigns `to`, and the lines in
+ * the reach it had as `from` that still read `from` follow it. The plan is
+ * the one `planRename` gives for the line as if it still assigned `from`, so
+ * the reach, the uses and "changes a result" are the form's, and its lines
+ * are those whose text the rename changes: the line itself only where it
+ * still reads `from` (a function's own call). It refuses nothing, since the
+ * new name is already in the line. Null when the line doesn't assign `to`,
+ * or no line would change: there is nothing to offer.
+ *
+ * With `check` false the engine isn't run, and `changes` is empty: the card
+ * draws its count at once and its amber line after (section 14, 0.5.0).
+ */
+export function planOffer(
+  blocks: readonly SheetBlock[],
+  target: RenameOfferTarget,
+  settings: DisplaySettings = DEFAULT_DISPLAY,
+  check = true,
+): RenamePlan | null {
+  const { id, line, from, to } = target
+  if (from === to || from === '' || to === '') return null
+  const sheet = readSheet(blocks)
+  // The line's own `to`, swapped back: what the line would be had its name not changed.
+  const own = findUses(sheet, { id, line, name: to })?.[0]
+  if (!own) return null
+  const swapped = own.uses
+  const asBefore = applyRename(blocks, [
+    {
+      id,
+      line,
+      text: replaceSpans(own.row.shown, swapped, from),
+      stored: replaceSpans(own.row.stored, own.storedUses, from),
+      uses: [],
+      storedUses: [],
+    },
+  ])
+  const found = findUses(readSheet(asBefore), { id, line, name: from })
+  if (found === null) return null
+  const all = found.map(({ row, uses, storedUses }): RenamedLine => ({
+    id: row.id,
+    line: row.line,
+    text: replaceSpans(row.shown, uses, to),
+    stored: replaceSpans(row.stored, storedUses, to),
+    uses,
+    storedUses,
+  }))
+  // The lines whose text changes, their uses placed in the text as it stands now.
+  const now = new Map(sheet.map((row) => [`${row.id}:${row.line}`, row]))
+  const lines = all.flatMap((planned): RenamedLine[] => {
+    const row = now.get(`${planned.id}:${planned.line}`)
+    if (!row || (planned.text === row.shown && planned.stored === row.stored)) return []
+    if (planned.id !== id || planned.line !== line) return [planned]
+    return [
+      {
+        ...planned,
+        uses: unswapped(planned.uses, swapped, to.length - from.length),
+        storedUses: unswapped(planned.storedUses, own.storedUses, to.length - from.length),
+      },
+    ]
+  })
+  if (lines.length === 0) return null
+  if (!check) return { lines, refusal: null, warning: null, changes: [] }
+  const before = evaluateSheet(asBefore, settings)
+  const after = evaluateSheet(applyRename(asBefore, all), settings)
+  const same = resultComparer(from, to)
+  const changes = readSheet(asBefore).flatMap(({ id: at, line: index }) => {
+    const a = before.get(at)?.[index]
+    const b = after.get(at)?.[index]
+    return a !== undefined && b !== undefined && same(a, b) ? [] : [{ id: at, line: index }]
+  })
+  return { lines, refusal: null, warning: null, changes }
+}
+
+/**
+ * Spans found in a text whose `swapped` spans were put back to a name `grown`
+ * characters shorter, placed in the text as it was. The `swapped` places
+ * already stand as the new name there, and are left out.
+ */
+function unswapped(spans: readonly NameSpan[], swapped: readonly NameSpan[], grown: number): NameSpan[] {
+  // Where each swapped place starts in the text with the shorter name.
+  const starts = swapped.map((span, k) => span.start - k * grown)
+  return spans.flatMap(({ start, end }) => {
+    if (starts.includes(start)) return []
+    const shift = starts.filter((at) => at < start).length * grown
+    return [{ start: start + shift, end: end + shift }]
+  })
+}
+
+/** A stretch of a line's text; `marked` where the old name stands as a use. */
+export interface MarkedPart {
+  text: string
+  marked: boolean
+}
+
+/** A text cut at each span, the spans marked: a line as the form's and the card's lists show it. */
+export function markParts(text: string, spans: readonly NameSpan[]): MarkedPart[] {
+  const parts: MarkedPart[] = []
+  let from = 0
+  for (const { start, end } of spans) {
+    if (start > from) parts.push({ text: text.slice(from, start), marked: false })
+    parts.push({ text: text.slice(start, end), marked: true })
+    from = end
+  }
+  if (from < text.length || parts.length === 0) parts.push({ text: text.slice(from), marked: false })
+  return parts
+}
+
+/**
  * The blocks with a plan's lines written: each changed line's text and stored
  * clause, every other character kept, the line ends included.
  */

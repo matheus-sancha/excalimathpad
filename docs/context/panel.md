@@ -22,7 +22,8 @@ typed, settings)` gives the lines to write, each named by its element
 where the name stands in it), the reason under the field (the refusal, or
 the shadow warning), the lines whose result would differ, `canRename`, and
 the `plan` itself; null when the line no longer assigns the name.
-`RENAME_WORDS` is section 13's wording, the toast's included. The sheet it
+`RENAME_WORDS` is section 13's wording, the toast's included; the lines' marks
+are the engine's `markParts`. The sheet it
 reads is a `RenameElement`: the panel's element with its `source` and
 `formats`, which `EvaluatedElement` carries. `RenameForm.tsx` draws it: a
 `type="text"` field that takes the keyboard as it mounts, the old name

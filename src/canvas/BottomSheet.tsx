@@ -28,6 +28,7 @@ export function BottomSheet({
   active,
   compact,
   quickKeys,
+  offer,
   onTab,
   onClose,
 }: {
@@ -35,6 +36,8 @@ export function BottomSheet({
   active: SheetPanelTab
   compact: boolean
   quickKeys?: ReactNode
+  /** A rename's offer, the newest waiting, at the very top (0.5.0). */
+  offer?: ReactNode
   onTab: (tab: SheetPanelTab) => void
   onClose: () => void
 }) {
@@ -50,6 +53,7 @@ export function BottomSheet({
       style={{ bottom, '--sheet-visible': `${visible}px` } as CSSProperties}
     >
       <div className="sheet-sidebar__keys" onKeyDown={(event) => event.stopPropagation()}>
+        {offer}
         {quickKeys}
         <div className="sheet-bottom__bar">
           <div className="sheet-bottom__tabs" role="tablist" aria-label="Math settings tabs">
