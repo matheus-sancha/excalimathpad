@@ -2,6 +2,8 @@ import { useDeferredValue, useEffect, useMemo, useRef, useState, type KeyboardEv
 import type { DisplaySettings } from '../math/display.ts'
 import type { RenamePlan, RenameTarget } from '../math/rename.ts'
 import { RENAME_WORDS, renameFormView, type MarkedPart, type RenameElement, type RenameFormLine } from './renameForm.ts'
+import { wordMessage } from '../text/engine.ts'
+import { useWords } from '../text/words.ts'
 
 /**
  * The rename form under a Variables row (docs/spec-v1.md section 4, Renaming
@@ -33,6 +35,7 @@ interface RenameFormProps {
 }
 
 export function RenameForm({ sheet, target, settings, onRename, onCancel, onGone }: RenameFormProps) {
+  const { engine } = useWords()
   const [name, setName] = useState(target.name)
   // "Changes a result" runs the sheet twice (section 14, 0.5.0): the check
   // follows the typing, so a key is drawn before its check is made (section 17).
@@ -95,7 +98,7 @@ export function RenameForm({ sheet, target, settings, onRename, onCancel, onGone
       </label>
       {view.reason && (
         <p className={`sheet-rename__reason is-${view.reason.kind}`} role="status">
-          {view.reason.kind === 'warning' ? `⚠ ${view.reason.text}` : view.reason.text}
+          {view.reason.kind === 'warning' ? `⚠ ${wordMessage(engine, view.reason.message)}` : wordMessage(engine, view.reason.message)}
         </p>
       )}
       <p className="sheet-rename__count">{RENAME_WORDS.lines(view.lines.length)}</p>

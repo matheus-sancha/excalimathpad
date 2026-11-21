@@ -37,7 +37,7 @@ describe('an unexpected throw on one line (#179, section 4, Unexpected failures)
       { kind: 'empty' },
       { kind: 'error', message: UNEXPECTED_LINE, unexpected: { text: 'Error: unexpected', stack: expect.stringContaining('lineWarnings') as string } },
       { kind: 'value', text: '6 m' },
-      { kind: 'error', message: 'y has an error above' },
+      { kind: 'error', message: { code: 'errorAbove', name: 'y' } },
     ])
     expect(lines.get('a')![1].typeset).toEqual({ kind: 'unparsed', source: 'y = boom + 1' })
     expect(lines.get('a')![1].variables).toEqual([{ name: 'y', kind: 'error' }])
@@ -51,7 +51,7 @@ describe('an unexpected throw on one line (#179, section 4, Unexpected failures)
       { kind: 'empty' },
       { kind: 'error', message: UNEXPECTED_LINE, unexpected: { text: 'TypeError: unexpected in the parse', stack: expect.any(String) as string } },
       { kind: 'value', text: '6 m' },
-      { kind: 'error', message: 'y has an error above' },
+      { kind: 'error', message: { code: 'errorAbove', name: 'y' } },
     ])
     expect(lines[1].typeset).toEqual({ kind: 'unparsed', source: 'y = parseboom + 1' })
     expect(lines[1].variables).toEqual([{ name: 'y', kind: 'error' }])

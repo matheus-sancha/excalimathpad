@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import guide from '../../docs/math-guide.md?raw'
 import { guideTree, slug } from '../guide/markdown.ts'
 import { examples, LINES, sections, type Shows } from '../test/guideExamples.ts'
-import { evaluateSheet, type SheetLine } from './evaluate.ts'
+import { evaluateSheet, type EnglishLine as SheetLine } from '../test/english.ts'
 
 /**
  * The Math guide in CI (docs/spec-v1.md section 8, Math guide): every example

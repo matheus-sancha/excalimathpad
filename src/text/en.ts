@@ -1,3 +1,5 @@
+import { engineEn } from './engine.en.ts'
+
 /**
  * The English text table (docs/spec-v1.md section 14, 0.6.0: two text tables,
  * one shape): the app's own words, by key. `ptBR.ts` is typed against this
@@ -58,6 +60,8 @@ export const en = {
   print: {
     browserLine: "Use Print… from the app's menu",
   },
+  /** The engine's messages, by code (section 13; ADR 0007): read through `wordMessage` (`engine.ts`). */
+  engine: engineEn,
 }
 
 /** The shape every text table has: the English table's keys, each word a string or a function of its arguments. */

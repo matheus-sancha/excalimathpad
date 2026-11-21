@@ -13,6 +13,8 @@ import {
 import { InsertButton, OPEN_A_LINE, type InsertProps } from './SymbolsTab.tsx'
 import { RenameForm, type RenameRequest } from './RenameForm.tsx'
 import { RENAME_WORDS, type RenameElement } from './renameForm.ts'
+import { wordMessage } from '../text/engine.ts'
+import { useWords } from '../text/words.ts'
 import './SheetPanel.css'
 
 /**
@@ -147,6 +149,7 @@ export function VariablesTab({
 /** Errors ● and warnings ⚠ in one list, in reading order. */
 export function ProblemsTab({ sheet, onJump }: TabProps) {
   const rows = problemRows(sheet)
+  const { engine } = useWords()
   return (
     <div className="sheet-panel">
       {rows.length === 0 ? (
@@ -163,7 +166,7 @@ export function ProblemsTab({ sheet, onJump }: TabProps) {
                 <span className="sheet-panel__mark" aria-label={row.severity}>
                   {row.severity === 'error' ? '●' : '⚠'}
                 </span>
-                <span className="sheet-panel__message">{row.message}</span>
+                <span className="sheet-panel__message">{wordMessage(engine, row.message)}</span>
                 {row.unexpected && <span className="sheet-panel__raw">{row.unexpected.text}</span>}
                 <span className="sheet-panel__where">{row.where}</span>
               </button>

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { RENAME_WORDS, renameBlocks, renameFormView, type RenameElement } from './renameForm.ts'
+import { inEnglish } from '../test/english.ts'
 
 /**
  * The rename form's view (docs/spec-v1.md section 4, Renaming a name: The
@@ -74,7 +75,7 @@ describe('the rename form’s view', () => {
     const view = renameFormView(SHEET, RHO, name)!
 
     expect(view.canRename).toBe(false)
-    expect(view.reason).toEqual({ kind: 'refused', text: message })
+    expect(inEnglish(view.reason)).toEqual({ kind: 'refused', message })
     // The list still shows the lines as they are.
     expect(view.lines).toHaveLength(3)
   })
@@ -90,7 +91,7 @@ describe('the rename form’s view', () => {
     const view = renameFormView(SHEET, RHO, 'm')!
 
     expect(view.canRename).toBe(true)
-    expect(view.reason).toEqual({ kind: 'warning', text: 'm shadows the unit m' })
+    expect(inEnglish(view.reason)).toEqual({ kind: 'warning', message: 'm shadows the unit m' })
   })
 
   it('says which lines’ results a rename would change, and still allows it', () => {

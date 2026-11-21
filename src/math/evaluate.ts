@@ -20,7 +20,8 @@ import {
   type ShownUnit,
   type UnitSlot,
 } from './display.ts'
-import { createCalls, isSheetFunction, messageOf, SheetError } from './functions.ts'
+import { createCalls, isSheetFunction, messageOf, SheetError, thrownMessage } from './functions.ts'
+import type { EngineMessage, PointAt, ValueKind } from './messages.ts'
 import {
   applyFormatWord,
   hasTopLevelSemicolon,
@@ -176,7 +177,7 @@ export const DEFAULT_DISPLAY: DisplaySettings = {
 let messageSettings: DisplaySettings = DEFAULT_DISPLAY
 
 const disabled = (name: string) => () => {
-  throw new Error(`${name} is not supported in a math element`)
+  throw new SheetError({ code: 'notSupported', name })
 }
 
 /**
@@ -283,6 +284,8 @@ class SheetScope extends Map<string, unknown> {
   }
 
   override get(name: string): unknown {
+    // math.js's own error for a name it can't find, so `explain` reads it as it reads
+    // math.js's: a taken name is always defined below or failed above, so it never shows.
     if (!super.has(name) && this.taken.has(name)) throw new Error(`Undefined symbol ${name}`)
     return super.get(name)
   }
@@ -299,7 +302,7 @@ function forget(scope: Map<string, unknown>, name: string) {
 }
 
 /** What a line reads when the app itself failed on it (section 13, Unexpected failures). */
-export const UNEXPECTED_LINE = 'this line hit an unexpected error in Excalimathpad'
+export const UNEXPECTED_LINE: EngineMessage = { code: 'unexpectedLine' }
 
 /** The outcome of evaluating one line of a math element. */
 export type LineResult =
@@ -310,13 +313,13 @@ export type LineResult =
    * Unexpected failures): the failure's raw text and its stack, under the
    * message `UNEXPECTED_LINE`. A sheet's own error has none.
    */
-  | { kind: 'error'; message: string; unexpected?: { text: string; stack: string } }
+  | { kind: 'error'; message: EngineMessage; unexpected?: { text: string; stack: string } }
   /**
    * A list (section 10): its one-row summary, `30 values, 12.04 … 33.18 m`.
    * `failed` is the line's problem when points failed, `1 of 30 points
    * failed. At Q_s = 0 L/s: …`; the other points keep their values.
    */
-  | { kind: 'list'; text: string; failed: string | null }
+  | { kind: 'list'; text: string; failed: EngineMessage | null }
   /**
    * A solved value's roots (section 9, Roots), when it found several: up to
    * five written out, `0.07996, 0.1491, 0.2369 L / mol`, else a summary with
@@ -350,10 +353,10 @@ export interface SheetLine {
   result: LineResult
   typeset: TypesetLine
   /**
-   * The line's warnings (section 5, Warnings), in the wording of section 13.
+   * The line's warnings (section 5, Warnings), as codes worded by section 13.
    * They never change the result, and an error line keeps them too.
    */
-  warnings: readonly string[]
+  warnings: readonly EngineMessage[]
   /**
    * What the line defines, for the Variables tab (section 8): each name with
    * its value in the sheet's system and Digits, even where the result cell
@@ -374,9 +377,10 @@ export interface SheetLine {
   solveDetails: SolveDetails | null
   /**
    * A list result's hover (section 10): the first and last few points, each
-   * with its index, `1: 12.04 m`, a gap marked `…`. Null on any other line.
+   * with its index, `1: 12.04 m`, a gap marked `…`, one row each; a failed
+   * point's row is its message. Null on any other line.
    */
-  listPreview: string | null
+  listPreview: readonly PreviewRow[] | null
   /** A table line's table (section 10), drawn under the line. Null on any other line. */
   table: TableView | null
   /** A plot line's chart (section 10), drawn under the line. Null on any other line. */
@@ -401,7 +405,7 @@ export interface SheetLine {
 export type RuleState =
   | { kind: 'true' | 'false' | 'overridden' }
   | { kind: 'count'; count: number; of: number; unit: 'points' | 'rows' }
-  | { kind: 'warning'; message: string }
+  | { kind: 'warning'; message: EngineMessage }
 
 /** A table as the grid draws it: its columns, then every row, one cell per column. */
 export interface TableView {
@@ -431,7 +435,7 @@ export interface PlotView {
   /** `mark` clauses: a guide at x, a dot where it meets each curve, its label at the top. */
   marks: readonly { x: number; label: string }[]
   /** Points where a series failed: a red × on the x axis, with the message on hover. */
-  failed: readonly { x: number; message: string }[]
+  failed: readonly { x: number; message: EngineMessage }[]
   /**
    * Labelled dots (M4e): `plot(x, y)` of two single values, then each `point`
    * clause, in the axes' units, each with its coordinates' label and its
@@ -463,7 +467,10 @@ export interface PlotAxis {
 }
 
 /** A cell: its number in the column's unit and the table's form, or a failed point's message. */
-export type TableCell = { ok: true; text: string } | { ok: false; message: string }
+export type TableCell = { ok: true; text: string } | { ok: false; message: EngineMessage }
+
+/** A row of a list's hover: its text, or a failed point's message (`3: failed: …`). */
+export type PreviewRow = string | EngineMessage
 
 export type { SolveDetails } from './solve.ts'
 
@@ -495,9 +502,9 @@ export type ParsedLine =
    * A blank line or a comment line: never evaluated, so its result is empty,
    * unless its clause has a problem, which is its error (section 3, M4d).
    */
-  | { kind: 'blank'; comment: { text: string; format: CommentFormat } | null; formatError: string | null }
+  | { kind: 'blank'; comment: { text: string; format: CommentFormat } | null; formatError: EngineMessage | null }
   /** `defines` is a best guess from the raw text: the line did not parse. */
-  | { kind: 'syntax-error'; message: string; defines: readonly string[]; source: string }
+  | { kind: 'syntax-error'; message: EngineMessage; defines: readonly string[]; source: string }
   | {
       kind: 'parsed'
       node: MathNode
@@ -507,7 +514,7 @@ export type ParsedLine =
       note: string | null
       format: LineFormat
       rules: readonly FormatRule[]
-      formatError: string | null
+      formatError: EngineMessage | null
       /** The line's trailing `in <unit>`, read outside the sheet's scope, or null. */
       display: DisplayUnit | null
       /** That unit as typed. */
@@ -524,7 +531,7 @@ export type ParsedLine =
       note: string | null
       format: LineFormat
       rules: readonly FormatRule[]
-      formatError: string | null
+      formatError: EngineMessage | null
       display: DisplayUnit | null
       displayText: string | null
       source: string
@@ -541,7 +548,7 @@ export type ParsedLine =
       note: string | null
       format: LineFormat
       rules: readonly FormatRule[]
-      formatError: string | null
+      formatError: EngineMessage | null
       display: DisplayUnit | null
       displayText: string | null
     }
@@ -561,7 +568,7 @@ export type ParsedLine =
       note: string | null
       format: LineFormat
       rules: readonly FormatRule[]
-      formatError: string | null
+      formatError: EngineMessage | null
       display: DisplayUnit | null
       displayText: string | null
     }
@@ -576,7 +583,7 @@ export type ParsedLine =
       note: string | null
       format: LineFormat
       rules: readonly FormatRule[]
-      formatError: string | null
+      formatError: EngineMessage | null
       display: DisplayUnit | null
       displayText: string | null
     }
@@ -673,7 +680,7 @@ export function evaluateSheet(
   // The slot and solve details of the line being evaluated, set by `evaluateLine`.
   let slot: SheetLine['unitSlot'] = null
   let details: SolveDetails | null = null
-  let preview: string | null = null
+  let preview: readonly PreviewRow[] | null = null
   // The value the line being evaluated computed, for its rules.
   let lineValue: unknown = undefined
   let table: TableView | null = null
@@ -740,7 +747,7 @@ export function evaluateSheet(
     if (ruled !== null) {
       if (typeset.kind === 'math') typeset = { ...typeset, format: ruled.format }
       warnings.push(...ruled.warnings)
-      if (ruled.counts.length > 0 && preview !== null) preview = [preview, ...ruled.counts].join('\n')
+      if (ruled.counts.length > 0 && preview !== null) preview = [...preview, ...ruled.counts]
     }
     return {
       result,
@@ -770,18 +777,23 @@ export function evaluateSheet(
     line: ParsedLine,
     result: LineResult,
     here: number,
-  ): { format: LineFormat; warnings: string[]; counts: string[]; truth: boolean[]; states: RuleState[] } | null {
+  ): { format: LineFormat; warnings: EngineMessage[]; counts: string[]; truth: boolean[]; states: RuleState[] } | null {
     if (line.kind === 'blank' || line.kind === 'syntax-error' || line.rules.length === 0) return null
     const none = () => line.rules.map(() => false)
     if (result.kind === 'error') {
       return { format: line.format, warnings: [], counts: [], truth: none(), states: none().map(() => ({ kind: 'false' })) }
     }
-    const warnings: string[] = []
+    const warnings: EngineMessage[] = []
+    const warned = new Set<string>()
     // The first warning that skipped each rule: its row shows it (section 4, Rules list).
-    const skippedFor: (string | null)[] = line.rules.map(() => null)
-    const warn = (rule: FormatRule, message: string) => {
-      const text = `if ${rule.condition}: ${message}`
-      if (!warnings.includes(text)) warnings.push(text)
+    const skippedFor: (EngineMessage | null)[] = line.rules.map(() => null)
+    const warn = (rule: FormatRule, message: EngineMessage) => {
+      const warning: EngineMessage = { code: 'rule', condition: rule.condition, inner: message }
+      const key = JSON.stringify(warning)
+      if (!warned.has(key)) {
+        warned.add(key)
+        warnings.push(warning)
+      }
       const index = line.rules.indexOf(rule)
       skippedFor[index] ??= message
     }
@@ -792,12 +804,12 @@ export function evaluateSheet(
       })
     const conditions = line.rules.map((rule) => {
       try {
-        if (rule.condition === '') throw new SheetError('not true or false')
+        if (rule.condition === '') throw new SheetError({ code: 'notTrueOrFalse' })
         const node = parseSheet(rule.condition)
-        if (isAssignmentNode(node) || isFunctionAssignmentNode(node)) throw new SheetError("a rule can't assign; write ==")
+        if (isAssignmentNode(node) || isFunctionAssignmentNode(node)) throw new SheetError({ code: 'ruleAssigns' })
         return { rule, node, code: node.compile(), usesResult: usedNames(node).includes('result'), skipped: false }
       } catch (error) {
-        warn(rule, error instanceof Error ? error.message : String(error))
+        warn(rule, thrownMessage(error))
         return null
       }
     })
@@ -808,17 +820,18 @@ export function evaluateSheet(
       try {
         const value: unknown = condition.code.evaluate(new LayeredScope(scope, own))
         if (typeof value === 'boolean') return value
-        throw new SheetError('not true or false')
+        throw new SheetError({ code: 'notTrueOrFalse' })
       } catch (error) {
         const raw = messageOf(error, condition.node, (name) => own.get(name) ?? scope.peek(name))
-        // Section 13: units of different kinds in a comparison read as the sheet words it.
-        const message = /^Cannot compare units|actual: Unit/.test(raw) ? 'Units do not match' : raw
-        warn(condition.rule, explain(message, here, definedAt, failed))
+        // Section 13: units of different kinds in a comparison read as the sheet
+        // words it. math.js's own wording, pinned by a test.
+        const units = raw.code === 'mathjs' && /^Cannot compare units|actual: Unit/.test(raw.text)
+        warn(condition.rule, explain(units ? { code: 'unitsDoNotMatch' } : raw, here, definedAt, failed))
         condition.skipped = true
         return false
       }
     }
-    const skip = (index: number, message: string) => {
+    const skip = (index: number, message: EngineMessage) => {
       const condition = conditions[index]
       if (condition === null || condition.skipped) return
       warn(condition.rule, message)
@@ -836,7 +849,7 @@ export function evaluateSheet(
       for (const name of listsIn(condition.node, own)) {
         const list = scope.peek(name) as SheetList
         if (list.length !== length) {
-          skip(index, `${name} has ${list.length} values, the line has ${length}`)
+          skip(index, { code: 'ruleListLength', name, length: list.length, lineLength: length })
           return null
         }
         const point = list.points[i]
@@ -851,7 +864,7 @@ export function evaluateSheet(
       // A table row whose point is true takes the format; the line's own row keeps its plain format.
       const view: TableView = table
       conditions.forEach((condition, index) => {
-        if (condition?.usesResult) skip(index, 'a table has no result; use its list names')
+        if (condition?.usesResult) skip(index, { code: 'ruleTableResult' })
       })
       const length = view.rows.length
       const rowCounts = line.rules.map(() => 0)
@@ -898,7 +911,7 @@ export function evaluateSheet(
     const single = value !== undefined && typeof value !== 'function'
     const truth = truths((index) => {
       if (!single && conditions[index]?.usesResult) {
-        skip(index, 'a rule needs a value')
+        skip(index, { code: 'ruleNeedsValue' })
         return false
       }
       return decide(index, single ? new Map<string, unknown>([['result', value]]) : new Map<string, unknown>())
@@ -943,7 +956,7 @@ export function evaluateSheet(
     })
   }
 
-  function warningsOf(line: ParsedLine, here: number): string[] {
+  function warningsOf(line: ParsedLine, here: number): EngineMessage[] {
     const at = (name: string) => definedAt.get(name) ?? []
     const facts = {
       isUnit: (name: string) => math.Unit.isValuelessUnit(name),
@@ -967,7 +980,7 @@ export function evaluateSheet(
     const here = position++
     // A comment line's clause problem (section 3, M4d): it defines nothing, so nothing below fails.
     if (line.kind === 'blank') return line.formatError === null ? { kind: 'empty' } : { kind: 'error', message: line.formatError }
-    const fail = (message: string): LineResult => {
+    const fail = (message: EngineMessage): LineResult => {
       for (const name of line.defines) {
         failed.add(name)
         forget(scope, name)
@@ -976,29 +989,29 @@ export function evaluateSheet(
     }
     if (line.kind === 'syntax-error') return fail(line.message)
     const reserved = line.defines.find((name) => RESERVED.includes(name))
-    if (reserved !== undefined) return fail(`${reserved} is a line form: choose another name`)
-    if (line.defines.includes(IF_FN)) return fail(`${IF_FN} is a function: choose another name`)
+    if (reserved !== undefined) return fail({ code: 'lineFormName', name: reserved })
+    if (line.defines.includes(IF_FN)) return fail({ code: 'ifIsFunction' })
     // `in <unit>` belongs on the line that calls a function (section 3).
     const definesFunction =
       line.kind === 'solve' ? line.params !== null : line.kind === 'parsed' && isFunctionAssignmentNode(line.node)
     if (line.display !== null && definesFunction) {
-      return fail("Set a function's display unit on the line that calls it")
+      return fail({ code: 'functionDisplayUnit' })
     }
     try {
       // Asked before the line runs: the line itself may assign one of these names.
       const isPlain = (line.kind === 'parsed' && line.plainInputUnits?.every((name) => !scope.holds(name))) || false
       lastSolve = null
       if (line.kind === 'plot') {
-        if (line.display !== null) throw new SheetError('a plot takes its units on its arguments: plot(Q_s in L/s, …)')
+        if (line.display !== null) throw new SheetError({ code: 'plotUnits' })
         const unknown = line.clauses.find((clause) => clause.kind === 'unknown')
-        if (unknown?.kind === 'unknown') throw new SheetError(`Unknown plot setting ${unknown.text}`)
+        if (unknown?.kind === 'unknown') throw new SheetError({ code: 'unknownPlotSetting', text: unknown.text })
         const built = runPlot(line)
         plot = built.view
         if (line.formatError !== null) return { kind: 'error', message: line.formatError }
         return built.failed === null ? { kind: 'empty' } : { kind: 'error', message: built.failed }
       }
       if (line.kind === 'table') {
-        if (line.display !== null) throw new SheetError('a table takes its units on its arguments: table(Q_s in L/s)')
+        if (line.display !== null) throw new SheetError({ code: 'tableUnits' })
         const built = runTable(line)
         table = built.view
         if (line.formatError !== null) return { kind: 'error', message: line.formatError }
@@ -1017,7 +1030,7 @@ export function evaluateSheet(
         return { kind: 'error', message: line.formatError }
       }
       if (line.display?.kind === 'unknown') {
-        return { kind: 'error', message: `Unknown unit ${line.display.name}` }
+        return { kind: 'error', message: { code: 'unknownUnit', name: line.display.name } }
       }
       // Comment-only lines evaluate to nothing. A plain input without a display
       // unit and a line whose value is a function leave the result cell empty,
@@ -1025,7 +1038,7 @@ export function evaluateSheet(
       if (value === undefined || typeof value === 'function') return { kind: 'empty' }
       // Section 5: a text has no unit. Its value still reaches the lines below.
       if (line.display !== null && isText(value)) {
-        return { kind: 'error', message: `text has no unit: take off "in ${line.displayText}"` }
+        return { kind: 'error', message: { code: 'textNoUnit', unit: line.displayText ?? '' } }
       }
       try {
         const shown = line.display
@@ -1062,7 +1075,7 @@ export function evaluateSheet(
         return { kind: 'value', text }
       } catch (error) {
         // The value is assigned: only its showing failed.
-        return { kind: 'error', message: error instanceof Error ? error.message : String(error) }
+        return { kind: 'error', message: thrownMessage(error) }
       }
     } catch (error) {
       const node =
@@ -1083,7 +1096,7 @@ export function evaluateSheet(
     // Section 10: a function body can't reach a list from outside.
     for (const { params, expr } of functionDefinitions(node)) {
       const outside = bodyNames(expr).find((name) => !params.includes(name) && isSheetList(scope.peek(name)))
-      if (outside !== undefined) throw new SheetError(`pass ${outside} as an argument`)
+      if (outside !== undefined) throw new SheetError({ code: 'passAsArgument', name: outside })
     }
     const bound = new Map<string, unknown>()
     const folded = foldAggregates(node, bound)
@@ -1123,7 +1136,7 @@ export function evaluateSheet(
       for (const node of [parts.lhs, parts.rhs, ...clause]) {
         const list = listsIn(node).find((name) => name !== parts.unknown)
         if (list !== undefined) {
-          throw new SheetError(`a range solve can't use the list ${list}; use a solve function with a guess`)
+          throw new SheetError({ code: 'rangeSolveList', name: list })
         }
       }
       const { value, details } = solve.run(scope, solveText)
@@ -1146,7 +1159,7 @@ export function evaluateSheet(
   function runRange(line: Extract<ParsedLine, { kind: 'range' }>): SheetList {
     const at = (node: MathNode): unknown => {
       const value: unknown = node.compile().evaluate(scope)
-      if (isSheetList(value)) throw new SheetError('a range takes single values, not a list')
+      if (isSheetList(value)) throw new SheetError({ code: 'rangeSingleValues' })
       return value
     }
     const list = ranges.range(at(line.start), at(line.end), line.step === null ? null : at(line.step), line.name)
@@ -1159,19 +1172,19 @@ export function evaluateSheet(
    * point, a single value filling its column. Lists must have one length, and
    * at least one argument must be a list.
    */
-  function runTable(line: Extract<ParsedLine, { kind: 'table' }>): { view: TableView; failed: string | null } {
-    if (line.args.length === 0) throw new SheetError('a table needs a list, such as table(Q_s)')
+  function runTable(line: Extract<ParsedLine, { kind: 'table' }>): { view: TableView; failed: EngineMessage | null } {
+    if (line.args.length === 0) throw new SheetError({ code: 'tableNeedsList' })
     const columns = line.args.map((arg) => {
       const lists = listsIn(arg.node)
       const value: unknown = lists.length > 0 ? iterate(arg.node, new Map()) : arg.node.compile().evaluate(scope)
       return { arg, value, name: isSymbolNode(arg.node) ? arg.node.name : arg.node.toString() }
     })
     const listed = columns.filter((column) => isSheetList(column.value))
-    if (listed.length === 0) throw new SheetError('a table needs a list, such as table(Q_s)')
+    if (listed.length === 0) throw new SheetError({ code: 'tableNeedsList' })
     const length = (listed[0].value as SheetList).length
     const other = listed.find((column) => (column.value as SheetList).length !== length)
     if (other) {
-      throw new SheetError(`${listed[0].name} has ${length} values, ${other.name} has ${(other.value as SheetList).length}`)
+      throw new SheetError({ code: 'lengthsDiffer', a: listed[0].name, aLength: length, b: other.name, bLength: (other.value as SheetList).length })
     }
     const built = columns.map(({ arg, value }) => {
       const points: Point[] = isSheetList(value)
@@ -1198,8 +1211,8 @@ export function evaluateSheet(
    * the axes' units. A failed point is a gap and a × on the x axis; a series
    * whose every point failed is the line's error.
    */
-  function runPlot(line: Extract<ParsedLine, { kind: 'plot' }>): { view: PlotView; failed: string | null } {
-    if (line.args.length < 2) throw new SheetError('a plot needs x and at least one y: plot(Q_s, Hs(Q_s))')
+  function runPlot(line: Extract<ParsedLine, { kind: 'plot' }>): { view: PlotView; failed: EngineMessage | null } {
+    if (line.args.length < 2) throw new SheetError({ code: 'plotNeedsY' })
     const values = line.args.map((arg) => {
       const lists = listsIn(arg.node)
       return lists.length > 0 ? iterate(arg.node, new Map()) : (arg.node.compile().evaluate(scope) as unknown)
@@ -1208,11 +1221,11 @@ export function evaluateSheet(
     const xList = values[0]
     // Two single values are one labelled dot (M4e); any other single x is still an error.
     const single = line.args.length === 2 && !isSheetList(xList) && !isSheetList(values[1])
-    if (!isSheetList(xList) && !single) throw new SheetError(`x must be a list: ${xArg.text} is a single value`)
+    if (!isSheetList(xList) && !single) throw new SheetError({ code: 'xMustBeList', text: xArg.text })
     const length = isSheetList(xList) ? xList.length : 1
     values.forEach((value, i) => {
       if (isSheetList(value) && value.length !== length) {
-        throw new SheetError(`${xArg.text} has ${length} values, ${line.args[i].text} has ${value.length}`)
+        throw new SheetError({ code: 'lengthsDiffer', a: xArg.text, aLength: length, b: line.args[i].text, bLength: value.length })
       }
     })
     const pointsOf = (value: unknown): Point[] =>
@@ -1224,17 +1237,15 @@ export function evaluateSheet(
       const xs = xList as SheetList
       ys.forEach(({ arg, points }) => {
         if (points.every((point) => !point.ok)) {
-          const failure = failureOf(new SheetList(points, { name: xArg.text, list: xs }))
-          throw new SheetError(`${arg.text}: every point failed. ${failure?.replace(/^\d+ of \d+ points failed\. /, '') ?? ''}`)
+          const first = firstFailure(new SheetList(points, { name: xArg.text, list: xs }))
+          if (first !== null) throw new SheetError({ code: 'everyPointFailed', name: arg.text, at: first.at, inner: first.message })
         }
       })
     }
     const kinds = ys.map(({ points }) => kindName(points.find((point) => point.ok)!))
-    const other = kinds.findIndex((kind) => kind !== kinds[0])
+    const other = kinds.findIndex((kind) => JSON.stringify(kind) !== JSON.stringify(kinds[0]))
     if (other !== -1) {
-      throw new SheetError(
-        `${ys[0].arg.text} is ${article(kinds[0])}, ${ys[other].arg.text} is ${article(kinds[other])}: one plot shows one kind`,
-      )
+      throw new SheetError({ code: 'mixedKinds', a: ys[0].arg.text, aKind: kinds[0], b: ys[other].arg.text, bKind: kinds[other] })
     }
 
     const xPoints = pointsOf(xList)
@@ -1251,8 +1262,8 @@ export function evaluateSheet(
           values: numbers(points, yAxis.unit),
         }))
 
-    const failed: { x: number; message: string }[] = []
-    let firstFailed: string | null | undefined = null
+    const failed: { x: number; message: EngineMessage }[] = []
+    let firstFailed: EngineMessage | null | undefined = null
     if (!single) {
       const xs = xList as SheetList
       ys.forEach(({ points }) =>
@@ -1274,7 +1285,7 @@ export function evaluateSheet(
       ['x', x],
       ['y', series.flatMap((s) => s.values)],
     ] as const) {
-      if (logOn(axis) && data.some((v) => v !== null && v <= 0)) throw new SheetError(`${axis} log needs values above 0`)
+      if (logOn(axis) && data.some((v) => v !== null && v <= 0)) throw new SheetError({ code: 'logNeedsPositive', axis })
     }
     const domain = (axis: 'x' | 'y'): readonly [number, number] | null => {
       const range = line.ranges.find((r) => r.axis === axis)
@@ -1283,7 +1294,7 @@ export function evaluateSheet(
       const end = (node: MathNode) => {
         const value: unknown = node.compile().evaluate(scope)
         const n = numberIn(value, unit.unit, unit.reference)
-        if (n === null) throw new SheetError(`${axis} ${range.text}: the range must be the axis's kind`)
+        if (n === null) throw new SheetError({ code: 'axisRangeKind', axis, range: range.text })
         return n
       }
       return [end(range.start), end(range.end)]
@@ -1291,15 +1302,15 @@ export function evaluateSheet(
     const marks = line.marks.map(({ node, text }) => {
       const value: unknown = node.compile().evaluate(scope)
       const n = numberIn(value, xAxis.unit, xAxis.reference)
-      if (n === null || isSheetList(value)) throw new SheetError(`mark ${text}: one value of x's kind`)
+      if (n === null || isSheetList(value)) throw new SheetError({ code: 'markKind', text })
       return { x: n, label: `${text} = ${display.show(value, xAxis.unit, settings)}` }
     })
 
     // Equal scales (M4e): from `equal` or a circle, on x and y of one kind.
     const equal = has('equal') || line.circles.length > 0
-    if (equal && !sameKind(xAxis.reference, yAxis.reference)) throw new SheetError('equal scales need x and y of the same kind')
+    if (equal && !sameKind(xAxis.reference, yAxis.reference)) throw new SheetError({ code: 'equalKinds' })
     if (equal && line.ranges.some((r) => r.axis === 'x') && line.ranges.some((r) => r.axis === 'y')) {
-      throw new SheetError('equal with both x and y ranges typed: leave one out')
+      throw new SheetError({ code: 'equalRanges' })
     }
     /** One value of a clause, or null when it is a list or not of `axis`'s kind. */
     const single1 = (node: MathNode, axis: typeof xAxis): { value: unknown; n: number } | null => {
@@ -1324,8 +1335,8 @@ export function evaluateSheet(
     const dots: PlotView['dots'][number][] = []
     if (single) {
       const at = { x: numberIn(values[0], xAxis.unit), y: numberIn(values[1], yAxis.unit) }
-      if (at.x === null || !Number.isFinite(at.x)) throw new SheetError(`x must be a list: ${xArg.text} is a single value`)
-      if (at.y === null || !Number.isFinite(at.y)) throw new SheetError(`a plot needs x and at least one y: plot(Q_s, Hs(Q_s))`)
+      if (at.x === null || !Number.isFinite(at.x)) throw new SheetError({ code: 'xMustBeList', text: xArg.text })
+      if (at.y === null || !Number.isFinite(at.y)) throw new SheetError({ code: 'plotNeedsY' })
       dots.push({
         x: at.x,
         y: at.y,
@@ -1335,7 +1346,7 @@ export function evaluateSheet(
       })
     }
     for (const { pair, text } of line.points) {
-      const wrong = () => new SheetError(`point ${text}: a point is two single values, (x, y)`)
+      const wrong = () => new SheetError({ code: 'pointShape', text })
       if (pair === null) throw wrong()
       const px = single1(pair[0], xAxis)
       const py = single1(pair[1], yAxis)
@@ -1354,14 +1365,14 @@ export function evaluateSheet(
       if (centre !== null) {
         const a = single1(centre[0], xAxis)
         const b = single1(centre[1], yAxis)
-        if (a === null || b === null) throw new SheetError(`circle ${text}: the centre is two single values, (x0, y0)`)
+        if (a === null || b === null) throw new SheetError({ code: 'circleCentre', text })
         cx = a.n
         cy = b.n
       }
       const r = single1(radius, xAxis)
       const ry = r && numberIn(r.value, yAxis.unit, yAxis.reference)
       if (r === null || ry === null || !(r.n > 0) || !(ry > 0)) {
-        throw new SheetError(`circle ${text}: the radius is one positive value of the axes' kind`)
+        throw new SheetError({ code: 'circleRadius', text })
       }
       const centreTex = centre === null ? '' : `\\left(${tableHeaderTex(centre[0], names)},\\;${tableHeaderTex(centre[1], names)}\\right)\\;`
       return { cx, cy, rx: r.n, ry, name: `circle ${text}`, tex: `\\text{circle }${centreTex}${tableHeaderTex(radius, names)}` }
@@ -1455,21 +1466,16 @@ export function evaluateSheet(
     return dims(a) !== null && dims(a) === dims(b)
   }
 
-  /** A value's kind in words, for the one-kind message: `a length`, `a power`. */
-  function kindName(point: Point): string {
-    if (!point.ok) return 'a failed point'
+  /** A value's kind, for the one-kind message: a length, a power (section 13). */
+  function kindName(point: Point): ValueKind {
+    if (!point.ok) return 'failed'
     const slot = display.slot(point.value, settings)
-    if (slot === null) return 'a value'
-    if (slot.kind === 'dimensionless') return 'a number'
+    if (slot === null) return 'value'
+    if (slot.kind === 'dimensionless') return 'number'
     if (slot.kind === null) {
-      return math.isUnit(point.value) ? `in ${point.value.toSI().formatUnits()}` : 'a value'
+      return math.isUnit(point.value) ? { units: point.value.toSI().formatUnits() } : 'value'
     }
-    return slot.kind.replace(/[A-Z]/g, (c) => ` ${c.toLowerCase()}`)
-  }
-
-  function article(kind: string): string {
-    if (kind.startsWith('a ') || kind.startsWith('in ')) return kind
-    return /^[aeiou]/.test(kind) ? `an ${kind}` : `a ${kind}`
+    return { kind: slot.kind }
   }
 
   /** A column's unit, header and cells, in its argument's unit, else its list's, else the sheet's system. */
@@ -1527,7 +1533,7 @@ export function evaluateSheet(
     const length = lists[0].length
     const other = lists.findIndex((list) => list.length !== length)
     if (other !== -1) {
-      throw new SheetError(`${names[0]} has ${length} values, ${names[other]} has ${lists[other].length}`)
+      throw new SheetError({ code: 'lengthsDiffer', a: names[0], aLength: length, b: names[other], bLength: lists[other].length })
     }
     const code = expression.compile()
     const points: Point[] = []
@@ -1588,7 +1594,7 @@ export function evaluateSheet(
       const values = child.args.flatMap((arg) => {
         if (listsIn(arg).length === 0) return [arg.compile().evaluate(scope) as unknown]
         const items = iterate(arg, new Map()).values()
-        if (items === null) throw new SheetError(`${isSymbolNode(arg) ? arg.name : arg.toString()} has a failed point`)
+        if (items === null) throw new SheetError({ code: 'hasFailedPoint', name: isSymbolNode(arg) ? arg.name : arg.toString() })
         return items
       })
       const key = `__aggregate${bound.size}`
@@ -1599,7 +1605,7 @@ export function evaluateSheet(
   }
 
   /** A list's summary in the sheet's number form, in `unit` if the line chose one. */
-  function summaryOf(list: SheetList, unit: ShownUnit | null): string {
+  function summaryOf(list: SheetList, unit: ShownUnit | null, noun: 'values' | 'roots' = 'values'): string {
     return listSummary(
       list,
       (value) => display.show(value, unit, settings),
@@ -1607,6 +1613,7 @@ export function evaluateSheet(
         const target = like === '' ? null : display.readTarget(like)
         return display.show(value, target?.kind === 'unit' ? target.unit : unit, settings)
       },
+      noun,
     )
   }
 
@@ -1617,7 +1624,7 @@ export function evaluateSheet(
    * first and last few values or rows, with their index. Null for anything
    * shown whole.
    */
-  function largeMatrix(value: unknown, unit: ShownUnit | null): { text: string; preview: string } | null {
+  function largeMatrix(value: unknown, unit: ShownUnit | null): { text: string; preview: readonly PreviewRow[] } | null {
     const size = matrixSize(math, value)
     if (size === null || size.reduce((total, n) => total * n, 1) <= MAX_SHOWN_WHOLE) return null
     const rows = (math.isMatrix(value) ? value.toArray() : value) as unknown[]
@@ -1626,7 +1633,7 @@ export function evaluateSheet(
       return { text: summaryOf(list, unit), preview: previewOf(list, unit) }
     }
     const cell = (entry: unknown): string => (Array.isArray(entry) ? `[${ends(entry, cell).join(', ')}]` : display.show(entry, unit, settings))
-    const preview = ends(rows, (row, i) => `${i + 1}: ${cell(row)}`).join('\n')
+    const preview = ends(rows, (row, i) => `${i + 1}: ${cell(row)}`)
     return { text: `${size.join(' × ')} matrix`, preview }
   }
 
@@ -1640,7 +1647,7 @@ export function evaluateSheet(
   /** A solved value's roots: written out, `1, 2, 3 m`, the unit once; or a summary with the count. */
   function rootsSummary(list: SheetList, unit: ShownUnit | null): string {
     const values = list.values() ?? []
-    if (values.length > MAX_WRITTEN_ROOTS) return summaryOf(list, unit).replace(/^(\d+) values/, '$1 roots')
+    if (values.length > MAX_WRITTEN_ROOTS) return summaryOf(list, unit, 'roots')
     const last = display.show(values[values.length - 1], unit, settings)
     const lastUnit = leadingNumber(last)?.rest.trim() ?? ''
     const target = lastUnit === '' ? null : display.readTarget(lastUnit)
@@ -1653,14 +1660,14 @@ export function evaluateSheet(
   }
 
   /** The hover of a list's summary: three points from each end, with their index. */
-  function previewOf(list: SheetList, unit: ShownUnit | null): string {
-    const row = (i: number) => {
+  function previewOf(list: SheetList, unit: ShownUnit | null): PreviewRow[] {
+    const row = (i: number): PreviewRow => {
       const point = list.points[i]
-      return `${i + 1}: ${point.ok ? display.show(point.value, unit, settings) : `failed: ${point.message}`}`
+      return point.ok ? `${i + 1}: ${display.show(point.value, unit, settings)}` : { code: 'previewFailed', index: i + 1, inner: point.message }
     }
     const n = list.length
-    if (n <= 7) return list.points.map((_, i) => row(i)).join('\n')
-    return [row(0), row(1), row(2), '…', row(n - 3), row(n - 2), row(n - 1)].join('\n')
+    if (n <= 7) return list.points.map((_, i) => row(i))
+    return [row(0), row(1), row(2), '…', row(n - 3), row(n - 2), row(n - 1)]
   }
 
   /** One value of a list in the unit its summary ends with, so `0 L/s` reads as the list does. */
@@ -1673,15 +1680,22 @@ export function evaluateSheet(
   }
 
   /** `1 of 30 points failed. At Q_s = 0 L/s: …`, or null when none did. */
-  function failureOf(list: SheetList): string | null {
+  function failureOf(list: SheetList): EngineMessage | null {
+    const first = firstFailure(list)
+    if (first === null) return null
     const failed = list.points.filter((point) => !point.ok).length
-    if (failed === 0) return null
+    return { code: 'pointsFailed', failed, of: list.length, at: first.at, inner: first.message }
+  }
+
+  /** A list's first failed point: where it is (`Q_s = 0 L/s`, or its index) and its message; null when none failed. */
+  function firstFailure(list: SheetList): { at: PointAt; message: EngineMessage } | null {
     const i = list.points.findIndex((point) => !point.ok)
+    if (i === -1) return null
     const point = list.points[i] as Extract<Point, { ok: false }>
     const origin = list.origin
     const input = origin?.list.points[i]
-    const where = origin && input?.ok ? `At ${origin.name} = ${likeList(origin.list, input.value)}` : `At point ${i + 1}`
-    return `${failed} of ${list.length} points failed. ${where}: ${point.message}`
+    const at: PointAt = origin && input?.ok ? { name: origin.name, value: likeList(origin.list, input.value) } : { index: i + 1 }
+    return { at, message: point.message }
   }
 
   /** `f_d = f(Re_d, eps/D)` or `f(…)`: the line is just one call to a solve function. */
@@ -1901,7 +1915,7 @@ function parseLine(text: string): ParsedLine {
   // Step 6, one statement: math.js would run `x1 = 5; y1 = x1 * 2` as a block,
   // both names reaching the lines below. Read first, so no line form hides it.
   if (hasTopLevelSemicolon(form.code)) {
-    return { kind: 'syntax-error', message: ONE_STATEMENT, defines: statementNames(form.code), source: text }
+    return { kind: 'syntax-error', message: { code: 'oneStatement' }, defines: statementNames(form.code), source: text }
   }
   const target = form.displayUnit === null ? null : display.readTarget(form.displayUnit)
   const line = target === null ? form.code : form.expression
@@ -1953,7 +1967,7 @@ function parseLine(text: string): ParsedLine {
         displayText: target === null ? null : form.displayUnit,
       }
     } catch (error) {
-      return { kind: 'syntax-error', message: error instanceof Error ? error.message : String(error), defines: [], source: text }
+      return { kind: 'syntax-error', message: thrownMessage(error), defines: [], source: text }
     }
   }
   const tableForm = readTable(line)
@@ -1978,7 +1992,7 @@ function parseLine(text: string): ParsedLine {
         displayText: target === null ? null : form.displayUnit,
       }
     } catch (error) {
-      return { kind: 'syntax-error', message: error instanceof Error ? error.message : String(error), defines: [], source: text }
+      return { kind: 'syntax-error', message: thrownMessage(error), defines: [], source: text }
     }
   }
   const range = readSolve(line) === null ? readRange(line) : null
@@ -2002,7 +2016,7 @@ function parseLine(text: string): ParsedLine {
     } catch (error) {
       return {
         kind: 'syntax-error',
-        message: error instanceof Error ? error.message : String(error),
+        message: thrownMessage(error),
         defines: range.name === null ? [] : [range.name],
         source: text,
       }
@@ -2042,7 +2056,7 @@ function parseLine(text: string): ParsedLine {
     } catch (error) {
       return {
         kind: 'syntax-error',
-        message: error instanceof Error ? error.message : String(error),
+        message: thrownMessage(error),
         defines: [solve.name],
         source: text,
       }
@@ -2066,7 +2080,7 @@ function parseLine(text: string): ParsedLine {
     const target = ASSIGNMENT_TARGET.exec(line)?.[1]
     return {
       kind: 'syntax-error',
-      message: error instanceof Error ? error.message : String(error),
+      message: thrownMessage(error),
       defines: target === undefined ? [] : [target],
       source: text,
     }
@@ -2146,9 +2160,6 @@ const ASSIGNMENT_TARGET = /^\s*([A-Za-z_]\w*)\s*(?:\([^)]*\))?\s*=(?!=)/
 /** Names that start a line form (ADR 0005): assigning to one is an error. */
 const RESERVED = ['table', 'plot', 'solve']
 
-/** A line split by a top-level `;` (section 3; ADR 0005, step 6), in the wording of section 13. */
-const ONE_STATEMENT = 'one statement per line: split the line at the ;'
-
 /** The function a line defines, if it is a definition. */
 function functionDefinitions(node: MathNode) {
   return isFunctionAssignmentNode(node) ? [node] : []
@@ -2211,18 +2222,16 @@ function isUnitExponent(node: MathNode): boolean {
 // math.js's own wording (pinned by a test, so an upgrade that rewords it fails CI).
 const UNDEFINED_NAME = /^Undefined (?:symbol|function) (\S+)$/
 
-/** Turns a bare "Undefined symbol x" into why it is undefined, when we know. */
+/** Turns math.js's bare "Undefined symbol x" into why it is undefined, when we know. */
 function explain(
-  message: string,
+  message: EngineMessage,
   position: number,
   definedAt: ReadonlyMap<string, readonly number[]>,
   failed: ReadonlySet<string>,
-): string {
-  const name = UNDEFINED_NAME.exec(message)?.[1]
+): EngineMessage {
+  const name = message.code === 'mathjs' ? UNDEFINED_NAME.exec(message.text)?.[1] : undefined
   if (name === undefined) return message
-  if (failed.has(name)) return `${name} has an error above`
-  if (definedAt.get(name)?.some((at) => at > position)) {
-    return `${name} is defined below`
-  }
+  if (failed.has(name)) return { code: 'errorAbove', name }
+  if (definedAt.get(name)?.some((at) => at > position)) return { code: 'definedBelow', name }
   return message
 }

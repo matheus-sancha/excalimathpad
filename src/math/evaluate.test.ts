@@ -1,5 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
-import { evaluateSheet, type LineResult, type SheetLine, type TableView } from './evaluate.ts'
+import type { LineResult as EngineResult, TableView as EngineTable } from './evaluate.ts'
+import { evaluateSheet, type English, type EnglishLine as SheetLine } from '../test/english.ts'
+
+/** Lines as the English table words them (section 14, 0.6.0: engine tests keep their English). */
+type LineResult = English<EngineResult>
+type TableView = English<EngineTable>
 import { NO_COMMENT_FORMAT, writeDisplayUnit } from './lineForm.ts'
 import { KIND_REFERENCE, KINDS } from './unitSystems.ts'
 

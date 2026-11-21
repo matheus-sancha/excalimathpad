@@ -1,6 +1,7 @@
 import type { EvalFunction, MathJsInstance, MathNode, Unit } from 'mathjs'
 import { SheetError, messageOf } from './functions.ts'
 import { SheetList } from './lists.ts'
+import type { EngineMessage } from './messages.ts'
 import { leadingNumber } from './numbers.ts'
 import { RANGE_POINTS, solveNear, solveRange } from './solver.ts'
 
@@ -161,7 +162,7 @@ export function createSolver(math: MathJsInstance) {
     }
     // A complex number (sqrt of a negative) has no value on the real line.
     if (math.isComplex(value)) return NO_VALUE
-    throw new SheetError('a side of the equation is not a number or a quantity')
+    throw new SheetError({ code: 'sideNotNumber' })
   }
 
   return {
@@ -177,7 +178,7 @@ export function createSolver(math: MathJsInstance) {
       function residualAt(scope: Scope, template: Unit | null, mismatch: string) {
         const own = new Map<string, unknown>()
         const local = new LayeredScope(scope, own)
-        const state: { lastInner: string | null; unit: string | null } = { lastInner: null, unit: null }
+        const state: { lastInner: EngineMessage | null; unit: string | null } = { lastInner: null, unit: null }
         const trial = (x: number): unknown => {
           if (template === null) return x
           const value = template.clone()
@@ -189,7 +190,7 @@ export function createSolver(math: MathJsInstance) {
             return reduce(code.evaluate(local))
           } catch (error) {
             if (error instanceof SheetError && error.outsideDomain) {
-              state.lastInner = error.message
+              state.lastInner = error.sheetMessage
               return NO_VALUE
             }
             if (error instanceof SheetError) throw error
@@ -202,7 +203,7 @@ export function createSolver(math: MathJsInstance) {
           const right = side(rhs)
           if (Number.isNaN(left.number) || Number.isNaN(right.number)) return Number.NaN
           if (!sameDimensions(left.dimensions, right.dimensions)) {
-            throw new SheetError(`${mismatch}: ${equation} units do not match`)
+            throw new SheetError({ code: 'sidesUnits', label: mismatch, equation })
           }
           // The residual's SI unit, from the left side at the latest point with a value.
           state.unit = left.unit
@@ -217,11 +218,11 @@ export function createSolver(math: MathJsInstance) {
         try {
           value = code.evaluate(new LayeredScope(at, new Map(), [unknown]))
         } catch (error) {
-          throw new SheetError(`${what}: ${messageOf(error, node, (name) => at.get(name))}`)
+          throw new SheetError({ code: 'clause', clause: what, inner: messageOf(error, node, (name) => at.get(name)) })
         }
         if (typeof value === 'number' && Number.isFinite(value)) return value
         if (isUnit(value) && value.value !== null && Number.isFinite(value.value)) return value
-        throw new SheetError(`${what}: not a number or a quantity`)
+        throw new SheetError({ code: 'notNumberOrQuantity', clause: what })
       }
 
       function runGuess(scope: Scope, text: SolveText, code: EvalFunction, node: MathNode) {
@@ -231,17 +232,13 @@ export function createSolver(math: MathJsInstance) {
         const { residual, trial, state } = residualAt(scope, si, `guess ${unknown} = ${parts.guessText}`)
         const x0 = si === null ? (start as number) : si.value
         const outcome = solveNear(residual, x0)
-        const near = () => `${unknown} = ${text.show(start, guessUnit)}`
-        const inner = () => (state.lastInner === null ? '' : `; last inner error: ${state.lastInner}`)
         if (outcome.kind === 'no-convergence') {
-          throw new SheetError(`no convergence for ${unknown} after ${outcome.iterations} iterations`, false, true)
+          throw new SheetError({ code: 'noConvergence', unknown, iterations: outcome.iterations }, false, true)
         }
         if (outcome.kind === 'no-root') {
-          const where =
-            outcome.searched === null
-              ? 'the equation has no value near the guess'
-              : `searched ${range(outcome.searched, (x) => text.show(trial(x), guessUnit))}`
-          throw new SheetError(`no root near ${near()} (${where})${inner()}`, false, true)
+          const searched = outcome.searched === null ? null : range(outcome.searched, (x) => text.show(trial(x), guessUnit))
+          const guessed = `${unknown} = ${text.show(start, guessUnit)}`
+          throw new SheetError({ code: 'noRootNear', guess: guessed, searched, inner: state.lastInner }, false, true)
         }
         const value = trial(outcome.x)
         const unitText = state.unit
@@ -264,25 +261,23 @@ export function createSolver(math: MathJsInstance) {
         const to = clauseValue(codes.to, nodes.to, scope, `for ${unknown}`)
         const a = reduce(from)
         const b = reduce(to)
-        if (!sameDimensions(a.dimensions, b.dimensions)) throw new SheetError(`${label}: the ends must be the same kind`)
-        if (!(a.number < b.number)) throw new SheetError(`${label}: from must be below to`)
+        if (!sameDimensions(a.dimensions, b.dimensions)) {
+          throw new SheetError({ code: 'endsSameKind', unknown, from: fromText, to: toText })
+        }
+        if (!(a.number < b.number)) throw new SheetError({ code: 'fromBelowTo', unknown, from: fromText, to: toText })
         const si = isUnit(from) ? from.toSI() : null
         const unit = isUnit(from) ? valueless(from) : null
         const { residual, trial, state } = residualAt(scope, si, label)
         const outcome = solveRange(residual, a.number, b.number)
         const shown = (x: number) => text.show(trial(x), unit)
-        const where = `${unknown} in ${range([a.number, b.number], shown)}`
+        const searched = range([a.number, b.number], shown)
         if (outcome.kind === 'no-convergence') {
-          throw new SheetError(`no convergence for ${unknown} after ${outcome.iterations} iterations`)
+          throw new SheetError({ code: 'noConvergence', unknown, iterations: outcome.iterations })
         }
-        if (outcome.kind === 'too-many') throw new SheetError(`more than 100 roots for ${where}: narrow the range`)
+        if (outcome.kind === 'too-many') throw new SheetError({ code: 'tooManyRoots', unknown, range: searched })
         if (outcome.kind === 'no-root') {
-          const why = !outcome.hadValue
-            ? ' (the equation has no value in the range)'
-            : state.lastInner !== null
-              ? `; last inner error: ${state.lastInner}`
-              : ''
-          throw new SheetError(`no root found for ${where}${why}`)
+          const inner = outcome.hadValue ? state.lastInner : null
+          throw new SheetError({ code: 'noRootIn', unknown, range: searched, noValue: !outcome.hadValue, inner })
         }
         const values = outcome.roots.map((root) => {
           const value = trial(root.x)
@@ -309,7 +304,7 @@ export function createSolver(math: MathJsInstance) {
         unknown,
         run(scope, text) {
           if (ends !== null) return runRange(scope, text, ends)
-          if (guess === null || parts.guess === null) throw new SheetError(`solve needs a guess: ", guess ${unknown} = <value>"`)
+          if (guess === null || parts.guess === null) throw new SheetError({ code: 'solveNeedsGuess', unknown })
           return runGuess(scope, text, guess, parts.guess)
         },
       }

@@ -11,7 +11,10 @@ the badge's `errors`, the tabs' content, `onChange`). `sheetPanel.ts` (pure)
 turns the evaluated sheet (`EvaluatedElement`s, which `MathOverlay` hands
 out through `onEvaluated`) into Variables groups and Problems rows (every
 error and warning), and `errorCount`, the Problems badge (errors only, M4d);
-`SheetPanel.tsx` renders them, and a click asks App to jump. **The rename
+`SheetPanel.tsx` renders them, and a click asks App to jump. A row's `message` is the
+engine's code (`EngineMessage`, ADR 0007), worded as the tab renders
+(`wordMessage(useWords().engine, …)`, `src/text/engine.ts`), as are the rename form's
+`reason` and a rule's warning state in the Rules list (0.6.0, #291). **The rename
 form** (spec section 4, Renaming a name: The form, on a Variables row; 0.5.0,
 #261): every Variables row ends in a ✎ (`.sheet-panel__rename`, outside the
 row's jump button), and `VariablesTab` holds which row's form is open, one at

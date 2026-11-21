@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { evaluateSheet } from '../math/evaluate.ts'
-import { elementLabel, errorCount, problemRows, variableGroups, type PanelElement } from './sheetPanel.ts'
+import { evaluateSheet, UNEXPECTED_LINE } from '../math/evaluate.ts'
+import { inEnglish } from '../test/english.ts'
+import { elementLabel, errorCount, problemRows as rowsOf, variableGroups, type PanelElement } from './sheetPanel.ts'
+
+/** The Problems rows, their messages in English (section 14, 0.6.0: tests keep their English). */
+const problemRows = (sheet: readonly PanelElement[]) => inEnglish(rowsOf(sheet))
 
 /** Elements in reading order, evaluated as one sheet, as the overlay hands them over. */
 function sheetOf(...elements: { source: string; title?: string }[]): PanelElement[] {
@@ -105,7 +109,7 @@ describe('Problems (docs/spec-v1.md section 8)', () => {
     const unexpected = { text: 'TypeError: boom', stack: 'TypeError: boom\n    at somewhere' }
     const failed: PanelElement = {
       ...element,
-      lines: [element.lines[0], { ...element.lines[1], result: { kind: 'error', message: 'this line hit an unexpected error in Excalimathpad', unexpected } }],
+      lines: [element.lines[0], { ...element.lines[1], result: { kind: 'error', message: UNEXPECTED_LINE, unexpected } }],
     }
 
     expect(problemRows([failed])).toEqual([

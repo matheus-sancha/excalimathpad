@@ -57,6 +57,12 @@ restarts them, one line for a jump and every changed line after a rename,
 spec section 4, 0.5.0). Otherwise `TypesetRow` hands the gutter no warnings: the cell
 keeps its fixed 10 px column, empty and with no `data-tip`, so rows don't
 shift when an edit opens. An error's `●` always shows.
+A line's error, its warnings and a failed point or cell come from the engine as codes
+(`EngineMessage`, ADR 0007): `Gutter`, `ResultCell` and `TableBlock` word them while they
+render, with `wordMessage(useWords().engine, …)` (`src/text/engine.ts`), so ☰ → Language
+re-words them at once from the same results (0.6.0, #291). A chart's failed points are
+worded by `tipFailures` (`plotDrawing.ts`), from an effect of `PlotChart` apart from the
+drawing, so a language change re-words their tips without drawing the chart again.
 A **problem's message on hover** (spec section 4, Problems): the gutter mark
 and an error's result cell carry it as `data-tip`, never a `title` (the
 overlay takes no pointer events, so a title never shows). The gestures find
@@ -79,7 +85,8 @@ root's slot), else a count summary (`13 roots, …`), with the details on
 hover. A solve line's range or guess and a range's step are their own TeX
 (`TypesetLine.aside`), set small and grey after the expression. A list's summary (`math-element__summary`)
 typesets its first and last values after the count, and its `data-tip` is
-the line's `listPreview`: three points from each end with their index.
+the line's `listPreview`: three points from each end with their index, one row each, a failed
+point's row a code worded with the rest (`wordPreview`).
 `MathOverlay` subscribes to the scene (`onChange`, `onScrollChange`) and
 places each element from its anchor's scene position via `viewport.ts`
 (`sceneToStage`, pure). It reads source from the anchors and holds the sheet's

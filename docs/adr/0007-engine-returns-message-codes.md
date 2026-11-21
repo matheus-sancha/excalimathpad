@@ -1,6 +1,6 @@
 # 0007. The engine returns message codes, and the app words them
 
-- **Status**: accepted, 0.6.0, not built
+- **Status**: accepted, 0.6.0; the messages built (#291): every error, warning, rule warning and rename refusal is a code. The words inside a result follow (#292).
 - **Date**: 2026-11-21
 
 ## Context

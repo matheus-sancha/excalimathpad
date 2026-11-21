@@ -5,6 +5,7 @@ import {
   isSymbolNode,
   type MathNode,
 } from 'mathjs'
+import type { EngineMessage, ShadowedKind } from './messages.ts'
 
 /**
  * Warnings (docs/spec-v1.md section 5, Warnings; wording in section 13). A
@@ -45,12 +46,10 @@ export interface WarningFacts {
   failed(name: string): boolean
 }
 
-export function lineWarnings(node: MathNode, facts: WarningFacts): string[] {
-  const warnings: string[] = []
-  const add = (message: string) => {
-    if (!warnings.includes(message)) warnings.push(message)
-  }
-  const what = (name: string) => (facts.isUnit(name) ? 'the unit' : 'the built-in')
+export function lineWarnings(node: MathNode, facts: WarningFacts): EngineMessage[] {
+  const warnings: EngineMessage[] = []
+  const add = addOnce(warnings)
+  const what = (name: string): ShadowedKind => (facts.isUnit(name) ? 'unit' : 'builtIn')
   const clashes = (name: string) => facts.isUnit(name) || facts.isBuiltIn(name)
   // A short constant the sheet also defines is the sheet's name: used before
   // its line it is an error, not the constant (see `SheetScope`).
@@ -61,15 +60,13 @@ export function lineWarnings(node: MathNode, facts: WarningFacts): string[] {
     if (parameter && facts.isSheetFunction(name)) continue
     // `R`, `k`, `c` are everyday variable names: taking one is no problem to flag.
     if (facts.isShortConstant(name) && !facts.isUnit(name)) continue
-    add(`${name} shadows ${what(name)} ${name}`)
+    add({ code: 'shadows', name, what: what(name) })
   }
 
   for (const name of usedNames(node)) {
     if (!clashes(name) || facts.inScope(name) || taken(name)) continue
-    if (facts.failed(name)) add(`${name} reads as ${what(name)} ${name} here: its definition failed`)
-    else if (facts.definedBelow(name)) {
-      add(`${name} reads as ${what(name)} ${name} here: the variable is defined below`)
-    }
+    if (facts.failed(name)) add({ code: 'readsAsUnit', name, what: what(name), failed: true })
+    else if (facts.definedBelow(name)) add({ code: 'readsAsUnit', name, what: what(name), failed: false })
   }
 
   for (const definition of functionDefinitions(node)) {
@@ -77,7 +74,7 @@ export function lineWarnings(node: MathNode, facts: WarningFacts): string[] {
     for (const name of bodyNames(definition.expr)) {
       if (own.has(name) || (clashes(name) && !taken(name))) continue
       if (facts.inScope(name) || facts.definedAbove(name)) continue
-      add(`${name} isn't defined above this line`)
+      add({ code: 'notDefinedAbove', name })
     }
   }
   return warnings
@@ -101,12 +98,10 @@ export interface SolveWarningParts {
  * form runs at each call, so the body-name check covers the equation and the
  * guess, except the function's name, its parameters and the unknown.
  */
-export function solveWarnings(parts: SolveWarningParts, facts: WarningFacts): string[] {
-  const warnings: string[] = []
-  const add = (message: string) => {
-    if (!warnings.includes(message)) warnings.push(message)
-  }
-  const what = (name: string) => (facts.isUnit(name) ? 'the unit' : 'the built-in')
+export function solveWarnings(parts: SolveWarningParts, facts: WarningFacts): EngineMessage[] {
+  const warnings: EngineMessage[] = []
+  const add = addOnce(warnings)
+  const what = (name: string): ShadowedKind => (facts.isUnit(name) ? 'unit' : 'builtIn')
   const clashes = (name: string) => facts.isUnit(name) || facts.isBuiltIn(name)
   const taken = (name: string) => facts.isShortConstant(name) && (facts.definedAbove(name) || facts.definedBelow(name))
   const { name, params, unknown } = parts
@@ -119,16 +114,14 @@ export function solveWarnings(parts: SolveWarningParts, facts: WarningFacts): st
     if (!clashes(entry.name)) continue
     if (entry.parameter && facts.isSheetFunction(entry.name)) continue
     if (facts.isShortConstant(entry.name) && !facts.isUnit(entry.name)) continue
-    add(`${entry.name} shadows ${what(entry.name)} ${entry.name}`)
+    add({ code: 'shadows', name: entry.name, what: what(entry.name) })
   }
   const sides = [parts.lhs, parts.rhs, ...(parts.guess ? [parts.guess] : []), ...(parts.range ? [parts.range.from, parts.range.to] : [])]
   if (params === null) {
     for (const used of sides.flatMap(usedNames)) {
       if (used === unknown || !clashes(used) || facts.inScope(used) || taken(used)) continue
-      if (facts.failed(used)) add(`${used} reads as ${what(used)} ${used} here: its definition failed`)
-      else if (facts.definedBelow(used)) {
-        add(`${used} reads as ${what(used)} ${used} here: the variable is defined below`)
-      }
+      if (facts.failed(used)) add({ code: 'readsAsUnit', name: used, what: what(used), failed: true })
+      else if (facts.definedBelow(used)) add({ code: 'readsAsUnit', name: used, what: what(used), failed: false })
     }
     return warnings
   }
@@ -136,9 +129,20 @@ export function solveWarnings(parts: SolveWarningParts, facts: WarningFacts): st
   for (const used of sides.flatMap(bodyNames)) {
     if (own.has(used) || (clashes(used) && !taken(used))) continue
     if (facts.inScope(used) || facts.definedAbove(used)) continue
-    add(`${used} isn't defined above this line`)
+    add({ code: 'notDefinedAbove', name: used })
   }
   return warnings
+}
+
+/** Adds a warning to `warnings` unless the same one is there already. */
+function addOnce(warnings: EngineMessage[]) {
+  const seen = new Set<string>()
+  return (message: EngineMessage) => {
+    const key = JSON.stringify(message)
+    if (seen.has(key)) return
+    seen.add(key)
+    warnings.push(message)
+  }
 }
 
 /** The names a line defines: variables, function names and their parameters. */

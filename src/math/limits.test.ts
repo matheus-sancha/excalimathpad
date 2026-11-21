@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { evaluateSheet, type SheetLine } from './evaluate.ts'
+import { evaluateSheet, type EnglishLine as SheetLine } from '../test/english.ts'
 import { MAX_POINTS } from './lists.ts'
 import { SLOW_ARGUMENTS, SLOW_BIG, SLOW_PAIRS, SLOW_VALUES } from './limits.ts'
 

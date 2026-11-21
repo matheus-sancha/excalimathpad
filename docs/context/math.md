@@ -14,9 +14,20 @@ line, keyed by block id; never throws: each line is read inside one guard,
 its parse included (a parse that threw is rethrown there; `statementNames`
 still gives the names it assigns), so a throw from outside a line's own
 handling is that line's error and the lines below still run (spec section 4,
-Unexpected failures, #193): the message is `UNEXPECTED_LINE`, the result's
+Unexpected failures, #193): the message is `UNEXPECTED_LINE` (`unexpectedLine`), the result's
 `unexpected` holds the failure's raw text and stack, and the typeset form is
-the raw source. A `SheetLine` is the line's
+the raw source. **Messages are codes** (ADR 0007, spec section 14, 0.6.0, #291; `messages.ts`, pure, no
+words): every error, warning, rule warning, failed point and rename refusal is an
+`EngineMessage`, a `code` and its arguments (code as typed, a value as the sheet shows it, a
+number, or another message: `inCall`'s `inner`); a math.js error is `mathjs` with math.js's
+raw text. The engine holds no words and never imports `src/text/`; the overlay and the panel
+word a message with `wordMessage` (`src/text/engine.ts`), and the tests that compare English
+read results through `src/test/english.ts` (`evaluateSheet`, `planRename`, `inEnglish`). A
+`SheetError` carries its message (`sheetMessage`; its `Error.message` is the code);
+`thrownMessage` and `messageOf` (`functions.ts`) turn anything thrown into one. math.js's
+English is read in four places only, each with its test: `Undefined symbol|function`
+(`explain`), `is not a function` (`messageOf`), `Cannot compare units` in a rule's condition,
+and ` (char N)` (a rename's comparison; the Português table words it). A `SheetLine` is the line's
 `LineResult` (value | error | empty) and its `TypesetLine`, from the same
 parse: blank, comment, math (name, expression and note, as TeX) or unparsed
 (raw source). `lineForm.ts` (pure) reads a line's comment and its format clause
@@ -48,9 +59,9 @@ Format tab press writes: the stored clause, and the text only where a clause
 typed in it has to move (plain words with a Format tab press, rules with a
 Rules list write). A math line carries its `LineFormat` (bold, underline, highlight, text
 colour); an unknown clause word is the line's error, reported after the line
-ran. A clause's first problem is the form's `formatError`, in section 13's
-words (`Unknown format @blod`, and a comment word on a math line, `@L is for
-comment lines`). Code that is only a clause is a **formatted comment line**
+ran. A clause's first problem is the form's `formatError`, a code
+(`unknownFormat`, `unknownFormatIn`, `commentOnly`: `Unknown format @blod`, and a comment
+word on a math line, `@L is for comment lines`). Code that is only a clause is a **formatted comment line**
 (M4d, #142): the clause is the comment's `CommentFormat` (a line's words,
 `@upright` and a size, `@S`, `@L` or `@XL`; M is the size without one), a
 rule there is its error (`rules need a math line`), and with no text after
@@ -63,7 +74,8 @@ format (`resolveRules`), and the typeset format is the result;
 list, at every point; never on a table), so the Format tab names the rule
 that sets a property (#144), and `SheetLine.ruleStates` is each rule's
 live state for the Rules list (#145): true, false, overridden, a count of
-points or rows, or the warning that skipped it. A condition
+points or rows, or the warning that skipped it (the inner message; the line's warning is
+`rule`, `if <condition>: …`, around it). A condition
 that can't be decided is one warning per rule. On a list it runs per point
 (the summary takes the format only if all are true; the hover counts them);
 on a table, per row (`TableView.rowFormats`). `typeset.ts` is the
@@ -117,9 +129,8 @@ carries its `warnings` (`warnings.ts`, pure, read before the line runs).
 Each function the sheet defines is wrapped once its line has run
 (`functions.ts`, `createCalls`): the wrapper checks the argument count,
 stops recursion at a fixed depth, prefixes an error from its body with
-`in k(1 s): `, and carries `sheetFunction` (name, parameters); `messageOf`
-rewords math.js's errors (a value called, a function used as a number) in
-section 13's words. `table`, `plot` and `solve` can't be assigned, nor
+`in k(1 s): ` (`inCall`), and carries `sheetFunction` (name, parameters); `messageOf`
+turns math.js's errors (a value called, a function used as a number) into the app's codes. `table`, `plot` and `solve` can't be assigned, nor
 `if` (a function, with its own message).
 **One statement** (spec section 3, ADR 0005 step 6): `hasTopLevelSemicolon`
 (`lineForm.ts`, pure) finds a `;` outside brackets and strings, and
@@ -206,7 +217,9 @@ index never makes a line iterate (`withoutIndexes`), and `iterate` works out
 an index on a whole list first (`foldIndexes`), so `Q_s[2] + Q_s` reads the
 list. The typesetter shows it as `x_r[2]`, brackets at the baseline. A list
 result is `{ kind: 'list', text, failed }`: its summary, and the line's
-error when points failed. A **table line** (`tableLine.ts`, `table(arg, …)`,
+error when points failed (`pointsFailed`, its first failed point's place as `PointAt`; a series
+whose every point failed is `everyPointFailed` from the same, never read back from words). A
+solved value's summary counts roots by `listSummary`'s `noun`. A **table line** (`tableLine.ts`, `table(arg, …)`,
 each argument with its own `in <unit>`) gives `SheetLine.table`: columns
 (header TeX, unit, a header unit slot) and every row's cells in the table
 number form (`tableColumn` in `numbers.ts`: zeros kept, whole columns whole).
@@ -238,9 +251,9 @@ arguments before it runs: `range` (which `a:b` compiles to) for its points
 and its ends, the builders for the values they would build (`builds`), and
 the slow calls for their bounds (`SLOW_ARGUMENTS`, `SLOW_BIG`, `SLOW_VALUES`,
 `SLOW_PAIRS`, `SLOW_COUNTS`; spec section 14 lists them). A refusal is a
-`LimitError`, a `SheetError` worded from the values; the line's own catch
-words it as typed with `wordLimit`, which finds the call by running each
-candidate node again, innermost first (a refused call stops at its check).
+`LimitError`, a `SheetError` that names the call from the values (`refused`: points,
+values or too large); the line's own catch names it as typed with `wordLimit`, which finds the
+call by running each candidate node again, innermost first (a refused call stops at its check).
 `iterate` refuses a list line whose points would hold more than the limit
 between them. `MAX_POINTS` in `lists.ts` is the one number. `largeMatrix` in
 `evaluate.ts` shows a matrix of more than 20 values as a list result: a row
@@ -253,8 +266,9 @@ newName, settings)` takes the sheet's blocks in reading order, one assignment
 (`RenameTarget`: element, line from 0, name) and the new name, and gives a
 `RenamePlan`: `lines`, what Rename writes (each line's new `text` and
 `stored` clause, with `uses` and `storedUses`, where the old name stands in
-them as they are), the `refusal` if there is one (with a refusal a line's
-text is as it is, and nothing may be written), the shadow `warning`, and
+them as they are), the `refusal` if there is one, a code (with a refusal a line's
+text is as it is, and nothing may be written), the shadow `warning` (the line's own
+`shadows` warning, found by its code and name), and
 `changes`, the lines whose result would differ. Null for a line that doesn't
 assign the name. **The offer** (spec section 4, The offer, on a committed
 line, #262) has its own entry: `planOffer(blocks, { id, line, from, to },
@@ -284,7 +298,7 @@ line is in the reach: `target` on the line renamed, `before` below it down
 to the next line that assigns the name, `after` from it down to the line
 before that one. A line that didn't parse reads as the names its text
 assigns and nothing else. "Changes a result" is `evaluateSheet` twice,
-compared by `resultComparer`. `rename.test.ts` holds it: a test for each
+compared by `resultComparer` (a message by its code and arguments, the two names made one). `rename.test.ts` holds it: a test for each
 use, each thing left alone, each refusal and each "changes a result", and
 every name of the Math guide's examples (read by
 `src/test/guideExamples.ts`, which `math-guide.test.ts` shares) and of both

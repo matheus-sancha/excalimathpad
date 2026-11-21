@@ -1,4 +1,5 @@
 import type { SheetLine } from '../math/evaluate.ts'
+import type { EngineMessage } from '../math/messages.ts'
 import { leadingNumber } from '../math/numbers.ts'
 import { nameTex } from '../math/typeset.ts'
 
@@ -43,7 +44,8 @@ export interface VariableGroup {
 export interface ProblemRow extends PanelTarget {
   key: string
   severity: 'error' | 'warning'
-  message: string
+  /** Worded where it shows, in the language shown (`wordMessage`). */
+  message: EngineMessage
   /** "Pipe flow, line 3 · dP" or "Element 2, line 1". */
   where: string
   /** Set on a line the app itself failed on (section 4, Unexpected failures): the failure, for the row's actions. */
@@ -145,7 +147,7 @@ export function errorCount(sheet: readonly PanelElement[]): number {
 }
 
 /** A line's error: its message, or a list's failed points (section 10). */
-function problemOf(result: PanelElement['lines'][number]['result']): string | null {
+function problemOf(result: PanelElement['lines'][number]['result']): EngineMessage | null {
   if (result.kind === 'error') return result.message
   return result.kind === 'list' ? result.failed : null
 }

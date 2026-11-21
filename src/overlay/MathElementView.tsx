@@ -32,6 +32,9 @@ import {
   type LineFormat,
 } from '../math/lineForm.ts'
 import { leadingNumber } from '../math/numbers.ts'
+import type { EngineMessage } from '../math/messages.ts'
+import { wordMessage, wordPreview } from '../text/engine.ts'
+import { useWords } from '../text/words.ts'
 import { texToHtml, useKatexReady } from './katex.ts'
 import { UnitField } from './UnitField.tsx'
 import { PlotChart } from './PlotChart.tsx'
@@ -465,7 +468,7 @@ function commentClasses(format: CommentFormat): string {
 type FormatKey = 'b' | 'i' | 'u'
 
 /** A row whose ⚠ is hidden: its gutter keeps its column, with no mark and no hover. */
-const NO_WARNINGS: readonly string[] = []
+const NO_WARNINGS: readonly EngineMessage[] = []
 
 const EMPTY_LINE: SheetLine = {
   result: { kind: 'empty' },
@@ -557,7 +560,7 @@ function MathCells({
 }: {
   typeset: Extract<TypesetLine, { kind: 'math' }>
   result: LineResult
-  warnings: readonly string[]
+  warnings: readonly EngineMessage[]
   fallback: string
   line: SheetLine
   index: number
@@ -638,6 +641,7 @@ function MathCells({
  */
 function TableBlock({ table, index }: { table: TableView; index: number }) {
   const slots = useContext(SlotsContext)
+  const { engine } = useWords()
   return (
     <div className="math-element__table-cell">
       <table className="math-element__table">
@@ -680,7 +684,7 @@ function TableBlock({ table, index }: { table: TableView; index: number }) {
               {row.map((cell, c) => {
                 if (!cell.ok) {
                   return (
-                    <td key={c} colSpan={2} className="is-failed" data-tip={cell.message} data-tip-when="details">
+                    <td key={c} colSpan={2} className="is-failed" data-tip={wordMessage(engine, cell.message)} data-tip-when="details">
                       —
                     </td>
                   )
@@ -757,16 +761,18 @@ function Html({ html }: { html: string }) {
  * the mark's box (`tipAt`): the overlay takes no pointer events, so a `title`
  * here would never show. Screen only: print and the file never carry it.
  */
-function Gutter({ result, warnings }: { result: LineResult; warnings: readonly string[] }) {
+function Gutter({ result, warnings }: { result: LineResult; warnings: readonly EngineMessage[] }) {
+  const { engine } = useWords()
   // A list's failed points are the line's error (section 10).
   const message = result.kind === 'error' ? result.message : result.kind === 'list' ? result.failed : null
   const error = message !== null
   const warned = !error && warnings.length > 0
+  const warningText = warnings.map((warning) => wordMessage(engine, warning)).join('\n')
   return (
     <span
       className={`math-element__gutter${warned ? ' is-warning' : ''}`}
-      data-tip={error ? problemTip(result, message) : warned ? warnings.join('\n') : undefined}
-      data-warnings={warnings.length > 0 ? warnings.join('\n') : undefined}
+      data-tip={error ? problemTip(result, wordMessage(engine, message)) : warned ? warningText : undefined}
+      data-warnings={warnings.length > 0 ? warningText : undefined}
     >
       {error ? '●' : warned ? '⚠' : ''}
     </span>
@@ -797,9 +803,10 @@ function ResultCell({
   slot?: SheetLine['unitSlot']
   index?: number
   details?: SolveDetails | null
-  preview?: string | null
+  preview?: SheetLine['listPreview']
 }) {
   const slots = useContext(SlotsContext)
+  const { engine } = useWords()
   let content: ReactNode = null
   let text: string | undefined
   if (result.kind === 'value') {
@@ -814,8 +821,8 @@ function ResultCell({
       )
     }
   } else if (result.kind === 'error') {
-    text = result.message
-    content = result.message
+    text = wordMessage(engine, result.message)
+    content = text
   } else if (result.kind === 'roots') {
     // Section 9, Roots: written out in one row, the unit once in its slot, or a summary; details on hover.
     text = result.text
@@ -841,7 +848,7 @@ function ResultCell({
     content = plain ? (
       result.text
     ) : (
-      <span className="math-element__summary" data-tip={preview ?? undefined} data-tip-when="details">
+      <span className="math-element__summary" data-tip={preview === null ? undefined : wordPreview(engine, preview)} data-tip-when="details">
         <SummaryContent text={result.text} />
       </span>
     )
@@ -854,7 +861,7 @@ function ResultCell({
     <span
       className={`math-element__result is-${result.kind}`}
       data-text={text}
-      data-tip={result.kind === 'error' ? problemTip(result, result.message) : undefined}
+      data-tip={result.kind === 'error' ? problemTip(result, wordMessage(engine, result.message)) : undefined}
       // An unexpected failure's raw text is under its words on every hover (section 4, Unexpected failures).
       data-tip-when={result.kind === 'error' && !result.unexpected ? 'capped' : undefined}
     >
@@ -999,7 +1006,7 @@ function SlotBox({
 interface EditingRowProps {
   edit: LineEdit
   result: LineResult
-  warnings: readonly string[]
+  warnings: readonly EngineMessage[]
   isEmpty: boolean
   /** The room the field has before it wraps, in scene units; null before it is measured. */
   wrapRoom: number | null

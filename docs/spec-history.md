@@ -646,6 +646,31 @@ The items with a recorded result. Those still open are in
   - Excalidraw also writes the language into the window's `<html lang>` (and `dir`), as it already wrote `en`
     at every mount; in Obsidian that is Obsidian's own page.
 
+**0.6.0**
+
+- How many Portuguese messages reach the on-sheet error's cap (about 320 px) that the English
+  didn't. **Measured (#291)** in headless Chromium, in the overlay's own CSS for an error cell
+  (`MathOverlay.css`: 16 px monospace, `max-width: 320px`): one example of each engine code,
+  section 13's own where it gives one (three for `no root found`, two each for the units of the
+  two sides and `no root near`), and the 21 math.js patterns from the engine, 100 messages, each
+  worded by both tables. The English reaches the cap on 66 of them and the Português on 79: **13
+  more**, each by one to 18 characters: `h precisa de 2 argumentos, recebeu 1`, `em k(1 s): As
+  unidades não correspondem`, `regras precisam de uma linha de cálculo`, `não é possível comparar
+  texto com um número`, `Configuração de gráfico desconhecida xyz`, `x log precisa de valores
+  acima de 0`, `mark 2 s: um valor da grandeza de x`, and six of math.js's (`Parêntese ) esperado
+  (caractere 11)`, `Fim do texto " esperado (caractere 9)`, `Operador inesperado ] (caractere 7)`,
+  `Parte inesperada "3" (caractere 7)`, `Não é possível converter "x" em número`, `A matriz deve
+  ser quadrada (tamanho: [2])`). The whole text still shows on hover and in Problems. The cap
+  stays; the number is for Matheus to judge.
+- That each math.js message of section 13's known list is math.js 15.2's exact text, and the
+  final list. **Passed (#291):** read from the engine running a line for each (the inventory's
+  probe and more), not from the package's source alone: 21 patterns, the inventory's ten and the
+  Math guide's Shows cells (`Units do not match`) among them. The probe changed two of section
+  13's first rows: `Matrix must be square` ends in `(size: [2])`, and `Too few arguments` holds
+  `expected:` and `index:`, both worded. Each has a test in `src/text/mathjs.ptBR.test.ts`
+  against the text math.js throws, and another checks a text outside the list passes through.
+  The list is [section 13](spec-v1.md#13-messages)'s table.
+
 ## 18. Decision index
 
 | Ticket | Fed sections |

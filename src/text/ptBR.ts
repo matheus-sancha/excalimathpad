@@ -1,4 +1,5 @@
 import type { Words } from './en.ts'
+import { enginePtBR } from './engine.ptBR.ts'
 
 /**
  * The Português (Brasil) text table (docs/spec-v1.md section 14, 0.6.0): the
@@ -41,4 +42,5 @@ export const ptBR: Words = {
   print: {
     browserLine: 'Use Imprimir… no menu do app',
   },
+  engine: enginePtBR,
 }

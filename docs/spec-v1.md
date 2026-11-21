@@ -3181,22 +3181,34 @@ a keyword stay as typed in both; `<reason>` passes through in the language it ar
 **math.js's own errors.** An error math.js words reaches the line as math.js writes it, after
 the app's prefix (`in k(1 s): …`). In Português, the known ones are matched by pattern and
 worded from the table; ` (char N)` becomes ` (caractere N)`. Anything else passes through in
-math.js's English in both languages. The list is fixed by the engine's issue from the
-inventory's probe and the Math guide's Shows cells, about fifteen patterns; each has a test,
-so a math.js upgrade that rewords one fails CI. Those seen so far on math.js 15.2:
+math.js's English in both languages. The list is fixed from the inventory's probe and the Math
+guide's Shows cells, on math.js 15.2's exact text (0.6.0, #291): each pattern has a test
+against the text math.js throws, so a math.js upgrade that rewords one fails CI. A list of
+types math.js writes (`number or Complex`) keeps its names, with `or` as `ou`.
 
 | math.js writes | Português |
 |---|---|
 | `Parenthesis ) expected (char 11)` | `Parêntese ) esperado (caractere 11)` |
-| `Unexpected end of expression` | `Fim inesperado da expressão` |
-| `Unexpected operator …` | `Operador inesperado …` |
+| `End of matrix ] expected (char 10)` | `Fim da matriz ] esperado (caractere 10)` |
+| `End of string " expected (char 9)` | `Fim do texto " esperado (caractere 9)` |
+| `Unexpected end of expression (char 8)` | `Fim inesperado da expressão (caractere 8)` |
+| `Unexpected operator ] (char 7)` | `Operador inesperado ] (caractere 7)` |
+| `Unexpected part "3" (char 7)` | `Parte inesperada "3" (caractere 7)` |
+| `Value expected (char 8)` | `Valor esperado (caractere 8)` |
 | `Units do not match` | `As unidades não correspondem` |
 | `Too many arguments in function sin (expected: 1, actual: 2)` | `Argumentos demais na função sin (esperado: 1, recebido: 2)` |
-| `Too few arguments in function pow (…)` | `Argumentos de menos na função pow (…)` |
-| `Dimension mismatch …` | `Dimensões incompatíveis …` |
+| `Too few arguments in function max (expected: any, index: 0)` | `Argumentos de menos na função max (esperado: any, índice: 0)` |
+| `Unexpected type of argument in function addScalar (expected: Unit, actual: number, index: 1)` | `Tipo de argumento inesperado na função addScalar (esperado: Unit, recebido: number, índice: 1)` |
+| `Dimension mismatch (1 != 2)` | `Dimensões incompatíveis (1 != 2)` |
+| `Dimension mismatch in multiplication. Vectors must have the same length` | `Dimensões incompatíveis na multiplicação: os vetores devem ter o mesmo comprimento` |
 | `Cannot convert "x" to a number` | `Não é possível converter "x" em número` |
-| `Matrix must be square` | `A matriz deve ser quadrada` |
+| `Matrix must be square (size: [2])` | `A matriz deve ser quadrada (tamanho: [2])` |
 | `Parameters in function gcd must be integer numbers` | `Os parâmetros da função gcd devem ser números inteiros` |
+| `Undefined symbol foo` | `Símbolo indefinido foo` |
+| `Undefined function foo` | `Função indefinida foo` |
+| `Index out of range (3 > 2)` | `Índice fora do intervalo (3 > 2)` |
+| `Cannot compare units with different base` | `Não é possível comparar unidades de bases diferentes` |
+| `Cannot calculate inverse, determinant is zero` | `Não é possível calcular a inversa: o determinante é zero` |
 
 **Reading and names**
 
@@ -3207,7 +3219,7 @@ so a math.js upgrade that rewords one fails CI. Those seen so far on math.js 15.
 | `table`, `plot` or `solve` assigned to | `table is a line form: choose another name` | `table é uma forma de linha: escolha outro nome` | M2 |
 | `if` assigned to | `if is a function: choose another name` | `if é uma função: escolha outro nome` | M4d |
 | A `;` at a line's top level | `one statement per line: split the line at the ;` | `uma instrução por linha: divida a linha no ;` | M4d |
-| A name shadows a unit or built-in (warning) | `K shadows the unit K` | `K encobre a unidade K` | M2 |
+| A name shadows a unit or built-in (warning) | `K shadows the unit K`, `sqrt shadows the built-in sqrt` | `K encobre a unidade K`, `sqrt encobre o nome interno sqrt` | M2 |
 | A use that falls back to the unit (warning) | `V reads as the unit V here: the variable is defined below` or `… its definition failed` | `V é lido como a unidade V aqui: a variável é definida abaixo` ou `… sua definição falhou` | M2 |
 | A body name not defined above (warning) | `y isn't defined above this line` | `y não está definido acima desta linha` | M2 |
 
@@ -4533,11 +4545,6 @@ M1 to M5, is in [`docs/spec-history.md`](spec-history.md#17-verify-first), with 
 
 **0.6.0**
 
-- How many Portuguese messages reach the on-sheet error's cap (about 320 px) that the English
-  didn't, measured in Chromium once the engine's issue has worded them. The cap stays; the
-  number is for Matheus to judge.
-- That each math.js message of [section 13](#13-messages)'s known list is math.js 15.2's exact
-  text, read from the package and the inventory's probe, and the final list of about fifteen.
 - `main.js`'s size with the Portuguese table and guide, against its budget.
 - In Obsidian, by hand: the command palette, the ribbon's tooltip and the folder item after a
   language change and a restart, and whether reloading the plugin alone is enough.

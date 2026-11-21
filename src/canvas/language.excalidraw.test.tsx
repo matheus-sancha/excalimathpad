@@ -9,6 +9,7 @@ import { resultsOf } from '../test/sheetView.ts'
 import type { LanguageMemory, SheetLanguage } from './language.ts'
 import { en } from '../text/en.ts'
 import { ptBR } from '../text/ptBR.ts'
+import { createMathAnchorElements } from './mathAnchor.ts'
 
 /**
  * ☰ → Language (docs/spec-v1.md section 8, Language, 0.5.0), in the web home,
@@ -232,5 +233,24 @@ describe('☰ → Language (section 8, Language)', () => {
     await shownIn('pt-BR')
     expect(menuEntries()).toContain('Modo escuro')
     expect(languageSelect()).toBeInTheDocument()
+  })
+
+  it('words the sheet’s errors in the language shown, at once, the results as they were (0.6.0)', async () => {
+    const sheet = createMathAnchorElements([
+      { id: 'math-errors', x: 100, y: 100, width: 420, height: 72, source: 'y = x * 2\nx = 2 m + 1 s' },
+    ])
+    await renderApp({ language: fakeLanguageMemory(), initialElements: sheet })
+    await waitFor(() => expect(mathElements()).toHaveLength(1))
+    const cells = () => Array.from(document.querySelectorAll('.math-element__result.is-error'), (cell) => cell.textContent)
+    const tips = () => Array.from(document.querySelectorAll('.math-element__gutter[data-tip]'), (mark) => mark.getAttribute('data-tip'))
+    await waitFor(() => expect(cells()).toEqual(['x is defined below', 'Units do not match']))
+    expect(tips()).toEqual(['x is defined below', 'Units do not match'])
+
+    openMenu()
+    await choose('pt-BR')
+    await shownIn('pt-BR')
+
+    await waitFor(() => expect(cells()).toEqual(['x é definido abaixo', 'As unidades não correspondem']))
+    expect(tips()).toEqual(['x é definido abaixo', 'As unidades não correspondem'])
   })
 })

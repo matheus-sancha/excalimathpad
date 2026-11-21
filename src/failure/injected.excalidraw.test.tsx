@@ -3,12 +3,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from '../App.tsx'
 import { createMathAnchorElements } from '../canvas/mathAnchor.ts'
 import { readSheet } from '../file/sheetFormat.ts'
-import { UNEXPECTED_LINE } from '../math/evaluate.ts'
+import { UNEXPECTED_LINE as UNEXPECTED_CODE } from '../math/evaluate.ts'
+import { english } from '../test/english.ts'
 import { fakeFileAccess, fakeRecovery } from '../test/files.ts'
 import { doubleClickLine } from '../test/gestures.ts'
 import { undoControls } from '../test/excalidraw.ts'
 import { linesOf, resultsOf } from '../test/sheetView.ts'
 import { FAILURE_MESSAGES, REPORT_URL } from './details.ts'
+
+/** The unexpected line's words, in English. */
+const UNEXPECTED_LINE = english(UNEXPECTED_CODE)
 
 /**
  * Injected failures (docs/spec-v1.md section 14, M4e; section 4, Unexpected
