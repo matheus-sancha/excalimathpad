@@ -4,6 +4,7 @@
  * the plugin never overwrites a file.
  */
 import { SHEET_EXTENSION } from '../src/file/sheetFormat.ts'
+import type { Words } from '../src/text/words.ts'
 
 /** `folder/name.ext` for a folder path as Obsidian gives it (`/` is the root). */
 export function inFolder(folder: string, file: string): string {
@@ -21,15 +22,14 @@ export function freeSheetPath(folder: string, base: string, taken: (path: string
   }
 }
 
-/** A new sheet's name, before its number: `Untitled.excalimathpad`, `Untitled 1.excalimathpad`… */
-export const NEW_SHEET_BASE = 'Untitled'
-
 /**
  * The name, without extension, of a busy tab's own version after an outside
- * change: `pump-sizing (conflict 2026-11-14 1532)`, in local time.
+ * change, in local time and in the language of `text` at that moment:
+ * `pump-sizing (conflict 2026-11-14 1532)`, `pump-sizing (conflito 2026-11-14 1532)`.
+ * The name is only written, never read back to find a sheet.
  */
-export function conflictBase(basename: string, at: Date): string {
+export function conflictBase(basename: string, at: Date, text: Words): string {
   const two = (n: number) => String(n).padStart(2, '0')
   const date = `${at.getFullYear()}-${two(at.getMonth() + 1)}-${two(at.getDate())}`
-  return `${basename} (conflict ${date} ${two(at.getHours())}${two(at.getMinutes())})`
+  return text.vault.conflictCopy(basename, `${date} ${two(at.getHours())}${two(at.getMinutes())}`)
 }

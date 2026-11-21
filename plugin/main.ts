@@ -2,17 +2,11 @@ import { Notice, Platform, Plugin, TFolder, type TAbstractFile } from 'obsidian'
 import { emptyScene } from '../src/canvas/sceneFile.ts'
 import { DEFAULT_SETTINGS, writeSheet } from '../src/file/sheetFormat.ts'
 import { isSheetTheme, type SheetTheme } from '../src/canvas/theme.ts'
-import { isSheetLanguage, type SheetLanguage } from '../src/canvas/language.ts'
+import { DEFAULT_LANGUAGE, isSheetLanguage, type SheetLanguage } from '../src/canvas/language.ts'
 import type { SheetCommands } from '../src/App.tsx'
-import { freeSheetPath, NEW_SHEET_BASE } from './names.ts'
-import {
-  createFailedNotice,
-  errorReason,
-  SHEET_EXTENSION_NAME,
-  SheetView,
-  VIEW_TYPE,
-  type SheetMemory,
-} from './SheetView.ts'
+import { wordsFor, type Words } from '../src/text/words.ts'
+import { freeSheetPath } from './names.ts'
+import { errorReason, SHEET_EXTENSION_NAME, SheetView, VIEW_TYPE, type SheetMemory } from './SheetView.ts'
 
 /** What the plugin keeps in its `data.json` (docs/spec-v1.md section 12a, Data protection). */
 interface PluginData {
@@ -26,9 +20,6 @@ interface PluginData {
   language?: SheetLanguage
 }
 
-/** The words of New sheet, in the command palette, on the ribbon and in a folder's menu. */
-export const NEW_SHEET = 'New sheet'
-
 /** The ribbon's and the folder menu's icon (Lucide, as Obsidian ships it). */
 export const NEW_SHEET_ICON = 'calculator'
 
@@ -36,13 +27,19 @@ export const NEW_SHEET_ICON = 'calculator'
  * The commands that act on the active sheet tab, and are offered only while
  * one is active (docs/spec-v1.md section 8, Inside an Obsidian tab). None has
  * a default hotkey. Print… (M5, section 11) is registered on a computer only:
- * on a phone or tablet there is no such command.
+ * on a phone or tablet there is no such command. `name` is the key of its
+ * words in the table's `vault` group, worded at `onload` (section 8, Language).
  */
-export const SHEET_COMMANDS: readonly { id: string; name: string; run: keyof SheetCommands; computer?: true }[] = [
-  { id: 'add-math', name: 'Add math', run: 'addMath' },
-  { id: 'toggle-math-settings', name: 'Toggle Math settings', run: 'toggleMathSettings' },
-  { id: 'open-math-guide', name: 'Open Math guide', run: 'openMathGuide' },
-  { id: 'print', name: 'Print…', run: 'print', computer: true },
+export const SHEET_COMMANDS: readonly {
+  id: string
+  name: 'addMath' | 'toggleMathSettings' | 'openMathGuide' | 'print'
+  run: keyof SheetCommands
+  computer?: true
+}[] = [
+  { id: 'add-math', name: 'addMath', run: 'addMath' },
+  { id: 'toggle-math-settings', name: 'toggleMathSettings', run: 'toggleMathSettings' },
+  { id: 'open-math-guide', name: 'openMathGuide', run: 'openMathGuide' },
+  { id: 'print', name: 'print', run: 'print', computer: true },
 ]
 
 /**
@@ -76,12 +73,15 @@ export default class ExcalimathpadPlugin extends Plugin {
     this.registerView(VIEW_TYPE, (leaf) => new SheetView(leaf, memory))
     this.registerExtensions([SHEET_EXTENSION_NAME], VIEW_TYPE)
 
-    this.addCommand({ id: 'new-sheet', name: NEW_SHEET, callback: () => void this.newSheet() })
+    // Registered once, in the language `data.json` holds at load: the palette,
+    // the ribbon and the folder item change after a restart (section 8, Language).
+    const { vault: text } = this.words()
+    this.addCommand({ id: 'new-sheet', name: text.newSheet, callback: () => void this.newSheet() })
     for (const command of SHEET_COMMANDS) {
       if (command.computer && Platform.isMobile) continue
       this.addCommand({
         id: command.id,
-        name: command.name,
+        name: text[command.name],
         checkCallback: (checking) => {
           const run = this.app.workspace.getActiveViewOfType(SheetView)?.commands?.[command.run]
           if (!run) return false
@@ -90,18 +90,23 @@ export default class ExcalimathpadPlugin extends Plugin {
         },
       })
     }
-    this.addRibbonIcon(NEW_SHEET_ICON, NEW_SHEET, () => void this.newSheet())
+    this.addRibbonIcon(NEW_SHEET_ICON, text.newSheet, () => void this.newSheet())
     this.registerEvent(
       this.app.workspace.on('file-menu', (menu, file: TAbstractFile) => {
         if (!(file instanceof TFolder)) return
         menu.addItem((item) =>
           item
-            .setTitle(NEW_SHEET)
+            .setTitle(text.newSheet)
             .setIcon(NEW_SHEET_ICON)
             .onClick(() => void this.newSheet(file)),
         )
       }),
     )
+  }
+
+  /** The plugin's words in the language `data.json` holds now. */
+  private words(): Words {
+    return wordsFor(this.stored.language ?? DEFAULT_LANGUAGE)
   }
 
   /** Writes `change` into `data.json`, if it changes anything. */
@@ -123,17 +128,20 @@ export default class ExcalimathpadPlugin extends Plugin {
    * Creates an empty sheet (format 1, default settings) and opens it in a new
    * tab, on the welcome screen. It goes in `folder` (a folder's menu), else
    * where Obsidian's *Default location for new notes* puts a note. It is named
-   * `Untitled`, then `Untitled 1`, `Untitled 2`…, never over a file.
+   * `Untitled`, then `Untitled 1`, `Untitled 2`… (`Sem título`… in Português:
+   * the language at creation), never over a file.
    */
   async newSheet(folder?: TFolder) {
     const { vault, workspace, fileManager } = this.app
     const parent = folder ?? fileManager.getNewFileParent(workspace.getActiveFile()?.path ?? '')
-    const path = freeSheetPath(parent.path, NEW_SHEET_BASE, (at) => vault.getAbstractFileByPath(at) !== null)
+    const text = this.words().vault
+    const path = freeSheetPath(parent.path, text.untitled, (at) => vault.getAbstractFileByPath(at) !== null)
     let file
     try {
       file = await vault.create(path, writeSheet(emptyScene(), DEFAULT_SETTINGS))
     } catch (error) {
-      new Notice(createFailedNotice(path.slice(path.lastIndexOf('/') + 1), errorReason(error)))
+      // Worded again: the language may have changed while the file was being created.
+      new Notice(this.words().vault.createFailed(path.slice(path.lastIndexOf('/') + 1), errorReason(error)))
       return
     }
     await workspace.getLeaf('tab').openFile(file)
