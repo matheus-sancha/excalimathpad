@@ -15,6 +15,13 @@
 // failing cases). `--screenshot
 // <file>` saves what the run saw.
 //
+// It then chooses ☰ → Language → Português (section 8, Language, 0.5.0) and
+// checks, in Portuguese, that the texts came from the bundle with no request,
+// that the choice is in `data.json`, and that what the app finds in
+// Excalidraw's DOM (More tools' Math items, the image tool, the plugin's
+// hidden items, the reduced properties panel and the canvas hint) it still
+// finds: none of it goes by Excalidraw's English text (section 14, 0.5.0).
+//
 // The page also carries a stand-in for Obsidian's global rules for buttons,
 // inputs and selects (plugin/test/obsidian-globals.css), on a dark-theme body:
 // the run fails if a Sheet panel row takes any of them (the view's guard in
@@ -82,6 +89,7 @@ const page = `<!doctype html>
     const leaf = app.workspace.getLeaf()
     await leaf.openFile(new FakeObsidian.TFile(${JSON.stringify(SHEET)}))
     window.__app = app
+    window.__plugin = plugin
     return leaf.view.getViewType()
   }
 </script>
@@ -216,6 +224,7 @@ try {
   else if (guide.contents !== 17 || guide.sections < 17) failures.push(`the Math guide shows ${JSON.stringify(guide)}, not its 17 sections`)
   await tab.keyboard.press('Escape')
   if (await tab.$('.math-guide')) failures.push("Esc didn't close the Math guide")
+  await portuguese(tab, manifest)
   // Let late work (fonts, the plot's chunk, image decoding) try anything it would.
   await tab.waitForTimeout(1500)
   if (screenshot) await tab.screenshot({ path: screenshot })
@@ -235,9 +244,107 @@ try {
   server.close()
 }
 
+/**
+ * ☰ → Language → Português, in the built plugin (section 8, Language). Each
+ * check that fails is added to `failures`; the requests are the run's own log.
+ */
+async function portuguese(tab, manifest) {
+  const choose = async () => {
+    await tab.click('[data-testid="main-menu-trigger"]')
+    await tab.selectOption('[data-testid="language-select"]', 'pt-BR')
+  }
+  await choose()
+  const translated = await tab
+    .waitForFunction(
+      () => document.querySelector('[data-testid="toolbar-rectangle"]')?.closest('label')?.title.startsWith('Retângulo'),
+      null,
+      { timeout: 10_000 },
+    )
+    .then(() => true)
+    .catch(() => false)
+  if (!translated) failures.push("☰ → Language → Português didn't put Excalidraw's toolbar in Portuguese")
+  const menu = await tab.evaluate(() => ({
+    entries: [...document.querySelectorAll('.dropdown-menu .dropdown-menu-item__text')].map((item) => item.textContent.trim()),
+    label: document.querySelector('.language-row__label')?.textContent,
+    stamp: document.querySelector('[data-testid="build-stamp"]')?.textContent.trim(),
+  }))
+  // Excalidraw's own ☰ items in Portuguese, the app's in English.
+  if (!menu.entries.includes('Modo escuro')) failures.push(`☰ isn't in Portuguese under Português: ${JSON.stringify(menu.entries)}`)
+  if (!menu.entries.includes('Math guide') || menu.label !== 'Language' || menu.stamp !== manifest.version) {
+    failures.push(`the app's own ☰ text changed under Português: ${JSON.stringify(menu)}`)
+  }
+  const data = await tab.evaluate(() => window.__plugin.dataJson)
+  if (data?.language !== 'pt-BR') failures.push(`data.json holds ${JSON.stringify(data)}, not the language chosen`)
+  await tab.keyboard.press('Escape')
+
+  // More tools: the app's Math heading and two items, and the plugin's hidden items still hidden.
+  await tab.click('.App-toolbar__extra-tools-trigger')
+  await tab.waitForSelector('.math-tools__heading', { timeout: 10_000 }).catch(() => null)
+  const tools = await tab.evaluate(() => {
+    const shown = (element) => !!element && getComputedStyle(element).display !== 'none'
+    const dropdown = document.querySelector('.App-toolbar__extra-tools-dropdown')
+    return {
+      heading: dropdown?.querySelector('.math-tools__heading')?.textContent,
+      items: [...(dropdown?.querySelectorAll('.math-tools__heading ~ * .dropdown-menu-item__text, .math-tools__heading ~ .dropdown-menu-item .dropdown-menu-item__text') ?? [])].map(
+        (item) => item.childNodes[0]?.textContent.trim(),
+      ),
+      embed: shown(dropdown?.querySelector('[data-testid="toolbar-embeddable"]')),
+      generate: shown(dropdown?.querySelector('.dropdown-menu-container > div:not([class])')),
+    }
+  })
+  if (tools.heading !== 'Math' || tools.items.join() !== 'Add math,Math settings') {
+    failures.push(`More tools' Math items under Português: ${JSON.stringify(tools)}`)
+  }
+  if (tools.embed || tools.generate) failures.push(`a hidden More tools item shows under Português: ${JSON.stringify(tools)}`)
+  await tab.click('.App-toolbar__extra-tools-trigger')
+
+  // The image tool opens the vault's picker, never the system's.
+  let chooser = false
+  tab.once('filechooser', () => (chooser = true))
+  await tab.click('label.ToolIcon:has([data-testid="toolbar-image"])')
+  await tab.waitForTimeout(300)
+  const picker = await tab.evaluate(() => FakeObsidian.modals.filter((modal) => modal.isOpen).length)
+  if (chooser || picker !== 1) failures.push(`the image tool under Português: ${picker} vault picker(s), system chooser ${chooser}`)
+  await tab.evaluate(() => FakeObsidian.modals.forEach((modal) => modal.close()))
+
+  // One math element selected: the reduced properties panel and the app's hint, in English.
+  const box = await tab.locator('.math-element').first().boundingBox()
+  await tab.mouse.click(box.x + 6, box.y + 6)
+  await tab.waitForSelector('[data-math-selection="one"]', { timeout: 10_000 }).catch(() => null)
+  const selected = await tab.evaluate(() => {
+    const column = document.querySelector('.App-menu__left .panelColumn')
+    const children = column ? [...column.children] : []
+    const opacity = children.findIndex((child) => child.matches('label.control-label'))
+    const hint = document.querySelector('.HintViewer')
+    return {
+      before: children.slice(0, Math.max(opacity, 0)).filter((child) => getComputedStyle(child).display !== 'none').length,
+      opacity: opacity >= 0 ? children[opacity].textContent.trim() : null,
+      hint: hint ? getComputedStyle(hint, '::after').content : null,
+    }
+  })
+  if (selected.opacity === null || selected.before !== 0) failures.push(`the reduced properties panel under Português: ${JSON.stringify(selected)}`)
+  if (selected.hint !== JSON.stringify('Double-click a line or press Enter to edit')) {
+    failures.push(`the canvas hint under Português reads ${selected.hint}`)
+  }
+
+  // Copy to clipboard as SVG stays hidden in Excalidraw's right-click menu.
+  await tab.mouse.click(box.x + 6, box.y + 6, { button: 'right' })
+  const copyAsSvg = await tab
+    .waitForSelector('.context-menu', { timeout: 10_000 })
+    .then(() =>
+      tab.evaluate(() => {
+        const item = document.querySelector('.context-menu [data-testid="copyAsSvg"]')
+        return item ? getComputedStyle(item).display : 'missing'
+      }),
+    )
+    .catch(() => 'no menu')
+  if (copyAsSvg !== 'none') failures.push(`Copy to clipboard as SVG under Português: ${copyAsSvg}`)
+  await tab.keyboard.press('Escape')
+}
+
 if (failures.length) {
   console.error('Network-blocked run failed (docs/spec-v1.md section 12a, Data protection):')
   for (const failure of [...new Set(failures)]) console.error(`  - ${failure}`)
   process.exit(1)
 }
-console.log('Network-blocked run passed: math, a table, a plot, an image, CJK text and the Math guide, and no request.')
+console.log('Network-blocked run passed: math, a table, a plot, an image, CJK text, the Math guide and Português, and no request.')

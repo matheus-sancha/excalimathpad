@@ -8,8 +8,9 @@ touches this module, and keep it true in the pull request that changes the modul
 **plugin** (`plugin/`, section 12a, ADR 0006) — the Obsidian plugin, and the
 only code that imports `obsidian`. `main.ts` (the `Plugin`) registers the
 view for `.excalimathpad` only and keeps the panel's open state, its width
-(`sheetPanelWidth`, M4e, #198) and light or dark in `data.json` (`loadData`/`saveData`; `SheetMemory`, anything else
-read there dropped). It registers New sheet and `SHEET_COMMANDS` (Add math,
+(`sheetPanelWidth`, M4e, #198), light or dark and, from 0.5.0, the language
+(`language`: `en` or `pt-BR`) in `data.json` (`loadData`/`saveData`; `SheetMemory`, anything else
+read there dropped). The view hands App the language memory as `language`, beside `panelMemory`. It registers New sheet and `SHEET_COMMANDS` (Add math,
 Toggle Math settings, Open Math guide, and Print…, marked `computer` and skipped where
 `Platform.isMobile`), whose `checkCallback` offers each only while
 `getActiveViewOfType(SheetView)` has that command in `commands`; none has a hotkey. `SheetView.ts` is the `TextFileView`:
@@ -66,7 +67,9 @@ blocked run bundles the same file for the browser.
 CJK text. Depends on: App, file (`readSheet`, the messages), panel memory.
 
 **The build** (`esbuild.plugin.mjs`, section 12a, One source, two builds and
-Data protection). It stubs Mermaid to Excalidraw, the non-English locales,
+Data protection). It stubs Mermaid to Excalidraw, every Excalidraw locale but
+English and, from 0.5.0, Brazilian Portuguese (`KEPT_LOCALES`; the build fails
+if it meets no `pt-BR` to keep: about 24 kB of `main.js`),
 font subsetting and math.js's help texts (`embeddedDocs.js` resolves to
 `src/math/noHelpTexts.ts`, as `vite.config.ts`'s alias does for the web; the
 build fails if it stubbed nothing; section 14, M4e, Lighter plugin);

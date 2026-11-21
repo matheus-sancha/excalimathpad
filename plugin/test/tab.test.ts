@@ -7,8 +7,8 @@ import { SHEET_COMMANDS } from '../main.ts'
 import { vaultWith, type Vault } from './harness.ts'
 
 /**
- * Inside an Obsidian tab (docs/spec-v1.md section 8): the theme kept in
- * `data.json`, the commands offered only with a sheet tab active, two tabs
+ * Inside an Obsidian tab (docs/spec-v1.md section 8): the theme and, from
+ * 0.5.0, the language kept in `data.json`, the commands offered only with a sheet tab active, two tabs
  * that each keep their own keys and panel, and Obsidian's core keys passing
  * through from a focused line. Against the fake `obsidian` and the real
  * Excalidraw. The real Obsidian, side by side and in a pop-out window, is a
@@ -184,6 +184,62 @@ describe('the theme (section 8: Excalimathpad’s own light or dark, remembered)
     await darkModeKey(leaf)
     await act(() => (leaf.view as unknown as { save: () => Promise<void> }).save())
     expect(vault.app.vault.writes).toEqual([])
+  })
+})
+
+describe('the language (section 8, Language, 0.5.0: per device, in data.json, never in the file)', () => {
+  const rectangleTitle = (leaf: WorkspaceLeaf) =>
+    leaf.containerEl.querySelector('[data-testid="toolbar-rectangle"]')!.closest('label')!.title
+  const shownIn = (leaf: WorkspaceLeaf, rectangle: RegExp) => waitFor(() => expect(rectangleTitle(leaf)).toMatch(rectangle))
+  const choose = async (leaf: WorkspaceLeaf, language: string) => {
+    fireEvent.click(leaf.containerEl.querySelector('[data-testid="main-menu-trigger"]')!)
+    const select = await waitFor(() => leaf.containerEl.querySelector<HTMLSelectElement>('[data-testid="language-select"]')!)
+    await act(async () => {
+      fireEvent.change(select, { target: { value: language } })
+    })
+  }
+
+  it('is English until chosen, whatever Obsidian’s language', async () => {
+    const vault = await setUp()
+    const leaf = await openTab(vault, A)
+    await shownIn(leaf, /^Rectangle/)
+    expect(vault.recorded.dataJson).toBeNull()
+  })
+
+  it('remembers Português in data.json beside the rest, a tab opened after opens in it, and the file is never written', async () => {
+    const vault = await setUp({ theme: 'dark', sheetPanel: false })
+    const leaf = await openTab(vault, A)
+    await choose(leaf, 'pt-BR')
+    await shownIn(leaf, /^Retângulo/)
+    expect(vault.recorded.dataJson).toEqual({ theme: 'dark', sheetPanel: false, language: 'pt-BR' })
+    await act(() => (leaf.view as unknown as { save: () => Promise<void> }).save())
+    expect(vault.app.vault.writes).toEqual([])
+    await shownIn(await openTab(vault, B), /^Retângulo/)
+  })
+
+  it('opens in the remembered language after a restart, and drops one it doesn’t offer', async () => {
+    const vault = await setUp({ language: 'pt-BR' })
+    await shownIn(await openTab(vault, A), /^Retângulo/)
+    await act(() => open.splice(0)[0].detach())
+
+    const odd = await setUp({ language: 'fr-FR', sheetPanel: false })
+    const leaf = await openTab(odd, A)
+    await shownIn(leaf, /^Rectangle/)
+    await choose(leaf, 'pt-BR')
+    expect(odd.recorded.dataJson).toEqual({ sheetPanel: false, language: 'pt-BR' })
+  })
+
+  it('a tab already open follows a choice made in another, since Excalidraw holds one language', async () => {
+    const vault = await setUp()
+    const first = await openTab(vault, A)
+    const second = await openTab(vault, B)
+    await choose(second, 'pt-BR')
+    await shownIn(second, /^Retângulo/)
+    await shownIn(first, /^Retângulo/)
+    expect(first.containerEl.querySelector<HTMLSelectElement>('[data-testid="language-select"]')?.value ?? 'pt-BR').toBe('pt-BR')
+    await choose(first, 'en')
+    await shownIn(second, /^Rectangle/)
+    expect(vault.recorded.dataJson).toEqual({ language: 'en' })
   })
 })
 

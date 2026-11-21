@@ -238,6 +238,46 @@
   user-select: text;
 }
 
+/* ☰ → Language (section 8, Language, 0.5.0): a custom item laid out as the
+   items around it (icon, label), with Excalidraw's own language `<select>` at
+   its end, as excalidraw.com draws its own. The custom item's top margin is
+   dropped, so the row sits in the list as an item does. */
+.excalidraw .dropdown-menu .language-row {
+  margin-top: 0;
+}
+
+.excalidraw .language-row__field {
+  display: flex;
+  align-items: center;
+  column-gap: 0.625rem;
+  width: 100%;
+  min-height: 2.25rem;
+  /* An item's padding plus its 1 px margin and 1 px border, so the icon and
+     the label line up with Dark mode's above. */
+  padding: 0 calc(0.5rem + 2px);
+  box-sizing: border-box;
+}
+
+.excalidraw .language-row__icon {
+  display: flex;
+  flex: none;
+}
+
+.excalidraw .language-row__icon svg {
+  width: 1rem;
+  height: 1rem;
+  display: block;
+}
+
+.excalidraw .language-row__label {
+  flex: 1;
+}
+
+.excalidraw .language-row__select {
+  flex: none;
+  max-width: 60%;
+}
+
 /* Math settings' wrapper (#102): it carries Excalidraw's `sidebar-trigger`
    class only so a floating panel's outside click ignores the item. It has no
    box, and it hands down the dropdown's text styles, not the square button's:

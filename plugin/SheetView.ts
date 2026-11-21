@@ -3,6 +3,7 @@ import { createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import App, { type SheetCommands } from '../src/App.tsx'
 import type { ThemeMemory } from '../src/canvas/theme.ts'
+import type { LanguageMemory } from '../src/canvas/language.ts'
 import { readSheet, SHEET_EXTENSION } from '../src/file/sheetFormat.ts'
 import { MESSAGES } from '../src/file/sheetSession.ts'
 import type { VaultSheet } from '../src/file/vaultSheet.ts'
@@ -48,6 +49,8 @@ export function hasLookbehind(make: (source: string) => unknown = (source) => ne
 export interface SheetMemory {
   panel: PanelMemory
   theme: ThemeMemory
+  /** ☰ → Language (section 8, Language, 0.5.0). */
+  language: LanguageMemory
 }
 
 export interface SheetViewOptions {
@@ -310,6 +313,7 @@ export class SheetView extends TextFileView {
                 }),
         },
         panelMemory: this.memory.panel,
+        language: this.memory.language,
       }),
     )
   }

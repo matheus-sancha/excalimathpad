@@ -2137,7 +2137,10 @@ From 0.5.0, in both homes, on Excalidraw 0.18.1.
 - **Remembered per device and never in the file:** browser storage on the web, beside the
   panel's memory; the plugin's `data.json` in a vault, beside the theme. Every sheet opened
   after a choice opens in it, after a restart too, and the sheet it was chosen in changes at
-  once.
+  once, with ☰ still open. In a vault every sheet tab already open changes with it too, unlike
+  Dark mode: Excalidraw keeps one language for every editor in the window.
+- **Choosing leaves an open line first:** ☰ is a press on the sheet's own chrome, so a line
+  open when it is pressed is left (committed) before the row is reached.
 - **Choosing a language** is no undo step, never makes the sheet dirty, changes no result
   and nothing a sheet file holds: a sheet reads and shows the same in either language, and
   numbers keep [section 5](#numbers)'s form.
@@ -2885,8 +2888,8 @@ touch in [section 4](#touch). Research: [`docs/research/obsidian-plugin.md`](res
   stubbed; Xiaolai's paths become `local:`, so CJK text uses system fonts. Measured: 3.46 MB.
   The web build is untrimmed. From 0.5.0 the plugin keeps one more locale, Excalidraw's
   Brazilian Portuguese (`pt-BR`, about 22 kB on 0.18.1), for [Language](#language); every
-  other locale stays stubbed. It fits `main.js`'s budget as it stands (about 170 kB free);
-  if it doesn't on the day, the budget is raised by the rule below, in a commit that says so.
+  other locale stays stubbed. It fits `main.js`'s budget as it stands: 3,447,773 bytes with it,
+  23,822 more, against 3,574,000, so the budget isn't raised (#263).
 - **The Excalidraw package is pinned** from [the upgrade](#the-excalidraw-upgrade):
   `"@excalidraw/excalidraw": "0.18.0-9fbeaed"`, exact, with no caret. It moves only twice: to
   a newer canary when a bug that blocks the app is fixed there, in a commit that names the
@@ -3828,7 +3831,11 @@ Evidence: [`obsidian-plugin.md`](research/obsidian-plugin.md).
 - **Language is Excalidraw's `langCode` prop,** set from a memory port beside the theme's:
   the web's is browser storage, handed to `App` as a prop like the panel's, and the plugin's
   is `data.json`, so the plugin's bundle still names no browser storage.
-  `esbuild.plugin.mjs`'s locale trim lets `pt-BR` through beside English and stubs the rest.
+  `esbuild.plugin.mjs`'s locale trim lets `pt-BR` through beside English and stubs the rest,
+  and the build fails if it finds no `pt-BR` to keep. Excalidraw keeps one language for every
+  editor in the window, so each canvas also follows the language Excalidraw shows (its public
+  `useI18n`): a tab given the new prop in the same render as the one chosen in kept its toolbar
+  in the old language ([spec history](spec-history.md#17-verify-first)).
 - **The Language row passes no key to Excalidraw.** A `<select>` isn't a field to it
   (Delete on a focused one once deleted the selected element), so the row's control stops
   its keys as the Sheet panel's box does.
@@ -4280,9 +4287,6 @@ M1 to M5, is in [`docs/spec-history.md`](spec-history.md#17-verify-first), with 
 **0.5.0**
 
 - The offer's row above a real on-screen keyboard.
-- Under Português: every place a test or a run finds Excalidraw's DOM by its English text;
-  whether Excalidraw redraws in the new language at once with a line open, or only after
-  the menu closes; the plugin's `main.js` with `pt-BR` in it, against its budget.
 - In Obsidian, by hand: the language is still chosen after a restart, on the work laptop
   and one phone.
 
