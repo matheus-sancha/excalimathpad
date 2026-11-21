@@ -108,7 +108,7 @@ async function writeHandle(handle: WritableHandle, text: string) {
   // A handle restored from the recovery copy starts without write permission.
   if (handle.queryPermission && (await handle.queryPermission({ mode: 'readwrite' })) !== 'granted') {
     const granted = await handle.requestPermission?.({ mode: 'readwrite' })
-    if (granted !== 'granted') throw new Error('permission to write the file was refused')
+    if (granted !== 'granted') throw new Error(words().dialogs.reasons.writeRefused)
   }
   const writable = await handle.createWritable()
   await writable.write(text)
@@ -141,10 +141,10 @@ function fallbackAccess(document: Document): FileAccess {
         input.click()
       }),
     async save() {
-      throw new Error('this browser cannot write back to a file')
+      throw new Error(words().dialogs.reasons.cannotWriteBack)
     },
     async read() {
-      throw new Error('this browser cannot read a file again')
+      throw new Error(words().dialogs.reasons.cannotReadAgain)
     },
     async saveAs(suggestedName, text) {
       const url = URL.createObjectURL(new Blob([text], { type: 'application/json' }))

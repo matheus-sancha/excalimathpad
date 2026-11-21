@@ -24,7 +24,7 @@ export interface RenameElement extends PanelElement {
   formats?: string
 }
 
-/** Section 13, Rename and Language: the form's and the toast's words. */
+/** Section 13, Rename and Language: the form's words. The toast's are the text tables' `offer.renamed`. */
 export const RENAME_WORDS = {
   /** A Variables row's ✎: its name and its tooltip. */
   start: (name: string) => `Rename ${name}`,
@@ -34,9 +34,6 @@ export const RENAME_WORDS = {
   results: (count: number) => (count === 1 ? 'This changes 1 result:' : `This changes ${count} results:`),
   rename: 'Rename',
   cancel: 'Cancel',
-  /** After a rename; on touch there is no Ctrl+Z to name. */
-  renamed: (from: string, to: string, count: number, touch: boolean) =>
-    `Renamed ${from} to ${to} in ${count === 1 ? '1 line' : `${count} lines`}. ${touch ? 'Undo' : 'Ctrl+Z'} takes it back.`,
 } as const
 
 export type { MarkedPart }

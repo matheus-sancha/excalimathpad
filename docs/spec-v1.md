@@ -3167,7 +3167,14 @@ The wording of every user-facing message. `<…>` is filled in. Numbers follow
 
 From 0.6.0 every table has a **Português** column: the message as it shows with ☰ → Language
 on Português (Brasil) ([Language](#language)). The code a message quotes, a name, a unit and
-a keyword stay as typed in both; `<reason>` passes through in the language it arrives in.
+a keyword stay as typed in both; `<reason>` passes through in the language it arrives in. The
+few reasons the web app words itself follow the language with the rest: `permission to write the
+file was refused` (`a permissão para gravar o arquivo foi negada`), `this browser cannot write
+back to a file` (`este navegador não consegue gravar de volta em um arquivo`), `this browser
+cannot read a file again` (`este navegador não consegue ler um arquivo de novo`), and the recovery
+copy's `IndexedDB would not open`, `IndexedDB transaction failed` and `IndexedDB transaction
+aborted` (`o IndexedDB não abriu`, `a transação do IndexedDB falhou`, `a transação do IndexedDB
+foi abortada`).
 
 - **Counts** have a singular and a plural form in both languages (`1 linha`, `6 linhas`;
   `1 de 30 pontos falhou`, `2 de 30 pontos falharam`), and a kind carries its article

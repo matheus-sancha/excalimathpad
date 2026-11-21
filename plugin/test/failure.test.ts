@@ -2,7 +2,9 @@ import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { notices, type WorkspaceLeaf } from './obsidian.ts'
 import { readSheet, writeSheet, DEFAULT_SETTINGS } from '../../src/file/sheetFormat.ts'
-import { FAILURE_MESSAGES } from '../../src/failure/details.ts'
+import { NO_CONTENT } from '../../src/failure/details.ts'
+import { en } from '../../src/text/en.ts'
+import { ptBR } from '../../src/text/ptBR.ts'
 import { doubleClickLine } from '../../src/test/gestures.ts'
 import { linesOf } from '../../src/test/sheetView.ts'
 import type { SheetView } from '../SheetView.ts'
@@ -69,8 +71,8 @@ afterEach(async () => {
   errors.mockRestore()
 })
 
-async function setUp() {
-  vault = await vaultWith({ [SHEET]: sheetOf(['a = 2 m', 'b = a * 3']) })
+async function setUp(data: unknown = null) {
+  vault = await vaultWith({ [SHEET]: sheetOf(['a = 2 m', 'b = a * 3']) }, data)
   const leaf = await act(() => vault.open(SHEET))
   open.push(leaf)
   await screen.findAllByRole('list', { name: 'Lines' }, { timeout: 10_000 })
@@ -96,8 +98,8 @@ function typeLine(n: number, text: string) {
 }
 
 /** A line committed and not yet written, another being typed, then the view throws on the next key. */
-async function failWhileTyping() {
-  const tab = await setUp()
+async function failWhileTyping(data: unknown = null) {
+  const tab = await setUp(data)
   fireEvent.keyDown(typeLine(1, 'a = 5 m'), { key: 'Escape' })
   const field = typeLine(2, 'b = a * secret_flo')
   bomb.view = true
@@ -113,7 +115,7 @@ describe('the view failing as a whole, in a vault', () => {
 
     const screenBox = screen.getByRole('alert')
     expect(view.contentEl).toContainElement(screenBox)
-    expect(screenBox).toHaveTextContent(FAILURE_MESSAGES.view)
+    expect(screenBox).toHaveTextContent(en.failure.view)
     expect(screenBox.querySelector('code')).toHaveTextContent('b = a * secret_flow')
     expect(document.querySelector('.excalidraw')).toBeNull()
   })
@@ -137,15 +139,32 @@ describe('the view failing as a whole, in a vault', () => {
   it('copies details that say the plugin and its device, and hold no sheet text', async () => {
     await failWhileTyping()
 
-    fireEvent.click(within(screen.getByRole('alert')).getByRole('button', { name: FAILURE_MESSAGES.copyDetails }))
+    fireEvent.click(within(screen.getByRole('alert')).getByRole('button', { name: en.failure.copyDetails }))
     await waitFor(() => expect(copied).toHaveLength(1))
     const lines = copied[0].split('\n')
     expect(lines[0]).toMatch(/^Excalimathpad \d+\.\d+\.\d+/)
     expect(lines[1]).toBe('Obsidian plugin, desktop')
-    expect(lines[2]).toBe('What failed: the view')
-    expect(lines[3]).toBe('Error: injected: the view')
-    expect(lines.at(-1)).toBe(FAILURE_MESSAGES.noContent)
+    expect(lines[2]).toBe('Language: English')
+    expect(lines[3]).toBe('What failed: the view')
+    expect(lines[4]).toBe('Error: injected: the view')
+    expect(lines.at(-1)).toBe(NO_CONTENT)
     for (const text of ['secret_flow', 'a = 5 m', '5 m', 'b = a']) expect(copied[0]).not.toContain(text)
+  })
+
+  it('in Português: the screen in Português, and the details still English, naming the language (0.6.0)', async () => {
+    await failWhileTyping({ language: 'pt-BR' })
+
+    const screenBox = screen.getByRole('alert')
+    expect(screenBox).toHaveTextContent(ptBR.failure.view)
+    expect(screenBox).toHaveTextContent(`${ptBR.failure.kept} ${ptBR.failure.typing}`)
+    expect(within(screenBox).getByRole('button', { name: ptBR.failure.reload })).toBeInTheDocument()
+    expect(within(screenBox).getByRole('link', { name: ptBR.failure.report })).toBeInTheDocument()
+    fireEvent.click(within(screenBox).getByRole('button', { name: ptBR.failure.copyDetails }))
+    await waitFor(() => expect(copied).toHaveLength(1))
+    const lines = copied[0].split('\n')
+    expect(lines.slice(1, 4)).toEqual(['Obsidian plugin, desktop', 'Language: Português (Brasil)', 'What failed: the view'])
+    expect(lines.at(-1)).toBe(NO_CONTENT)
+    expect(within(screenBox).getByRole('button', { name: ptBR.failure.copied })).toBeInTheDocument()
   })
 
   it('Reload the sheet mounts what the tab held, up to the last line commit, and autosave goes on from there', async () => {
@@ -153,7 +172,7 @@ describe('the view failing as a whole, in a vault', () => {
     const asked = view.saveRequests
     bomb.view = false
 
-    fireEvent.click(screen.getByRole('button', { name: FAILURE_MESSAGES.reload }))
+    fireEvent.click(screen.getByRole('button', { name: en.failure.reload }))
 
     await screen.findAllByRole('list', { name: 'Lines' }, { timeout: 10_000 })
     // The committed line is there; the line that was being typed isn't put back.
@@ -175,10 +194,10 @@ describe('the view failing as a whole, in a vault', () => {
     act(() => {
       fireEvent.input(field, { target: { value: 'b = a * 44' } })
     })
-    expect(screen.getByRole('alert')).toHaveTextContent(FAILURE_MESSAGES.typing)
+    expect(screen.getByRole('alert')).toHaveTextContent(en.failure.typing)
     bomb.view = false
 
-    fireEvent.click(screen.getByRole('button', { name: FAILURE_MESSAGES.reload }))
+    fireEvent.click(screen.getByRole('button', { name: en.failure.reload }))
 
     await screen.findAllByRole('list', { name: 'Lines' }, { timeout: 10_000 })
     await waitFor(() => expect(shownLines()).toEqual(['a = 2 m', 'b = a * 3']))
@@ -199,10 +218,10 @@ describe('the view failing as a whole, in a vault', () => {
     act(() => {
       fireEvent.input(field, { target: { value: 'b = a * 44' } })
     })
-    fireEvent.click(screen.getByRole('button', { name: FAILURE_MESSAGES.reload }))
+    fireEvent.click(screen.getByRole('button', { name: en.failure.reload }))
     await waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument())
     bomb.view = false
-    fireEvent.click(screen.getByRole('button', { name: FAILURE_MESSAGES.reload }))
+    fireEvent.click(screen.getByRole('button', { name: en.failure.reload }))
 
     await screen.findAllByRole('list', { name: 'Lines' }, { timeout: 10_000 })
     await waitFor(() => expect(shownLines()).toEqual(['a = 7 m', 'b = a * 3']))

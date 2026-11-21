@@ -38,7 +38,15 @@ sheet given `unwrittenAtStart` asks for a save once loaded.
 and asks before leaving while dirty; an unsaved sheet's name there, and the
 browser's own Print line (`--math-print-line` on `<html>`, for `src/index.css`),
 are in the language shown, read with `useWords()`, and `displayName` and the
-save picker's file type read `words()` when worded ([text](text.md), 0.6.0); it answers the keys and drops that
+save picker's file type read `words()` when worded ([text](text.md), 0.6.0). **The words of
+the file** (section 13, App; 0.6.0) are the text tables' `dialogs` group: a `PendingDialog`
+holds its `kind` and `name`, and `FileDialog` words the question (`dialogTitle`) and its
+buttons as it draws, so a choice in ☰ reaches an open one. `MESSAGES` (`sheetSession.ts`, also
+read by the vault's view) words the four file messages when each is read; a `<reason>` the
+browser gives passes through, and the reasons the app throws itself (`fileAccess.ts`'s three,
+`recovery.ts`'s three) are worded from `dialogs.reasons` when thrown. `suggestedName` gives
+an untitled sheet `Untitled.excalimathpad` or `Sem título.excalimathpad`, by the language
+shown when Save as asks. It answers the keys and drops that
 `canvas/fileRoutes.ts` takes, Ctrl+P through its `print` prop (App's Print…). Opening picks the file before it asks about
 unsaved changes: Chromium allows one picker per gesture. Depends on: canvas
 (file routes, layers), text (its words).

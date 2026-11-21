@@ -48,5 +48,13 @@ build stamp's tooltip, More tools' heading, items and badge (`SheetCanvas.tsx`);
 welcome hint, with its touch wording after a touch press; the canvas hint
 (`mathSelection.ts`); the window title and the name beside ☰ (`FileChrome.tsx`,
 `displayName`), the save picker's file type (`fileAccess.ts`) and the browser's own Print
-line (`--math-print-line` on `<html>`, read by `src/index.css`). The image-too-big toast is
+line (`--math-print-line` on `<html>`, read by `src/index.css`). Issue 5 (#294) adds the
+groups `dialogs` (the file's two questions, their buttons, the four messages and the reasons
+the app words itself, `FileChrome.tsx`, `sheetSession.ts`, `fileAccess.ts`, `recovery.ts`; the
+suggested name `Sem título.excalimathpad`), `printView` (the footer's `2 de 3` and Print…'s
+notice, `printView.ts`, `printSheet.ts`), `failure` (`src/failure/`), `offer` (the offer's
+card, its lines and row, and the toast after a rename, `OfferCard.tsx`, `renameOffer.ts`,
+App), `unitSlot` (`UnitField.tsx`) and `plotSettings` (`PlotSettings.tsx`). A word with
+parts that aren't text, as the offer's question with its code and button, is a function that
+hands back the words and the parts in the language's order (`offer.question`). The image-too-big toast is
 Excalidraw's own `errors.fileTooBig`, from its `t`, not a word of these tables.

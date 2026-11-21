@@ -1,6 +1,6 @@
 import { Notice } from 'obsidian'
 import type { PageSetting } from '../src/print/pages.ts'
-import { PRINT_FAILED, printSheet, type SheetToPrint } from '../src/print/printSheet.ts'
+import { printFailed, printSheet, type SheetToPrint } from '../src/print/printSheet.ts'
 
 /**
  * Print… in a vault (docs/spec-v1.md section 11, Changed on 2026-11-15 and
@@ -136,7 +136,7 @@ export async function printInFrame({ doc, sheet, page, name, plain }: FramePrint
   } catch (error) {
     // The frame couldn't be made, or its dialog couldn't open: nothing was printed.
     console.error('Excalimathpad: the print frame', error)
-    new Notice(PRINT_FAILED)
+    new Notice(printFailed())
   } finally {
     shown.paper?.hide()
     frame?.remove()
