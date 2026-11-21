@@ -1262,13 +1262,22 @@ for it (F2 on the open line is not in 0.5.0).
   next line keeps its left side, and its right side is still in the reach: with `rho`
   renamed, `rho = rho * 1.1` becomes `rho = rho_w * 1.1`. A use above the assignment is never
   touched. A name assigned twice has two rows in Variables, and each renames its own reach.
+  What a line reads after it has run is that line's own assignment: a rule on it, and the
+  body of a function it defines, which runs at each call. So on the next line that assigns
+  the name those two are outside the reach (`sq(x) = sq(x) + 1` is left whole, and so is the
+  `rho` in `rho = rho * 1.1 @bold if rho > 1050`'s rule), and on the line renamed they are in
+  it: `fact(n) = n * fact(n - 1)` renames its own call.
 - **A use is everything the engine reads as that assignment:** the line's math, an index, a
   rule's condition (typed in the line or stored beside it), a solve line's equation, search
   range and guess, a table's and a plot's arguments and clauses (a mark, a range, a point, a
   circle), and a function body that reads the sheet's name.
 - **Left alone:** a text in quotes, a note and a comment line, a title, the unit after `in`,
-  a function whose parameter has that name (inside it the name is the parameter), and a
-  solve whose unknown has it.
+  a function whose parameter has that name (inside it the name is the parameter), a
+  solve whose unknown has it, and `result` in a rule, which is the line's own value. A plot's
+  title and its own words (`x`, `y`, `mark`) are left too, and so is a range's `step`.
+- **A line that doesn't parse is left as typed,** since the engine reads nothing in it. Only
+  the name it assigns is renamed, when it is the line renamed: `rho = 1000 *` becomes
+  `rho_w = 1000 *`. Such a line still ends a reach, as it ends the name's value.
 - **A name that shadows a unit** is followed where the engine reads the name (`5 m` below
   `m = …`) and not where it reads the unit (`in m`).
 - **A function's name is renamed like a variable's:** its definition, and every call and
@@ -1292,7 +1301,8 @@ for it (F2 on the open line is not in 0.5.0).
 - **Refused, with Rename dimmed and the reason under the field**
   ([section 13](#13-messages)): a name the sheet already assigns, above or below; a reserved
   word (`table`, `plot`, `solve`, `if`); text that isn't a name. The old name itself dims
-  Rename and says nothing.
+  Rename and says nothing, and so does an empty field. A name is what a line can assign: one
+  word, as the engine reads it on the left of `=`.
 - **A unit's or a built-in's name is allowed.** While one is typed the form shows the amber
   [shadow warning](#warnings) under the field (`⚠ m shadows the unit m`) and Rename stays
   enabled: a rename allows what typing the name in a line allows.
@@ -1301,7 +1311,9 @@ for it (F2 on the open line is not in 0.5.0).
   so in amber, with those lines ("This changes 1 result:"), and Rename stays enabled. This
   is what catches a new name that shadows a unit used below, a new name that is the
   parameter of a function whose body reads the old name, and a function that reads the name
-  across a second assignment.
+  across a second assignment. It also says a line above the assignment that reads the name,
+  which a rename never touches: a function's body there that a line below calls, and a line
+  that read "is defined below".
 - **Rename writes every changed line of every element at once:** one undo step
   ([section 6](#6-undo)), and the sheet is dirty, as after any source change.
 
@@ -3699,20 +3711,37 @@ Evidence: [`obsidian-plugin.md`](research/obsidian-plugin.md).
   the new name, it gives the lines to write (element, line, new text, new clause), the
   refusal if there is one, the shadow warning, and the lines whose result would differ. The
   form, the card and the phone's row all show what it returns, and Rename writes exactly
-  that.
+  that. It is `planRename` (`rename.ts`): it also gives where the name stands in each line,
+  for the list's marks, and it is null for a line that doesn't assign the name.
+  `applyRename` gives the blocks with a plan written. The shadow warning is the one the
+  engine gives the renamed line, so a rename warns exactly where typing the name would.
 - **It reads a line as the engine does:** the same line forms `evaluateSheet` reads (ADR
   0005) and the names the warnings already collect (`usedNames`, `bodyNames`), so a unit
   after `in`, a parameter, an unknown, a text and a note are told from a use by the engine's
   own rules. The prototype's whole-word search in a line's code is not the rule. It replaces
   only the name's own characters, so a line's spacing, note and clauses stay as typed.
+- **There is no second reader of the line forms.** Each place the name's characters stand in
+  a line's text, or in its stored clause, is tried on its own: the name there is swapped for
+  a marker no sheet holds, and the line is read again by the reader `evaluateSheet` uses
+  (`readSheetLine`). The place is a use only if the line otherwise reads the same and the
+  marker is a name it reads; where the reading changed, the place was a unit after `in` or a
+  form's own word. Whether a read is in the reach goes by when it happens: as the line runs,
+  or after it (a rule, a function's body, a solve function's equation and guess).
 - **The test that holds it:** for every name in the Math guide's examples and in the two
   acceptance sheets, a rename to a name the sheet doesn't hold changes no line's result, and
   renaming it back gives the sheet's text again, character for character. The cases
   [section 4](#renaming-a-name) lists as left alone and as "changes a result" each have a
-  test of their own.
+  test of their own. Three of the guide's examples are set aside by name in the test, each
+  by section 4's own rules: `z_u`, read by a function's body above its line and called
+  below, and `b_1`, read above its line to show "is defined below", each change the one
+  result the test names; `table = 2` assigns a reserved word, so no rename starts there. A
+  name assigned twice is refused on the way back, as taken; its text is put back at the
+  places the plan lists.
 - **"Changes a result" is the engine run twice,** on the sheet as it is and with the rename
   applied, compared line by line: the same kind of result, and the same shown value, error
-  or list. No result is kept from it.
+  or list. No result is kept from it. A table's cells and a plot's points count as their
+  line's result. An error that names the renamed name is the same error under the new name
+  ("rho has an error above"), and so is a syntax error wherever it stands in the line.
 - **One write for every changed anchor:** one `updateScene` with
   `CaptureUpdateAction.IMMEDIATELY` holding every changed anchor, each with its `source` and
   `formats` together, as `writeAnchorSource` writes one. On 0.18.1 that is one undo step
@@ -4230,6 +4259,19 @@ Each section above ends with its own tickets.
 
 ## Changes since agreed
 
+- 2026-11-21, [sections 4](#renaming-a-name) and [14](#14-engineering-constraints) (#260, found
+  while building, for Matheus to confirm on the PR):
+  - **The test that holds the rename sets three of the Math guide's examples aside.** Section 14
+    said a rename to a new name changes no line's result for every name of the guide. Two
+    examples read a name above the line that assigns it (`y_u(x) = x + z_u` over `z_u = 1`, and
+    `a_1 = b_1 + 1` over `b_1 = 2`), and a use above the assignment is never touched, so each
+    rename changes one result and says so. `table = 2` assigns a reserved word, and no rename
+    starts there. The reach was kept as agreed; following a function's body above its
+    assignment would be a change to it.
+  - **"Its right side is still in the reach" is the right side the line reads as it runs.** On
+    the next line that assigns the name, the body of a function it defines and a rule on it read
+    that line's own assignment, so they are outside the reach: renaming the first `sq` leaves
+    `sq(x) = sq(x) + 1` whole.
 - 2026-11-21, [sections 8](#the-excalidraw-upgrade), [7](#the-file), [4](#gestures) and
   [12a](#12a-obsidian-plugin) (the Excalidraw upgrade, from the map
   [Spec for 0.5.0, from the first test week's feedback](https://github.com/matheus-sancha/excalimathpad/issues/230)).

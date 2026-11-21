@@ -247,6 +247,38 @@ between them. `MAX_POINTS` in `lists.ts` is the one number. `largeMatrix` in
 of values through `listSummary`, a matrix by its size, with `listPreview`.
 `engineFunctionNames()` lists what a line can call, for the sweep test
 (`sweep.test.ts`, whose calls run in a child process, `src/test/sweepChild.ts`).
+**A rename** (spec section 4, Renaming a name; section 14, 0.5.0;
+`rename.ts`, no React and no Excalidraw): `planRename(blocks, target,
+newName, settings)` takes the sheet's blocks in reading order, one assignment
+(`RenameTarget`: element, line from 0, name) and the new name, and gives a
+`RenamePlan`: `lines`, what Rename writes (each line's new `text` and
+`stored` clause, with `uses` and `storedUses`, where the old name stands in
+them as they are), the `refusal` if there is one (with a refusal a line's
+text is as it is, and nothing may be written), the shadow `warning`, and
+`changes`, the lines whose result would differ. Null for a line that doesn't
+assign the name. `applyRename(blocks, lines)` gives the blocks with a plan
+written, line ends kept, and `formats` untouched where no stored clause
+changed. It has no reader of its own: `evaluate.ts` exports the engine's,
+`readSheetLine(shown, stored)` (a `ParsedLine`, never throws),
+`parseCondition` (a rule's condition, as `runRules` parses it),
+`isAssignableName` and `isReservedName`. Each place the name's characters
+stand (`places`) is tried alone: swapped for a marker no line holds
+(`markerFor`), the line is read again, and the place counts only if the
+reading is otherwise the same (`signature`: the `ParsedLine` and its
+conditions as JSON, without what moves with a text's length) and the marker
+has a role in it (`rolesOf`): `target`, the name the line assigns; `before`,
+read as the line runs; `after`, read once it has run (a rule, a function's
+body, a solve function's parts); `bound`, the line's own (a parameter, a
+solve's unknown, a rule's `result`). `findUses` keeps a role by where the
+line is in the reach: `target` on the line renamed, `before` below it down
+to the next line that assigns the name, `after` from it down to the line
+before that one. A line that didn't parse reads as the names its text
+assigns and nothing else. "Changes a result" is `evaluateSheet` twice,
+compared by `resultComparer`. `rename.test.ts` holds it: a test for each
+use, each thing left alone, each refusal and each "changes a result", and
+every name of the Math guide's examples (read by
+`src/test/guideExamples.ts`, which `math-guide.test.ts` shares) and of both
+acceptance sheets renamed and renamed back.
 App code must evaluate only
 through `evaluateSheet`: math.js functions that depend on the disabled
 names (`help`, `rationalize`, a `parser()`'s methods) no longer work. The
