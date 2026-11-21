@@ -15,7 +15,7 @@ const count = (n) => n.toLocaleString('en-US')
  * the model, the terms and where things are, and nothing else. If the growth
  * is meant, raise the budget in a commit that says what was added.
  */
-export const CONTEXT_BUDGET = 37_300
+export const CONTEXT_BUDGET = 37_700
 
 /** The files a build session is routed through, and the history beside the spec. */
 const modules = readdirSync(join(root, 'docs/context')).map((name) => `docs/context/${name}`)

@@ -18,7 +18,8 @@ what to read for an issue and where to write.
 
 - `index.html` → `src/main.tsx` — the web app's entry; mounts `App` with the
   browser's ports: the file pickers, the IndexedDB recovery copy and the
-  per-browser panel memory (`localStorage`: open or closed, and its width).
+  per-browser memory (`localStorage`: the panel open or closed, its width,
+  and from 0.5.0 the language).
 - `plugin/main.ts` — the plugin's entry (section 12a), built by
   `esbuild.plugin.mjs` into `dist-plugin/` (`main.js`, `styles.css`, a copy of
   the root `manifest.json`). `tsconfig.plugin.json` type-checks `plugin/`.
@@ -454,6 +455,10 @@ and everything downstream recalculates. Engine: math.js, client-side.
   press or key (each view notes that on its own container), and gives the main
   body a `removeChild` that finds a moved box. Every one of these is
   Excalidraw 0.18.1's text; the pop-out run fails an upgrade that moves it.
+- **Excalidraw keeps one language per window** (0.5.0): `langCode` loads its
+  texts for every editor there, and a tab given the new prop before they load
+  keeps its toolbar in the old one. So each canvas also follows `useI18n`'s
+  `langCode` (`LanguageShown`, `SheetCanvas.tsx`; `plugin/test/tab.test.ts`).
 - **Callbacks handed around unbound are function properties**, not methods
   (`SheetSession`, `DialogHost`, the scene store): the type-aware lint's
   `unbound-method` holds them to it.

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
-import { Excalidraw, FONT_FAMILY, MainMenu, Sidebar, WelcomeScreen } from '@excalidraw/excalidraw'
+import { Excalidraw, FONT_FAMILY, MainMenu, Sidebar, WelcomeScreen, useI18n } from '@excalidraw/excalidraw'
 import type { ExcalidrawElement } from '@excalidraw/excalidraw/element/types'
 import type { ExcalidrawImperativeAPI, UIOptions } from '@excalidraw/excalidraw/types'
 import '@excalidraw/excalidraw/index.css'
@@ -13,6 +13,7 @@ import { PanelResizeHandle } from './PanelResizeHandle.tsx'
 import { PANEL_WIDTH, clampPanelWidth, docksAbove, type PanelWidthMemory } from './panelWidth.ts'
 import { closeMoreTools, markMoreTools, useMoreToolsSlot } from './moreTools.ts'
 import type { SheetTheme, ThemeMemory } from './theme.ts'
+import { DEFAULT_LANGUAGE, LANGUAGE_LABEL, LANGUAGES, isSheetLanguage, type LanguageMemory, type SheetLanguage } from './language.ts'
 import { VAULT_CLASS } from './vaultItems.ts'
 import { MathGuide } from '../guide/MathGuide.tsx'
 import './SheetCanvas.css'
@@ -163,6 +164,12 @@ export interface SheetCanvasProps {
    */
   theme?: ThemeMemory
   /**
+   * Where ☰ → Language is remembered (section 8, Language, 0.5.0): the canvas
+   * opens in the language last chosen, English until one is, and tells the
+   * memory each choice. Unset, a choice lasts as long as the canvas.
+   */
+  language?: LanguageMemory
+  /**
    * On a phone (the plugin's `Platform.isPhone`, section 8, On a phone, M4d)
    * the Sheet panel is a bottom sheet (`BottomSheet.tsx`) in place of
    * Excalidraw's sidebar; the handle and Math settings act on it the same way.
@@ -212,6 +219,7 @@ export function SheetCanvas({
   imageTool,
   vault = false,
   theme,
+  language: languageMemory,
   phone = false,
   touch = false,
 }: SheetCanvasProps) {
@@ -271,6 +279,22 @@ export function SheetCanvas({
   const focusCanvas = useCallback(() => {
     containerRef.current?.querySelector<HTMLElement>('.excalidraw')?.focus()
   }, [])
+
+  // Excalidraw's language (section 8, Language): the one last chosen, else
+  // English, read once; then each choice in ☰. Excalidraw holds one language
+  // for the whole page, so in a vault a choice in another tab reaches this one
+  // too: `LanguageShown` follows it, once Excalidraw has loaded its texts.
+  const [langCode, setLangCode] = useState<SheetLanguage>(() => languageMemory?.rememberedLanguage() ?? DEFAULT_LANGUAGE)
+  const followLanguage = useCallback((shown: string) => {
+    if (isSheetLanguage(shown)) setLangCode(shown)
+  }, [])
+  const chooseLanguage = useCallback(
+    (next: SheetLanguage) => {
+      setLangCode(next)
+      languageMemory?.rememberLanguage(next)
+    },
+    [languageMemory],
+  )
 
   // The mode the canvas opens in: the one last chosen, else light. Read once.
   const [initialData] = useState(() => ({
@@ -407,6 +431,7 @@ export function SheetCanvas({
         excalidrawAPI={setApi}
         initialData={initialData}
         UIOptions={uiOptions}
+        langCode={langCode}
         aiEnabled={!vault}
         // `false` makes every embed invalid, so none loads its iframe.
         validateEmbeddable={embeds ? undefined : false}
@@ -465,8 +490,15 @@ export function SheetCanvas({
           )
         }
       >
-        <SheetMenu fileMenu={fileMenu} print={print} onMathGuide={openMathGuide} />
+        <SheetMenu
+          fileMenu={fileMenu}
+          print={print}
+          onMathGuide={openMathGuide}
+          language={langCode}
+          onLanguage={chooseLanguage}
+        />
         <SheetWelcome fileMenu={fileMenu} />
+        <LanguageShown onShown={followLanguage} />
         {sheetPanel && !phone && (
           <Sidebar
             name={SHEET_PANEL}
@@ -680,10 +712,14 @@ function SheetMenu({
   fileMenu,
   print,
   onMathGuide,
+  language,
+  onLanguage,
 }: {
   fileMenu?: FileMenu
   print?: () => void
   onMathGuide: () => void
+  language: SheetLanguage
+  onLanguage: (language: SheetLanguage) => void
 }) {
   return (
     <MainMenu>
@@ -720,12 +756,69 @@ function SheetMenu({
       <MainMenu.DefaultItems.ClearCanvas />
       <MainMenu.Separator />
       <MainMenu.DefaultItems.ToggleTheme />
+      <MainMenu.ItemCustom className="language-row" data-testid="language-row">
+        <LanguageRow language={language} onLanguage={onLanguage} />
+      </MainMenu.ItemCustom>
       <MainMenu.DefaultItems.ChangeCanvasBackground />
       {/* Text, not an item: it takes no focus and no click (section 12, Hosted build). */}
       <div className="build-stamp" data-testid="build-stamp" title="This build">
         {__BUILD_STAMP__}
       </div>
     </MainMenu>
+  )
+}
+
+/**
+ * ☰ → Language (section 8, Language, 0.5.0): its label, in English whichever
+ * is chosen, and a `<select>` of the two, each named in its own language.
+ * A `<select>` isn't a field to Excalidraw's shortcuts, so no key on it
+ * reaches them: Delete there would delete the selected element (section 14).
+ */
+function LanguageRow({ language, onLanguage }: { language: SheetLanguage; onLanguage: (language: SheetLanguage) => void }) {
+  return (
+    <label className="language-row__field" onKeyDown={(event) => event.stopPropagation()}>
+      <LanguageIcon />
+      <span className="language-row__label">{LANGUAGE_LABEL}</span>
+      <select
+        className="dropdown-select dropdown-select__language language-row__select"
+        data-testid="language-select"
+        value={language}
+        onChange={({ target }) => {
+          if (isSheetLanguage(target.value)) onLanguage(target.value)
+        }}
+      >
+        {LANGUAGES.map(({ code, label }) => (
+          <option key={code} value={code} lang={code}>
+            {label}
+          </option>
+        ))}
+      </select>
+    </label>
+  )
+}
+
+/**
+ * Tells the canvas the language Excalidraw shows (its public `useI18n`), each
+ * time it changes. Excalidraw keeps one language for every editor on the page
+ * and changes it only once its texts have loaded; a tab whose own `langCode`
+ * changed before that would keep its toolbar in the old language, since
+ * Excalidraw draws its UI again only when its props or state change.
+ */
+function LanguageShown({ onShown }: { onShown: (langCode: string) => void }) {
+  const { langCode } = useI18n()
+  useEffect(() => onShown(langCode), [langCode, onShown])
+  return null
+}
+
+/** The Language row's icon: a globe, drawn as Excalidraw's own menu icons are. */
+function LanguageIcon() {
+  return (
+    <span className="language-row__icon" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="8.5" />
+        <path d="M3.5 12h17M12 3.5c2.5 2.4 3.5 5.2 3.5 8.5s-1 6.1-3.5 8.5c-2.5-2.4-3.5-5.2-3.5-8.5s1-6.1 3.5-8.5z" />
+      </svg>
+    </span>
   )
 }
 

@@ -23,7 +23,23 @@ and on the web the app takes Ctrl+P first (Print…). After an Open, Excalidraw'
 Undo button can stay lit: `history.clear()` (`sceneFile.ts`) doesn't notify it;
 pressing it undoes nothing and puts it right. With `theme` (a `ThemeMemory`, `theme.ts`) it opens
 in the mode last chosen, light until one is, and tells the memory each
-change of `appState.theme`. `vaultKeys.ts` is the keys of a vault tab:
+change of `appState.theme`. **Language** (spec section 8, Language, 0.5.0):
+`language.ts` holds `SheetLanguage` (`en`, `pt-BR`), `LANGUAGES` (the two
+choices and their labels), the `LanguageMemory` port and
+`storageLanguageMemory`, the web's (`localStorage` key
+`excalimathpad.language`, handed in by `src/main.tsx`). `SheetCanvas`'s
+`language` prop is that memory: it reads it once (English when unset), passes
+Excalidraw `langCode`, and draws ☰'s Language row (`LanguageRow`: a
+`MainMenu.ItemCustom` just below Dark mode, holding Excalidraw's own
+`dropdown-select__language` `<select>`, `data-testid="language-select"`,
+whose box stops every key's React propagation, as the panel's does). A
+choice sets the state and tells the memory. Excalidraw keeps one language
+for every editor in the window and changes it once its texts have loaded,
+so `LanguageShown`, a child of the editor, hands back `useI18n`'s `langCode`
+each time it changes and the canvas follows it: another tab's choice reaches
+this one, and its toolbar draws again then (see CONTEXT.md, Load-bearing).
+Excalidraw also writes the language into the window's `<html lang>` and
+`dir`. `vaultKeys.ts` is the keys of a vault tab:
 `PASS_THROUGH_KEYS` and `SWALLOWED_KEYS` (tested constants), `vaultKeyRoute`,
 and `confineKeys`, a capture listener on the view's container that stops a
 core key Obsidian took (`defaultPrevented`) and every swallowed key.

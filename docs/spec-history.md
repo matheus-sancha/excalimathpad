@@ -622,6 +622,29 @@ The items with a recorded result. Those still open are in
   - On a 640 px editor (the panel closed) the card is under its line, its buttons whole, inside the editor.
   - On a 2560 px window there is room: the card is beside the line, 8 px right of its element, at its row.
   - The element on the pump sheet is about 610 px wide (its comment line), so on 1920 px there is no room either.
+- Under Português: every place a test or a run finds Excalidraw's DOM by its English text; whether Excalidraw
+  redraws in the new language at once with a line open, or only after the menu closes; the plugin's `main.js`
+  with `pt-BR` in it, against its budget. **Measured (#263)** on Excalidraw 0.18.1:
+  - The app's own code and CSS find Excalidraw's DOM only by class, order and `data-testid`: nothing by its
+    English text. The tests that do (`findByTitle('More tools')`, a `Close` button, the labels of the plugin's
+    hidden items) run in English and check Excalidraw, not the app. Under Português the network-blocked run
+    (the built plugin) still finds More tools' Math heading and two items, the image tool (the vault's picker,
+    no system chooser), Web Embed, the Generate heading and Copy to clipboard as SVG hidden, the reduced
+    properties panel (only Opacidade, Camadas and Ações) and the app's canvas hint, in English.
+  - A line can't be open while a language is chosen: ☰ is a press, which leaves the line first. Excalidraw
+    redraws at once, with ☰ still open (the panel run on the web, and in jsdom). A `langCode` change doesn't
+    remount the editor: Excalidraw shows its loading screen only on its first mount, so the scene, the
+    selection and the panel stay as they are.
+  - Excalidraw keeps one language for every editor in the window and switches it only once the texts have
+    loaded. A second sheet tab given the new `langCode` in the same render kept its toolbar in the old language,
+    since Excalidraw draws its UI again only on a change of its own props or state. So each canvas follows the
+    language Excalidraw shows (`useI18n`), and every open tab changes with a choice (`plugin/test/tab.test.ts`,
+    with the control).
+  - The plugin's `main.js` with `pt-BR` kept: 3,447,773 bytes, 23,822 more than without it, under its budget
+    of 3,574,000, so the budget isn't raised. On the web `pt-BR` is its own 22 kB chunk, fetched from the app's
+    address when first chosen.
+  - Excalidraw also writes the language into the window's `<html lang>` (and `dir`), as it already wrote `en`
+    at every mount; in Obsidian that is Obsidian's own page.
 
 ## 18. Decision index
 

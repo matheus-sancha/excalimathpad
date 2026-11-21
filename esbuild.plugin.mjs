@@ -7,7 +7,8 @@
 // - No splitting: the KaTeX and Plot `import()`s fold into `main.js`.
 // - Fonts are `data:` URLs: KaTeX's through its CSS (woff2 only), Excalidraw's
 //   by rewriting the `./fonts/…` strings it resolves at run time.
-// - Trims: Mermaid to Excalidraw, the non-English locales, font subsetting and
+// - Trims: Mermaid to Excalidraw, the locales but English and Brazilian
+//   Portuguese (☰ → Language, 0.5.0), font subsetting and
 //   math.js's help texts are stubbed; Xiaolai's paths become `local:`, so CJK
 //   text uses system fonts; four KaTeX font families are dropped
 //   (`src/overlay/katexFonts.ts`).
@@ -37,11 +38,17 @@ const pkg = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'))
 const HELP_TEXTS = /[\\/]expression[\\/]embeddedDocs[\\/]embeddedDocs\.js$/
 const NO_HELP_TEXTS = join(root, 'src/math/noHelpTexts.ts')
 
+/** The Excalidraw locales the plugin keeps: the two ☰ → Language offers (`src/canvas/language.ts`). */
+const KEPT_LOCALES = ['en', 'pt-BR']
+
 /** A path inside Excalidraw's production build. */
 const inExcalidraw = (path) => path.replaceAll('\\', '/').includes('/@excalidraw/excalidraw/dist/prod/')
 
 /** How many imports of math.js's help texts the build stubbed: none means math.js moved them. */
 let helpTextsStubbed = 0
+
+/** The kept locales the build met: one missing means Excalidraw renamed or moved it. */
+const localesKept = new Set()
 
 /** The plugin-only trims, as one esbuild plugin. */
 const trims = {
@@ -52,12 +59,15 @@ const trims = {
       path: 'mermaid-to-excalidraw',
       namespace: 'trimmed',
     }))
-    // The non-English locales: the plugin sets no language, so English (bundled) is all it reads.
-    b.onResolve({ filter: /^\.\/locales\/[^/]+\.js$/ }, (args) =>
-      inExcalidraw(args.importer) && !args.path.startsWith('./locales/en-')
-        ? { path: args.path, namespace: 'trimmed-locale' }
-        : undefined,
-    )
+    // The locales ☰ → Language doesn't offer (section 12a, Trims): English is
+    // bundled, and Brazilian Portuguese folds in, so choosing it makes no request.
+    b.onResolve({ filter: /^\.\/locales\/[^/]+\.js$/ }, (args) => {
+      if (!inExcalidraw(args.importer)) return undefined
+      const kept = KEPT_LOCALES.find((locale) => args.path.startsWith(`./locales/${locale}-`))
+      if (!kept) return { path: args.path, namespace: 'trimmed-locale' }
+      localesKept.add(kept)
+      return undefined
+    })
     // Font subsetting: only Excalidraw's own image export embeds fonts with it.
     b.onResolve({ filter: /^\.\/subset-(worker|shared)\.chunk\.js$/ }, (args) =>
       inExcalidraw(args.importer) ? { path: args.path, namespace: 'trimmed' } : undefined,
@@ -159,6 +169,7 @@ export async function buildPlugin({ outDir = out, log = console.log } = {}) {
   await rm(outDir, { recursive: true, force: true })
   await mkdir(outDir, { recursive: true })
   helpTextsStubbed = 0
+  localesKept.clear()
   const result = await build({
     absWorkingDir: root,
     entryPoints: ['plugin/main.ts'],
@@ -191,6 +202,9 @@ export async function buildPlugin({ outDir = out, log = console.log } = {}) {
   })
 
   if (helpTextsStubbed === 0) throw new Error("math.js's help texts weren't stubbed: embeddedDocs.js has moved")
+  for (const locale of KEPT_LOCALES.filter((locale) => locale !== 'en' && !localesKept.has(locale))) {
+    throw new Error(`Excalidraw's ${locale} locale wasn't found: ☰ → Language would show English (section 12a, Trims)`)
+  }
 
   const mainPath = join(outDir, 'main.js')
   const fonts = await inlineFonts(await readFile(mainPath, 'utf8'))

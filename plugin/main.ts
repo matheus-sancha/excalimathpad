@@ -2,6 +2,7 @@ import { Notice, Platform, Plugin, TFolder, type TAbstractFile } from 'obsidian'
 import { emptyScene } from '../src/canvas/sceneFile.ts'
 import { DEFAULT_SETTINGS, writeSheet } from '../src/file/sheetFormat.ts'
 import { isSheetTheme, type SheetTheme } from '../src/canvas/theme.ts'
+import { isSheetLanguage, type SheetLanguage } from '../src/canvas/language.ts'
 import type { SheetCommands } from '../src/App.tsx'
 import { freeSheetPath, NEW_SHEET_BASE } from './names.ts'
 import {
@@ -21,6 +22,8 @@ interface PluginData {
   sheetPanelWidth?: number
   /** Light or dark, as last chosen with ☰ Dark mode (section 8, Inside an Obsidian tab). */
   theme?: SheetTheme
+  /** Excalidraw's language, as last chosen with ☰ → Language (section 8, Language, 0.5.0). */
+  language?: SheetLanguage
 }
 
 /** The words of New sheet, in the command palette, on the ribbon and in a folder's menu. */
@@ -65,6 +68,10 @@ export default class ExcalimathpadPlugin extends Plugin {
         rememberedTheme: () => this.stored.theme ?? null,
         rememberTheme: (theme) => this.remember({ theme }),
       },
+      language: {
+        rememberedLanguage: () => this.stored.language ?? null,
+        rememberLanguage: (language) => this.remember({ language }),
+      },
     }
     this.registerView(VIEW_TYPE, (leaf) => new SheetView(leaf, memory))
     this.registerExtensions([SHEET_EXTENSION_NAME], VIEW_TYPE)
@@ -103,7 +110,8 @@ export default class ExcalimathpadPlugin extends Plugin {
     if (
       next.sheetPanel === this.stored.sheetPanel &&
       next.sheetPanelWidth === this.stored.sheetPanelWidth &&
-      next.theme === this.stored.theme
+      next.theme === this.stored.theme &&
+      next.language === this.stored.language
     ) {
       return
     }
@@ -135,11 +143,12 @@ export default class ExcalimathpadPlugin extends Plugin {
 /** `data.json` as read: anything that isn't ours is dropped. */
 function readData(value: unknown): PluginData {
   if (typeof value !== 'object' || value === null) return {}
-  const { sheetPanel, sheetPanelWidth, theme } = value as Record<string, unknown>
+  const { sheetPanel, sheetPanelWidth, theme, language } = value as Record<string, unknown>
   return {
     ...(typeof sheetPanel === 'boolean' && { sheetPanel }),
     ...(typeof sheetPanelWidth === 'number' && Number.isFinite(sheetPanelWidth) && { sheetPanelWidth }),
     ...(isSheetTheme(theme) && { theme }),
+    ...(isSheetLanguage(language) && { language }),
   }
 }
 

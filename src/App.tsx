@@ -42,6 +42,7 @@ import { createVaultSheet, type VaultSheet, type VaultSheetData } from './file/v
 import { ignoreSceneDrops } from './canvas/fileRoutes.ts'
 import type { PickedImage } from './canvas/imageTool.ts'
 import type { ThemeMemory } from './canvas/theme.ts'
+import type { LanguageMemory } from './canvas/language.ts'
 import { confineKeys } from './canvas/vaultKeys.ts'
 import { bridgeWindow } from './canvas/popoutBridge.ts'
 import { isInSheetPanel, keepPanelPresses } from './canvas/panelPresses.ts'
@@ -130,6 +131,12 @@ export interface AppProps {
   recovery?: RecoveryStore
   /** Where the Sheet panel's open state is kept. Unset: for this page only. */
   panelMemory?: PanelMemory
+  /**
+   * Where ☰ → Language is kept (section 8, Language, 0.5.0): browser storage
+   * on the web, `data.json` in a vault. Unset: English, and a choice lasts as
+   * long as the page.
+   */
+  language?: LanguageMemory
   /** Set inside an Obsidian view: the sheet is the vault's file. */
   vault?: VaultHome
   /**
@@ -211,6 +218,7 @@ function Sheet({
   files,
   recovery,
   panelMemory,
+  language,
   vault,
   initialElements,
   box,
@@ -632,6 +640,7 @@ function Sheet({
           embeds={!vault}
           vault={!!vault}
           theme={vault?.theme}
+          language={language}
           phone={phone}
           touch={touch}
           imageTool={imageTool ?? undefined}

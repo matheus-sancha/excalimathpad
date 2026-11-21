@@ -41,7 +41,10 @@ Print… where `vault.print` is set) through `vault.commands`, and passes the ca
 light or dark is remembered). `panelMemory` is where the panel's open state and its width live
 (a port: `storagePanelMemory` on the web, `data.json` in the plugin, this
 page only if unset); App hands it to the canvas as the slot's `width`, and
-holds no width itself. Whether the panel docks is the canvas's answer
+holds no width itself. `language` (a `LanguageMemory`, spec section 8,
+Language, 0.5.0) is where ☰ → Language is kept, the same way: browser
+storage on the web, `data.json` in the plugin; App passes it to the canvas
+as it is. Whether the panel docks is the canvas's answer
 (`panelDocks()`, spec section 8, M4e, #198): the launch opens the panel only
 where it docks, a jump closes it where it doesn't, and only a docked panel's
 open state is remembered. **An edit opens the panel on Format** (M4d, #143):

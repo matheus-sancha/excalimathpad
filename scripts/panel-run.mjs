@@ -65,6 +65,10 @@
 //   With the element under the docked panel at its right, and on a 640 px
 //   editor, the card is under its line, clear of the open line, inside the
 //   visible area; on a 2560 px window it is beside its line (section 17).
+// - ☰ → Language on the web (section 8, Language, 0.5.0): English at first;
+//   Português shows at once with the menu still open, its texts fetched from
+//   the app's own address, remembered in `localStorage`, the sheet not dirty;
+//   it survives a reload, and English chosen again is remembered too.
 //
 // Run: `node scripts/panel-run.mjs` (`npm run test:panel`), after
 // `npm run build`. PANEL_RUN_SHOTS=<folder> keeps a screenshot of each step;
@@ -1337,6 +1341,40 @@ try {
     s = await read('reloaded')
     row('the width survives a reload', s.variable === 416 && docked(s) && Math.abs(s.panel.width - 408) < 0.5, `--right-sidebar-width ${s.variable}`)
   }, { url: '/web/' })
+
+  // ☰ → Language on the web (section 8, Language, 0.5.0): Português comes
+  // from the app's own address when first chosen, and survives a reload.
+  await run('web language', 1280, async ({ tab, row }) => {
+    const requests = []
+    tab.on('request', (request) => requests.push(request.url()))
+    const rectangle = () => tab.evaluate(() => document.querySelector('[data-testid="toolbar-rectangle"]')?.closest('label')?.title ?? null)
+    const open = async () => {
+      await tab.goto(`${origin}/web/`)
+      await tab.waitForSelector('[data-testid="toolbar-rectangle"]', { timeout: 30_000 })
+      await tab.waitForTimeout(300)
+    }
+    await open()
+    row('the web app opens in English', /^Rectangle/.test(await rectangle()), await rectangle())
+    const before = requests.length
+    await tab.click('[data-testid="main-menu-trigger"]')
+    await tab.selectOption('[data-testid="language-select"]', 'pt-BR')
+    await tab.waitForFunction(() => document.querySelector('[data-testid="toolbar-rectangle"]')?.closest('label')?.title.startsWith('Retângulo'), null, { timeout: 10_000 }).catch(() => null)
+    const fetched = requests.slice(before).filter((url) => /pt-BR/.test(url))
+    const stored = await tab.evaluate(() => localStorage.getItem('excalimathpad.language'))
+    row('Português shows at once, the menu still open', /^Retângulo/.test(await rectangle()) && !!(await tab.$('[data-testid="language-select"]')), await rectangle())
+    row('its texts come from the app’s own address, and it is remembered in the browser’s storage', fetched.length > 0 && fetched.every((url) => url.startsWith(`${origin}/`)) && stored === 'pt-BR', `${fetched.map((url) => url.slice(origin.length)).join(', ')}; stored ${stored}`)
+    const title = await tab.title()
+    row('the sheet isn’t dirty', title === 'Untitled', `title ${title}`)
+    await tab.keyboard.press('Escape')
+    await open()
+    row('the language survives a reload', /^Retângulo/.test(await rectangle()), await rectangle())
+    await tab.click('[data-testid="main-menu-trigger"]')
+    const value = await tab.locator('[data-testid="language-select"]').inputValue()
+    row('☰’s row shows Português (Brasil) after it', value === 'pt-BR', value)
+    await tab.selectOption('[data-testid="language-select"]', 'en')
+    await tab.waitForFunction(() => document.querySelector('[data-testid="toolbar-rectangle"]')?.closest('label')?.title.startsWith('Rectangle'), null, { timeout: 10_000 }).catch(() => null)
+    row('English, chosen again, shows and is remembered', /^Rectangle/.test(await rectangle()) && (await tab.evaluate(() => localStorage.getItem('excalimathpad.language'))) === 'en', await rectangle())
+  }, { url: '/web/' })
 } finally {
   await browser.close()
   server.close()
@@ -1352,4 +1390,4 @@ if (failed.length || errors.length || results.length === 0) {
   for (const error of errors) console.error(`  - ${error}`)
   process.exit(1)
 }
-console.log('Panel run passed: 320 px, icon tabs, the drag handle, docking by width, every tab usable at 280 px, the Format tab’s sample, the charts, the Page row, the page breaks, a rename from a Variables row and the offer on a committed line.')
+console.log('Panel run passed: 320 px, icon tabs, the drag handle, docking by width, every tab usable at 280 px, the Format tab’s sample, the charts, the Page row, the page breaks, a rename from a Variables row, the offer on a committed line and Language on the web.')
