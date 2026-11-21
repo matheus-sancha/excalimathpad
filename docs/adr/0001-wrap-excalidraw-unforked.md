@@ -13,6 +13,15 @@
   listeners and its dialogs are the main window's; the pop-out bridge
   (`src/canvas/popoutBridge.ts`) carries the pop-out's events and dialogs across rather
   than patch the package, contract-tested by the pop-out run in CI.
+  2026-11-21 (the Excalidraw upgrade; #234, #256; not built until its branch is merged):
+  the package is pinned to a canary build, `0.18.0-9fbeaed`, exact, because no release
+  holds the five items of the first test week. It is still the official package, unforked
+  and unpatched. While the app is on a canary an upgrade is not `npm update`: the pin moves
+  only for a blocking bug fixed in a newer canary, or to Excalidraw's next release, each
+  as a deliberate change. The app also takes two more gestures before Excalidraw, in the
+  capture phase and with a contract test each: Tab's shape switch while a math element is
+  selected, and the bucket's click inside one. Print's drawings come from `exportScene`,
+  which replaced `exportToSvg`.
 
 ## Context
 
