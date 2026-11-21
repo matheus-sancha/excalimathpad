@@ -284,12 +284,54 @@ export function writeAnchorSource(
   source: string,
   formats?: string,
 ): boolean {
-  return writeAnchorData(api, anchorId, (anchor) => {
-    const stored = formats ?? readFormats(anchor)
-    if (readSource(anchor) === source && readFormats(anchor) === stored) return null
-    const { formats: _old, ...rest } = anchor.customData ?? {}
-    return { ...rest, source, ...(stored === '' ? {} : { formats: stored }) }
+  return writeAnchorData(api, anchorId, (anchor) => sourceData(anchor, source, formats))
+}
+
+/** An anchor's `customData` with a source and its formats written; null when neither changes. */
+function sourceData(anchor: ExcalidrawElement, source: string, formats?: string): Record<string, unknown> | null {
+  const stored = formats ?? readFormats(anchor)
+  if (readSource(anchor) === source && readFormats(anchor) === stored) return null
+  const { formats: _old, ...rest } = anchor.customData ?? {}
+  return { ...rest, source, ...(stored === '' ? {} : { formats: stored }) }
+}
+
+/** One anchor's lines in a write of several: as `writeAnchorSource` takes them. */
+export interface AnchorSourceWrite {
+  anchorId: string
+  source: string
+  formats?: string
+}
+
+/**
+ * Writes the source of several anchors as **one undo step** (docs/spec-v1.md
+ * section 14, 0.5.0: a rename): one `updateScene` with `IMMEDIATELY` that
+ * holds every changed anchor, each with its source and formats together, as
+ * `writeAnchorSource` writes one. An anchor that is gone, or whose lines are
+ * already these, is left out; with none left nothing is written and no step
+ * is added. Returns the ids of the anchors written.
+ *
+ * A nudge or a Link edit pending on one of those anchors is recorded first,
+ * as its own step (`recordPendingChange`), one per anchor that has one: so two
+ * anchors nudged together and both renamed are two steps before the rename's
+ * (section 6). `mathAnchor.excalidraw.test.tsx` holds each case.
+ */
+export function writeAnchorSources(api: SourceWriteApi, writes: readonly AnchorSourceWrite[]): string[] {
+  const scene = api.getSceneElementsIncludingDeleted()
+  const changed = writes.flatMap(({ anchorId, source, formats }) => {
+    const anchor = scene.find(({ id }) => id === anchorId)
+    if (!anchor || !isMathAnchor(anchor)) return []
+    const customData = sourceData(anchor, source, formats)
+    return customData ? [{ anchor, customData }] : []
   })
+  if (changed.length === 0) return []
+  const next = new Map(
+    changed.map(({ anchor, customData }) => [anchor.id, newElementWith(recordPendingChange(api, anchor), { customData })]),
+  )
+  api.updateScene({
+    elements: api.getSceneElementsIncludingDeleted().map((element) => next.get(element.id) ?? element),
+    captureUpdate: CaptureUpdateAction.IMMEDIATELY,
+  })
+  return [...next.keys()]
 }
 
 /**

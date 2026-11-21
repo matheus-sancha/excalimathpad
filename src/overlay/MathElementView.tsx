@@ -64,8 +64,8 @@ export interface MathElementViewProps {
   onEscape: () => void
   onBlurLine: (lineIndex: number) => void
   forwardWheel: ForwardWheel
-  /** The line a jump from the Sheet panel flashes (section 8), with its key to restart the flash. */
-  flash?: { line: number; key: number } | null
+  /** The element's lines a jump from the Sheet panel (section 8) or a rename (section 4) flashes, with the key that restarts the flash. */
+  flash?: { lines: readonly number[]; key: number } | null
   /** The unit slots (section 5): which row is hovered, which slot's field is open. */
   unitSlots?: UnitSlots
   /**
@@ -220,11 +220,11 @@ export function MathElementView({
             {splitLines(source).map((text, i) => {
               const line = lines[i] ?? EMPTY_LINE
               const open = edit?.lineIndex === i
-              const flashing = flash?.line === i
+              const flashing = flash?.lines.includes(i) ?? false
               return (
                 <li
                   // A new key restarts the flash's animation on a second jump.
-                  key={flashing ? `${i}:${flash.key}` : i}
+                  key={flashing ? `${i}:${flash?.key}` : i}
                   className={`math-element__row is-${open ? 'editing' : line.typeset.kind}${
                     open
                       ? formatClasses(formatOf(withFormat(edit.text, stored)))

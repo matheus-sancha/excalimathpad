@@ -39,7 +39,11 @@ line of the source, no key when no line has one. `writeAnchorSource(api, id,
 source, formats)` writes the two in one captured write, one undo step; with
 `formats` left out they stay as they are, which only a write that keeps every
 line in its place may do (a unit slot, a plot's settings, a save with a line
-open). `selection.ts`
+open). `writeAnchorSources(api, writes)` (0.5.0, #261) is the same write for
+several anchors at once, a rename's: one `updateScene` holding every anchor
+that changes, so one undo step, after each one's pending nudge or Link edit
+is recorded as its own step; it returns the ids it wrote, and writes nothing
+when none changes. `selection.ts`
 holds `deselectAll`, the second Esc's write (`NEVER`, no undo step).
 `anchorStyle.ts` keeps anchors in the fixed style (`ANCHOR_STYLE`, in
 `mathAnchor.ts`): `restoreAnchorStyles` writes it back with `NEVER`.

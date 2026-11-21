@@ -753,3 +753,176 @@ li + li > .sheet-panel__constant {
   font: inherit;
   cursor: pointer;
 }
+
+/* A Variables row and its ✎ (section 4, Renaming a name, 0.5.0). The ✎ is
+   always shown, so it works by touch, and stands outside the row's button: a
+   press on it doesn't jump. */
+.sheet-panel__variable {
+  display: flex;
+  align-items: stretch;
+  gap: 2px;
+}
+
+.sheet-panel__variable .sheet-panel__row {
+  flex: 1 1 auto;
+  width: auto;
+  min-width: 0;
+}
+
+.sheet-panel__rename {
+  flex: none;
+  box-sizing: border-box;
+  width: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--color-gray-50, #868e96);
+  font: inherit;
+  cursor: pointer;
+}
+
+.sheet-panel__rename:hover,
+.sheet-panel__rename:focus-visible,
+.sheet-panel__rename[aria-expanded='true'] {
+  background: var(--button-hover-bg, rgba(0, 0, 0, 0.05));
+  color: inherit;
+}
+
+/* The rename form, under its row, in the list (section 4, The form, on a
+   Variables row). Everything in it wraps: nothing scrolls sideways at the
+   panel's least width, 280 px. */
+.sheet-rename {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 2px 0 8px;
+  padding: 8px;
+  border: 1px solid var(--default-border-color, #dee2e6);
+  border-radius: 8px;
+}
+
+.sheet-rename p {
+  margin: 0;
+}
+
+.sheet-rename code {
+  font: 12px/1.4 ui-monospace, monospace;
+}
+
+.sheet-rename__heading {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-weight: 600;
+}
+
+.sheet-rename__field {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid var(--default-border-color, #dee2e6);
+  border-radius: 6px;
+  background: var(--input-bg-color, transparent);
+  color: inherit;
+  font: 13px/1.4 ui-monospace, monospace;
+}
+
+.sheet-rename__field[aria-invalid='true'] {
+  border-color: #e03131;
+}
+
+.sheet-rename__reason.is-refused {
+  color: #e03131;
+}
+
+.sheet-rename__reason.is-warning,
+.sheet-rename__count.is-warning {
+  color: #e8590c;
+}
+
+.sheet-rename__reason,
+.sheet-rename__source {
+  overflow-wrap: anywhere;
+}
+
+/* The lists are what will be written; a long one scrolls inside, so Rename
+   and Cancel stay near the field. */
+.sheet-rename__lines {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 180px;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.sheet-rename__line {
+  display: flex;
+  flex-direction: column;
+}
+
+.sheet-rename__where {
+  font-size: 12px;
+  color: var(--color-gray-50, #868e96);
+}
+
+.sheet-rename__source {
+  white-space: pre-wrap;
+}
+
+.sheet-rename__source mark {
+  border-radius: 3px;
+  background: #ffec99;
+  color: #1e1e1e;
+}
+
+/* A rule's condition stored beside the line, where the name stands in it. */
+.sheet-rename__stored {
+  color: var(--color-gray-50, #868e96);
+}
+
+.sheet-rename__actions {
+  display: flex;
+  gap: 8px;
+}
+
+.sheet-rename__button {
+  box-sizing: border-box;
+  min-height: 28px;
+  padding: 2px 12px;
+  border: 1px solid var(--default-border-color, #dee2e6);
+  border-radius: 6px;
+  background: var(--island-bg-color, #fff);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.sheet-rename__button.is-primary {
+  border-color: var(--color-primary, #6965db);
+  background: var(--color-primary, #6965db);
+  color: #fff;
+}
+
+/* Rename dimmed: the name is refused, or is the old one. */
+.sheet-rename__button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/* By touch, and in a phone's bottom sheet, the ✎ and the form's buttons are
+   40 px or more (section 4, Touch; section 8, On a phone). */
+[data-math-touch] .sheet-panel__rename,
+.sheet-bottom .sheet-panel__rename {
+  width: 40px;
+  min-height: 40px;
+}
+
+[data-math-touch] .sheet-rename__button,
+.sheet-bottom .sheet-rename__button {
+  min-width: 40px;
+  min-height: 40px;
+}

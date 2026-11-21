@@ -1,6 +1,7 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import type { DisplaySettings } from '../math/display.ts'
 import { listConstants, typesetUnit } from '../math/evaluate.ts'
+import type { RenameTarget } from '../math/rename.ts'
 import { texToHtml, useKatexReady } from '../overlay/katex.ts'
 import { FailureActions } from '../failure/FailureActions.tsx'
 import {
@@ -10,13 +11,16 @@ import {
   type PanelTarget,
 } from './sheetPanel.ts'
 import { InsertButton, OPEN_A_LINE, type InsertProps } from './SymbolsTab.tsx'
+import { RenameForm, type RenameRequest } from './RenameForm.tsx'
+import { RENAME_WORDS, type RenameElement } from './renameForm.ts'
 import './SheetPanel.css'
 
 /**
  * The Sheet panel's Variables, Problems and Constants tabs (docs/spec-v1.md
  * section 8); the Format tab is `FormatTab.tsx`, the Symbols tab `SymbolsTab.tsx`.
  * They render inside Excalidraw's sidebar, which `src/canvas/` draws; this
- * module knows no Excalidraw. A click on a row asks to jump to its line.
+ * module knows no Excalidraw. A click on a row asks to jump to its line; a
+ * Variables row's ✎ opens the rename form (`RenameForm.tsx`, 0.5.0).
  */
 
 interface TabProps {
@@ -24,11 +28,38 @@ interface TabProps {
   onJump: (target: PanelTarget) => void
 }
 
-/** A filter box, then every name in reading order, grouped by element. */
-export function VariablesTab({ sheet, onJump }: TabProps) {
+/** What the Variables tab's rename form needs (section 4, Renaming a name, 0.5.0). */
+export interface RenameProps {
+  /** The sheet's unit system and Digits: "changes a result" compares results as they show. */
+  settings?: DisplaySettings
+  /** Rename: writes the plan the form showed. */
+  onRename: (request: RenameRequest) => void
+  /** The form closed with nothing written (Cancel, Esc, its ✎ again). */
+  onCancel?: () => void
+}
+
+/**
+ * A filter box, then every name in reading order, grouped by element. From
+ * 0.5.0 every row ends in a ✎ that opens the rename form under it, one form
+ * at a time; a press on the ✎ or in the form doesn't jump.
+ */
+export function VariablesTab({
+  sheet,
+  onJump,
+  settings,
+  onRename,
+  onCancel,
+}: { sheet: readonly RenameElement[]; onJump: (target: PanelTarget) => void } & RenameProps) {
   const [filter, setFilter] = useState('')
+  // The row whose form is open: its key, and the assignment it renames.
+  const [renaming, setRenaming] = useState<{ key: string; target: RenameTarget } | null>(null)
   const katexReady = useKatexReady()
   const groups = variableGroups(sheet, filter)
+  const close = useCallback(() => setRenaming(null), [])
+  const cancel = useCallback(() => {
+    setRenaming(null)
+    onCancel?.()
+  }, [onCancel])
   return (
     <div className="sheet-panel">
       <input
@@ -40,7 +71,11 @@ export function VariablesTab({ sheet, onJump }: TabProps) {
         placeholder="Filter names"
         aria-label="Filter names"
         value={filter}
-        onChange={(event) => setFilter(event.target.value)}
+        onChange={(event) => {
+          setFilter(event.target.value)
+          // The rows change under an open form: it closes, and never comes back to take the keyboard.
+          setRenaming(null)
+        }}
       />
       {groups.length === 0 ? (
         <p className="sheet-panel__empty">{filter ? 'No name matches.' : 'No variables yet.'}</p>
@@ -52,22 +87,52 @@ export function VariablesTab({ sheet, onJump }: TabProps) {
               {group.rows.map((row) => {
                 const html = katexReady ? texToHtml(row.tex) : null
                 const unitHtml = katexReady && row.unit ? texToHtml(typesetUnit(row.unit)) : null
+                const open = renaming?.key === row.key
                 return (
                   <li key={row.key}>
-                    <button
-                      type="button"
-                      className={`sheet-panel__row is-${row.kind}`}
-                      aria-label={`${row.name}: ${row.value}${row.unit ? ` ${row.unit}` : ''}`}
-                      onClick={() => onJump(row)}
-                    >
-                      <span className="sheet-panel__name">
-                        {html === null ? row.name : <span dangerouslySetInnerHTML={{ __html: html }} />}
-                      </span>
-                      <span className="sheet-panel__value">{row.value}</span>
-                      <span className="sheet-panel__unit">
-                        {unitHtml === null ? row.unit : <span dangerouslySetInnerHTML={{ __html: unitHtml }} />}
-                      </span>
-                    </button>
+                    <div className="sheet-panel__variable">
+                      <button
+                        type="button"
+                        className={`sheet-panel__row is-${row.kind}`}
+                        aria-label={`${row.name}: ${row.value}${row.unit ? ` ${row.unit}` : ''}`}
+                        onClick={() => onJump(row)}
+                      >
+                        <span className="sheet-panel__name">
+                          {html === null ? row.name : <span dangerouslySetInnerHTML={{ __html: html }} />}
+                        </span>
+                        <span className="sheet-panel__value">{row.value}</span>
+                        <span className="sheet-panel__unit">
+                          {unitHtml === null ? row.unit : <span dangerouslySetInnerHTML={{ __html: unitHtml }} />}
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        className="sheet-panel__rename"
+                        aria-label={RENAME_WORDS.start(row.name)}
+                        title={RENAME_WORDS.start(row.name)}
+                        aria-expanded={open}
+                        onClick={() =>
+                          open
+                            ? cancel()
+                            : setRenaming({ key: row.key, target: { id: row.anchorId, line: row.line, name: row.name } })
+                        }
+                      >
+                        ✎
+                      </button>
+                    </div>
+                    {open && (
+                      <RenameForm
+                        sheet={sheet}
+                        target={renaming.target}
+                        settings={settings}
+                        onRename={(request) => {
+                          setRenaming(null)
+                          onRename(request)
+                        }}
+                        onCancel={cancel}
+                        onGone={close}
+                      />
+                    )}
                   </li>
                 )
               })}

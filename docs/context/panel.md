@@ -11,7 +11,31 @@ the badge's `errors`, the tabs' content, `onChange`). `sheetPanel.ts` (pure)
 turns the evaluated sheet (`EvaluatedElement`s, which `MathOverlay` hands
 out through `onEvaluated`) into Variables groups and Problems rows (every
 error and warning), and `errorCount`, the Problems badge (errors only, M4d);
-`SheetPanel.tsx` renders them, and a click asks App to jump. A row of a
+`SheetPanel.tsx` renders them, and a click asks App to jump. **The rename
+form** (spec section 4, Renaming a name: The form, on a Variables row; 0.5.0,
+#261): every Variables row ends in a ✎ (`.sheet-panel__rename`, outside the
+row's jump button), and `VariablesTab` holds which row's form is open, one at
+a time (`renaming`: the row's key and its `RenameTarget`). `renameForm.ts`
+(pure) is the form as a view of `planRename`: `renameFormView(sheet, target,
+typed, settings)` gives the lines to write, each named by its element
+(`elementLabel`) with its text cut into marked parts (and its stored clause
+where the name stands in it), the reason under the field (the refusal, or
+the shadow warning), the lines whose result would differ, `canRename`, and
+the `plan` itself; null when the line no longer assigns the name.
+`RENAME_WORDS` is section 13's wording, the toast's included. The sheet it
+reads is a `RenameElement`: the panel's element with its `source` and
+`formats`, which `EvaluatedElement` carries. `RenameForm.tsx` draws it: a
+`type="text"` field that takes the keyboard as it mounts, the old name
+selected (so an open line is left, section 8), Enter and Esc on the field,
+and Rename and Cancel. The view is made from `useDeferredValue` of the
+field's text, so a key is drawn before its check runs the engine twice
+(spec section 14, 0.5.0); Rename plans again if the check shown is for an
+older text. It writes nothing: `onRename` hands App a `RenameRequest` (the
+target, the new name, the plan), `onCancel` says the form closed unwritten,
+and `onGone` that its line stopped assigning the name. By touch
+(`[data-math-touch]`) and in the bottom sheet the ✎ and the buttons are
+40 px (`SheetPanel.css`); `scripts/panel-run.mjs` holds the form on the pump
+sheet and at 280 px, `scripts/touch-run.mjs` by touch. A row of a
 line the app itself failed on (`ProblemRow.unexpected`, spec section 4,
 Unexpected failures) shows the failure's raw text under its message, and
 `FailureActions` after its button. **The Symbols
@@ -99,5 +123,5 @@ measures them) through the
 session's `setSettings` (saved with the sheet, dirty, not in undo); App
 hands the session's settings to `MathOverlay`, which evaluates with them. App does the jump
 (`jumpToAnchor` in `canvas/selection.ts`: scroll, select with `NEVER`) and
-the flash (`MathOverlay`'s `flash`, a row class). Depends on: math, overlay
-(KaTeX), print (`PageSetting`).
+the flash (`MathOverlay`'s `flash`, a row class), and writes a rename
+([app](app.md)). Depends on: math, overlay (KaTeX), print (`PageSetting`).
