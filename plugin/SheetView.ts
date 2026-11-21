@@ -3,11 +3,12 @@ import { createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import App, { type SheetCommands } from '../src/App.tsx'
 import type { ThemeMemory } from '../src/canvas/theme.ts'
-import type { LanguageMemory } from '../src/canvas/language.ts'
+import { DEFAULT_LANGUAGE, type LanguageMemory } from '../src/canvas/language.ts'
 import { readSheet, SHEET_EXTENSION } from '../src/file/sheetFormat.ts'
 import { MESSAGES } from '../src/file/sheetSession.ts'
 import type { VaultSheet } from '../src/file/vaultSheet.ts'
 import type { PanelMemory } from '../src/panel/panelMemory.ts'
+import { wordsFor, type Words } from '../src/text/words.ts'
 import { pickVaultImage } from './ImagePicker.ts'
 import { conflictBase, freeSheetPath } from './names.ts'
 import { printInFrame } from './print.ts'
@@ -18,19 +19,15 @@ export const VIEW_TYPE = 'excalimathpad-sheet'
 /** The extension Obsidian registers, without its dot. */
 export const SHEET_EXTENSION_NAME = SHEET_EXTENSION.slice(1)
 
-/** Section 13, In a vault. */
-export const NO_LOOKBEHIND = 'Excalimathpad needs iOS 16.4 or later.'
-
-/** Section 13, In a vault: an outside change met unwritten work. Names without extensions. */
-export const conflictNotice = (sheet: string, copy: string) =>
-  `${sheet} changed elsewhere. Your version was saved beside it as ${copy}.`
-
-/** Section 13, In a vault: a write that fails. The file's name with its extension. */
-export const writeFailedNotice = (file: string, reason: string) =>
-  `Couldn't save ${file}: ${reason}. Your work is still open.`
-
-/** New sheet couldn't create its file (a write that fails, with no work to keep). */
-export const createFailedNotice = (file: string, reason: string) => `Couldn't create ${file}: ${reason}.`
+/**
+ * The plugin's words, in the language `data.json` holds now (section 8,
+ * Language: In Obsidian). Read each time something is worded, so a notice
+ * follows a choice in ☰ at once, and a sheet is named in it with no sheet tab
+ * open. The notices are section 13's, In a vault (`vault` in `src/text/`).
+ */
+export function vaultWords(language: LanguageMemory): Words {
+  return wordsFor(language.rememberedLanguage() ?? DEFAULT_LANGUAGE)
+}
 
 /**
  * Whether this device's JavaScript has regex lookbehind, which Excalidraw's
@@ -111,6 +108,11 @@ export class SheetView extends TextFileView {
     this.now = options.now ?? (() => new Date())
   }
 
+  /** The plugin's words now: read at each notice, never kept. */
+  private words(): Words {
+    return vaultWords(this.memory.language)
+  }
+
   getViewType(): string {
     return VIEW_TYPE
   }
@@ -172,7 +174,7 @@ export class SheetView extends TextFileView {
     } catch (error) {
       this.known = before.known
       this.data = before.data
-      new Notice(writeFailedNotice(file.name, errorReason(error)))
+      new Notice(this.words().vault.writeFailed(file.name, errorReason(error)))
       return
     }
     sheet.written(write)
@@ -243,16 +245,16 @@ export class SheetView extends TextFileView {
     const file = this.file
     if (!file) return false
     const vault = this.app.vault
-    const base = conflictBase(file.basename, this.now())
+    const base = conflictBase(file.basename, this.now(), this.words())
     const path = freeSheetPath(file.parent?.path ?? '/', base, (at) => vault.getAbstractFileByPath(at) !== null)
     const copy = path.slice(path.lastIndexOf('/') + 1)
     try {
       await vault.create(path, text)
     } catch (error) {
-      new Notice(writeFailedNotice(copy, errorReason(error)))
+      new Notice(this.words().vault.writeFailed(copy, errorReason(error)))
       return false
     }
-    new Notice(conflictNotice(file.basename, copy.slice(0, -SHEET_EXTENSION.length)))
+    new Notice(this.words().vault.conflict(file.basename, copy.slice(0, -SHEET_EXTENSION.length)))
     return true
   }
 
@@ -268,7 +270,7 @@ export class SheetView extends TextFileView {
     const content = this.contentEl
     content.empty()
     content.addClass('excalimathpad-view')
-    if (!this.lookbehind()) return this.say(NO_LOOKBEHIND)
+    if (!this.lookbehind()) return this.say(this.words().vault.noLookbehind)
     const read = readSheet(data)
     if (read.kind !== 'sheet') return this.say(read.kind === 'newer' ? MESSAGES.newer : MESSAGES.notASheet)
     const host = content.createDiv({ cls: 'excalimathpad-view__app' })
@@ -290,7 +292,7 @@ export class SheetView extends TextFileView {
             this.sheet = sheet
           },
           onUnwritten: () => this.requestSave(),
-          pickImage: () => pickVaultImage(this.app),
+          pickImage: () => pickVaultImage(this.app, this.words().vault.pickImage),
           theme: this.memory.theme,
           commands: (commands) => {
             this.commands = commands
@@ -310,6 +312,7 @@ export class SheetView extends TextFileView {
                   page,
                   name: this.file?.name ?? 'Untitled',
                   plain: this.file?.basename ?? 'Untitled',
+                  text: this.words(),
                 }),
         },
         panelMemory: this.memory.panel,

@@ -1,6 +1,6 @@
 import { act, fireEvent, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, onTestFinished } from 'vitest'
-import { isOffered, Platform, runCommand, type Command, type WorkspaceLeaf } from './obsidian.ts'
+import { isOffered, notices, Platform, runCommand, type Command, type WorkspaceLeaf } from './obsidian.ts'
 import { DEFAULT_SETTINGS, writeSheet } from '../../src/file/sheetFormat.ts'
 import { doubleClickLine } from '../../src/test/gestures.ts'
 import { SHEET_COMMANDS } from '../main.ts'
@@ -250,6 +250,63 @@ describe('the language (section 8, Language, 0.5.0: per device, in data.json, ne
     await shownIn(second, /^Rectangle/)
     for (const leaf of [first, second]) expect(hintIn(leaf)).toBe(JSON.stringify('Double-click a line or press Enter to edit'))
     expect(vault.recorded.dataJson).toEqual({ language: 'en' })
+  })
+})
+
+describe('the plugin’s own words in Obsidian (section 8, Language: In Obsidian, 0.6.0)', () => {
+  /** ☰ → Language, opening ☰ only if it is closed (it stays open after a choice). */
+  const choose = async (leaf: WorkspaceLeaf, language: string) => {
+    const field = () => leaf.containerEl.querySelector<HTMLSelectElement>('[data-testid="language-select"]')
+    if (!field()) fireEvent.click(leaf.containerEl.querySelector('[data-testid="main-menu-trigger"]')!)
+    const select = await waitFor(() => {
+      expect(field()).not.toBeNull()
+      return field()!
+    })
+    await act(async () => {
+      fireEvent.change(select, { target: { value: language } })
+    })
+  }
+  const names = (vault: Vault) => vault.recorded.commands.map((c) => c.name)
+
+  it('registers the commands in the language data.json holds at load', async () => {
+    const vault = await setUp({ language: 'pt-BR' })
+    expect(names(vault)).toEqual([
+      'Nova folha',
+      'Adicionar cálculo',
+      'Mostrar ou ocultar Configurações de cálculo',
+      'Abrir Guia de cálculo',
+      'Imprimir…',
+    ])
+    expect(vault.recorded.ribbon.map((r) => r.title)).toEqual(['Nova folha'])
+  })
+
+  it('a choice names the next new sheet and words the next notice at once; the palette waits for a restart', async () => {
+    const vault = await setUp()
+    const leaf = await openTab(vault, A)
+    await choose(leaf, 'pt-BR')
+    expect(vault.recorded.dataJson).toEqual({ language: 'pt-BR' })
+    // Registered at load: unchanged until Obsidian restarts or the plugin reloads.
+    expect(names(vault)[0]).toBe('New sheet')
+    await act(async () => command(vault, 'new-sheet').callback!())
+    expect(vault.app.vault.creates.map(({ path }) => path)).toEqual(['Sem título.excalimathpad'])
+    open.push(vault.app.workspace.leaves.at(-1)!)
+    vault.app.vault.failNext = new Error('Disk full.')
+    notices.length = 0
+    await act(async () => command(vault, 'new-sheet').callback!())
+    expect(notices).toEqual(['Não foi possível criar Sem título 1.excalimathpad: Disk full.'])
+    // Back to English: the next notice is English again.
+    await choose(leaf, 'en')
+    vault.app.vault.failNext = new Error('Disk full.')
+    notices.length = 0
+    await act(async () => command(vault, 'new-sheet').callback!())
+    expect(notices).toEqual(["Couldn't create Untitled.excalimathpad: Disk full."])
+  })
+
+  it('after a restart the commands read the language chosen', async () => {
+    const first = await setUp()
+    await choose(await openTab(first, A), 'pt-BR')
+    const restarted = await setUp(first.recorded.dataJson)
+    expect(names(restarted)[0]).toBe('Nova folha')
   })
 })
 

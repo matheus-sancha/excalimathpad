@@ -1,6 +1,7 @@
 import { Notice } from 'obsidian'
 import type { PageSetting } from '../src/print/pages.ts'
 import { printFailed, printSheet, type SheetToPrint } from '../src/print/printSheet.ts'
+import type { Words } from '../src/text/words.ts'
 
 /**
  * Print… in a vault (docs/spec-v1.md section 11, Changed on 2026-11-15 and
@@ -24,9 +25,12 @@ const APP_LAYER = 'excalimathpad'
 /**
  * The notice before the dialog opens (section 13, In a vault): the paper to
  * choose there, from the sheet's Page setting. The system's dialog prints on
- * its own paper, whatever `@page` asks (section 17, M5, in the history).
+ * its own paper, whatever `@page` asks (section 17, M5, in the history). The
+ * stored `A4`/`Letter` and `portrait`/`landscape` are worded through the
+ * table (section 8, Language), never shown as stored.
  */
-export const paperNotice = ({ size, orientation }: PageSetting) => `Choose ${size}, ${orientation} in the print dialog.`
+export const paperNotice = ({ size, orientation }: PageSetting, text: Words) =>
+  text.vault.paper(text.vault.paperSize[size], text.vault.orientation[orientation])
 
 /**
  * The app's own style sheets in `doc`, as text: the ones that hold its cascade
@@ -62,6 +66,8 @@ export interface FramePrint {
   name: string
   /** The name without its extension: the window's title while the dialog is open. */
   plain: string
+  /** The plugin's words at this Print…, for the paper notice. */
+  text: Words
 }
 
 /** Two frames of `view`: the notice is painted before the dialog takes the window. */
@@ -101,7 +107,7 @@ function openFrame(doc: Document): Promise<HTMLIFrameElement> {
  * Save as PDF names the file from it. A failure before the dialog is the
  * notice that nothing was printed, and leaves nothing behind.
  */
-export async function printInFrame({ doc, sheet, page, name, plain }: FramePrint): Promise<void> {
+export async function printInFrame({ doc, sheet, page, name, plain, text }: FramePrint): Promise<void> {
   let frame: HTMLIFrameElement | null = null
   const shown: { paper?: Notice } = {}
   try {
@@ -124,7 +130,7 @@ export async function printInFrame({ doc, sheet, page, name, plain }: FramePrint
       styles: appStyles(doc),
       print: async () => {
         // Shown until the dialog closes (section 13, In a vault).
-        shown.paper = new Notice(paperNotice(page), 0)
+        shown.paper = new Notice(paperNotice(page, text), 0)
         await frames(doc.defaultView)
         // The frame's fonts, KaTeX's included, as laid out since the pages went in.
         await frameDoc.fonts.ready
