@@ -30,8 +30,12 @@ export const IMAGE_TOOL_SELECTOR = '[data-testid="toolbar-image"]'
 /** Excalidraw's own cap on an image file (`MAX_ALLOWED_FILE_BYTES`, 4 MiB). */
 export const MAX_IMAGE_BYTES = 4 * 1024 * 1024
 
-/** Excalidraw's own words for an image over the cap. */
-export const IMAGE_TOO_BIG = 'File is too big. Maximum allowed size is 4MB.'
+/**
+ * The replacement Excalidraw's own `errors.fileTooBig` takes, as Excalidraw
+ * words it for its cap (spec section 13, In a vault: Excalidraw's own toast, in
+ * the language it shows, from 0.6.0).
+ */
+export const IMAGE_TOO_BIG_SIZE = { maxSize: `${MAX_IMAGE_BYTES / 1024 / 1024}MB` }
 
 /**
  * Stops the image tool's press and key and calls `pick` instead. `keys` is
@@ -85,11 +89,12 @@ export type MeasureImage = (dataURL: string) => Promise<{ width: number; height:
 /**
  * Places `image` at the centre of the view, sized as Excalidraw's own tool
  * sizes a click-placed image, and selects it: one undo step. An image over
- * Excalidraw's cap is refused with Excalidraw's own words.
+ * Excalidraw's cap is refused with `tooBig`: Excalidraw's own words, its
+ * `errors.fileTooBig` as it shows them (`SheetCanvas` words it).
  */
-export async function insertImage(api: ImageApi, image: PickedImage, measure: MeasureImage): Promise<void> {
+export async function insertImage(api: ImageApi, image: PickedImage, measure: MeasureImage, tooBig: string): Promise<void> {
   if (image.bytes.byteLength > MAX_IMAGE_BYTES) {
-    api.setToast({ message: IMAGE_TOO_BIG, closable: true, duration: 6000 })
+    api.setToast({ message: tooBig, closable: true, duration: 6000 })
     return
   }
   const id = (await fileIdOf(image.bytes)) as FileId

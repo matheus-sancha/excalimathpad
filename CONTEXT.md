@@ -125,6 +125,9 @@ an issue touches that module ([`CLAUDE.md`](CLAUDE.md) has the reading route).
 - **print** (`src/print/`) — the print pages (spec section 11): `printPages`, one pure function
   from the scene's boxes, the overlay's measured rows (`printRows`) and the Page to the pages and
   their breaks; the print view, drawn in any document; and Print… (`printSheet`). Depends on: nothing. [`docs/context/print.md`](docs/context/print.md)
+- **text** (`src/text/`) — the app's own words: two text tables of one shape (`en.ts`,
+  `ptBR.ts`) and the reader (`words.ts`), which answers the language Excalidraw shows, for
+  React and for code outside it (0.6.0). Depends on: nothing. [`docs/context/text.md`](docs/context/text.md)
 - **failure** (`src/failure/`) — unexpected failures (spec section 4): the boundary, the
   failure screen, Copy details and Report this error. `App` wraps the sheet in the view's
   boundary. Depends on: nothing. [`docs/context/failure.md`](docs/context/failure.md)
@@ -458,7 +461,8 @@ and everything downstream recalculates. Engine: math.js, client-side.
 - **Excalidraw keeps one language per window** (0.5.0): `langCode` loads its
   texts for every editor there, and a tab given the new prop before they load
   keeps its toolbar in the old one. So each canvas also follows `useI18n`'s
-  `langCode` (`LanguageShown`, `SheetCanvas.tsx`; `plugin/test/tab.test.ts`).
+  `langCode` (`LanguageShown`, `SheetCanvas.tsx`; `plugin/test/tab.test.ts`), and tells
+  the reader (`src/text/words.ts`, 0.6.0), the one answer the app's own words read.
 - **Callbacks handed around unbound are function properties**, not methods
   (`SheetSession`, `DialogHost`, the scene store): the type-aware lint's
   `unbound-method` holds them to it.

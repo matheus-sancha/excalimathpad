@@ -1,18 +1,18 @@
+import type { SheetLanguage } from '../text/words.ts'
+
 /**
- * ☰ → Language (docs/spec-v1.md section 8, Language, 0.5.0): the language of
- * Excalidraw's own text, given to it as its `langCode` prop. The app's own text
- * stays English whichever is chosen.
+ * ☰ → Language (docs/spec-v1.md section 8, Language): the choice and its
+ * memory. It is given to Excalidraw as its `langCode` prop (0.5.0), and the
+ * app's own text follows the language Excalidraw then shows, through the
+ * reader in `src/text/words.ts` (0.6.0).
  */
-export type SheetLanguage = 'en' | 'pt-BR'
+export type { SheetLanguage }
 
 /** The row's two choices, in their order, each named in its own language (section 13). */
 export const LANGUAGES: readonly { code: SheetLanguage; label: string }[] = [
   { code: 'en', label: 'English' },
   { code: 'pt-BR', label: 'Português (Brasil)' },
 ]
-
-/** The row's own label, which stays English (section 13, Rename and Language). */
-export const LANGUAGE_LABEL = 'Language'
 
 /** English until one is chosen: nothing reads the browser's or Obsidian's language. */
 export const DEFAULT_LANGUAGE: SheetLanguage = 'en'

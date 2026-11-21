@@ -21,6 +21,8 @@
 // Excalidraw's DOM (More tools' Math items, the image tool, the plugin's
 // hidden items, the reduced properties panel and the canvas hint) it still
 // finds: none of it goes by Excalidraw's English text (section 14, 0.5.0).
+// From 0.6.0 the app's own ☰ items, More tools' Cálculo items and the canvas
+// hint read in Portuguese too, from the text tables in `main.js`.
 //
 // The page also carries a stand-in for Obsidian's global rules for buttons,
 // inputs and selects (plugin/test/obsidian-globals.css), on a dark-theme body:
@@ -268,16 +270,16 @@ async function portuguese(tab, manifest) {
     label: document.querySelector('.language-row__label')?.textContent,
     stamp: document.querySelector('[data-testid="build-stamp"]')?.textContent.trim(),
   }))
-  // Excalidraw's own ☰ items in Portuguese, the app's in English.
+  // Excalidraw's own ☰ items in Portuguese, and the app's with them (0.6.0), from the bundle.
   if (!menu.entries.includes('Modo escuro')) failures.push(`☰ isn't in Portuguese under Português: ${JSON.stringify(menu.entries)}`)
-  if (!menu.entries.includes('Math guide') || menu.label !== 'Language' || menu.stamp !== manifest.version) {
-    failures.push(`the app's own ☰ text changed under Português: ${JSON.stringify(menu)}`)
+  if (!menu.entries.includes('Guia de cálculo') || !menu.entries.includes('Imprimir…') || menu.label !== 'Idioma' || menu.stamp !== manifest.version) {
+    failures.push(`the app's own ☰ text isn't in Portuguese under Português: ${JSON.stringify(menu)}`)
   }
   const data = await tab.evaluate(() => window.__plugin.dataJson)
   if (data?.language !== 'pt-BR') failures.push(`data.json holds ${JSON.stringify(data)}, not the language chosen`)
   await tab.keyboard.press('Escape')
 
-  // More tools: the app's Math heading and two items, and the plugin's hidden items still hidden.
+  // More tools: the app's Cálculo heading and two items, and the plugin's hidden items still hidden.
   await tab.click('.App-toolbar__extra-tools-trigger')
   await tab.waitForSelector('.math-tools__heading', { timeout: 10_000 }).catch(() => null)
   const tools = await tab.evaluate(() => {
@@ -292,7 +294,7 @@ async function portuguese(tab, manifest) {
       generate: shown(dropdown?.querySelector('.dropdown-menu-container > div:not([class])')),
     }
   })
-  if (tools.heading !== 'Math' || tools.items.join() !== 'Add math,Math settings') {
+  if (tools.heading !== 'Cálculo' || tools.items.join() !== 'Adicionar cálculo,Configurações de cálculo') {
     failures.push(`More tools' Math items under Português: ${JSON.stringify(tools)}`)
   }
   if (tools.embed || tools.generate) failures.push(`a hidden More tools item shows under Português: ${JSON.stringify(tools)}`)
@@ -307,7 +309,7 @@ async function portuguese(tab, manifest) {
   if (chooser || picker !== 1) failures.push(`the image tool under Português: ${picker} vault picker(s), system chooser ${chooser}`)
   await tab.evaluate(() => FakeObsidian.modals.forEach((modal) => modal.close()))
 
-  // One math element selected: the reduced properties panel and the app's hint, in English.
+  // One math element selected: the reduced properties panel and the app's hint, in Portuguese.
   const box = await tab.locator('.math-element').first().boundingBox()
   await tab.mouse.click(box.x + 6, box.y + 6)
   await tab.waitForSelector('[data-math-selection="one"]', { timeout: 10_000 }).catch(() => null)
@@ -323,7 +325,7 @@ async function portuguese(tab, manifest) {
     }
   })
   if (selected.opacity === null || selected.before !== 0) failures.push(`the reduced properties panel under Português: ${JSON.stringify(selected)}`)
-  if (selected.hint !== JSON.stringify('Double-click a line or press Enter to edit')) {
+  if (selected.hint !== JSON.stringify('Clique duas vezes em uma linha ou pressione Enter para editar')) {
     failures.push(`the canvas hint under Português reads ${selected.hint}`)
   }
 

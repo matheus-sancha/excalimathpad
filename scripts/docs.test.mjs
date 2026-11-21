@@ -11,11 +11,13 @@ const count = (n) => n.toLocaleString('en-US')
 /**
  * `CONTEXT.md`'s budget in bytes: its size after the split into
  * `docs/context/` (33,957 B, #192) plus about 10% (docs/spec-v1.md section
- * 14, M4e, Documents). Every build session reads the file whole, so it holds
- * the model, the terms and where things are, and nothing else. If the growth
- * is meant, raise the budget in a commit that says what was added.
+ * 14, M4e, Documents), raised by 400 B for the text module's line and its
+ * reader in Load-bearing (0.6.0, #290). Every build session reads the file
+ * whole, so it holds the model, the terms and where things are, and nothing
+ * else. If the growth is meant, raise the budget in a commit that says what
+ * was added.
  */
-export const CONTEXT_BUDGET = 37_700
+export const CONTEXT_BUDGET = 38_100
 
 /** The files a build session is routed through, and the history beside the spec. */
 const modules = readdirSync(join(root, 'docs/context')).map((name) => `docs/context/${name}`)

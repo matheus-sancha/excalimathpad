@@ -1,4 +1,5 @@
 import { SHEET_EXTENSION } from './sheetFormat.ts'
+import { words } from '../text/words.ts'
 
 /**
  * Reading and writing sheet files on disk (docs/spec-v1.md section 7). Chrome and
@@ -36,10 +37,14 @@ export interface FileAccess {
   read(handle: SheetFileHandle): Promise<PickedFile>
 }
 
-/** What the picker offers. Plain drawings open too, as format 1 sheets. */
-const PICKER_TYPES = [
+/**
+ * What the picker offers, its file type named in the language shown when the
+ * picker opens (section 8, Language, 0.6.0). Plain drawings open too, as
+ * format 1 sheets.
+ */
+const pickerTypes = () => [
   {
-    description: 'Excalimathpad sheet',
+    description: words().file.pickerType,
     accept: { 'application/json': [SHEET_EXTENSION, '.excalidraw'] },
   },
 ]
@@ -72,7 +77,7 @@ function fileSystemAccess(picker: PickerWindow): FileAccess {
   return {
     async open() {
       const handles = await cancellable(() =>
-        picker.showOpenFilePicker({ types: PICKER_TYPES, multiple: false, id: 'sheet' }),
+        picker.showOpenFilePicker({ types: pickerTypes(), multiple: false, id: 'sheet' }),
       )
       const handle = handles?.[0]
       if (!handle) return null
@@ -84,7 +89,7 @@ function fileSystemAccess(picker: PickerWindow): FileAccess {
     read: readHandle,
     async saveAs(suggestedName, text) {
       const handle = await cancellable(() =>
-        picker.showSaveFilePicker({ types: PICKER_TYPES, suggestedName, id: 'sheet' }),
+        picker.showSaveFilePicker({ types: pickerTypes(), suggestedName, id: 'sheet' }),
       )
       if (!handle) return null
       await writeHandle(handle, text)

@@ -1,7 +1,8 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { SheetCanvas, type ImageToolSlot, type SheetCanvasHandle } from './SheetCanvas.tsx'
-import { IMAGE_TOO_BIG, IMAGE_TOOL_SELECTOR, insertImage, MAX_IMAGE_BYTES, type PickedImage } from './imageTool.ts'
+import { IMAGE_TOOL_SELECTOR, MAX_IMAGE_BYTES, type PickedImage } from './imageTool.ts'
+import type { LanguageMemory } from './language.ts'
 import { sceneLoaded } from '../test/excalidraw.ts'
 
 /**
@@ -17,9 +18,9 @@ const PNG: PickedImage = { mimeType: 'image/png', bytes: new Uint8Array([137, 80
 
 afterEach(() => vi.restoreAllMocks())
 
-async function mount(imageTool?: ImageToolSlot) {
+async function mount(imageTool?: ImageToolSlot, language?: LanguageMemory) {
   let handle: SheetCanvasHandle | undefined
-  const view = render(<SheetCanvas onReady={(h) => (handle = h)} imageTool={imageTool} />)
+  const view = render(<SheetCanvas onReady={(h) => (handle = h)} imageTool={imageTool} language={language} />)
   await waitFor(() => expect(handle).toBeDefined())
   await sceneLoaded(handle!.api)
   return { api: handle!.api, root: handle!.root, container: view.container }
@@ -124,14 +125,19 @@ describe('the takeover (in a vault)', () => {
     vi.unstubAllGlobals()
   })
 
-  it("an image over Excalidraw's 4 MB cap is refused with Excalidraw's own words", async () => {
-    const { api } = await mount()
-    await act(() =>
-      insertImage(api, { mimeType: 'image/png', bytes: new ArrayBuffer(MAX_IMAGE_BYTES + 1) }, () =>
-        Promise.resolve({ width: 1, height: 1 }),
-      ),
-    )
+  // Excalidraw's own words, its `errors.fileTooBig`, in the language it shows (spec section 13, In a vault, 0.6.0).
+  it.each([
+    ['en', 'File is too big. Maximum allowed size is 4MB.'],
+    ['pt-BR', 'O arquivo é muito grande. O tamanho máximo permitido é 4MB.'],
+  ] as const)("an image over Excalidraw's 4 MB cap is refused with Excalidraw's own words (%s)", async (language, words) => {
+    const { slot: imageTool } = slot({ mimeType: 'image/png', bytes: new ArrayBuffer(MAX_IMAGE_BYTES + 1) })
+    const { api } = await mount(imageTool, { rememberedLanguage: () => language, rememberLanguage: () => {} })
+    const rectangle = () => document.querySelector('[data-testid="toolbar-rectangle"]')!.closest('label')!.title
+    await waitFor(() => expect(rectangle()).toMatch(language === 'en' ? /^Rectangle/ : /^Retângulo/))
+    act(() => {
+      fireEvent.click(tool()!.closest('label')!)
+    })
+    expect(await screen.findByText(words)).toBeInTheDocument()
     expect(api.getSceneElements()).toHaveLength(0)
-    expect(await screen.findByText(IMAGE_TOO_BIG)).toBeInTheDocument()
   })
 })

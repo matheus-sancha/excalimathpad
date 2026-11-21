@@ -35,7 +35,10 @@ or clean mark; the vault's `unwritten()` is null from then on. A session
 given `resume` loads it in `start` in place of the recovery offer; a vault
 sheet given `unwrittenAtStart` asks for a save once loaded.
 `FileChrome.tsx` shows the name and title, asks the two questions
-and asks before leaving while dirty; it answers the keys and drops that
+and asks before leaving while dirty; an unsaved sheet's name there, and the
+browser's own Print line (`--math-print-line` on `<html>`, for `src/index.css`),
+are in the language shown, read with `useWords()`, and `displayName` and the
+save picker's file type read `words()` when worded ([text](text.md), 0.6.0); it answers the keys and drops that
 `canvas/fileRoutes.ts` takes, Ctrl+P through its `print` prop (App's Print…). Opening picks the file before it asks about
 unsaved changes: Chromium allows one picker per gesture. Depends on: canvas
-(file routes, layers).
+(file routes, layers), text (its words).

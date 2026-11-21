@@ -4,6 +4,7 @@ import { isOffered, Platform, runCommand, type Command, type WorkspaceLeaf } fro
 import { DEFAULT_SETTINGS, writeSheet } from '../../src/file/sheetFormat.ts'
 import { doubleClickLine } from '../../src/test/gestures.ts'
 import { SHEET_COMMANDS } from '../main.ts'
+import { VAULT_CLASS } from '../../src/canvas/vaultItems.ts'
 import { vaultWith, type Vault } from './harness.ts'
 
 /**
@@ -191,6 +192,8 @@ describe('the language (section 8, Language, 0.5.0: per device, in data.json, ne
   const rectangleTitle = (leaf: WorkspaceLeaf) =>
     leaf.containerEl.querySelector('[data-testid="toolbar-rectangle"]')!.closest('label')!.title
   const shownIn = (leaf: WorkspaceLeaf, rectangle: RegExp) => waitFor(() => expect(rectangleTitle(leaf)).toMatch(rectangle))
+  const hintIn = (leaf: WorkspaceLeaf) =>
+    leaf.containerEl.querySelector<HTMLElement>(`.${VAULT_CLASS}`)?.style.getPropertyValue('--math-hint')
   const choose = async (leaf: WorkspaceLeaf, language: string) => {
     fireEvent.click(leaf.containerEl.querySelector('[data-testid="main-menu-trigger"]')!)
     const select = await waitFor(() => leaf.containerEl.querySelector<HTMLSelectElement>('[data-testid="language-select"]')!)
@@ -237,8 +240,15 @@ describe('the language (section 8, Language, 0.5.0: per device, in data.json, ne
     await shownIn(second, /^Retângulo/)
     await shownIn(first, /^Retângulo/)
     expect(first.containerEl.querySelector<HTMLSelectElement>('[data-testid="language-select"]')?.value ?? 'pt-BR').toBe('pt-BR')
+    // The app's own text follows in both tabs (0.6.0): the canvas hint, and ☰ in the tab already open.
+    for (const leaf of [first, second]) expect(hintIn(leaf)).toBe(JSON.stringify('Clique duas vezes em uma linha ou pressione Enter para editar'))
+    fireEvent.click(first.containerEl.querySelector('[data-testid="main-menu-trigger"]')!)
+    await waitFor(() => expect(first.containerEl.querySelector('[data-testid="math-guide-item"]')?.textContent).toMatch('Guia de cálculo'))
+    expect(first.containerEl.querySelector('.language-row__label')?.textContent).toBe('Idioma')
+    fireEvent.click(first.containerEl.querySelector('[data-testid="main-menu-trigger"]')!)
     await choose(first, 'en')
     await shownIn(second, /^Rectangle/)
+    for (const leaf of [first, second]) expect(hintIn(leaf)).toBe(JSON.stringify('Double-click a line or press Enter to edit'))
     expect(vault.recorded.dataJson).toEqual({ language: 'en' })
   })
 })

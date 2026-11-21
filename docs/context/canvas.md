@@ -38,6 +38,12 @@ for every editor in the window and changes it once its texts have loaded,
 so `LanguageShown`, a child of the editor, hands back `useI18n`'s `langCode`
 each time it changes and the canvas follows it: another tab's choice reaches
 this one, and its toolbar draws again then (see CONTEXT.md, Load-bearing).
+`LanguageShown` is also where the app's own words learn the language (0.6.0,
+#290): it calls the reader's `showLanguage` ([text](text.md)) in a layout
+effect, and hands the canvas Excalidraw's `t`, kept for the image-too-big
+toast. The canvas's own chrome reads its words with `useWords()`: ☰'s items,
+the Language row's label, the build stamp's tooltip, More tools' heading,
+items and badge, and the welcome screen.
 Excalidraw also writes the language into the window's `<html lang>` and
 `dir`. `vaultKeys.ts` is the keys of a vault tab:
 `PASS_THROUGH_KEYS` and `SWALLOWED_KEYS` (tested constants), `vaultKeyRoute`,
@@ -67,7 +73,8 @@ holds `deselectAll`, the second Esc's write (`NEVER`, no undo step).
 `data-math-selection` (`one`, `several`) while only math is selected, and
 with `data-math-touch` (`markTouch`) while the `touch` App passes
 `SheetCanvas` is set; `SheetCanvas.css` uses the marks for the reduced panel
-and the hint (`MATH_HINT`, or `MATH_HINT_TOUCH` under the touch mark).
+and the hint (the text table's `hint.selected`, or `hint.selectedTouch` under
+the touch mark, set again on each change of language through `onLanguage`).
 `SheetCanvas` starts new text in the Normal font (Nunito).
 `canvasEvents.ts` (`listenToCanvas`) hands the canvas's double-clicks, presses,
 clicks, pointer moves and keys to the gestures before Excalidraw hears them,
@@ -99,13 +106,16 @@ takes over Excalidraw's image tool in a vault (`takeOverImageTool`: the
 system's picker never opens) and copies a picked image in with the public
 API (`insertImage`: a `files` entry named by the bytes' SHA-1 and an image
 element sized as Excalidraw sizes a click-placed one, one undo step;
-Excalidraw's own 4 MB cap). `layers.ts` records where overlay
+Excalidraw's own 4 MB cap, refused with its own `errors.fileTooBig` as it
+shows it, which `SheetCanvas` words from Excalidraw's `t` and
+`IMAGE_TOO_BIG_SIZE`). `layers.ts` records where overlay
 content sits among Excalidraw's DOM layers, and the dark theme's filter.
 `addMath.ts` is Add math: a public custom tool (`startPlacing`,
 `cancelPlacing`, `isPlacing`) and `watchPlacing`, which turns the placing
 click into a new anchor, selected in the same write, and holds the crosshair.
 `mathAnchor.ts` also has `removeAnchor`, the one-step removal of an element
-left empty. `SheetCanvas` draws the welcome screen, and the app's two
+left empty. `SheetCanvas` draws the welcome screen (its hint naming the taps
+while `touch` is set, spec section 13), and the app's two
 items in Excalidraw's More tools dropdown: Add math and Math settings, which
 opens the Sheet panel. `panelPresses.ts` holds `SHEET_SIDEBAR_CLASS`,
 `isInSheetPanel` and `keepPanelPresses` (see Load-bearing), and `LINE_FIELD`
@@ -175,4 +185,4 @@ anchors, light, no background, the scene's images; `inlineFonts` for a frame), w
 its scene top-left. It writes nothing. The only module that imports
 Excalidraw at runtime; tests may too, and other modules may import its
 types. This is ADR 0001's engineering rule as amended in ADR 0002. Depends
-on: `@excalidraw/excalidraw`, guide (the Math guide's dialog).
+on: `@excalidraw/excalidraw`, guide (the Math guide's dialog), text (its words).

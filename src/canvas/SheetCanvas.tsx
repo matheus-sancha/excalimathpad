@@ -5,7 +5,7 @@ import type { ExcalidrawElement } from '@excalidraw/excalidraw/element/types'
 import type { ExcalidrawImperativeAPI, UIOptions } from '@excalidraw/excalidraw/types'
 import '@excalidraw/excalidraw/index.css'
 import { isPlacing, startPlacing } from './addMath.ts'
-import { insertImage, measureIn, takeOverImageTool, type PickedImage } from './imageTool.ts'
+import { IMAGE_TOO_BIG_SIZE, insertImage, measureIn, takeOverImageTool, type PickedImage } from './imageTool.ts'
 import { markMathSelection, markTouch } from './mathSelection.ts'
 import { SHEET_PANEL_TABS, SHEET_SIDEBAR_CLASS, type SheetPanelTab } from './panelPresses.ts'
 import { BottomSheet } from './BottomSheet.tsx'
@@ -13,9 +13,10 @@ import { PanelResizeHandle } from './PanelResizeHandle.tsx'
 import { PANEL_WIDTH, clampPanelWidth, docksAbove, type PanelWidthMemory } from './panelWidth.ts'
 import { closeMoreTools, markMoreTools, useMoreToolsSlot } from './moreTools.ts'
 import type { SheetTheme, ThemeMemory } from './theme.ts'
-import { DEFAULT_LANGUAGE, LANGUAGE_LABEL, LANGUAGES, isSheetLanguage, type LanguageMemory, type SheetLanguage } from './language.ts'
+import { DEFAULT_LANGUAGE, LANGUAGES, isSheetLanguage, type LanguageMemory, type SheetLanguage } from './language.ts'
 import { VAULT_CLASS } from './vaultItems.ts'
 import { MathGuide } from '../guide/MathGuide.tsx'
+import { showLanguage, useWords } from '../text/words.ts'
 import './SheetCanvas.css'
 
 /**
@@ -177,7 +178,7 @@ export interface SheetCanvasProps {
   phone?: boolean
   /**
    * The last press in the view was a touch (section 4, Touch, M4d): the hint
-   * for one math element names the taps.
+   * for one math element and the welcome hint name the taps.
    */
   touch?: boolean
 }
@@ -224,6 +225,7 @@ export function SheetCanvas({
   touch = false,
 }: SheetCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null)
+  const words = useWords()
   // The tab Math settings opens: the one last shown.
   const lastTab = useRef<SheetPanelTab>('variables')
   const [docked, setDocked] = useState(true)
@@ -285,7 +287,10 @@ export function SheetCanvas({
   // for the whole page, so in a vault a choice in another tab reaches this one
   // too: `LanguageShown` follows it, once Excalidraw has loaded its texts.
   const [langCode, setLangCode] = useState<SheetLanguage>(() => languageMemory?.rememberedLanguage() ?? DEFAULT_LANGUAGE)
-  const followLanguage = useCallback((shown: string) => {
+  // Excalidraw's own words, in the language it shows: the image-too-big toast is its text.
+  const excalidrawText = useRef<ExcalidrawText | null>(null)
+  const followLanguage = useCallback((shown: string, text: ExcalidrawText) => {
+    excalidrawText.current = text
     if (isSheetLanguage(shown)) setLangCode(shown)
   }, [])
   const chooseLanguage = useCallback(
@@ -389,7 +394,11 @@ export function SheetCanvas({
   useEffect(() => {
     if (!api || !root || !imageTool) return
     return takeOverImageTool(root, imageTool.keys, () => {
-      void imageTool.pick().then((image) => image && insertImage(api, image, measureIn(root.ownerDocument)))
+      void imageTool.pick().then((image) => {
+        if (!image) return
+        const tooBig = excalidrawText.current?.('errors.fileTooBig', IMAGE_TOO_BIG_SIZE) ?? ''
+        return insertImage(api, image, measureIn(root.ownerDocument), tooBig)
+      })
     })
   }, [api, root, imageTool])
 
@@ -443,13 +452,13 @@ export function SheetCanvas({
           moreTools &&
           createPortal(
             <>
-              <div className="math-tools__heading">Math</div>
+              <div className="math-tools__heading">{words.tools.heading}</div>
               <MoreToolsItem
                 icon="∑"
-                label="Add math"
+                label={words.tools.addMath}
                 shortcut="M"
                 pressed={isPlacing(appState)}
-                title="Add math — M"
+                title={words.tools.addMathTitle}
                 onSelect={() => {
                   closeMoreTools(root)
                   startPlacing(api)
@@ -465,9 +474,9 @@ export function SheetCanvas({
                 <div className="math-tools__trigger sidebar-trigger">
                   <MoreToolsItem
                     icon={<SettingsIcon />}
-                    label="Math settings"
+                    label={words.tools.mathSettings}
                     pressed={phone ? bottom.open : appState.openSidebar?.name === SHEET_PANEL}
-                    title="Math settings: variables, problems and settings"
+                    title={words.tools.mathSettingsTitle}
                     onSelect={() => {
                       closeMoreTools(root)
                       if (phone) showBottom({ open: !bottomRef.current.open, tab: lastTab.current })
@@ -477,7 +486,7 @@ export function SheetCanvas({
                     {sheetPanel.errors > 0 && (
                       <span
                         className="math-tools__badge"
-                        aria-label={`${sheetPanel.errors} ${sheetPanel.errors === 1 ? 'error' : 'errors'}`}
+                        aria-label={words.tools.errors(sheetPanel.errors)}
                       >
                         {sheetPanel.errors}
                       </span>
@@ -497,7 +506,7 @@ export function SheetCanvas({
           language={langCode}
           onLanguage={chooseLanguage}
         />
-        <SheetWelcome fileMenu={fileMenu} />
+        <SheetWelcome fileMenu={fileMenu} touch={touch} />
         <LanguageShown onShown={followLanguage} />
         {sheetPanel && !phone && (
           <Sidebar
@@ -678,19 +687,21 @@ function SettingsIcon() {
 
 /**
  * Excalidraw's welcome screen, shown on an empty sheet: the app's name, the
- * hint for Add math, and Open… (docs/spec-v1.md section 8). Excalidraw's own
- * logo and collaboration items are left out.
+ * hint for Add math (naming the taps after a touch press, section 13), and
+ * Open… (docs/spec-v1.md section 8). Excalidraw's own logo and collaboration
+ * items are left out.
  */
-function SheetWelcome({ fileMenu }: { fileMenu?: FileMenu }) {
+function SheetWelcome({ fileMenu, touch }: { fileMenu?: FileMenu; touch: boolean }) {
+  const { welcome } = useWords()
   return (
     <WelcomeScreen>
       <WelcomeScreen.Center>
         <WelcomeScreen.Center.Logo>Excalimathpad</WelcomeScreen.Center.Logo>
-        <WelcomeScreen.Center.Heading>{WELCOME_HINT}</WelcomeScreen.Center.Heading>
+        <WelcomeScreen.Center.Heading>{touch ? welcome.hintTouch : welcome.hint}</WelcomeScreen.Center.Heading>
         {fileMenu && (
           <WelcomeScreen.Center.Menu>
             <WelcomeScreen.Center.MenuItem onSelect={fileMenu.open} shortcut="Ctrl+O">
-              Open…
+              {welcome.open}
             </WelcomeScreen.Center.MenuItem>
           </WelcomeScreen.Center.Menu>
         )}
@@ -698,8 +709,6 @@ function SheetWelcome({ fileMenu }: { fileMenu?: FileMenu }) {
     </WelcomeScreen>
   )
 }
-
-export const WELCOME_HINT = 'Press M, or choose Add math under More tools, then click the sheet to place math'
 
 /**
  * The ☰ menu: the app's file items first, then the Excalidraw items v1 keeps,
@@ -721,12 +730,13 @@ function SheetMenu({
   language: SheetLanguage
   onLanguage: (language: SheetLanguage) => void
 }) {
+  const { menu } = useWords()
   return (
     <MainMenu>
       {!fileMenu && print && (
         <>
           <MainMenu.Item onSelect={print} data-testid="print-item">
-            Print…
+            {menu.print}
           </MainMenu.Item>
           <MainMenu.Separator />
         </>
@@ -734,23 +744,23 @@ function SheetMenu({
       {fileMenu && (
         <>
           <MainMenu.Item onSelect={fileMenu.open} shortcut="Ctrl+O">
-            Open…
+            {menu.open}
           </MainMenu.Item>
           <MainMenu.Item onSelect={fileMenu.save} shortcut="Ctrl+S">
-            Save
+            {menu.save}
           </MainMenu.Item>
           <MainMenu.Item onSelect={fileMenu.saveAs} shortcut="Ctrl+Shift+S">
-            Save as…
+            {menu.saveAs}
           </MainMenu.Item>
           <MainMenu.Item onSelect={fileMenu.print} shortcut="Ctrl+P" data-testid="print-item">
-            Print…
+            {menu.print}
           </MainMenu.Item>
           <MainMenu.Separator />
         </>
       )}
       <MainMenu.DefaultItems.SearchMenu />
       <MainMenu.Item onSelect={onMathGuide} icon={<GuideIcon />} data-testid="math-guide-item">
-        Math guide
+        {menu.mathGuide}
       </MainMenu.Item>
       <MainMenu.DefaultItems.Help />
       <MainMenu.DefaultItems.ClearCanvas />
@@ -761,7 +771,7 @@ function SheetMenu({
       </MainMenu.ItemCustom>
       <MainMenu.DefaultItems.ChangeCanvasBackground />
       {/* Text, not an item: it takes no focus and no click (section 12, Hosted build). */}
-      <div className="build-stamp" data-testid="build-stamp" title="This build">
+      <div className="build-stamp" data-testid="build-stamp" title={menu.buildStamp}>
         {__BUILD_STAMP__}
       </div>
     </MainMenu>
@@ -769,16 +779,17 @@ function SheetMenu({
 }
 
 /**
- * ☰ → Language (section 8, Language, 0.5.0): its label, in English whichever
- * is chosen, and a `<select>` of the two, each named in its own language.
+ * ☰ → Language (section 8, Language, 0.5.0): its label, in the language shown
+ * (0.6.0), and a `<select>` of the two, each named in its own language.
  * A `<select>` isn't a field to Excalidraw's shortcuts, so no key on it
  * reaches them: Delete there would delete the selected element (section 14).
  */
 function LanguageRow({ language, onLanguage }: { language: SheetLanguage; onLanguage: (language: SheetLanguage) => void }) {
+  const { menu } = useWords()
   return (
     <label className="language-row__field" onKeyDown={(event) => event.stopPropagation()}>
       <LanguageIcon />
-      <span className="language-row__label">{LANGUAGE_LABEL}</span>
+      <span className="language-row__label">{menu.language}</span>
       <select
         className="dropdown-select dropdown-select__language language-row__select"
         data-testid="language-select"
@@ -797,16 +808,26 @@ function LanguageRow({ language, onLanguage }: { language: SheetLanguage; onLang
   )
 }
 
+/** Excalidraw's own `t`, as its public `useI18n` gives it. */
+type ExcalidrawText = ReturnType<typeof useI18n>['t']
+
 /**
  * Tells the canvas the language Excalidraw shows (its public `useI18n`), each
  * time it changes. Excalidraw keeps one language for every editor on the page
  * and changes it only once its texts have loaded; a tab whose own `langCode`
  * changed before that would keep its toolbar in the old language, since
  * Excalidraw draws its UI again only when its props or state change.
+ *
+ * It is also where the app's own words learn the language (0.6.0): the reader
+ * (`src/text/words.ts`) is told it here, before paint, so the app's text
+ * changes with Excalidraw's, in every tab of the window.
  */
-function LanguageShown({ onShown }: { onShown: (langCode: string) => void }) {
-  const { langCode } = useI18n()
-  useEffect(() => onShown(langCode), [langCode, onShown])
+function LanguageShown({ onShown }: { onShown: (langCode: string, text: ExcalidrawText) => void }) {
+  const { langCode, t } = useI18n()
+  useLayoutEffect(() => {
+    if (isSheetLanguage(langCode)) showLanguage(langCode)
+  }, [langCode])
+  useEffect(() => onShown(langCode, t), [langCode, t, onShown])
   return null
 }
 

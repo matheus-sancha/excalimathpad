@@ -1,7 +1,7 @@
 import { act, createEvent, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { describe, expect, it, onTestFinished } from 'vitest'
 import App from './App.tsx'
-import { WELCOME_HINT } from './canvas/SheetCanvas.tsx'
+import { en } from './text/en.ts'
 import { fakeFileAccess, fakeRecovery } from './test/files.ts'
 import { clickOnCanvas, doubleClickLine, linePoint } from './test/gestures.ts'
 import { createMathAnchorElements } from './canvas/mathAnchor.ts'
@@ -92,7 +92,7 @@ describe('App', () => {
       const { files } = renderApp()
       await ready()
 
-      expect(await screen.findByText(WELCOME_HINT)).toBeInTheDocument()
+      expect(await screen.findByText(en.welcome.hint)).toBeInTheDocument()
       expect(screen.getByText('Excalimathpad')).toBeInTheDocument()
       // Excalidraw's own welcome items aren't there.
       expect(screen.queryByText(/Live collaboration/i)).toBeNull()
@@ -121,7 +121,7 @@ describe('App', () => {
       expect(mathElements()).toHaveLength(1)
       expect(lineField()).toHaveFocus()
       expect(placing()).toBe(false)
-      expect(screen.queryByText(WELCOME_HINT)).toBeNull()
+      expect(screen.queryByText(en.welcome.hint)).toBeNull()
       await waitFor(() => expect(document.title).toBe('● Untitled'))
     })
 
