@@ -1,0 +1,1518 @@
+diff --git a/src/App.tsx b/src/App.tsx
+index dbf708a..37726c4 100644
+--- a/src/App.tsx
++++ b/src/App.tsx
+@@ -22,6 +22,8 @@ import {
+ import { sessionPanelMemory, type PanelMemory } from './panel/panelMemory.ts'
+ import { ConstantsTab, ProblemsTab, VariablesTab } from './panel/SheetPanel.tsx'
+ import { SymbolsTab } from './panel/SymbolsTab.tsx'
++// PROTOTYPE (#242): where the Math assistant sits, `?assistant=A|B|C`.
++import { AssistantChat, AssistantPanel, AssistantSwitcher, assistantVariant, useAssistantPanel } from './assistantPrototype.tsx'
+ import type { SymbolInsert } from './math/symbols.ts'
+ import { FormatTab, type FormatActions } from './panel/FormatTab.tsx'
+ import { QuickKeys } from './panel/QuickKeys.tsx'
+@@ -562,8 +564,27 @@ function Sheet({
+     [web, print],
+   )
+ 
++  // PROTOTYPE (#242): the chat as a tab (A) or in the shell's side slot (B, C).
++  const assistant = assistantVariant()
++  const assistantPanel = useAssistantPanel()
++  const chatSheet = (sheet ?? []).map((element) => ({
++    anchorId: element.anchorId,
++    title: element.title,
++    lines: element.lines.length,
++  }))
++
+   return (
+     <AppShell
++      sidePanel={
++        assistant && assistant !== 'A' && assistantPanel.open ? (
++          <AssistantPanel
++            side={assistant === 'B' ? 'right' : 'left'}
++            sheet={chatSheet}
++            onJump={jump}
++            onClose={assistantPanel.toggle}
++          />
++        ) : undefined
++      }
+       canvas={
+         <SheetCanvas
+           initialElements={initialElements}
+@@ -597,6 +618,10 @@ function Sheet({
+             problemsTab: tab(<ProblemsTab sheet={sheet ?? []} onJump={jump} />),
+             settings: file && tab(<SettingsTab settings={settings} onChange={file.sheet.setSettings} />),
+             constants: tab(<ConstantsTab settings={settings} canInsert={canInsert} onInsert={insert} />),
++            // PROTOTYPE (#242)
++            assistant: assistant === 'A' ? tab(<AssistantChat bare sheet={chatSheet} onJump={jump} />) : undefined,
++            assistantItem:
++              assistant && assistant !== 'A' ? { pressed: assistantPanel.open, onSelect: assistantPanel.toggle } : undefined,
+             // Per device, never in the file (section 8, M4e).
+             width: memory,
+             // Remembered per home; a floating panel closes by itself, so
+@@ -640,6 +665,7 @@ function Sheet({
+               flash={flash}
+             />
+             {web && <FileChrome session={web.session} dialogs={web.dialogs} canvasRoot={canvas.root} print={print} />}
++            <AssistantSwitcher />
+           </>
+         )
+       }
+diff --git a/src/assistantPrototype.css b/src/assistantPrototype.css
+new file mode 100644
+index 0000000..fc0918e
+--- /dev/null
++++ b/src/assistantPrototype.css
+@@ -0,0 +1,566 @@
++/* PROTOTYPE (#242) — throwaway. Light theme only. */
++
++.assistant-proto {
++  --ap-border: #e3e3ea;
++  --ap-soft: #f4f4f8;
++  --ap-primary: #6965db;
++  --ap-primary-soft: #e9e8fb;
++  --ap-muted: #6b6b76;
++  --ap-danger: #c92a2a;
++  display: flex;
++  flex-direction: column;
++  min-height: 0;
++  height: 100%;
++  box-sizing: border-box;
++  color: #1b1b1f;
++  font-family: Assistant, system-ui, -apple-system, 'Segoe UI', sans-serif;
++  font-size: 13px;
++  line-height: 1.45;
++}
++
++.assistant-proto button {
++  font: inherit;
++  cursor: pointer;
++}
++
++.assistant-proto__header {
++  display: flex;
++  align-items: center;
++  gap: 4px;
++  padding: 6px 10px;
++  flex: none;
++}
++
++.assistant-proto__title {
++  margin: 0;
++  font-size: 14px;
++  font-weight: 600;
++}
++
++.assistant-proto__spacer {
++  flex: 1;
++}
++
++.assistant-proto__tool {
++  display: inline-flex;
++  align-items: center;
++  gap: 4px;
++  height: 28px;
++  padding: 0 8px;
++  border: 1px solid transparent;
++  border-radius: 6px;
++  background: none;
++  color: inherit;
++}
++
++.assistant-proto__tool.is-icon {
++  width: 28px;
++  padding: 0;
++  justify-content: center;
++}
++
++.assistant-proto__tool:hover:not(:disabled) {
++  background: var(--ap-soft);
++}
++
++.assistant-proto__tool:disabled {
++  opacity: 0.4;
++  cursor: default;
++}
++
++/* The messages */
++
++.assistant-proto__list {
++  flex: 1 1 0;
++  min-height: 0;
++  overflow-y: auto;
++  display: flex;
++  flex-direction: column;
++  gap: 10px;
++  padding: 4px 10px 10px;
++}
++
++.assistant-proto__empty {
++  display: flex;
++  flex-wrap: wrap;
++  gap: 6px;
++  margin-top: auto;
++  color: var(--ap-muted);
++}
++
++.assistant-proto__empty p {
++  flex: 0 0 100%;
++  margin: 0 0 4px;
++}
++
++.assistant-proto__chip {
++  padding: 4px 10px;
++  border: 1px solid var(--ap-border);
++  border-radius: 999px;
++  background: #fff;
++  color: inherit;
++}
++
++.assistant-proto__chip:hover {
++  border-color: var(--ap-primary);
++}
++
++.assistant-proto__message {
++  max-width: 100%;
++  box-sizing: border-box;
++  overflow-wrap: anywhere;
++}
++
++.assistant-proto__message p {
++  margin: 0 0 8px;
++}
++
++.assistant-proto__message p:last-child {
++  margin-bottom: 0;
++}
++
++.assistant-proto__message.is-user {
++  align-self: flex-end;
++  max-width: 88%;
++  padding: 7px 10px;
++  border-radius: 10px 10px 2px 10px;
++  background: var(--ap-primary-soft);
++}
++
++.assistant-proto__with {
++  display: block;
++  margin-top: 4px;
++  color: var(--ap-muted);
++  font-size: 11px;
++}
++
++.assistant-proto__message.is-assistant {
++  padding: 2px 2px 2px 10px;
++  border-left: 2px solid var(--ap-border);
++}
++
++.assistant-proto__message code {
++  padding: 0 3px;
++  border-radius: 3px;
++  background: var(--ap-soft);
++  font-family: Cascadia, 'Cascadia Code', Consolas, monospace;
++  font-size: 12px;
++}
++
++.assistant-proto__ref {
++  padding: 0 6px;
++  border: 1px solid var(--ap-border);
++  border-radius: 4px;
++  background: #fff;
++  color: var(--ap-primary);
++  font-weight: 600;
++  line-height: 1.35;
++}
++
++.assistant-proto__ref:hover {
++  border-color: var(--ap-primary);
++  background: var(--ap-primary-soft);
++}
++
++.assistant-proto__message.is-waiting {
++  display: flex;
++  align-items: center;
++  gap: 8px;
++  color: var(--ap-muted);
++}
++
++.assistant-proto__dots {
++  display: inline-flex;
++  gap: 3px;
++}
++
++.assistant-proto__dots i {
++  width: 5px;
++  height: 5px;
++  border-radius: 50%;
++  background: var(--ap-muted);
++  animation: assistant-proto-dot 1s infinite ease-in-out;
++}
++
++.assistant-proto__dots i:nth-child(2) {
++  animation-delay: 0.15s;
++}
++
++.assistant-proto__dots i:nth-child(3) {
++  animation-delay: 0.3s;
++}
++
++@keyframes assistant-proto-dot {
++  0%,
++  80%,
++  100% {
++    opacity: 0.25;
++  }
++  40% {
++    opacity: 1;
++  }
++}
++
++.assistant-proto__caret {
++  display: inline-block;
++  width: 7px;
++  height: 13px;
++  margin-top: 4px;
++  background: var(--ap-primary);
++  vertical-align: text-bottom;
++}
++
++.assistant-proto__stopped {
++  display: block;
++  margin-top: 4px;
++  color: var(--ap-muted);
++  font-size: 11px;
++  font-style: italic;
++}
++
++.assistant-proto__message.is-failed {
++  border-left-color: var(--ap-danger);
++}
++
++.assistant-proto__message.is-failed p {
++  margin-bottom: 6px;
++}
++
++.assistant-proto__message.is-failed b {
++  color: var(--ap-danger);
++}
++
++/* A proposal's card: a placeholder */
++
++.assistant-proto__proposal {
++  margin-top: 8px;
++  border: 1px dashed #b3b1ea;
++  border-radius: 8px;
++  background: #fbfbff;
++}
++
++.assistant-proto__proposal-head {
++  display: flex;
++  justify-content: space-between;
++  gap: 8px;
++  padding: 6px 8px 0;
++}
++
++.assistant-proto__proposal-head span {
++  color: var(--ap-muted);
++}
++
++.assistant-proto__proposal pre {
++  margin: 6px 8px;
++  padding: 6px 8px;
++  overflow-x: auto;
++  border-radius: 4px;
++  background: var(--ap-soft);
++  font-family: Cascadia, 'Cascadia Code', Consolas, monospace;
++  font-size: 11.5px;
++  line-height: 1.5;
++}
++
++.assistant-proto__proposal-actions {
++  display: flex;
++  align-items: center;
++  gap: 6px;
++  padding: 0 8px 8px;
++}
++
++.assistant-proto__placeholder {
++  margin-left: auto;
++  color: var(--ap-muted);
++  font-size: 11px;
++  font-style: italic;
++}
++
++.assistant-proto__toast {
++  flex: none;
++  margin: 0 10px 6px;
++  padding: 5px 8px;
++  border-radius: 6px;
++  background: #1b1b1f;
++  color: #fff;
++  font-size: 12px;
++}
++
++/* The field */
++
++.assistant-proto__compose {
++  flex: none;
++  padding: 8px 10px 8px;
++  border-top: 1px solid var(--ap-border);
++  background: #fff;
++}
++
++.assistant-proto__sent {
++  display: flex;
++  align-items: center;
++  gap: 6px;
++  width: 100%;
++  padding: 3px 4px;
++  border: none;
++  border-radius: 4px;
++  background: none;
++  color: var(--ap-muted);
++  font-size: 12px;
++  text-align: left;
++}
++
++.assistant-proto__sent span {
++  flex: 1;
++  min-width: 0;
++}
++
++.assistant-proto__sent b {
++  color: #1b1b1f;
++  font-weight: 600;
++}
++
++.assistant-proto__sent:hover {
++  background: var(--ap-soft);
++}
++
++.assistant-proto__sent svg {
++  flex: none;
++}
++
++.assistant-proto__sent-list {
++  margin: 2px 0 6px;
++  padding: 6px 8px;
++  border: 1px solid var(--ap-border);
++  border-radius: 6px;
++  list-style: none;
++  font-size: 12px;
++}
++
++.assistant-proto__sent-list li {
++  display: flex;
++  justify-content: space-between;
++  gap: 8px;
++}
++
++.assistant-proto__sent-list li.is-note {
++  margin-top: 4px;
++  color: var(--ap-muted);
++}
++
++.assistant-proto__field-row {
++  display: flex;
++  align-items: flex-end;
++  gap: 6px;
++  margin-top: 4px;
++}
++
++.assistant-proto__field {
++  flex: 1;
++  min-width: 0;
++  box-sizing: border-box;
++  padding: 6px 8px;
++  border: 1px solid #c9c9d4;
++  border-radius: 8px;
++  background: #fff;
++  color: inherit;
++  font: inherit;
++  resize: none;
++}
++
++.assistant-proto__field:focus {
++  border-color: var(--ap-primary);
++  outline: 2px solid var(--ap-primary-soft);
++}
++
++.assistant-proto__send {
++  display: inline-flex;
++  align-items: center;
++  gap: 6px;
++  height: 30px;
++  padding: 0 12px;
++  border: 1px solid var(--ap-primary);
++  border-radius: 8px;
++  background: var(--ap-primary);
++  color: #fff;
++  font-weight: 600;
++}
++
++.assistant-proto__send[aria-disabled='true'] {
++  opacity: 0.45;
++  cursor: default;
++}
++
++.assistant-proto__send.is-stop {
++  background: #fff;
++  color: #1b1b1f;
++  border-color: #c9c9d4;
++}
++
++.assistant-proto__stop-square {
++  width: 9px;
++  height: 9px;
++  border-radius: 2px;
++  background: #1b1b1f;
++}
++
++.assistant-proto__keys {
++  margin: 4px 0 0;
++  color: var(--ap-muted);
++  font-size: 11px;
++}
++
++/* No key */
++
++.assistant-proto__key {
++  margin: 8px 10px;
++  padding: 12px;
++  border: 1px solid var(--ap-border);
++  border-radius: 10px;
++  background: #fff;
++}
++
++.assistant-proto__key h3 {
++  margin: 0 0 6px;
++  font-size: 14px;
++}
++
++.assistant-proto__key p {
++  margin: 0 0 8px;
++}
++
++.assistant-proto__key-label {
++  display: block;
++  font-weight: 600;
++}
++
++.assistant-proto__key-field {
++  display: block;
++  box-sizing: border-box;
++  width: 100%;
++  margin-top: 4px;
++  padding: 6px 8px;
++  border: 1px solid #c9c9d4;
++  border-radius: 6px;
++  font: inherit;
++  font-weight: 400;
++}
++
++.assistant-proto__key-actions {
++  display: flex;
++  flex-wrap: wrap;
++  gap: 6px;
++  margin-top: 8px;
++}
++
++.assistant-proto__key-note {
++  margin: 8px 0 0 !important;
++  color: var(--ap-muted);
++  font-size: 12px;
++}
++
++/* A: the chat as a tab. The tab's box becomes a column the chat fills, so the
++   list scrolls and the field stays at the bottom. */
++
++.excalidraw .sheet-sidebar .sidebar-tabs-root:has(.assistant-proto-tab) {
++  overflow: hidden;
++  display: flex;
++  flex-direction: column;
++  min-height: 0;
++}
++
++.excalidraw .sheet-sidebar [role='tabpanel']:has(.assistant-proto-tab):not([hidden]) {
++  flex: 1 1 0;
++  min-height: 0;
++  display: flex;
++  flex-direction: column;
++}
++
++.assistant-proto-tab {
++  flex: 1 1 0;
++  min-height: 0;
++  display: flex;
++  flex-direction: column;
++}
++
++/* B and C: the panel of its own, in the shell's side slot. It docks while the
++   window is wider than its own 360 px plus the 640 px Excalidraw's toolbar
++   needs; at or below that it floats over the sheet. */
++
++.app-shell:has(.assistant-proto-panel) {
++  position: relative;
++}
++
++.app-shell:has(.assistant-proto-panel.is-left) {
++  flex-direction: row-reverse;
++}
++
++.app-shell__side-panel:has(.assistant-proto-panel) {
++  width: 360px;
++  overflow: hidden;
++  border-left: 1px solid #e3e3ea;
++  background: #fff;
++}
++
++.app-shell__side-panel:has(.assistant-proto-panel.is-left) {
++  border-left: none;
++  border-right: 1px solid #e3e3ea;
++}
++
++.assistant-proto-panel {
++  height: 100%;
++}
++
++@media (max-width: 1000px) {
++  .app-shell__side-panel:has(.assistant-proto-panel) {
++    position: absolute;
++    top: 0;
++    bottom: 0;
++    right: 0;
++    z-index: 20;
++    box-shadow: 0 0 24px rgb(0 0 0 / 22%);
++  }
++
++  .app-shell__side-panel:has(.assistant-proto-panel.is-left) {
++    right: auto;
++    left: 0;
++  }
++}
++
++/* The switcher: not part of the design. */
++
++.assistant-proto-switcher {
++  position: fixed;
++  left: 50%;
++  bottom: 14px;
++  z-index: 1000;
++  display: flex;
++  align-items: center;
++  gap: 8px;
++  padding: 6px 10px;
++  transform: translateX(-50%);
++  border-radius: 999px;
++  background: #111;
++  color: #fff;
++  font: 12px/1.3 system-ui, sans-serif;
++  box-shadow: 0 4px 18px rgb(0 0 0 / 35%);
++  white-space: nowrap;
++}
++
++.assistant-proto-switcher button {
++  padding: 3px 9px;
++  border: 1px solid #555;
++  border-radius: 999px;
++  background: #222;
++  color: #fff;
++  font: inherit;
++  cursor: pointer;
++}
++
++.assistant-proto-switcher button[aria-pressed='true'] {
++  border-color: #9a97f0;
++}
++
++.assistant-proto-switcher i {
++  width: 1px;
++  height: 16px;
++  background: #555;
++}
+diff --git a/src/assistantPrototype.tsx b/src/assistantPrototype.tsx
+new file mode 100644
+index 0000000..3c920b0
+--- /dev/null
++++ b/src/assistantPrototype.tsx
+@@ -0,0 +1,764 @@
++/*
++ * PROTOTYPE — throwaway. Not production code: no tests, no spec, delete when the
++ * ticket is answered.
++ *
++ * Wayfinder ticket #242, "Where does the Math assistant sit, a seventh tab of
++ * the Sheet panel or a panel of its own, and what does a conversation look
++ * like there?"
++ *
++ * Three placements of one chat, on the pump sheet, in the real app, switchable
++ * with `?assistant=A|B|C` and the bar at the bottom:
++ *   A  a seventh tab of the Sheet panel
++ *   B  a panel of its own, docked right of everything (outside Excalidraw)
++ *   C  a panel of its own, docked left of everything
++ *
++ * Answers are canned and nothing is sent anywhere: there is no network call in
++ * this file. `&key=0` starts with no key; the bar also switches the key and
++ * makes the next answer fail.
++ */
++import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
++import { createPortal } from 'react-dom'
++import { createMathAnchorElements } from './canvas/mathAnchor.ts'
++import './assistantPrototype.css'
++
++// ───────────────────────────── the variant ─────────────────────────────
++
++export type AssistantVariant = 'A' | 'B' | 'C'
++const VARIANTS: Record<AssistantVariant, string> = {
++  A: 'A seventh tab of the Sheet panel',
++  B: 'Its own panel, on the right',
++  C: 'Its own panel, on the left',
++}
++
++export function assistantVariant(): AssistantVariant | null {
++  if (typeof window === 'undefined') return null
++  const asked = new URLSearchParams(window.location.search).get('assistant')?.toUpperCase()
++  return asked === 'A' || asked === 'B' || asked === 'C' ? asked : null
++}
++
++// ───────────────────────────── the pump sheet ─────────────────────────────
++
++export function assistantPumpSheet() {
++  const box = { width: 300, height: 100 }
++  return createMathAnchorElements([
++    {
++      id: 'fluid',
++      x: 90,
++      y: 90,
++      ...box,
++      title: 'Fluid and pipe',
++      source: [
++        '# Water at 20 C, 4" Sch 40 steel',
++        'rho = 998.2 kg/m^3',
++        'mu = 1.002 cP',
++        'D = 102.3 mm',
++        'L_p = 150 m',
++        'eps = 0.045 mm',
++        'K = 4*0.9 + 2*0.15 + 0.5 + 1.0 # fittings',
++        'dz = 12 m',
++        'g_n = 9.80665 m/s^2',
++        'Q_d = 15 L/s',
++        'eta = 0.70',
++      ].join('\n'),
++    },
++    {
++      id: 'functions',
++      x: 90,
++      y: 440,
++      ...box,
++      title: 'Flow functions',
++      source: [
++        'A_p = pi D^2 / 4',
++        'v(Q) = Q / A_p',
++        'Re(Q) = rho v(Q) D / mu',
++        'f(Re, r) = solve 1/sqrt(f) = -2 log10(r/3.7 + 2.51/(Re sqrt(f))), guess f = 0.02',
++        'Hs(Q) = dz + (f(Re(Q), eps/D) L_p/D + K) v(Q)^2 / (2 g_n)',
++      ].join('\n'),
++    },
++    {
++      id: 'duty',
++      x: 90,
++      y: 700,
++      ...box,
++      title: 'Duty point',
++      source: [
++        'v_d = v(Q_d)',
++        'Re_d = Re(Q_d)',
++        'f_d = f(Re_d, eps/D)',
++        'dP_pipe = f_d * (L_p/D) rho v_d^2 / 2 in kPa',
++        'dP_K = K rho v_d^2 / 2 in kPa',
++        'dP_z = rho g_n dz in kPa',
++        'H_d = Hs(Q_d)',
++        'P_d = rho g_n Q_d H_d / eta in kW',
++      ].join('\n'),
++    },
++    {
++      id: 'pump',
++      x: 90,
++      y: 1010,
++      ...box,
++      title: 'Pump and operating point',
++      source: [
++        'H_0 = 25 m',
++        'H_r = 20 m',
++        'Q_r = 20 L/s',
++        'Hp(Q) = H_0 - (H_0 - H_r) (Q/Q_r)^2',
++        'Q_op = solve Hp(Q) = Hs(Q), for Q = 1 L/s .. 30 L/s in L/s',
++        'H_op = Hp(Q_op)',
++        'P_op = rho g_n Q_op H_op / eta in kW',
++      ].join('\n'),
++    },
++  ])
++}
++
++// ───────────────────────────── the prototype's own state ─────────────────────────────
++
++interface ProtoState {
++  /** B and C: the chat's own panel is open. */
++  open: boolean
++  hasKey: boolean
++  failNext: boolean
++}
++
++let state: ProtoState = {
++  open: true,
++  hasKey: typeof window === 'undefined' || new URLSearchParams(window.location.search).get('key') !== '0',
++  failNext: false,
++}
++const listeners = new Set<() => void>()
++function setProto(next: Partial<ProtoState>) {
++  state = { ...state, ...next }
++  listeners.forEach((listener) => listener())
++}
++function useProto(): ProtoState {
++  return useSyncExternalStore(
++    (listener) => {
++      listeners.add(listener)
++      return () => listeners.delete(listener)
++    },
++    () => state,
++  )
++}
++
++/** B and C: whether the chat's panel is open, and its More tools item. */
++export function useAssistantPanel(): { open: boolean; toggle: () => void } {
++  const { open } = useProto()
++  return { open, toggle: () => setProto({ open: !state.open }) }
++}
++
++// ───────────────────────────── canned answers ─────────────────────────────
++
++/** What the chat reads of the sheet: only what it needs to name a line and count. */
++export interface ChatElement {
++  anchorId: string
++  title: string | null
++  lines: number
++}
++
++type Piece = string | { code: string } | { ref: { anchorId: string; line: number } }
++interface Answer {
++  paragraphs: Piece[][]
++  proposal?: boolean
++}
++
++const REVIEW: Answer = {
++  paragraphs: [
++    ['I read the sheet: no line has an error, and the units close on every line.'],
++    [
++      'The formulas hold together. ',
++      { ref: { anchorId: 'functions', line: 3 } },
++      ' solves Colebrook for ',
++      { code: 'f' },
++      ', and at the duty flow ',
++      { code: 'Re_d' },
++      ' is about 1.9 × 10⁵, turbulent, so Colebrook applies.',
++    ],
++    [
++      'One thing to check: ',
++      { ref: { anchorId: 'duty', line: 7 } },
++      ' and ',
++      { ref: { anchorId: 'pump', line: 6 } },
++      ' both use ',
++      { code: 'eta = 0.70' },
++      '. A pump rarely has the same efficiency at two flows. Do you have the efficiency at the operating point from the curve?',
++    ],
++    [
++      'What is missing: an NPSH available check against the pump’s NPSH required (the sheet has no suction side: lift, suction losses, vapour pressure), and the motor’s margin over ',
++      { code: 'P_op' },
++      '.',
++    ],
++    ['Tell me the suction layout and I’ll say what the NPSH check needs.'],
++  ],
++}
++
++const DRAFT: Answer = {
++  paragraphs: [
++    [
++      'Here is an NPSH available check that reads the names the sheet already has (',
++      { code: 'rho' },
++      ', ',
++      { code: 'g_n' },
++      ', ',
++      { code: 'Q_op' },
++      '). I assumed a flooded suction 2 m above the pump and 8 m of 4" pipe; change those two lines to yours.',
++    ],
++  ],
++  proposal: true,
++}
++
++const SHORT: Answer = {
++  paragraphs: [
++    [
++      { ref: { anchorId: 'fluid', line: 6 } },
++      ' adds the fittings: four elbows at 0.9, two valves at 0.15, the entrance at 0.5 and the exit at 1.0, so ',
++      { code: 'K' },
++      ' is 5.4.',
++    ],
++  ],
++}
++
++function answerFor(text: string): Answer {
++  if (/npsh|draft|add|propos|template|write/i.test(text)) return DRAFT
++  if (/\bK\b|fitting/i.test(text)) return SHORT
++  return REVIEW
++}
++
++/** An answer as the tokens it arrives in: words, and a code or a reference whole. */
++function tokens(answer: Answer): { paragraph: number; piece: Piece }[] {
++  return answer.paragraphs.flatMap((pieces, paragraph) =>
++    pieces.flatMap((piece) =>
++      typeof piece === 'string'
++        ? (piece.match(/\s*\S+\s*/g) ?? [piece]).map((word) => ({ paragraph, piece: word as Piece }))
++        : [{ paragraph, piece }],
++    ),
++  )
++}
++
++// ───────────────────────────── the chat ─────────────────────────────
++
++interface UserMessage {
++  from: 'user'
++  text: string
++  /** What went with it, as the chat said before Send. */
++  sent: string
++}
++interface AssistantMessage {
++  from: 'assistant'
++  answer: Answer
++  /** How many tokens have arrived. */
++  shown: number
++  state: 'writing' | 'done' | 'stopped' | 'failed'
++}
++type Message = UserMessage | AssistantMessage
++
++export interface AssistantChatProps {
++  sheet: readonly ChatElement[]
++  /** Jumps to a line and flashes it, as a Variables row does. */
++  onJump: (target: { anchorId: string; line: number }) => void
++  /** B and C: the panel's own close button. */
++  onClose?: () => void
++  /** A: the Sheet panel's heading already names the tab. */
++  bare?: boolean
++}
++
++// The conversation lives outside the component: in A the tab's content is
++// unmounted while another tab shows, and the conversation has to outlive that.
++interface Chat {
++  messages: Message[]
++  waiting: boolean
++}
++let chat: Chat = { messages: [], waiting: false }
++const chatListeners = new Set<() => void>()
++function setChat(next: (now: Chat) => Chat) {
++  chat = next(chat)
++  chatListeners.forEach((listener) => listener())
++}
++let timer: number | null = null
++function stopTimer() {
++  if (timer !== null) window.clearTimeout(timer)
++  timer = null
++}
++
++function write(answer: Answer) {
++  const total = tokens(answer).length
++  const step = () => {
++    let done = false
++    setChat((now) => {
++      const last = now.messages[now.messages.length - 1]
++      if (last?.from !== 'assistant' || last.state !== 'writing') return now
++      const shown = Math.min(total, last.shown + 2)
++      done = shown >= total
++      return { ...now, messages: [...now.messages.slice(0, -1), { ...last, shown, state: done ? 'done' : 'writing' }] }
++    })
++    timer = done ? null : window.setTimeout(step, 45)
++  }
++  step()
++}
++
++function ask(asked: string) {
++  const answer = answerFor(asked)
++  setChat((now) => ({ ...now, waiting: true }))
++  timer = window.setTimeout(() => {
++    const failed = state.failNext
++    if (failed) setProto({ failNext: false })
++    setChat((now) => ({
++      waiting: false,
++      messages: [...now.messages, { from: 'assistant', answer, shown: 0, state: failed ? 'failed' : 'writing' }],
++    }))
++    if (!failed) write(answer)
++  }, 1100)
++}
++
++function stop() {
++  stopTimer()
++  setChat((now) =>
++    now.waiting
++      ? { waiting: false, messages: [...now.messages, { from: 'assistant', answer: REVIEW, shown: 0, state: 'stopped' }] }
++      : {
++          ...now,
++          messages: now.messages.map((message) =>
++            message.from === 'assistant' && message.state === 'writing' ? { ...message, state: 'stopped' } : message,
++          ),
++        },
++  )
++}
++
++function retry() {
++  const asked = [...chat.messages].reverse().find((message) => message.from === 'user')
++  setChat((now) => ({
++    ...now,
++    messages: now.messages.filter((message) => !(message.from === 'assistant' && message.state === 'failed')),
++  }))
++  if (asked?.from === 'user') ask(asked.text)
++}
++
++function newChat() {
++  stopTimer()
++  setChat(() => ({ messages: [], waiting: false }))
++}
++
++export function AssistantChat({ sheet, onJump, onClose, bare = false }: AssistantChatProps) {
++  const proto = useProto()
++  const { messages, waiting } = useSyncExternalStore(
++    (listener) => {
++      chatListeners.add(listener)
++      return () => chatListeners.delete(listener)
++    },
++    () => chat,
++  )
++  const [text, setText] = useState('')
++  const [showSent, setShowSent] = useState(false)
++  const [keyForm, setKeyForm] = useState(false)
++  const [toast, setToast] = useState<string | null>(null)
++  const list = useRef<HTMLDivElement>(null)
++  const field = useRef<HTMLTextAreaElement>(null)
++
++  const lineCount = sheet.reduce((sum, element) => sum + element.lines, 0)
++  const sentWith = `${sheet.length} math ${sheet.length === 1 ? 'element' : 'elements'}, ${lineCount} lines`
++  const label = (anchorId: string, line: number) => {
++    const index = sheet.findIndex((element) => element.anchorId === anchorId)
++    const name = index < 0 ? 'Element' : sheet[index].title?.trim() || `Element ${index + 1}`
++    return `${name}, line ${line + 1}`
++  }
++
++  const busy = waiting || messages.some((message) => message.from === 'assistant' && message.state === 'writing')
++  useLayoutEffect(() => {
++    list.current?.scrollTo({ top: list.current.scrollHeight })
++  }, [messages, waiting])
++  useEffect(() => {
++    if (!toast) return
++    const id = window.setTimeout(() => setToast(null), 2500)
++    return () => window.clearTimeout(id)
++  }, [toast])
++
++  const send = (asked = text) => {
++    const trimmed = asked.trim()
++    if (!trimmed || busy) return
++    setChat((now) => ({ ...now, messages: [...now.messages, { from: 'user', text: trimmed, sent: sentWith }] }))
++    setText('')
++    setShowSent(false)
++    ask(trimmed)
++  }
++
++  const needsKey = !proto.hasKey || keyForm
++
++  return (
++    <section className="assistant-proto" aria-label="Math assistant">
++      <header className="assistant-proto__header">
++        {!bare && <h2 className="assistant-proto__title">Math assistant</h2>}
++        <span className="assistant-proto__spacer" />
++        <button
++          type="button"
++          tabIndex={-1}
++          className="assistant-proto__tool"
++          title="New chat"
++          disabled={messages.length === 0 && !waiting}
++          onClick={newChat}
++        >
++          <Icon d="M12 5v14M5 12h14" /> New chat
++        </button>
++        {proto.hasKey && (
++          <button
++            type="button"
++            tabIndex={-1}
++            className="assistant-proto__tool is-icon"
++            title="API key"
++            aria-label="API key"
++            onClick={() => setKeyForm((shown) => !shown)}
++          >
++            <Icon d="M21 2l-2 2m-7.6 7.6a5.5 5.5 0 1 1-7.8 7.8 5.5 5.5 0 0 1 7.8-7.8zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4" />
++          </button>
++        )}
++        {onClose && (
++          <button
++            type="button"
++            tabIndex={-1}
++            className="assistant-proto__tool is-icon"
++            title="Close"
++            aria-label="Close the Math assistant"
++            onClick={onClose}
++          >
++            <Icon d="M6 6l12 12M18 6L6 18" />
++          </button>
++        )}
++      </header>
++
++      {needsKey ? (
++        <KeyCard
++          has={proto.hasKey}
++          onSave={() => {
++            setProto({ hasKey: true })
++            setKeyForm(false)
++          }}
++          onRemove={() => {
++            setProto({ hasKey: false })
++            setKeyForm(false)
++          }}
++          onCancel={proto.hasKey ? () => setKeyForm(false) : undefined}
++        />
++      ) : (
++        <>
++          <div className="assistant-proto__list" ref={list}>
++            {messages.length === 0 && !waiting && (
++              <div className="assistant-proto__empty">
++                <p>Ask about this sheet. The assistant reads it and answers; it writes nothing to the sheet by itself.</p>
++                {['Check this sheet', 'What is missing?', 'Add an NPSH check'].map((prompt) => (
++                  <button
++                    key={prompt}
++                    type="button"
++                    tabIndex={-1}
++                    className="assistant-proto__chip"
++                    onClick={() => send(prompt)}
++                  >
++                    {prompt}
++                  </button>
++                ))}
++              </div>
++            )}
++            {messages.map((message, index) =>
++              message.from === 'user' ? (
++                <div key={index} className="assistant-proto__message is-user">
++                  <p>{message.text}</p>
++                  <span className="assistant-proto__with">Sent with the sheet: {message.sent}</span>
++                </div>
++              ) : (
++                <AssistantBubble
++                  key={index}
++                  message={message}
++                  label={label}
++                  onJump={onJump}
++                  onRetry={retry}
++                  onPlaceholder={() => setToast('A placeholder: a proposal’s rules are other tickets’.')}
++                />
++              ),
++            )}
++            {waiting && (
++              <div className="assistant-proto__message is-assistant is-waiting" role="status">
++                <span className="assistant-proto__dots" aria-hidden="true">
++                  <i />
++                  <i />
++                  <i />
++                </span>
++                Reading the sheet…
++              </div>
++            )}
++          </div>
++
++          {toast && (
++            <p className="assistant-proto__toast" role="status">
++              {toast}
++            </p>
++          )}
++
++          <footer className="assistant-proto__compose">
++            <button
++              type="button"
++              tabIndex={-1}
++              className="assistant-proto__sent"
++              aria-expanded={showSent}
++              onClick={() => setShowSent((shown) => !shown)}
++            >
++              <Icon d="M14 3v5h5M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" />
++              <span>
++                Goes with your message: <b>the sheet</b>, {sentWith}
++              </span>
++              <Icon d={showSent ? 'M6 15l6-6 6 6' : 'M6 9l6 6 6-6'} />
++            </button>
++            {showSent && (
++              <ul className="assistant-proto__sent-list">
++                {sheet.map((element, index) => (
++                  <li key={element.anchorId}>
++                    <span>{element.title?.trim() || `Element ${index + 1}`}</span>
++                    <span>{element.lines} lines</span>
++                  </li>
++                ))}
++                <li className="is-note">Sent to the provider only when you press Send.</li>
++              </ul>
++            )}
++            <div className="assistant-proto__field-row">
++              <textarea
++                ref={field}
++                className="assistant-proto__field"
++                rows={2}
++                placeholder="Ask about this sheet"
++                aria-label="Message"
++                value={text}
++                onChange={(event) => setText(event.target.value)}
++                onKeyDown={(event) => {
++                  if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
++                    event.preventDefault()
++                    send()
++                  }
++                  if (event.key === 'Escape' && busy) stop()
++                }}
++              />
++              {busy ? (
++                <button type="button" tabIndex={-1} className="assistant-proto__send is-stop" title="Stop — Esc" onClick={stop}>
++                  <span className="assistant-proto__stop-square" aria-hidden="true" />
++                  Stop
++                </button>
++              ) : (
++                <button
++                  type="button"
++                  tabIndex={-1}
++                  className="assistant-proto__send"
++                  title="Send — Enter"
++                  aria-disabled={!text.trim()}
++                  onClick={() => send()}
++                >
++                  Send
++                </button>
++              )}
++            </div>
++            <p className="assistant-proto__keys">Enter sends · Shift+Enter starts a new line</p>
++          </footer>
++        </>
++      )}
++    </section>
++  )
++}
++
++function AssistantBubble({
++  message,
++  label,
++  onJump,
++  onRetry,
++  onPlaceholder,
++}: {
++  message: AssistantMessage
++  label: (anchorId: string, line: number) => string
++  onJump: (target: { anchorId: string; line: number }) => void
++  onRetry: () => void
++  onPlaceholder: () => void
++}) {
++  if (message.state === 'failed') {
++    return (
++      <div className="assistant-proto__message is-assistant is-failed" role="alert">
++        <p>
++          <b>No answer.</b> The provider didn’t reply, so nothing was read or changed.
++        </p>
++        <button type="button" tabIndex={-1} className="assistant-proto__chip" onClick={onRetry}>
++          Try again
++        </button>
++      </div>
++    )
++  }
++  const all = tokens(message.answer)
++  const shown = message.state === 'done' ? all : all.slice(0, message.shown)
++  const paragraphs: ReactNode[][] = []
++  shown.forEach(({ paragraph, piece }, index) => {
++    const parts = (paragraphs[paragraph] ??= [])
++    if (typeof piece === 'string') parts.push(piece)
++    else if ('code' in piece) parts.push(<code key={index}>{piece.code}</code>)
++    else {
++      const target = piece.ref
++      parts.push(
++        <button
++          key={index}
++          type="button"
++          tabIndex={-1}
++          className="assistant-proto__ref"
++          title="Show this line on the sheet"
++          onClick={() => onJump(target)}
++        >
++          {label(target.anchorId, target.line)}
++        </button>,
++      )
++    }
++  })
++  return (
++    <div className={`assistant-proto__message is-assistant is-${message.state}`}>
++      {paragraphs.map((parts, index) => (
++        <p key={index}>{parts}</p>
++      ))}
++      {message.state === 'writing' && <span className="assistant-proto__caret" aria-hidden="true" />}
++      {message.state === 'stopped' && <span className="assistant-proto__stopped">Stopped.</span>}
++      {message.state === 'done' && message.answer.proposal && (
++        <div className="assistant-proto__proposal">
++          <div className="assistant-proto__proposal-head">
++            <b>Proposal</b>
++            <span>1 new math element · 6 lines</span>
++          </div>
++          <pre>
++            {['# NPSH available', 'z_s = 2 m', 'L_s = 8 m', 'p_v = 2.34 kPa', 'h_s = f(Re(Q_op), eps/D) L_s/D v(Q_op)^2 / (2 g_n)', 'NPSH_a = (101.325 kPa - p_v)/(rho g_n) + z_s - h_s in m'].join('\n')}
++          </pre>
++          <div className="assistant-proto__proposal-actions">
++            <button type="button" tabIndex={-1} className="assistant-proto__send" onClick={onPlaceholder}>
++              Insert
++            </button>
++            <button type="button" tabIndex={-1} className="assistant-proto__chip" onClick={onPlaceholder}>
++              Dismiss
++            </button>
++            <span className="assistant-proto__placeholder">placeholder</span>
++          </div>
++        </div>
++      )}
++    </div>
++  )
++}
++
++function KeyCard({
++  has,
++  onSave,
++  onRemove,
++  onCancel,
++}: {
++  has: boolean
++  onSave: () => void
++  onRemove: () => void
++  onCancel?: () => void
++}) {
++  const [value, setValue] = useState('')
++  return (
++    <div className="assistant-proto__key">
++      <h3>{has ? 'API key' : 'The Math assistant needs an API key'}</h3>
++      {has ? (
++        <p>A key is kept on this device. It isn’t in the sheet, and it doesn’t travel with the file.</p>
++      ) : (
++        <>
++          <p>
++            It answers through an AI provider, with a key of your own. Without a key the app sends nothing, anywhere,
++            as before.
++          </p>
++          <p>With a key, a message and the sheet go to the provider only when you press Send.</p>
++        </>
++      )}
++      <label className="assistant-proto__key-label">
++        {has ? 'Replace the key' : 'API key'}
++        {/* A field inside Excalidraw's container is text, number or password (CONTEXT.md, Load-bearing). */}
++        <input
++          type="password"
++          className="assistant-proto__key-field"
++          placeholder="Paste the key"
++          autoComplete="off"
++          value={value}
++          onChange={(event) => setValue(event.target.value)}
++          onKeyDown={(event) => {
++            if (event.key === 'Enter' && value.trim()) onSave()
++          }}
++        />
++      </label>
++      <div className="assistant-proto__key-actions">
++        <button type="button" tabIndex={-1} className="assistant-proto__send" aria-disabled={!value.trim()} onClick={() => value.trim() && onSave()}>
++          Save key
++        </button>
++        {has && (
++          <button type="button" tabIndex={-1} className="assistant-proto__chip" onClick={onRemove}>
++            Remove the key
++          </button>
++        )}
++        {onCancel && (
++          <button type="button" tabIndex={-1} className="assistant-proto__chip" onClick={onCancel}>
++            Cancel
++          </button>
++        )}
++      </div>
++      <p className="assistant-proto__key-note">Kept on this device only. A new device asks for it again.</p>
++    </div>
++  )
++}
++
++function Icon({ d }: { d: string }) {
++  return (
++    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
++      <path d={d} />
++    </svg>
++  )
++}
++
++// ───────────────────────────── B and C: the panel of its own ─────────────────────────────
++
++/**
++ * The chat in the shell's side slot, outside Excalidraw. A press on anything
++ * but a field keeps the keyboard where it is, as in the Sheet panel, so a
++ * press on a line reference doesn't leave an open line.
++ */
++export function AssistantPanel(props: AssistantChatProps & { side: 'left' | 'right' }) {
++  return (
++    <div
++      className={`assistant-proto-panel is-${props.side}`}
++      onMouseDown={(event) => {
++        if (!(event.target as Element).closest('input, textarea')) event.preventDefault()
++      }}
++    >
++      <AssistantChat {...props} />
++    </div>
++  )
++}
++
++// ───────────────────────────── the switcher ─────────────────────────────
++
++export function AssistantSwitcher() {
++  const proto = useProto()
++  const variant = assistantVariant()
++  if (!variant || !import.meta.env.DEV) return null
++  const keys = Object.keys(VARIANTS) as AssistantVariant[]
++  const go = (step: number) => {
++    const next = keys[(keys.indexOf(variant) + step + keys.length) % keys.length]
++    const url = new URL(window.location.href)
++    url.searchParams.set('assistant', next)
++    window.location.assign(url)
++  }
++  // On the page's body: inside the stage, Excalidraw's sidebar covers it.
++  return createPortal(
++    <div className="assistant-proto-switcher" onMouseDown={(event) => event.preventDefault()}>
++      <button type="button" tabIndex={-1} aria-label="Previous variant" onClick={() => go(-1)}>
++        ←
++      </button>
++      <span>
++        <b>{variant}</b> — {VARIANTS[variant]}
++      </span>
++      <button type="button" tabIndex={-1} aria-label="Next variant" onClick={() => go(1)}>
++        →
++      </button>
++      <i />
++      <button type="button" tabIndex={-1} aria-pressed={proto.hasKey} onClick={() => setProto({ hasKey: !proto.hasKey })}>
++        Key: {proto.hasKey ? 'set' : 'none'}
++      </button>
++      <button type="button" tabIndex={-1} aria-pressed={proto.failNext} onClick={() => setProto({ failNext: !proto.failNext })}>
++        Next answer: {proto.failNext ? 'fails' : 'arrives'}
++      </button>
++    </div>,
++    window.document.body,
++  )
++}
+diff --git a/src/canvas/SheetCanvas.tsx b/src/canvas/SheetCanvas.tsx
+index 8172a72..a471240 100644
+--- a/src/canvas/SheetCanvas.tsx
++++ b/src/canvas/SheetCanvas.tsx
+@@ -88,6 +88,7 @@ const TAB_NAMES: Record<SheetPanelTab, string> = {
+   problems: 'Problems',
+   constants: 'Constants',
+   settings: 'Settings',
++  assistant: 'Math assistant', // PROTOTYPE (#242)
+ }
+ 
+ /** What fills the Sheet panel (docs/spec-v1.md section 8); the canvas draws its frame. */
+@@ -103,6 +104,10 @@ export interface SheetPanelSlot {
+   settings?: ReactNode
+   /** The built-in constants. */
+   constants?: ReactNode
++  /** PROTOTYPE (#242): variant A's seventh tab. */
++  assistant?: ReactNode
++  /** PROTOTYPE (#242): the Math assistant item of More tools; unset, the item opens the tab. */
++  assistantItem?: { pressed: boolean; onSelect: () => void }
+   /**
+    * The pinned row above the tab icons, on touch while a line or the title is
+    * open (section 4, Touch, M4d); unset, there is none.
+@@ -384,6 +389,7 @@ export function SheetCanvas({
+           problems: sheetPanel.problemsTab,
+           constants: sheetPanel.constants,
+           settings: sheetPanel.settings,
++          assistant: sheetPanel.assistant,
+         }[tab]
+         return content ? [[tab, content] as const] : []
+       })
+@@ -455,6 +461,28 @@ export function SheetCanvas({
+                   </MoreToolsItem>
+                 </div>
+               )}
++              {/* PROTOTYPE (#242): where the Math assistant is opened from. */}
++              {sheetPanel && (sheetPanel.assistant || sheetPanel.assistantItem) && (
++                <div className="math-tools__trigger sidebar-trigger">
++                  <MoreToolsItem
++                    icon={<TabIcon tab="assistant" />}
++                    label="Math assistant"
++                    pressed={
++                      sheetPanel.assistantItem
++                        ? sheetPanel.assistantItem.pressed
++                        : appState.openSidebar?.name === SHEET_PANEL && appState.openSidebar.tab === 'assistant'
++                    }
++                    title="Math assistant: ask about this sheet"
++                    onSelect={() => {
++                      closeMoreTools(root)
++                      if (sheetPanel.assistantItem) return sheetPanel.assistantItem.onSelect()
++                      const open = api.getAppState().openSidebar
++                      if (open?.name === SHEET_PANEL && open.tab === 'assistant') api.toggleSidebar({ name: SHEET_PANEL, force: false })
++                      else api.toggleSidebar({ name: SHEET_PANEL, tab: 'assistant', force: true })
++                    }}
++                  />
++                </div>
++              )}
+             </>,
+             moreTools,
+           )
+@@ -504,7 +532,7 @@ export function SheetCanvas({
+                 <Sidebar.Tab key={tab} tab={tab}>
+                   {/* The tabs are icons only (M4e): the shown tab's name is a heading over its content. */}
+                   <h2 className="sheet-sidebar__heading">{TAB_NAMES[tab]}</h2>
+-                  {content}
++                  {tab === 'assistant' ? <div className="assistant-proto-tab">{content}</div> : content}
+                 </Sidebar.Tab>
+               ))}
+             </Sidebar.Tabs>
+@@ -582,6 +610,7 @@ function TabIcon({ tab }: { tab: SheetPanelTab }) {
+     symbols: 'M4 8.5c1-1.3 2-2 4-2h12M9 6.5c0 5-1 9-3 12M15 6.5v9c0 1.5.8 2.5 2.5 2.5',
+     variables: 'M3.5 7l6 10M9.5 7l-6 10M13.5 10.5h7M13.5 14h7',
+     problems: 'M12 4.5l8.5 15h-17zM12 10v4.5M12 17v.01',
++    assistant: 'M5 5h14a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1h-7l-4 3.5V16H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1zM8.5 9h7M8.5 12h4.5',
+     constants:
+       'M12 12c-2-2.5-3.5-3.5-5.5-3.5a3.5 3.5 0 0 0 0 7c2 0 3.5-1 5.5-3.5s3.5-3.5 5.5-3.5a3.5 3.5 0 0 1 0 7c-2 0-3.5-1-5.5-3.5z',
+   }
+diff --git a/src/canvas/panelPresses.ts b/src/canvas/panelPresses.ts
+index 64b87fd..6a4ad7c 100644
+--- a/src/canvas/panelPresses.ts
++++ b/src/canvas/panelPresses.ts
+@@ -36,7 +36,7 @@ export const SHEET_SIDEBAR_CLASS = 'sheet-sidebar'
+ export const BOTTOM_SHEET_CLASS = 'sheet-bottom'
+ 
+ /** The panel's tabs, in their order (section 8, from M4d). */
+-export const SHEET_PANEL_TABS = ['format', 'symbols', 'variables', 'problems', 'constants', 'settings'] as const
++export const SHEET_PANEL_TABS = ['format', 'symbols', 'variables', 'problems', 'constants', 'settings', 'assistant'] as const // PROTOTYPE (#242): 'assistant'
+ export type SheetPanelTab = (typeof SHEET_PANEL_TABS)[number]
+ 
+ /** Whether an event's target is inside the Sheet panel. */
+diff --git a/src/main.tsx b/src/main.tsx
+index fd10e18..8121131 100644
+--- a/src/main.tsx
++++ b/src/main.tsx
+@@ -5,6 +5,7 @@ import App from './App.tsx'
+ import { browserFileAccess } from './file/fileAccess.ts'
+ import { indexedDbRecovery } from './file/recovery.ts'
+ import { storagePanelMemory } from './panel/panelMemory.ts'
++import { assistantPumpSheet, assistantVariant } from './assistantPrototype.tsx' // PROTOTYPE (#242)
+ 
+ /**
+  * The web app's entry (docs/spec-v1.md section 12a, One source, two builds):
+@@ -21,6 +22,12 @@ const panelMemory = storagePanelMemory(() => {
+ 
+ createRoot(window.document.getElementById('root')!).render(
+   <StrictMode>
+-    <App files={browserFileAccess()} recovery={indexedDbRecovery()} panelMemory={panelMemory} />
++    <App
++      files={browserFileAccess()}
++      recovery={indexedDbRecovery()}
++      panelMemory={panelMemory}
++      // PROTOTYPE (#242): `?assistant=A|B|C` starts on the pump sheet.
++      initialElements={assistantVariant() ? assistantPumpSheet() : undefined}
++    />
+   </StrictMode>,
+ )
