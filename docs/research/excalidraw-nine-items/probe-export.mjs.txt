@@ -1,0 +1,48 @@
+// Probe: what Excalidraw 0.18.1's own export route (Copy to clipboard as PNG) draws for a math element.
+import { createServer } from 'node:http'
+import { readFile, writeFile } from 'node:fs/promises'
+import { extname, join, normalize } from 'node:path'
+import { chromium } from 'playwright'
+const [web, out] = process.argv.slice(2)
+const types = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.woff2': 'font/woff2', '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png' }
+const server = createServer(async (req, res) => {
+  let p = normalize(decodeURIComponent(new URL(req.url, 'http://x').pathname)); if (p.endsWith('/')) p += 'index.html'
+  try { const b = await readFile(join(web, p)); res.writeHead(200, { 'content-type': types[extname(p)] ?? 'application/octet-stream' }); res.end(b) } catch { res.writeHead(404); res.end() }
+}).listen(0)
+const url = `http://localhost:${server.address().port}/`
+const browser = await chromium.launch()
+const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 }, permissions: ['clipboard-read', 'clipboard-write'] })
+const page = await ctx.newPage()
+await page.goto(url); await page.waitForSelector('.excalidraw canvas.interactive')
+// a drawing: a rectangle beside the math
+await page.mouse.click(600, 600); await page.locator('[data-testid="toolbar-rectangle"]').click({ force: true }); await page.mouse.move(700, 300); await page.mouse.down(); await page.mouse.move(820, 380); await page.mouse.up()
+await page.keyboard.press('Escape')
+// a math element
+await page.keyboard.press('m'); await page.mouse.click(400, 300)
+await page.keyboard.type('A = 2 m * 3 m'); await page.keyboard.press('Enter'); await page.keyboard.type('F = 10 kN'); await page.keyboard.press('Escape')
+await page.waitForTimeout(800)
+await page.keyboard.press('Control+a'); await page.waitForTimeout(300)
+await page.screenshot({ path: join(out, 'app.png') })
+await page.mouse.click(500, 335, { button: 'right' }); await page.waitForTimeout(300)
+const items = await page.$$eval('.context-menu li', (els) => els.map((e) => e.textContent.trim()))
+console.log('context menu:', JSON.stringify(items))
+await page.screenshot({ path: join(out, 'menu.png') })
+const png = page.locator('.context-menu li', { hasText: 'Copy to clipboard as PNG' })
+console.log('copy-as-png items:', await png.count())
+if (await png.count()) {
+  await png.first().click(); await page.waitForTimeout(1500)
+  const data = await page.evaluate(async () => {
+    const items = await navigator.clipboard.read()
+    for (const it of items) for (const t of it.types) if (t.startsWith('image/')) { const b = await it.getType(t); const buf = new Uint8Array(await b.arrayBuffer()); let s = ''; for (const x of buf) s += String.fromCharCode(x); return { type: t, b64: btoa(s) } }
+    return { types: items.flatMap((i) => i.types) }
+  })
+  if (data.b64) { await writeFile(join(out, 'copied.png'), Buffer.from(data.b64, 'base64')); console.log('clipboard image', data.type, data.b64.length) } else console.log('clipboard', JSON.stringify(data))
+}
+// the empty canvas's own menu: the toggles 0.18.1 already offers
+await page.keyboard.press('Escape'); await page.mouse.click(600, 620); await page.mouse.click(600, 620, { button: 'right' }); await page.waitForTimeout(300)
+console.log('canvas menu:', JSON.stringify(await page.$$eval('.context-menu li', (els) => els.map((e) => e.textContent.trim()))))
+await page.keyboard.press('Escape')
+// More tools, as the web app shows it
+await page.locator('.App-toolbar__extra-tools-trigger').click(); await page.waitForTimeout(300)
+console.log('more tools:', JSON.stringify(await page.$$eval('.App-toolbar__extra-tools-dropdown .dropdown-menu-item, .App-toolbar__extra-tools-dropdown button', (els) => els.map((e) => e.textContent.trim()))))
+await browser.close(); server.close()

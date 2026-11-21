@@ -1,0 +1,1031 @@
+diff --git a/src/App.tsx b/src/App.tsx
+index dbf708a..eaab8f9 100644
+--- a/src/App.tsx
++++ b/src/App.tsx
+@@ -21,6 +21,7 @@ import {
+ } from './overlay/MathOverlay.tsx'
+ import { sessionPanelMemory, type PanelMemory } from './panel/panelMemory.ts'
+ import { ConstantsTab, ProblemsTab, VariablesTab } from './panel/SheetPanel.tsx'
++import { RenamePrototype } from './renamePrototype.tsx' // PROTOTYPE (#232)
+ import { SymbolsTab } from './panel/SymbolsTab.tsx'
+ import type { SymbolInsert } from './math/symbols.ts'
+ import { FormatTab, type FormatActions } from './panel/FormatTab.tsx'
+@@ -640,6 +641,12 @@ function Sheet({
+               flash={flash}
+             />
+             {web && <FileChrome session={web.session} dialogs={web.dialogs} canvasRoot={canvas.root} print={print} />}
++            {/* PROTOTYPE (#232): how a rename starts, `?rename=A|B|C`. */}
++            <RenamePrototype
++              api={canvas.api}
++              leaveLine={() => line.current?.leaveLine()}
++              focusCanvas={canvas.focusCanvas}
++            />
+           </>
+         )
+       }
+diff --git a/src/main.tsx b/src/main.tsx
+index fd10e18..2396d2b 100644
+--- a/src/main.tsx
++++ b/src/main.tsx
+@@ -5,6 +5,7 @@ import App from './App.tsx'
+ import { browserFileAccess } from './file/fileAccess.ts'
+ import { indexedDbRecovery } from './file/recovery.ts'
+ import { storagePanelMemory } from './panel/panelMemory.ts'
++import { pumpSheet, renameVariant } from './renamePrototype.tsx' // PROTOTYPE (#232)
+ 
+ /**
+  * The web app's entry (docs/spec-v1.md section 12a, One source, two builds):
+@@ -21,6 +22,12 @@ const panelMemory = storagePanelMemory(() => {
+ 
+ createRoot(window.document.getElementById('root')!).render(
+   <StrictMode>
+-    <App files={browserFileAccess()} recovery={indexedDbRecovery()} panelMemory={panelMemory} />
++    <App
++      files={browserFileAccess()}
++      recovery={indexedDbRecovery()}
++      panelMemory={panelMemory}
++      // PROTOTYPE (#232): `?rename=A|B|C` starts on the pump sheet.
++      initialElements={renameVariant() ? pumpSheet() : undefined}
++    />
+   </StrictMode>,
+ )
+diff --git a/src/overlay/MathOverlay.tsx b/src/overlay/MathOverlay.tsx
+index 4cc865e..9b43aac 100644
+--- a/src/overlay/MathOverlay.tsx
++++ b/src/overlay/MathOverlay.tsx
+@@ -68,6 +68,7 @@ import { Boundary } from '../failure/Boundary.tsx'
+ import { TEXT_COLOR_VALUES } from './textColors.ts'
+ import { PlacingGhost } from './PlacingGhost.tsx'
+ import { readingOrder } from './readingOrder.ts'
++import { protoLineCommitted } from '../renamePrototype.tsx' // PROTOTYPE (#232)
+ import { constantSuggestions, FUNCTION_SUGGESTIONS, sheetNames, suggest, unitSuggestions, type Suggested } from './suggest.ts'
+ import { isPlainAt, planInsert } from './symbolInsert.ts'
+ import { fieldRoom, wrapWidthTo } from './wrapRoom.ts'
+@@ -470,6 +471,8 @@ export function MathOverlay({
+       // The line's text and its format go in that one write (section 7).
+       writeAnchorSource(api, current.anchorId, next.source, next.formats)
+       writeAnchorTitle(api, current.anchorId, next.title)
++      // PROTOTYPE (#232): variant A asks about a rename at the commit.
++      if (next.source !== anchor.source) protoLineCommitted(current.anchorId, anchor.source, next.source)
+     }
+     changeEdit(next.edit)
+   }
+diff --git a/src/panel/SheetPanel.tsx b/src/panel/SheetPanel.tsx
+index 9f6e297..08be464 100644
+--- a/src/panel/SheetPanel.tsx
++++ b/src/panel/SheetPanel.tsx
+@@ -10,6 +10,7 @@ import {
+   type PanelTarget,
+ } from './sheetPanel.ts'
+ import { InsertButton, OPEN_A_LINE, type InsertProps } from './SymbolsTab.tsx'
++import { RenameRowButton, RenameRowForm } from '../renamePrototype.tsx' // PROTOTYPE (#232)
+ import './SheetPanel.css'
+ 
+ /**
+@@ -54,6 +55,8 @@ export function VariablesTab({ sheet, onJump }: TabProps) {
+                 const unitHtml = katexReady && row.unit ? texToHtml(typesetUnit(row.unit)) : null
+                 return (
+                   <li key={row.key}>
++                    {/* PROTOTYPE (#232): variant B's Rename control and its form. */}
++                    <div className="rename-proto__rowline">
+                     <button
+                       type="button"
+                       className={`sheet-panel__row is-${row.kind}`}
+@@ -68,6 +71,9 @@ export function VariablesTab({ sheet, onJump }: TabProps) {
+                         {unitHtml === null ? row.unit : <span dangerouslySetInnerHTML={{ __html: unitHtml }} />}
+                       </span>
+                     </button>
++                    <RenameRowButton anchorId={row.anchorId} line={row.line} name={row.name} />
++                    </div>
++                    <RenameRowForm anchorId={row.anchorId} line={row.line} name={row.name} />
+                   </li>
+                 )
+               })}
+diff --git a/src/renamePrototype.css b/src/renamePrototype.css
+new file mode 100644
+index 0000000..6c40e25
+--- /dev/null
++++ b/src/renamePrototype.css
+@@ -0,0 +1,247 @@
++/* PROTOTYPE — throwaway (ticket #232). Delete with renamePrototype.tsx. */
++
++.rename-proto {
++  position: absolute;
++  inset: 0;
++  z-index: 5;
++  pointer-events: none;
++  font: 13px/1.4 system-ui, sans-serif;
++}
++
++.rename-proto__beside {
++  position: absolute;
++  pointer-events: auto;
++}
++
++.rename-proto__form {
++  box-sizing: border-box;
++  display: grid;
++  gap: 6px;
++  width: 300px;
++  max-width: 100%;
++  padding: 10px 12px;
++  border: 1px solid #c9c9d1;
++  border-radius: 8px;
++  background: #fff;
++  color: #1b1b1f;
++  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.16);
++  font: 13px/1.4 system-ui, sans-serif;
++  text-align: left;
++}
++
++/* In the Variables tab the form is part of the list, not a card over it. */
++.sheet-panel .rename-proto__form {
++  width: auto;
++  margin: 2px 0 8px;
++  box-shadow: none;
++  background: var(--island-bg-color, #fff);
++  color: inherit;
++}
++
++.rename-proto__form p {
++  margin: 0;
++}
++
++.rename-proto__form code,
++.rename-proto__last code {
++  font: 12px/1.4 ui-monospace, Consolas, monospace;
++}
++
++.rename-proto__label {
++  display: grid;
++  gap: 4px;
++}
++
++.rename-proto__field {
++  box-sizing: border-box;
++  width: 100%;
++  padding: 4px 6px;
++  border: 1px solid #6965db;
++  border-radius: 4px;
++  font: 13px/1.4 ui-monospace, Consolas, monospace;
++}
++
++.rename-proto__problem {
++  color: #c92a2a;
++}
++
++.rename-proto__count,
++.rename-proto__keys,
++.rename-proto__where {
++  color: #6b6b76;
++}
++
++.rename-proto__keys {
++  margin-left: auto;
++  font-size: 11px;
++}
++
++.rename-proto__changes {
++  display: grid;
++  gap: 3px;
++  max-height: 168px;
++  margin: 0;
++  padding: 0;
++  overflow: auto;
++  list-style: none;
++}
++
++.rename-proto__changes li {
++  display: grid;
++}
++
++.rename-proto__changes code {
++  overflow: hidden;
++  text-overflow: ellipsis;
++  white-space: nowrap;
++}
++
++.rename-proto__where {
++  font-size: 11px;
++}
++
++.rename-proto__changes mark {
++  border-radius: 2px;
++  background: #ffe066;
++  color: inherit;
++}
++
++.rename-proto__buttons {
++  display: flex;
++  align-items: center;
++  gap: 6px;
++}
++
++.rename-proto__buttons button {
++  min-height: 28px;
++  padding: 3px 10px;
++  border: 1px solid #c9c9d1;
++  border-radius: 6px;
++  background: #fff;
++  color: #1b1b1f;
++  font: inherit;
++  cursor: pointer;
++}
++
++.rename-proto__buttons .rename-proto__primary {
++  border-color: #6965db;
++  background: #6965db;
++  color: #fff;
++}
++
++.rename-proto__buttons button:disabled {
++  opacity: 0.45;
++  cursor: default;
++}
++
++.rename-proto__link {
++  padding: 0;
++  border: 0;
++  background: none;
++  color: #4a47b1;
++  font: inherit;
++  text-decoration: underline;
++  cursor: pointer;
++}
++
++/* Variant B: the pencil at the end of a Variables row. */
++.rename-proto__rowline {
++  display: flex;
++  align-items: center;
++}
++
++.rename-proto__rowline > .sheet-panel__row {
++  flex: 1;
++  min-width: 0;
++}
++
++.rename-proto__pencil {
++  flex: none;
++  width: 26px;
++  height: 26px;
++  border: 0;
++  border-radius: 6px;
++  background: none;
++  color: #6b6b76;
++  font-size: 14px;
++  cursor: pointer;
++}
++
++.rename-proto__pencil:hover,
++.rename-proto__pencil.is-open {
++  background: var(--button-hover-bg, rgba(0, 0, 0, 0.08));
++  color: #4a47b1;
++}
++
++/* The prototype's own chrome: not part of what is judged. */
++.rename-proto__last {
++  position: absolute;
++  left: 16px;
++  bottom: 64px;
++  width: 320px;
++  padding: 8px 10px;
++  border-radius: 8px;
++  background: #1b1b1f;
++  color: #f1f1f4;
++  pointer-events: auto;
++}
++
++.rename-proto__last header {
++  display: flex;
++  justify-content: space-between;
++}
++
++.rename-proto__last header button {
++  border: 0;
++  background: none;
++  color: inherit;
++  cursor: pointer;
++}
++
++.rename-proto__last p {
++  margin: 4px 0;
++}
++
++.rename-proto__last .rename-proto__changes {
++  max-height: 104px;
++}
++
++.rename-proto__last .rename-proto__where {
++  color: #a9a9b4;
++}
++
++.rename-proto__last mark {
++  background: #5c4d00;
++  color: #ffe066;
++}
++
++.rename-proto__steps {
++  color: #ffd43b;
++}
++
++.rename-proto__switcher {
++  position: absolute;
++  left: 50%;
++  bottom: 14px;
++  display: flex;
++  align-items: center;
++  gap: 10px;
++  padding: 5px 8px;
++  border-radius: 999px;
++  background: #1b1b1f;
++  color: #fff;
++  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
++  transform: translateX(-50%);
++  pointer-events: auto;
++  white-space: nowrap;
++}
++
++.rename-proto__switcher button {
++  width: 26px;
++  height: 26px;
++  border: 0;
++  border-radius: 50%;
++  background: #3a3a44;
++  color: #fff;
++  cursor: pointer;
++}
+diff --git a/src/renamePrototype.tsx b/src/renamePrototype.tsx
+new file mode 100644
+index 0000000..c19617e
+--- /dev/null
++++ b/src/renamePrototype.tsx
+@@ -0,0 +1,669 @@
++/*
++ * PROTOTYPE — throwaway. Not production code: no tests, no spec, delete when the
++ * ticket is answered.
++ *
++ * Wayfinder ticket #232, "How does renaming a variable start: a prompt when its
++ * line is committed, or a Rename command?"
++ *
++ * Three variants of how a rename starts, on the pump sheet, in the real app,
++ * switchable with `?rename=A|B|C` and the bar at the bottom:
++ *   A  a prompt when a line is committed with its name changed
++ *   B  a Rename control on a row of the Variables tab
++ *   C  F2 on the open line (the name at the caret)
++ *
++ * The rules of a rename are NOT this prototype's: it matches names as whole
++ * words in a line's code, from the definition down to the next assignment of
++ * the same name, skips a function whose parameter has the name, and leaves
++ * stored formats alone.
++ */
++import { CaptureUpdateAction, newElementWith } from '@excalidraw/excalidraw'
++import type { ExcalidrawImperativeAPI } from '@excalidraw/excalidraw/types'
++import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react'
++import { createMathAnchorElements, isMathAnchor, toMathAnchor } from './canvas/mathAnchor.ts'
++import { readingOrder } from './overlay/readingOrder.ts'
++import './renamePrototype.css'
++
++// ───────────────────────────── the variant ─────────────────────────────
++
++export type RenameVariant = 'A' | 'B' | 'C'
++const VARIANTS: Record<RenameVariant, string> = {
++  A: 'Prompt when the line is committed',
++  B: 'Rename on a Variables row',
++  C: 'F2 on the open line',
++}
++
++export function renameVariant(): RenameVariant | null {
++  if (typeof window === 'undefined') return null
++  const asked = new URLSearchParams(window.location.search).get('rename')?.toUpperCase()
++  return asked === 'A' || asked === 'B' || asked === 'C' ? asked : null
++}
++
++// ───────────────────────────── the pump sheet ─────────────────────────────
++
++export function pumpSheet() {
++  const box = { width: 300, height: 100 }
++  return createMathAnchorElements([
++    {
++      id: 'fluid',
++      x: 230,
++      y: 90,
++      ...box,
++      title: 'Fluid and pipe',
++      source: [
++        '# Water at 20 C, 4" Sch 40 steel',
++        'rho = 998.2 kg/m^3',
++        'mu = 1.002 cP',
++        'D = 102.3 mm',
++        'L_p = 150 m',
++        'eps = 0.045 mm',
++        'K = 4*0.9 + 2*0.15 + 0.5 + 1.0 # fittings',
++        'dz = 12 m',
++        'g_n = 9.80665 m/s^2',
++        'Q_d = 15 L/s',
++        'eta = 0.70',
++      ].join('\n'),
++    },
++    {
++      id: 'functions',
++      x: 690,
++      y: 100,
++      ...box,
++      title: 'Flow functions',
++      source: [
++        'A_p = pi D^2 / 4',
++        'v(Q) = Q / A_p',
++        'Re(Q) = rho v(Q) D / mu',
++        'f(Re, r) = solve 1/sqrt(f) = -2 log10(r/3.7 + 2.51/(Re sqrt(f))), guess f = 0.02',
++        'Hs(Q) = dz + (f(Re(Q), eps/D) L_p/D + K) v(Q)^2 / (2 g_n)',
++      ].join('\n'),
++    },
++    {
++      id: 'duty',
++      x: 800,
++      y: 370,
++      ...box,
++      title: 'Duty point',
++      source: [
++        'v_d = v(Q_d)',
++        'Re_d = Re(Q_d)',
++        'f_d = f(Re_d, eps/D)',
++        'dP_pipe = f_d * (L_p/D) rho v_d^2 / 2 in kPa',
++        'dP_K = K rho v_d^2 / 2 in kPa',
++        'dP_z = rho g_n dz in kPa',
++        'H_d = Hs(Q_d)',
++        'P_d = rho g_n Q_d H_d / eta in kW',
++      ].join('\n'),
++    },
++    {
++      id: 'pump',
++      x: 230,
++      y: 440,
++      ...box,
++      title: 'Pump and operating point',
++      source: [
++        'H_0 = 25 m',
++        'H_r = 20 m',
++        'Q_r = 20 L/s',
++        'Hp(Q) = H_0 - (H_0 - H_r) (Q/Q_r)^2',
++        'Q_op = solve Hp(Q) = Hs(Q), for Q = 1 L/s .. 30 L/s in L/s',
++        'H_op = Hp(Q_op)',
++        'P_op = rho g_n Q_op H_op / eta in kW',
++      ].join('\n'),
++    },
++  ])
++}
++
++// ───────────────────────────── the rename, prototype grade ─────────────────────────────
++
++const ID_START = /[A-Za-z_$À-ʯͰ-Ͽ]/
++const ID_CHAR = /[A-Za-z0-9_$À-ʯͰ-Ͽ]/
++
++interface Token {
++  start: number
++  end: number
++  name: string
++}
++
++/** The names in a line's code: not in a text, a note, a number or after `.` or `@`. */
++function names(line: string): Token[] {
++  const found: Token[] = []
++  let i = 0
++  while (i < line.length) {
++    const char = line[i]
++    if (char === '#') break
++    if (char === '"') {
++      const close = line.indexOf('"', i + 1)
++      i = close < 0 ? line.length : close + 1
++    } else if (/\d/.test(char)) {
++      i += /^\d*\.?\d*(e[+-]?\d+)?/i.exec(line.slice(i))![0].length || 1
++    } else if (ID_START.test(char)) {
++      let end = i + 1
++      while (end < line.length && ID_CHAR.test(line[end])) end++
++      const before = line[i - 1]
++      if (before !== '.' && before !== '@') found.push({ start: i, end, name: line.slice(i, end) })
++      i = end
++    } else i++
++  }
++  return found
++}
++
++/** What a line assigns: `rho = …` or `v(Q) = …`. */
++function definition(line: string): { name: string; params: string[] } | null {
++  const match = /^\s*([A-Za-z_$À-ʯͰ-Ͽ][A-Za-z0-9_$À-ʯͰ-Ͽ]*)\s*(?:\(([^)]*)\))?\s*=(?!=)/.exec(line)
++  if (!match) return null
++  return { name: match[1], params: match[2] === undefined ? [] : match[2].split(',').map((param) => param.trim()) }
++}
++
++interface SheetElement {
++  anchorId: string
++  label: string
++  lines: string[]
++}
++
++function readSheet(api: ExcalidrawImperativeAPI): SheetElement[] {
++  const anchors = api.getSceneElements().filter(isMathAnchor).map(toMathAnchor)
++  return readingOrder(anchors).map((id, index) => {
++    const anchor = anchors.find((each) => each.id === id)!
++    return { anchorId: id, label: anchor.title || `Element ${index + 1}`, lines: anchor.source.split('\n') }
++  })
++}
++
++export interface Change {
++  anchorId: string
++  label: string
++  line: number
++  before: string
++  after: string
++  /** Where the name sits in `before`, for the highlight. */
++  marks: Token[]
++}
++
++/**
++ * The lines a rename of `from`, as defined at `at`, would change: that line's
++ * own name (unless it already holds the new one), then every use below, down
++ * to the next line that assigns `from` again.
++ */
++function planRename(
++  sheet: readonly SheetElement[],
++  at: { anchorId: string; line: number },
++  from: string,
++  to: string,
++  withDefinition: boolean,
++): Change[] {
++  const changes: Change[] = []
++  const swap = (element: SheetElement, line: number, tokens: Token[]) => {
++    if (tokens.length === 0) return
++    const before = element.lines[line]
++    let after = before
++    for (const token of [...tokens].reverse()) after = after.slice(0, token.start) + to + after.slice(token.end)
++    changes.push({ anchorId: element.anchorId, label: element.label, line, before, after, marks: tokens })
++  }
++  let reached = false
++  for (const element of sheet) {
++    for (let line = 0; line < element.lines.length; line++) {
++      const tokens = names(element.lines[line]).filter((token) => token.name === from)
++      const defined = definition(element.lines[line])
++      if (!reached) {
++        if (element.anchorId !== at.anchorId || line !== at.line) continue
++        reached = true
++        if (withDefinition) swap(element, line, tokens.slice(0, 1))
++        continue
++      }
++      if (defined?.params.includes(from)) continue
++      if (defined?.name === from) {
++        // Assigned again: its right-hand side still reads the old value, then the rename ends.
++        swap(element, line, tokens.slice(1))
++        return changes
++      }
++      swap(element, line, tokens)
++    }
++  }
++  return changes
++}
++
++/** Where `name`, read at `at`, was assigned: the nearest assignment at or above it. */
++function definedAt(sheet: readonly SheetElement[], at: { anchorId: string; line: number }, name: string) {
++  let found: { anchorId: string; line: number } | null = null
++  for (const element of sheet) {
++    for (let line = 0; line < element.lines.length; line++) {
++      if (definition(element.lines[line])?.name === name) found = { anchorId: element.anchorId, line }
++      if (element.anchorId === at.anchorId && line === at.line) return found
++    }
++  }
++  return found
++}
++
++/** Every changed element in one scene write: one undo step. */
++function writeChanges(api: ExcalidrawImperativeAPI, changes: readonly Change[]) {
++  const sources = new Map<string, string[]>()
++  for (const element of readSheet(api)) sources.set(element.anchorId, element.lines)
++  for (const change of changes) sources.get(change.anchorId)![change.line] = change.after
++  const touched = new Set(changes.map((change) => change.anchorId))
++  api.updateScene({
++    elements: api.getSceneElementsIncludingDeleted().map((element) =>
++      touched.has(element.id)
++        ? newElementWith(element, { customData: { ...element.customData, source: sources.get(element.id)!.join('\n') } })
++        : element,
++    ),
++    captureUpdate: CaptureUpdateAction.IMMEDIATELY,
++  })
++}
++
++function refusal(sheet: readonly SheetElement[], from: string, to: string): string | null {
++  if (to === '') return 'Type the new name.'
++  if (to === from) return null
++  if (!/^[A-Za-z_$À-ʯͰ-Ͽ][A-Za-z0-9_$À-ʯͰ-Ͽ]*$/.test(to)) {
++    return 'A name is letters, digits and _, and starts with a letter.'
++  }
++  if (sheet.some((element) => element.lines.some((line) => definition(line)?.name === to))) {
++    return `${to} is already a name on this sheet.`
++  }
++  return null
++}
++
++// ───────────────────────────── the prototype's state ─────────────────────────────
++
++interface Asking {
++  anchorId: string
++  line: number
++  from: string
++  /** Variant A knows the new name already; B and C ask for it. */
++  to: string | null
++  where: 'prompt' | 'panel' | 'line'
++  /** Variant C: the line F2 was pressed on, where its popover shows. */
++  near?: { anchorId: string; line: number }
++}
++
++interface Done {
++  from: string
++  to: string
++  changes: Change[]
++  steps: string
++}
++
++interface State {
++  api: ExcalidrawImperativeAPI | null
++  asking: Asking | null
++  done: Done | null
++}
++
++let state: State = { api: null, asking: null, done: null }
++const listeners = new Set<() => void>()
++function set(next: Partial<State>) {
++  state = { ...state, ...next }
++  listeners.forEach((listener) => listener())
++}
++function useProto(): State {
++  return useSyncExternalStore(
++    (listener) => {
++      listeners.add(listener)
++      return () => listeners.delete(listener)
++    },
++    () => state,
++  )
++}
++
++function rename(asking: Asking, to: string, steps: string, after?: () => void) {
++  const api = state.api
++  if (!api) return
++  const changes = planRename(readSheet(api), asking, asking.from, to, asking.where !== 'prompt')
++  writeChanges(api, changes)
++  set({ asking: null, done: { from: asking.from, to, changes, steps } })
++  api.setToast({
++    message: `Renamed ${asking.from} to ${to} in ${count(changes.length)}. Ctrl+Z takes it back.`,
++    closable: true,
++    duration: 6000,
++  })
++  after?.()
++}
++
++const count = (lines: number) => (lines === 1 ? '1 line' : `${lines} lines`)
++
++/** Variant A's hook, called by the overlay at every line commit (PROTOTYPE). */
++export function protoLineCommitted(anchorId: string, before: string, after: string) {
++  if (renameVariant() !== 'A' || !state.api) return
++  const was = before.split('\n')
++  const now = after.split('\n')
++  if (was.length !== now.length) return
++  const changed = now.flatMap((text, line) => (text === was[line] ? [] : [line]))
++  if (changed.length !== 1) return
++  const line = changed[0]
++  const from = definition(was[line])?.name
++  const to = definition(now[line])?.name
++  if (!from || !to || from === to) return
++  // The scene takes the commit in this same turn; the prompt reads it after.
++  window.setTimeout(() => {
++    const api = state.api
++    if (!api) return
++    const asking: Asking = { anchorId, line, from, to, where: 'prompt' }
++    if (planRename(readSheet(api), asking, from, to, false).length > 0) set({ asking })
++  })
++}
++
++/** Variant B's control on a Variables row (PROTOTYPE). */
++export function RenameRowButton({ anchorId, line, name }: { anchorId: string; line: number; name: string }) {
++  const { asking } = useProto()
++  if (renameVariant() !== 'B') return null
++  const open = asking?.where === 'panel' && asking.anchorId === anchorId && asking.line === line && asking.from === name
++  return (
++    <button
++      type="button"
++      className={`rename-proto__pencil${open ? ' is-open' : ''}`}
++      aria-label={`Rename ${name}`}
++      title={`Rename ${name}`}
++      tabIndex={-1}
++      onClick={() => set({ asking: open ? null : { anchorId, line, from: name, to: null, where: 'panel' } })}
++    >
++      ✎
++    </button>
++  )
++}
++
++/** Variant B's form, under its row (PROTOTYPE). */
++export function RenameRowForm({ anchorId, line, name }: { anchorId: string; line: number; name: string }) {
++  const { asking } = useProto()
++  if (renameVariant() !== 'B' || !asking || asking.where !== 'panel') return null
++  if (asking.anchorId !== anchorId || asking.line !== line || asking.from !== name) return null
++  return <RenameForm asking={asking} steps="1 undo step: Ctrl+Z puts every line back at once." />
++}
++
++/** The field for the new name, the lines that change, Rename and Cancel (B and C). */
++function RenameForm({ asking, steps, onDone }: { asking: Asking; steps: string; onDone?: () => void }) {
++  const api = state.api!
++  const [to, setTo] = useState(asking.from)
++  const field = useRef<HTMLInputElement>(null)
++  useEffect(() => {
++    field.current?.focus()
++    field.current?.select()
++  }, [])
++  const sheet = readSheet(api)
++  const typed = to.trim()
++  const problem = refusal(sheet, asking.from, typed)
++  const changes = planRename(sheet, asking, asking.from, typed === '' ? asking.from : typed, true)
++  const ready = problem === null && typed !== asking.from
++  const cancel = () => {
++    set({ asking: null })
++    onDone?.()
++  }
++  return (
++    <form
++      className="rename-proto__form"
++      onSubmit={(event) => {
++        event.preventDefault()
++        if (ready) rename(asking, typed, steps, onDone)
++      }}
++      onKeyDown={(event) => {
++        event.stopPropagation()
++        if (event.key === 'Escape') cancel()
++      }}
++    >
++      <label className="rename-proto__label">
++        <span>
++          Rename <code>{asking.from}</code> to
++        </span>
++        <input
++          ref={field}
++          className="rename-proto__field"
++          type="text"
++          value={to}
++          spellCheck={false}
++          autoComplete="off"
++          aria-label="New name"
++          onChange={(event) => setTo(event.target.value)}
++        />
++      </label>
++      {problem ? (
++        <p className="rename-proto__problem">{problem}</p>
++      ) : (
++        <p className="rename-proto__count">Changes {count(changes.length)}:</p>
++      )}
++      <ChangeList changes={changes} />
++      <div className="rename-proto__buttons">
++        <button type="submit" className="rename-proto__primary" disabled={!ready}>
++          Rename
++        </button>
++        <button type="button" onClick={cancel}>
++          Cancel
++        </button>
++        <span className="rename-proto__keys">Enter · Esc</span>
++      </div>
++    </form>
++  )
++}
++
++function ChangeList({ changes }: { changes: readonly Change[] }) {
++  return (
++    <ul className="rename-proto__changes">
++      {changes.map((change) => (
++        <li key={`${change.anchorId}:${change.line}`}>
++          <span className="rename-proto__where">
++            {change.label}, line {change.line + 1}
++          </span>
++          <code>{marked(change)}</code>
++        </li>
++      ))}
++    </ul>
++  )
++}
++
++function marked(change: Change) {
++  const parts: (string | React.JSX.Element)[] = []
++  let from = 0
++  for (const mark of change.marks) {
++    parts.push(change.before.slice(from, mark.start), <mark key={mark.start}>{mark.name}</mark>)
++    from = mark.end
++  }
++  parts.push(change.before.slice(from))
++  return parts
++}
++
++// ───────────────────────────── the layer over the sheet ─────────────────────────────
++
++interface LayerProps {
++  api: ExcalidrawImperativeAPI
++  leaveLine: () => void
++  focusCanvas: () => void
++}
++
++/** Variant A's prompt, variant C's popover, the last rename and the switcher (PROTOTYPE). */
++export function RenamePrototype({ api, leaveLine, focusCanvas }: LayerProps) {
++  const variant = renameVariant()
++  const { asking, done } = useProto()
++  useLayoutEffect(() => {
++    set({ api })
++    return () => set({ api: null, asking: null })
++  }, [api])
++
++  // Variant C: F2 in the open line asks about the name at the caret, else the line's own.
++  useEffect(() => {
++    if (variant !== 'C') return
++    const onKey = (event: KeyboardEvent) => {
++      if (event.key !== 'F2') return
++      const field = document.activeElement
++      if (!(field instanceof HTMLTextAreaElement) || !field.classList.contains('math-element__field')) return
++      const anchorId = field.closest<HTMLElement>('[data-anchor-id]')?.dataset.anchorId
++      const row = field.closest<HTMLElement>('[data-line]')?.dataset.line
++      if (!anchorId || row === undefined) return
++      event.preventDefault()
++      event.stopPropagation()
++      const line = Number(row)
++      const caret = field.selectionStart
++      const at = names(field.value).find((token) => token.start <= caret && caret <= token.end)
++      const name = at?.name ?? definition(field.value)?.name
++      leaveLine()
++      const where = name ? definedAt(readSheet(api), { anchorId, line }, name) : null
++      if (!name || !where) {
++        api.setToast({
++          message: name ? `${name} isn't a name this sheet assigns.` : 'Put the caret on a name to rename it.',
++          closable: true,
++          duration: 4000,
++        })
++        focusCanvas()
++        return
++      }
++      set({ asking: { ...where, from: name, to: null, where: 'line', near: { anchorId, line } } })
++    }
++    document.addEventListener('keydown', onKey, true)
++    return () => document.removeEventListener('keydown', onKey, true)
++  }, [variant, api, leaveLine, focusCanvas])
++
++  // Variant A's prompt goes when the sheet no longer needs it (an undo, an edit of a use).
++  useEffect(() => {
++    if (asking?.where !== 'prompt') return
++    return api.onChange(() => {
++      const still = state.asking
++      if (still?.where !== 'prompt' || still.to === null) return
++      if (planRename(readSheet(api), still, still.from, still.to, false).length === 0) set({ asking: null })
++    })
++  }, [api, asking])
++
++  if (!variant) return null
++  const floating = asking && asking.where !== 'panel' ? asking : null
++  return (
++    <div className="rename-proto">
++      {floating && (
++        <Beside
++          api={api}
++          anchorId={(floating.near ?? floating).anchorId}
++          line={(floating.near ?? floating).line}
++          below={floating.where === 'line'}
++        >
++          {floating.where === 'prompt' ? (
++            <Prompt asking={floating} leaveLine={leaveLine} />
++          ) : (
++            <RenameForm
++              asking={floating}
++              steps="1 undo step: Ctrl+Z puts every line back at once."
++              onDone={focusCanvas}
++            />
++          )}
++        </Beside>
++      )}
++      {done && <LastRename done={done} />}
++      <Switcher variant={variant} />
++    </div>
++  )
++}
++
++/** Variant A: "Rename rho to rho_w in 7 lines?", Rename and Keep. */
++function Prompt({ asking, leaveLine }: { asking: Asking; leaveLine: () => void }) {
++  const api = state.api!
++  const [listed, setListed] = useState(false)
++  const changes = planRename(readSheet(api), asking, asking.from, asking.to!, false)
++  return (
++    <div className="rename-proto__form is-prompt" role="dialog" aria-label="Rename">
++      <p className="rename-proto__question">
++        Rename <code>{asking.from}</code> to <code>{asking.to}</code> in{' '}
++        <button type="button" className="rename-proto__link" onMouseDown={(e) => e.preventDefault()} onClick={() => setListed(!listed)}>
++          {count(changes.length)}
++        </button>
++        ?
++      </p>
++      {listed && <ChangeList changes={changes} />}
++      <div className="rename-proto__buttons">
++        <button
++          type="button"
++          className="rename-proto__primary"
++          onMouseDown={(event) => event.preventDefault()}
++          onClick={() => {
++            // A line opened since (↓ or Enter) is written first, as its own step.
++            leaveLine()
++            rename(
++              asking,
++              asking.to!,
++              '2 undo steps: the first Ctrl+Z puts the uses back (they read the old name again, so they show errors), the second puts the edited line back.',
++            )
++          }}
++        >
++          Rename
++        </button>
++        <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => set({ asking: null })}>
++          Keep {asking.from}
++        </button>
++      </div>
++    </div>
++  )
++}
++
++/** Places its children beside a line of the sheet, and follows it. */
++function Beside({
++  api,
++  anchorId,
++  line,
++  below,
++  children,
++}: {
++  api: ExcalidrawImperativeAPI
++  anchorId: string
++  line: number
++  below: boolean
++  children: React.ReactNode
++}) {
++  const box = useRef<HTMLDivElement>(null)
++  useLayoutEffect(() => {
++    let frame = 0
++    const place = () => {
++      const element = document.querySelector<HTMLElement>(`[data-anchor-id="${anchorId}"]`)
++      const row = element?.querySelector<HTMLElement>(`[data-line="${line}"]`)
++      const stage = box.current?.offsetParent?.getBoundingClientRect()
++      if (box.current && element && row && stage) {
++        const at = row.getBoundingClientRect()
++        const whole = element.getBoundingClientRect()
++        const sidebar = document.querySelector('.excalidraw .sidebar')?.getBoundingClientRect()
++        const edge = (sidebar && sidebar.width > 0 ? sidebar.left : stage.right) - box.current.offsetWidth - 12
++        const left = below ? at.left : whole.right + 10
++        box.current.style.left = `${Math.max(8, Math.min(left, edge)) - stage.left}px`
++        box.current.style.top = `${(below ? at.bottom + 6 : at.top - 6) - stage.top}px`
++      }
++      frame = requestAnimationFrame(place)
++    }
++    place()
++    return () => cancelAnimationFrame(frame)
++  }, [api, anchorId, line, below])
++  return (
++    <div ref={box} className="rename-proto__beside">
++      {children}
++    </div>
++  )
++}
++
++function LastRename({ done }: { done: Done }) {
++  return (
++    <aside className="rename-proto__last">
++      <header>
++        <strong>Prototype: last rename</strong>
++        <button type="button" aria-label="Hide" onClick={() => set({ done: null })}>
++          ✕
++        </button>
++      </header>
++      <p>
++        <code>{done.from}</code> → <code>{done.to}</code>, {count(done.changes.length)} written.
++      </p>
++      <ChangeList changes={done.changes} />
++      <p className="rename-proto__steps">{done.steps}</p>
++    </aside>
++  )
++}
++
++function Switcher({ variant }: { variant: RenameVariant }) {
++  const keys = Object.keys(VARIANTS) as RenameVariant[]
++  const go = (by: number) => {
++    const next = keys[(keys.indexOf(variant) + by + keys.length) % keys.length]
++    const url = new URL(window.location.href)
++    url.searchParams.set('rename', next)
++    window.location.assign(url)
++  }
++  return (
++    <nav className="rename-proto__switcher" aria-label="Prototype variants">
++      <button type="button" aria-label="Previous variant" onClick={() => go(-1)}>
++        ←
++      </button>
++      <span>
++        {variant} — {VARIANTS[variant]}
++      </span>
++      <button type="button" aria-label="Next variant" onClick={() => go(1)}>
++        →
++      </button>
++    </nav>
++  )
++}
