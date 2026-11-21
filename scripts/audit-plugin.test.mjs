@@ -63,6 +63,30 @@ describe('the bundle audit (docs/spec-v1.md section 12a, Data protection)', () =
     expect(problems.some((problem) => problem.includes(`"${needle}"`))).toBe(true)
   })
 
+  it("lets through a name the allowlist gives, and still fails on the word beside it", () => {
+    // One of Excalidraw's message names: a key in a table of texts.
+    const texts = 'var en={localStorageQuotaExceeded:"Browser storage quota exceeded."}'
+    expect(Object.keys(allowlist.text)).toContain('localStorageQuotaExceeded')
+    expect(bundle({ files: { 'main.js': texts } })).toEqual([])
+    expect(bundle({ files: { 'main.js': `${texts};localStorage.getItem("a")` } })).toEqual([
+      'main.js: 1 × "localStorage" (browser storage outside the vault)',
+    ])
+    expect(auditBundle({
+      files: { 'main.js': texts, 'manifest.json': '{"version":"1.2.3"}', 'styles.css': '' },
+      sizes: {},
+      packageVersion: '1.2.3',
+      allowlist: { ...allowlist, text: {} },
+    })).toEqual(['main.js: 1 × "localStorage" (browser storage outside the vault)'])
+  })
+
+  it('says why for every entry of the allowlist', () => {
+    for (const section of ['hosts', 'text', 'elementCreation']) {
+      for (const [name, why] of Object.entries(allowlist[section])) {
+        expect(why, `${section}: ${name}`).toEqual(expect.stringMatching(/\S.{20,}/))
+      }
+    }
+  })
+
   it('fails on a <style> or <link> created outside the known library sites', () => {
     expect(bundle({ files: { 'main.js': 'document.head.append(document.createElement("style"))' } })).toEqual([
       expect.stringContaining('creates a <style> element'),

@@ -587,6 +587,23 @@ The items with a recorded result. Those still open are in
   - Not checked by that probe, so still in section 17: KaTeX's fonts inside the frame, printing from a
     pop-out window, the work laptop.
 
+**The Excalidraw upgrade**
+
+- Whether CodeMirror and Mermaid to Excalidraw 3.6.0 can be trimmed from the plugin, and the two
+  sizes afterwards. **Passed (2026-11-21, #269, read from esbuild's own account of the bundle
+  and run in headless Chromium against the fake `obsidian`):** Mermaid to Excalidraw 3.6.0 was
+  already stubbed whole, as 2.2.2 was, and adds no byte. CodeMirror (295,879 bytes with its
+  Lezer and style modules) is imported by one file of Excalidraw's, the code editor of the
+  Mermaid dialog's tab, which the plugin can't open; stubbed, it takes with it the one
+  `<style>` made at run time. `main.js` is 3,904,270 bytes (4,207,228 before, 3,404,028 on
+  0.18.1) and `styles.css` 605,789 (555,370 on 0.18.1). The rest of the growth is Excalidraw's
+  own code: 964,776 bytes in one package on 0.18.1, 1,457,888 in four on the canary
+  (`excalidraw`, `element`, `common`, `math`). The
+  fonts are the same 21 inlined and 209 `local:` paths. **Found:** the canary's storage code
+  sits in `@excalidraw/common`, outside the path the build rewrote, which is why three uses of
+  `localStorage` came through; and a pasted Mermaid text still lands as text, with
+  Excalidraw's own warning in the console.
+
 ## 18. Decision index
 
 | Ticket | Fed sections |

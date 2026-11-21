@@ -66,17 +66,33 @@ blocked run bundles the same file for the browser.
 CJK text. Depends on: App, file (`readSheet`, the messages), panel memory.
 
 **The build** (`esbuild.plugin.mjs`, section 12a, One source, two builds and
-Data protection). It stubs Mermaid to Excalidraw, the non-English locales,
-font subsetting and math.js's help texts (`embeddedDocs.js` resolves to
-`src/math/noHelpTexts.ts`, as `vite.config.ts`'s alias does for the web; the
-build fails if it stubbed nothing; section 14, M4e, Lighter plugin);
+Data protection). It stubs Mermaid to Excalidraw, the code editor of its
+dialog (`components/TTDDialog/CodeMirrorEditor-*.js`, the one importer of
+CodeMirror: the stub throws as it loads, the case Excalidraw answers with a
+plain text box), the non-English locales, font subsetting and math.js's help
+texts (`embeddedDocs.js` resolves to `src/math/noHelpTexts.ts`, as
+`vite.config.ts`'s alias does for the web; section 14, M4e, Lighter plugin);
 rewrites Excalidraw's `./fonts/…` strings to `data:` URLs (Xiaolai to
-`local:`); and in Excalidraw's own files turns `localStorage` into no
-storage, the `esm.sh` fallback into `about:blank#` and every `VITE_APP_*`
-value (service URLs, the Firebase key) into `""`. KaTeX's CSS keeps woff2
+`local:`); and in the files of every `@excalidraw/*` package
+(`inExcalidraw`: the canary keeps storage and environment values in
+`common` and `element` too) runs `neutralise` (`scripts/neutralise.mjs`,
+pure, with its test on the canary's own text): a `localStorage.getItem(…)`
+becomes `null`, a `setItem` or `removeItem` a call that does nothing, with
+or without `window.`; the `esm.sh` fallback becomes `about:blank#` and every
+`VITE_APP_*` value (service URLs, the Firebase key) `""`. Any other use of
+`localStorage` is left in the text for the audit to fail on. **`TALLY`**
+counts what each of the nine trims and rewrites found, the build prints it,
+and a zero fails the build by name, as do no fonts inlined or no path made
+`local:`. The minimap's worker is never started: it is found by
+`import.meta.url`, which one CommonJS file doesn't have. KaTeX's CSS keeps woff2
 only and loses the `@font-face` of the four families in
 `src/overlay/katexFonts.ts` (`trimKatexCss`, which throws if one has no face to
 drop); the font test (`src/overlay/katexFonts.test.tsx`) reads the same list
 and KaTeX's CSS, and the network-blocked run fails on a KaTeX class drawn in a
-family with no font. Each rewrite depends on Excalidraw 0.18.1's text; the
-audit fails an upgrade that moves it.
+family with no font. Each rewrite depends on the pinned Excalidraw's text; the
+build, by `TALLY`, or the audit fails an upgrade that moves it. **The audit**
+(`scripts/audit-plugin.mjs`) reads `scripts/plugin-allowlist.json`: `hosts`,
+`elementCreation` (the marks of library code that may create a `<style>` or
+`<link>`), and `text`, the names taken out before the forbidden words are
+counted (one: `localStorageQuotaExceeded`, a message's name), each entry
+with why. `BUDGET` is set from the upgrade's build (#269).

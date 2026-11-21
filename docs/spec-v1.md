@@ -2837,10 +2837,18 @@ touch in [section 4](#touch). Research: [`docs/research/obsidian-plugin.md`](res
   (`legalComments: 'eof'`). No `<style>` or `<link>` is created at run time.
 - **Trims, plugin only:** Mermaid to Excalidraw, the non-English locales and font subsetting are
   stubbed; Xiaolai's paths become `local:`, so CJK text uses system fonts. Measured: 3.46 MB.
-  The web build is untrimmed. From 0.5.0 the plugin keeps one more locale, Excalidraw's
-  Brazilian Portuguese (`pt-BR`, about 22 kB on 0.18.1), for [Language](#language); every
-  other locale stays stubbed. It fits `main.js`'s budget as it stands (about 170 kB free);
-  if it doesn't on the day, the budget is raised by the rule below, in a commit that says so.
+  The web build is untrimmed. From the Excalidraw upgrade one more is stubbed: the code
+  editor of the Mermaid dialog (CodeMirror, about 300 kB), which Excalidraw loads only when
+  that dialog opens, and the plugin never opens it. The larger Mermaid to Excalidraw
+  (3.6.0) costs nothing, since all of it is stubbed. A pasted Mermaid text lands as text, as
+  before. Measured after the upgrade: 3.90 MB. From 0.5.0 the plugin keeps one more locale,
+  Excalidraw's Brazilian Portuguese (`pt-BR`, about 22 kB on 0.18.1), for
+  [Language](#language); every other locale stays stubbed. It fits `main.js`'s budget as it
+  stands (about 170 kB free on 0.18.1, about 195 kB after the upgrade); if it doesn't on the
+  day, the budget is raised by the rule below, in a commit that says so.
+- **A trim or a rewrite that finds nothing fails the build.** Each one names text of
+  Excalidraw's or math.js's, so the build counts what each found and stops on a zero, naming
+  it: an upgrade that moves the text is seen there, before the audit.
 - **The Excalidraw package is pinned** from [the upgrade](#the-excalidraw-upgrade):
   `"@excalidraw/excalidraw": "0.18.0-9fbeaed"`, exact, with no caret. It moves only twice: to
   a newer canary when a bug that blocks the app is fixed there, in a commit that names the
@@ -2881,7 +2889,8 @@ touch in [section 4](#touch). Research: [`docs/research/obsidian-plugin.md`](res
   closed state, light or dark, from 0.5.0 the language and, from the Excalidraw upgrade, nine
   preferences) in `data.json` through `loadData`/`saveData`. The canary's own two uses of
   `localStorage` (a setting of its properties panel, and its feature flags) are taken out of
-  the plugin's bundle, as its other storage is. No IndexedDB, `localStorage` or
+  the plugin's bundle, as its other storage is: in every package of Excalidraw's, a read
+  finds nothing stored and a write does nothing. No IndexedDB, `localStorage` or
   `App#saveLocalStorage`.
 - **Reach:** it reads only the sheet open in the view and one image the user picks from a vault
   image picker (image files listed by name; the picked image is copied into the sheet, as
@@ -2902,7 +2911,9 @@ touch in [section 4](#touch). Research: [`docs/research/obsidian-plugin.md`](res
     `esm.sh`, `AIza`, `indexedDB`, `localStorage`, `new Function`, `<style>`/`<link>` creation
     outside React DOM's and Radix's own library code, or `http(s)://` host missing from a committed
     allowlist (XML namespaces, licence comments, Excalidraw's Help links and its embed patterns, each
-    with why it can't load). **From 1.0.0, a budget per file** beside that cap: the measured
+    with why it can't load). A name that holds one of those words and is no use of it passes
+    only if the allowlist gives it, with why: one does, `localStorageQuotaExceeded`, the name
+    of a message of Excalidraw's. **From 1.0.0, a budget per file** beside that cap: the measured
     size of the 1.0.0 build of `main.js` and of `styles.css`, plus about 5%, rounded up to the
     next 1,000 bytes. The two numbers are `BUDGET` in `scripts/audit-plugin.mjs`, set from the
     build that becomes 1.0.0 (#203): 3,574,000 for `main.js` (3,403,718 measured) and 584,000
@@ -2911,10 +2922,12 @@ touch in [section 4](#touch). Research: [`docs/research/obsidian-plugin.md`](res
     `npm run check` with, for example, `main.js is 3,512,004 bytes, over its budget of
     3,500,000. If the growth is meant, raise BUDGET and say why.` Raising a budget is allowed,
     as a deliberate line in a commit that says what was added. The Excalidraw upgrade is
-    such a commit: with only the package changed, `main.js` was 4,206,778 bytes and
+    such a commit (#269): with only the package changed, `main.js` was 4,206,778 bytes and
     `styles.css` 605,569. Both budgets are set again from the upgraded build by this
-    rule, after what the plugin doesn't use is trimmed, and the 5,000,000 cap holds. The
-    allowlist gains the canary's two new embed hosts, with why neither can load.
+    rule, after what the plugin doesn't use is trimmed: 4,100,000 for `main.js` (3,904,270
+    measured) and 637,000 for `styles.css` (605,789), and the 5,000,000 cap holds. The
+    allowlist gains the canary's two new embed hosts (`drive.google.com`,
+    `www.instagram.com`), with why neither can load.
   - **Network-blocked run:** the built bundle loads in headless Chromium against the fake
     `obsidian`, with every non-local request blocked and logged, and opens a sample sheet with
     math, a plot, an image and CJK text. Any attempted request fails, and so does any `<style>` or
@@ -3814,10 +3827,21 @@ the six Playwright runs and the bundle audit fail. Each group below is one issue
     Esc deselects by itself. A locked math element still edits on a double-click, and the
     second Esc is still the app's own write, which is no undo step.
   - The z-indexes of the canvas, the overlay and the UI are unchanged.
-- **The plugin's bundle:** the canary's two `localStorage` uses are removed by the build;
-  CodeMirror, a new dependency that makes a `<style>` at run time, and the larger Mermaid to
-  Excalidraw are trimmed if the plugin never mounts them; the two new embed hosts go on the
-  allowlist with why they can't load; then the budgets are set from the build.
+- **The plugin's bundle** (#269): the audit failed on six counts and passes again.
+  - **Storage:** the canary keeps its storage code in a package of its own
+    (`@excalidraw/common`), which the build's rewrite didn't reach. The rewrite now covers
+    every package of Excalidraw's. The fourth count was a message's name, which the
+    allowlist gives.
+  - **CodeMirror,** a new dependency that makes a `<style>` at run time, is only the editor
+    of the Mermaid dialog, so it is stubbed, and no `<style>` site is left. Mermaid to
+    Excalidraw was stubbed whole already.
+  - **The size:** of the 803 kB `main.js` gained, 296 kB was CodeMirror and the rest is
+    Excalidraw's own editor, now in four packages; the fonts are the same 21. Budgets:
+    [section 12a](#data-protection).
+  - **No worker:** the canary's minimap can draw in a worker, found by the address of its
+    own file. One bundled file has none, so the minimap draws on the main thread. In
+    Chromium, with the minimap on and an arrow drawn from a rectangle, the built plugin
+    called no browser storage, started no worker and added no `<style>`.
 - **The format rise** is one constant and one migration step that changes no data, so the
   number can be set on the day the branch merges.
 - **Gestures taken before Excalidraw,** in the capture phase, as the others are: Tab's
@@ -4247,8 +4271,6 @@ M1 to M5, is in [`docs/spec-history.md`](spec-history.md#17-verify-first), with 
 - Where Tool lock and Canvas & Shape properties keep their state, and whether each of the
   nine preferences can be given to Excalidraw at start.
 - What Zen mode hides, with a line open and with the Sheet panel docked.
-- Whether CodeMirror and Mermaid to Excalidraw 3.6.0 can be trimmed from the plugin, and the
-  two sizes afterwards.
 - A sticky note and a fill on a printed page.
 - Under Português, that an empty text shows in English on screen: read from the package only.
 - In Obsidian, by hand: the new keys against Obsidian's own; copy and paste in a real
