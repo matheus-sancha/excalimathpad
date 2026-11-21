@@ -3765,7 +3765,7 @@ the six Playwright runs and the bundle audit fail. Each group below is one issue
   `selectedLinearElement?.isEditing`. The scene's saved state gains a key,
   `lockedMultiSelections`.
 - **Undo:** [Scene writes](#14-engineering-constraints) already says the version
-  comparison goes at this upgrade. 18 contract tests on undo steps fail on the canary. Every
+  comparison goes at this upgrade. 15 contract tests on undo steps fail on the canary. Every
   rule of [section 6](#6-undo) is to hold as written; one that can't is brought back to
   Matheus before a test is changed.
 - **Excalidraw's DOM,** each a contract in `src/canvas/` with its test against the installed
@@ -4211,7 +4211,7 @@ M1 to M5, is in [`docs/spec-history.md`](spec-history.md#17-verify-first), with 
 - What Zen mode hides, with a line open and with the Sheet panel docked.
 - Whether CodeMirror and Mermaid to Excalidraw 3.6.0 can be trimmed from the plugin, and the
   two sizes afterwards.
-- Why the 18 undo tests fail, beyond their messages, and whether a nudge and the next line
+- Why the 15 undo tests fail, beyond their messages, and whether a nudge and the next line
   can still be two steps.
 - A sticky note and a fill on a printed page.
 - Under Português, that an empty text shows in English on screen: read from the package only.

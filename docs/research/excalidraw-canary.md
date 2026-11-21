@@ -224,8 +224,8 @@ On the throwaway copy with only the patch above, so the Preferences menu isn't i
 
 | Contract | Failing | What the failures say |
 |---|---|---|
-| **Undo steps** of a source write, a format, a title, a split, a join, a width, a size write followed by a commit | 18, in `mathAnchor`, `MathOverlay` and `anchorSize` tests | A step is there where none is expected, or an undo takes back the wrong amount. This is the version comparison `CONTEXT.md` says "has to change at the next Excalidraw upgrade" |
-| **The toolbar:** the image tool as a radio in a label | 7, in `imageTool`, `vault` and `App` tests | No radio: tools are `<button>`s, and the image tool moved into More tools. The vault's image picker hangs on it |
+| **Undo steps** of a source write, a format, a title, a split, a join, a width, a size write followed by a commit | 15, in `mathAnchor`, `MathOverlay` and `anchorSize` tests | A step is there where none is expected, or an undo takes back the wrong amount. This is the version comparison `CONTEXT.md` says "has to change at the next Excalidraw upgrade" |
+| **The toolbar:** the image tool as a radio in a label | 8, in `imageTool`, `vault` and `App` tests | No radio: tools are `<button>`s, and the image tool moved into More tools. The vault's image picker hangs on it |
 | **More tools' items and the plugin's hidden items** | 2 | The lists differ: Excalidraw's own items are more, and in another order. Web Embed and Mermaid to Excalidraw are still hidden on screen [O] |
 | **The reduced panel and the hint** | 3, in `mathSelection` tests | The panel's children aren't where the CSS expects. On screen: the whole panel shows for a math element [O]; the app's hint still shows for one [O] |
 | **Gestures** on a locked math element over a drawing, and Esc's control | 3 | A selection the test expects isn't made |
