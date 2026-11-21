@@ -52,7 +52,9 @@ clause's error, so a comment row is laid out as before.
 A **warning at rest** (spec section 4, Problems, M4d): an element's `⚠`
 marks show only while one of its lines or its title is open (`edit` in
 that element; being selected is not), or on its line while a jump flashes
-it (`flash`). Otherwise `TypesetRow` hands the gutter no warnings: the cell
+it (`flash`, a `FlashLines`: the lines to flash at once and the key that
+restarts them, one line for a jump and every changed line after a rename,
+spec section 4, 0.5.0). Otherwise `TypesetRow` hands the gutter no warnings: the cell
 keeps its fixed 10 px column, empty and with no `data-tip`, so rows don't
 shift when an edit opens. An error's `●` always shows.
 A **problem's message on hover** (spec section 4, Problems): the gutter mark

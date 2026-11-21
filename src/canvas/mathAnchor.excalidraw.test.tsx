@@ -7,6 +7,7 @@ import {
   NO_TITLE_FORMAT,
   toMathAnchor,
   writeAnchorSource,
+  writeAnchorSources,
   writeAnchorTitle,
   writeAnchorTitleFormat,
 } from './mathAnchor.ts'
@@ -373,6 +374,182 @@ describe('writeAnchorSource after a change Excalidraw did not capture', () => {
     write('a = 1')
 
     expect(api.getSceneElements()[0].version).toBeGreaterThan(before)
+  })
+})
+
+/**
+ * A rename's write (docs/spec-v1.md section 14, 0.5.0; section 6, A rename):
+ * every changed anchor in one `updateScene`, so one undo step. Section 17's
+ * item for 0.5.0, a nudge or a Link edit pending on one of them, is measured here.
+ */
+describe('writeAnchorSources on real Excalidraw (0.5.0, #261)', () => {
+  const MORE = [
+    { id: 'm2', x: 100, y: 300, width: 300, height: 80, source: 'U = R * I', formats: '@bold if R > 1 ohm' },
+    { id: 'm3', x: 100, y: 500, width: 300, height: 80, source: 'P = U * I' },
+  ]
+  const RENAMED = [
+    { anchorId: 'm1', source: 'R_1 = 10 kohm\nI = 2 mA' },
+    { anchorId: 'm2', source: 'U = R_1 * I', formats: '@bold if R_1 > 1 ohm' },
+    // Named in the write, with the lines it already has: it is left out.
+    { anchorId: 'm3', source: 'P = U * I' },
+  ]
+
+  async function mountThree() {
+    const mounted = await mount(MORE)
+    const { api } = mounted
+    const of = (id: string) => api.getSceneElementsIncludingDeleted().find((e) => e.id === id)!
+    return {
+      ...mounted,
+      of,
+      xOf: (id: string) => of(id).x,
+      formatsOf: (id: string) => of(id).customData?.formats as string | undefined,
+      rename: () => {
+        let wrote: string[] = []
+        act(() => {
+          wrote = writeAnchorSources(api, RENAMED)
+        })
+        return wrote
+      },
+      nudge: (ids: string[]) => {
+        act(() => {
+          api.updateScene({ appState: { selectedElementIds: Object.fromEntries(ids.map((id) => [id, true as const])) } })
+        })
+        mounted.focusCanvas()
+        fireEvent.keyDown(mounted.container, { key: 'ArrowRight', code: 'ArrowRight' })
+        fireEvent.keyUp(mounted.container, { key: 'ArrowRight', code: 'ArrowRight' })
+      },
+    }
+  }
+
+  it('writes every changed anchor as one undo step, source and formats together', async () => {
+    const { canUndo, undo, redo, sourceOf, formatsOf, of, rename } = await mountThree()
+    const untouched = of('m3').version
+
+    expect(rename()).toEqual(['m1', 'm2'])
+
+    expect([sourceOf('m1'), sourceOf('m2'), formatsOf('m2')]).toEqual(['R_1 = 10 kohm\nI = 2 mA', 'U = R_1 * I', '@bold if R_1 > 1 ohm'])
+    expect(of('m3').version).toBe(untouched)
+
+    undo()
+    await waitFor(() => expect(sourceOf('m1')).toBe(SOURCE))
+    expect([sourceOf('m2'), formatsOf('m2')]).toEqual(['U = R * I', '@bold if R > 1 ohm'])
+    expect(canUndo()).toBe(false)
+
+    redo()
+    await waitFor(() => expect(sourceOf('m1')).toBe('R_1 = 10 kohm\nI = 2 mA'))
+    expect([sourceOf('m2'), formatsOf('m2')]).toEqual(['U = R_1 * I', '@bold if R_1 > 1 ohm'])
+  })
+
+  it('writes nothing and adds no step when no anchor changes, or none is there', async () => {
+    const { api, canUndo, of } = await mountThree()
+    const before = of('m1').version
+    let wrote: string[] = ['?']
+
+    act(() => {
+      wrote = writeAnchorSources(api, [
+        { anchorId: 'm1', source: SOURCE },
+        { anchorId: 'nope', source: 'a = 1' },
+      ])
+    })
+
+    expect(wrote).toEqual([])
+    expect(of('m1').version).toBe(before)
+    expect(canUndo()).toBe(false)
+  })
+
+  it('keeps a line written before it as its own step, undone after the rename', async () => {
+    const { canUndo, undo, sourceOf, write, rename } = await mountThree()
+    write('P = U * I # power', 'm3')
+
+    rename()
+
+    undo()
+    await waitFor(() => expect(sourceOf('m1')).toBe(SOURCE))
+    expect(sourceOf('m2')).toBe('U = R * I')
+    expect(sourceOf('m3')).toBe('P = U * I # power')
+    undo()
+    await waitFor(() => expect(sourceOf('m3')).toBe('P = U * I'))
+    expect(canUndo()).toBe(false)
+  })
+
+  it('after a nudge of one of them: the rename is one step, and the nudge its own before it', async () => {
+    const { canUndo, undo, redo, sourceOf, xOf, rename, nudge } = await mountThree()
+    nudge(['m2'])
+    expect(xOf('m2')).toBe(101)
+    expect(canUndo()).toBe(false)
+
+    rename()
+
+    undo()
+    await waitFor(() => expect(sourceOf('m1')).toBe(SOURCE))
+    expect(sourceOf('m2')).toBe('U = R * I')
+    expect(xOf('m2')).toBe(101)
+
+    undo()
+    await waitFor(() => expect(xOf('m2')).toBe(100))
+    expect(canUndo()).toBe(false)
+
+    redo()
+    await waitFor(() => expect(xOf('m2')).toBe(101))
+    expect(sourceOf('m2')).toBe('U = R * I')
+    redo()
+    await waitFor(() => expect(sourceOf('m2')).toBe('U = R_1 * I'))
+    expect(sourceOf('m1')).toBe('R_1 = 10 kohm\nI = 2 mA')
+  })
+
+  it('after a nudge of two of them: one step each for the two nudges, newest first, then nothing', async () => {
+    const { canUndo, undo, sourceOf, xOf, rename, nudge } = await mountThree()
+    nudge(['m1', 'm2'])
+    expect([xOf('m1'), xOf('m2')]).toEqual([101, 101])
+
+    rename()
+
+    undo()
+    await waitFor(() => expect(sourceOf('m1')).toBe(SOURCE))
+    expect(sourceOf('m2')).toBe('U = R * I')
+    expect([xOf('m1'), xOf('m2')]).toEqual([101, 101])
+
+    undo()
+    await waitFor(() => expect(xOf('m2')).toBe(100))
+    expect(xOf('m1')).toBe(101)
+    undo()
+    await waitFor(() => expect(xOf('m1')).toBe(100))
+    expect(canUndo()).toBe(false)
+  })
+
+  it('after a nudge that also moved an anchor it doesn’t write: that one stays moved, as for a line', async () => {
+    const { canUndo, undo, sourceOf, xOf, rename, nudge } = await mountThree()
+    nudge(['m2', 'm3'])
+
+    rename()
+
+    undo()
+    await waitFor(() => expect(sourceOf('m1')).toBe(SOURCE))
+    undo()
+    await waitFor(() => expect(xOf('m2')).toBe(100))
+    expect(xOf('m3')).toBe(101)
+    expect(canUndo()).toBe(false)
+  })
+
+  it('after an uncaptured link on one of them: the rename is one step, and the link its own before it', async () => {
+    const { api, canUndo, undo, sourceOf, of, rename } = await mountThree()
+    act(() => {
+      api.updateScene({
+        elements: api
+          .getSceneElementsIncludingDeleted()
+          .map((e) => (e.id === 'm1' ? newElementWith(e, { link: 'https://example.com' }) : e)),
+      })
+    })
+
+    rename()
+
+    undo()
+    await waitFor(() => expect(sourceOf('m1')).toBe(SOURCE))
+    expect(sourceOf('m2')).toBe('U = R * I')
+    expect(of('m1').link).toBe('https://example.com')
+    undo()
+    await waitFor(() => expect(of('m1').link).toBeNull())
+    expect(canUndo()).toBe(false)
   })
 })
 

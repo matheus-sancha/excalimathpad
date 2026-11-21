@@ -52,6 +52,13 @@ nothing; scrolling the line clear of the panel by the follow rule), and puts
 it back when the edit ends, unless it was
 closed meanwhile or the edit ended from a press in the panel. What it opens
 or restores itself (`automatic`) is never remembered as the user's choice.
+**A rename** (spec section 4, Renaming a name, 0.5.0, #261): the Variables
+tab's form hands App a `RenameRequest`, and `rename` leaves an open line
+(its own step), applies the plan's lines to the scene's anchors
+(`applyRename`) and writes them in one `writeAnchorSources`, one undo step;
+then the keyboard goes to the canvas, Excalidraw's toast says it
+(`RENAME_WORDS.renamed`, "Undo" on touch), and every changed line flashes
+through the overlay's `flash`, with no scroll and no selection.
 **Touch** (M4d, #147): App holds `touch`, whether the last press in the
 view was a touch (`pointerType`, so a mouse or a pen that hovers turns it
 back), and hands it to the overlay and the Format tab's hint; on touch, while

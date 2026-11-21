@@ -587,6 +587,31 @@ The items with a recorded result. Those still open are in
   - Not checked by that probe, so still in section 17: KaTeX's fonts inside the frame, printing from a
     pop-out window, the work laptop.
 
+**0.5.0**
+
+- A rename's one write over several anchors when one of them has a nudge or a Link edit pending: whether
+  that change is recorded first as its own step and the rename stays one step. **Passed (#261):** against
+  Excalidraw 0.18.1 in `mathAnchor.excalidraw.test.tsx`, a write of two of three anchors (`writeAnchorSources`)
+  after one of them was nudged took two Ctrl+Z: the first put both anchors' lines back and left the nudge, the
+  second took the nudge back, and redo mirrored both. The same with an uncaptured Link on one of them.
+  - With both written anchors nudged together, each nudge is its own step before the rename's: three Ctrl+Z,
+    the lines first, then one anchor back, then the other.
+  - An anchor nudged with them that the rename doesn't write stays moved and no undo reaches it, as for a line
+    commit ([section 6](spec-v1.md#6-undo), A nudge of several elements can split).
+  - In Chromium with real keys (the panel run, the built plugin): the pump sheet's first element selected with
+    a click, moved 1 px with →, then `rho` renamed to `rho_w` from its row. One Ctrl+Z put the eight lines
+    back in their five elements with the element still 1 px right; the next moved it back.
+- The cost of "changes a result" on the pump sheet: the engine run twice at each key in the form's field.
+  **Measured (#261)** in headless Chromium on the pump sheet in six elements (the panel run, the built plugin,
+  keys 120 ms apart): one check, `planRename` with its two engine runs, was one task of 64 to 97 ms. That is
+  felt if it stands between a key and its letter, so the check waits: the form's check is a deferred render
+  ([section 14](spec-v1.md#14-engineering-constraints), 0.5.0), and each key reached its paint in 32 ms or
+  less, with the check in a task of its own after it. No timer was needed: a run of keys faster than the check
+  is checked once, for the text as it stands. The run reports both numbers each time and fails on neither,
+  since a shared CI machine's times aren't the user's. The first run's results weren't passed in to halve it,
+  as [#279](https://github.com/matheus-sancha/excalimathpad/pull/279) suggested: it isn't needed while the key
+  doesn't wait for the check.
+
 ## 18. Decision index
 
 | Ticket | Fed sections |

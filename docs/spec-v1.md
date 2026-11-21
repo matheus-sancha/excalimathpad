@@ -1317,6 +1317,26 @@ for it (F2 on the open line is not in 0.5.0).
 - **Rename writes every changed line of every element at once:** one undo step
   ([section 6](#6-undo)), and the sheet is dirty, as after any source change.
 
+As built (#261):
+
+- **The ✎ of the row whose form is open closes it,** as Cancel does. The form also closes by
+  itself when its row's line no longer assigns the name (an undo, or the line edited), and
+  when the filter box is typed in, since the rows under it change.
+- **Spaces around the typed name are dropped.** A space inside it makes it text that isn't a
+  name.
+- **A line whose use is in its stored format** (a rule's condition kept beside the line) is
+  listed with that clause after its text, in grey, the name marked there. The lines under
+  "This changes 1 result:" are shown as they are today, with nothing marked.
+- **Each list scrolls inside itself past about 180 px,** so Rename and Cancel stay near the
+  field, and a long line wraps: nothing in the form scrolls sideways at 280 px.
+- **The check follows the typing.** A key is drawn first; the lists, the reason and Rename's
+  state come after it ([section 14](#14-engineering-constraints)). Rename and Enter go by the
+  name as it stands in the field, not by the last check shown.
+- **After Rename, Cancel or Esc the keyboard is the canvas's,** so Ctrl+Z reaches the sheet.
+  The panel stays as it is, docked or floating, on Variables.
+- **By touch the ✎ and the form's buttons are 40 px,** in the panel and in a phone's bottom
+  sheet.
+
 **The offer, on a committed line**
 
 - **It is made whenever a line's name changed.** An edit that leaves a line which assigned
@@ -1679,8 +1699,10 @@ Excalidraw's own selection steps, and a nudge or Link edit that a line commit fo
   the line's, so two Ctrl+Z take back a name changed in its line and then renamed below: the
   first puts the uses back, the second the line. Keep writes nothing. A nudge or a Link edit
   pending on an anchor the rename changes is recorded first as its own step, as a line
-  commit records it. Typing in the form's field is no step, and Ctrl+Z there is the field's
-  own text undo.
+  commit records it: one step for each such anchor, so two anchors nudged together and both
+  changed by the rename are two steps before it, and an anchor nudged with them that the
+  rename doesn't change stays moved, as below. Typing in the form's field is no step, and
+  Ctrl+Z there is the field's own text undo.
 - **Redo** (Ctrl+Y, Ctrl+Shift+Z) is Excalidraw's own and mirrors undo.
 - **Undoing a line shows nothing extra:** no selection, scroll or highlight. An undo off
   screen shows only as changed results. Undoing a rename is the same: no toast and no flash.
@@ -3744,11 +3766,14 @@ Evidence: [`obsidian-plugin.md`](research/obsidian-plugin.md).
   ("rho has an error above"), and so is a syntax error wherever it stands in the line.
 - **One write for every changed anchor:** one `updateScene` with
   `CaptureUpdateAction.IMMEDIATELY` holding every changed anchor, each with its `source` and
-  `formats` together, as `writeAnchorSource` writes one. On 0.18.1 that is one undo step
+  `formats` together, as `writeAnchorSource` writes one. It is `writeAnchorSources`
+  (`mathAnchor.ts`). On 0.18.1 that is one undo step
   (measured: seven lines in three elements came back with one Ctrl+Z). A nudge or a Link
   edit pending on any of those anchors is recorded first, as for one anchor
-  ([Scene writes](#14-engineering-constraints)); that case is unmeasured
-  ([section 17](#17-verify-first)).
+  ([Scene writes](#14-engineering-constraints)), one step for each anchor that has one;
+  `mathAnchor.excalidraw.test.tsx` holds it against the installed package, and the panel run
+  with real keys ([spec history](spec-history.md#17-verify-first)). An open line is left
+  first, so the plan the form showed and the scene it is written to are the same sheet.
 - **The offer is UI state, beside the line edit:** the anchor, the line, the old name and
   the new one. It is made at the line commit, by comparing the name the line assigned in
   the scene before the write with the one it assigns after, and it is dropped by the rules
@@ -3760,7 +3785,14 @@ Evidence: [`obsidian-plugin.md`](research/obsidian-plugin.md).
   open line, and Rename leaves it on purpose, through the same route a click outside takes.
 - **The form's field is a `type="text"` field inside the panel's key box**
   (`.sheet-sidebar__keys`), so Enter, Esc and every letter typed in it reach nothing else.
-- **The flash** is the jump's, on several lines at once, with no scroll and no selection.
+- **The form's check is a deferred render** (`useDeferredValue` of the field's text): the
+  field is drawn at each key, and `planRename`, with its two engine runs, follows at lower
+  priority, so a run of keys is checked once it pauses
+  ([spec history](spec-history.md#17-verify-first)). Rename plans again for the field's text
+  if the check shown is for an older one. The form is a view of the plan (`renameFormView`,
+  pure) and writes nothing itself: Rename hands the plan to `App`.
+- **The flash** is the jump's, on several lines at once, with no scroll and no selection
+  (`FlashLines`: the lines and one key).
 - **Language is Excalidraw's `langCode` prop,** set from a memory port beside the theme's:
   the web's is browser storage, handed to `App` as a prop like the panel's, and the plugin's
   is `data.json`, so the plugin's bundle still names no browser storage.
@@ -4215,11 +4247,6 @@ M1 to M5, is in [`docs/spec-history.md`](spec-history.md#17-verify-first), with 
 
 **0.5.0**
 
-- A rename's one write over several anchors when one of them has a nudge or a Link edit
-  pending: whether that change is recorded first as its own step and the rename stays one
-  step. The prototype measured the plain case only.
-- The cost of "changes a result" on the pump sheet: the engine run twice at each key in the
-  form's field. If it is felt, the check waits for a pause in the typing.
 - The offer's card on a narrow editor and beside an element at the window's right edge, and
   the offer's row above a real on-screen keyboard.
 - Under Português: every place a test or a run finds Excalidraw's DOM by its English text;

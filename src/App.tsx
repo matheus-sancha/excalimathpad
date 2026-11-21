@@ -7,7 +7,7 @@ import {
   type SheetPanelState,
   type SheetPanelTab,
 } from './canvas/SheetCanvas.tsx'
-import { isMathAnchor } from './canvas/mathAnchor.ts'
+import { isMathAnchor, toMathAnchor, writeAnchorSources } from './canvas/mathAnchor.ts'
 import { mathSelection } from './canvas/mathSelection.ts'
 import { sceneFileFor } from './canvas/sceneFile.ts'
 import { FOLLOW_MARGIN, jumpToAnchor, scrollIntoArea, visibleArea } from './canvas/selection.ts'
@@ -16,7 +16,7 @@ import {
   MathOverlay,
   type EditTarget,
   type EvaluatedElement,
-  type FlashLine,
+  type FlashLines,
   type LineEditControl,
 } from './overlay/MathOverlay.tsx'
 import { sessionPanelMemory, type PanelMemory } from './panel/panelMemory.ts'
@@ -28,6 +28,9 @@ import { QuickKeys } from './panel/QuickKeys.tsx'
 import { SettingsTab } from './panel/SettingsTab.tsx'
 import { DEFAULT_SETTINGS, readSheet, type SheetSettings } from './file/sheetFormat.ts'
 import { errorCount, type PanelTarget } from './panel/sheetPanel.ts'
+import type { RenameRequest } from './panel/RenameForm.tsx'
+import { RENAME_WORDS } from './panel/renameForm.ts'
+import { applyRename } from './math/rename.ts'
 import { createDialogHost } from './file/dialogs.ts'
 import type { FileAccess } from './file/fileAccess.ts'
 import { FileChrome } from './file/FileChrome.tsx'
@@ -313,7 +316,7 @@ function Sheet({
     },
     [box],
   )
-  const [flash, setFlash] = useState<FlashLine | null>(null)
+  const [flash, setFlash] = useState<FlashLines | null>(null)
   const errors = sheet ? errorCount(sheet) : 0
 
   // The opened sheet: its start has loaded it (the vault's file, or on the web
@@ -474,7 +477,7 @@ function Sheet({
     (target: PanelTarget) => {
       if (!canvas) return
       jumpToAnchor(canvas.api, target.anchorId)
-      setFlash({ ...target, key: Date.now() })
+      setFlash({ lines: [{ anchorId: target.anchorId, line: target.line }], key: Date.now() })
       // Floating over a small window, or a sheet on a phone, the panel gets out of the way.
       if (!canvas.panelDocks()) {
         canvas.showSheetPanel({ open: false, tab: canvas.sheetPanel().tab })
@@ -482,6 +485,38 @@ function Sheet({
       canvas.focusCanvas()
     },
     [canvas],
+  )
+
+  // Rename, from the form on a Variables row (section 4, Renaming a name,
+  // 0.5.0): the plan the form showed is written to every anchor it changes in
+  // one write, one undo step (section 6). A line still open is left first, as
+  // its own step. Then the toast, and every changed line flashes where it is:
+  // no scroll and no selection. The keyboard goes back to the canvas, so
+  // Ctrl+Z reaches the sheet.
+  const rename = useCallback(
+    ({ target, newName, plan }: RenameRequest) => {
+      if (!canvas || plan.refusal !== null) return
+      line.current?.leaveLine()
+      const changed = new Set(plan.lines.map(({ id }) => id))
+      const blocks = canvas.api
+        .getSceneElements()
+        .filter(isMathAnchor)
+        .map(toMathAnchor)
+        .filter(({ id }) => changed.has(id))
+      const written = writeAnchorSources(
+        canvas.api,
+        applyRename(blocks, plan.lines).map(({ id, source, formats }) => ({ anchorId: id, source, formats })),
+      )
+      canvas.focusCanvas()
+      if (written.length === 0) return
+      canvas.api.setToast({
+        message: RENAME_WORDS.renamed(target.name, newName, plan.lines.length, touch),
+        closable: true,
+        duration: 6000,
+      })
+      setFlash({ lines: plan.lines.map(({ id, line: index }) => ({ anchorId: id, line: index })), key: Date.now() })
+    },
+    [canvas, line, touch],
   )
 
   // The flash lasts about 1.5 s; with reduced motion it is an outline that
@@ -593,7 +628,15 @@ function Sheet({
             quickKeys: touch && editing ? <QuickKeys onInsert={insert} /> : undefined,
             compact: editing,
             symbols: tab(<SymbolsTab canInsert={canInsert} onInsert={insert} />),
-            variables: tab(<VariablesTab sheet={sheet ?? []} onJump={jump} />),
+            variables: tab(
+              <VariablesTab
+                sheet={sheet ?? []}
+                onJump={jump}
+                settings={settings}
+                onRename={rename}
+                onCancel={canvas?.focusCanvas}
+              />,
+            ),
             problemsTab: tab(<ProblemsTab sheet={sheet ?? []} onJump={jump} />),
             settings: file && tab(<SettingsTab settings={settings} onChange={file.sheet.setSettings} />),
             constants: tab(<ConstantsTab settings={settings} canInsert={canInsert} onInsert={insert} />),

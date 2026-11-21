@@ -16,7 +16,7 @@ import {
   MathOverlay,
   type EditTarget,
   type EvaluatedElement,
-  type FlashLine,
+  type FlashLines,
   type LineEditControl,
   type MathOverlayProps,
   type SceneApi,
@@ -218,7 +218,7 @@ function renderOverlay(
   onTestFinished(() => canvasRoot.remove())
   const forwardWheel = vi.fn()
   const focusCanvas = vi.fn()
-  const overlay = (flash: FlashLine | null) => {
+  const overlay = (flash: FlashLines | null) => {
     const props: MathOverlayProps = {
       api: scene.api,
       canvasRoot,
@@ -230,8 +230,8 @@ function renderOverlay(
     return formatTab ? <WithFormatTab props={props} phone={phone} /> : <MathOverlay {...props} />
   }
   const view = render(overlay(null))
-  /** A jump from the Sheet panel flashes a line, as App passes it; null clears it. */
-  const setFlash = (flash: FlashLine | null) => view.rerender(overlay(flash))
+  /** A jump from the Sheet panel flashes a line, and a rename its lines, as App passes them; null clears them. */
+  const setFlash = (flash: FlashLines | null) => view.rerender(overlay(flash))
   return { scene, forwardWheel, focusCanvas, setFlash, unmount: view.unmount }
 }
 
@@ -2533,7 +2533,7 @@ describe('a warning at rest (docs/spec-v1.md section 4, Problems, M4d)', () => {
     hidden(gutterOf('m2', 1))
     hidden(gutterOf('m2', 2))
     // The warning the edit caused is there: a jump to it shows it.
-    setFlash({ anchorId: 'm2', line: 1, key: 1 })
+    setFlash({ lines: [{ anchorId: 'm2', line: 1 }], key: 1 })
     shown(gutterOf('m2', 2), 'V reads as the unit V here: the variable is defined below')
     hidden(gutterOf('m2', 1))
   })
@@ -2541,7 +2541,7 @@ describe('a warning at rest (docs/spec-v1.md section 4, Problems, M4d)', () => {
   it('a jump’s flash shows that line’s ⚠ while it lasts, and opens nothing', () => {
     const { setFlash } = renderOverlay([anchorWith('K = 2 * 2.7\nm = 3\nx = 4')])
 
-    setFlash({ anchorId: 'm1', line: 1, key: 1 })
+    setFlash({ lines: [{ anchorId: 'm1', line: 1 }], key: 1 })
 
     expect(rowOf('m1', 2)).toHaveClass('is-flash')
     shown(gutterOf('m1', 2), 'm shadows the unit m')
@@ -2550,6 +2550,26 @@ describe('a warning at rest (docs/spec-v1.md section 4, Problems, M4d)', () => {
 
     setFlash(null)
     hidden(gutterOf('m1', 2))
+  })
+
+  it('a rename’s flash is on every changed line at once, in every element, and on no other (0.5.0)', () => {
+    const { setFlash } = renderOverlay(
+      createMathAnchorElements([
+        { id: 'm1', ...box, source: 'a = 1\nb = 2\nc = a' },
+        { id: 'm2', ...box, y: 300, source: 'd = a + b' },
+      ]),
+    )
+
+    setFlash({ lines: [{ anchorId: 'm1', line: 0 }, { anchorId: 'm1', line: 2 }, { anchorId: 'm2', line: 0 }], key: 1 })
+
+    expect(rowOf('m1', 1)).toHaveClass('is-flash')
+    expect(rowOf('m1', 2)).not.toHaveClass('is-flash')
+    expect(rowOf('m1', 3)).toHaveClass('is-flash')
+    expect(rowOf('m2', 1)).toHaveClass('is-flash')
+    expect(openField()).toBeNull()
+
+    setFlash(null)
+    expect(document.querySelector('.is-flash')).toBeNull()
   })
 
   it('an error’s ● always shows, at rest and selected', () => {

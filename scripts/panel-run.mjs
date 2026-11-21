@@ -45,9 +45,21 @@
 //   split table repeats its header; staggered side-by-side elements taller
 //   than a page are cut at the page's bottom; a rectangle taller than a page
 //   doesn't hold back a break, and a heading beside the lines does.
+// - A rename from a Variables row (section 4, Renaming a name, 0.5.0, #261),
+//   on the pump sheet in six elements: the ✎ opens the form with the old name
+//   selected and its eight lines listed; `mu`, `plot` and `2x` are refused
+//   with Rename dimmed, `m` is allowed under its amber warning and says which
+//   results it would change; `rho_w` changes the eight lines in five elements
+//   with every result as it was, the toast, the flash and no scroll; one
+//   Ctrl+Z puts every line back and redo renames again. With an element
+//   nudged first, the rename is still one step and the nudge its own before
+//   it; with a line open and half typed, the line is its own step before it
+//   (section 17's checks for 0.5.0, with what a key in the field costs). At
+//   280 px the form fits the panel.
 //
 // Run: `node scripts/panel-run.mjs` (`npm run test:panel`), after
-// `npm run build`. PANEL_RUN_SHOTS=<folder> keeps a screenshot of each step.
+// `npm run build`. PANEL_RUN_SHOTS=<folder> keeps a screenshot of each step;
+// PANEL_RUN_ONLY=<name> runs only the runs whose name starts with it.
 
 import { build } from 'esbuild'
 import { createServer } from 'node:http'
@@ -61,6 +73,7 @@ const dist = join(root, 'dist-plugin')
 const web = join(root, 'dist')
 const FILE = 'Calcs/panel.excalimathpad'
 const SHOTS = process.env.PANEL_RUN_SHOTS
+const ONLY = process.env.PANEL_RUN_ONLY
 const TABS = ['Format', 'Symbols', 'Variables', 'Problems', 'Constants', 'Settings']
 
 const fake = await build({
@@ -126,6 +139,50 @@ const READ = `
       undo: document.querySelector('[data-testid="button-undo"]')?.disabled ?? null,
       title: document.title,
     }
+  }
+  // The rename form and the sheet's lines (section 4, Renaming a name, 0.5.0).
+  window.__rename = () => {
+    const box = (element) => {
+      if (!element) return null
+      const { left, top, right, bottom, width, height } = element.getBoundingClientRect()
+      return { left, top, right, bottom, width, height }
+    }
+    const side = document.querySelector('.excalidraw .sidebar.sheet-sidebar')
+    const form = side?.querySelector('.sheet-rename')
+    const field = form?.querySelector('.sheet-rename__field')
+    const reason = form?.querySelector('.sheet-rename__reason')
+    const button = (name) => [...(form?.querySelectorAll('.sheet-rename__button') ?? [])].find((b) => b.textContent === name)
+    return {
+      panel: box(side),
+      form: box(form),
+      field: field ? { value: field.value, focused: document.activeElement === field, selected: field.value.slice(field.selectionStart, field.selectionEnd), box: box(field) } : null,
+      reason: reason ? { text: reason.textContent, warning: reason.classList.contains('is-warning'), color: getComputedStyle(reason).color } : null,
+      counts: [...(form?.querySelectorAll('.sheet-rename__count') ?? [])].map((p) => ({ text: p.textContent, color: getComputedStyle(p).color })),
+      listed: [...(form?.querySelectorAll('.sheet-rename__lines') ?? [])].map((list) => [...list.querySelectorAll('li')].map((li) => ({ where: li.querySelector('.sheet-rename__where').textContent, source: li.querySelector('.sheet-rename__source').textContent, marked: [...li.querySelectorAll('mark')].map((m) => m.textContent) }))),
+      rename: button('Rename') ? { disabled: button('Rename').disabled, box: box(button('Rename')) } : null,
+      cancel: box(button('Cancel')),
+      rows: [...(side?.querySelectorAll('.sheet-panel__rename') ?? [])].map((b) => b.getAttribute('aria-label')),
+      lines: [...document.querySelectorAll('[data-anchor-id] [data-line]')].map((row) => ({
+        id: row.closest('[data-anchor-id]').dataset.anchorId,
+        line: Number(row.dataset.line),
+        source: row.getAttribute('aria-label'),
+        result: [row.querySelector('.math-element__result')?.dataset.text ?? '', row.querySelector('table')?.textContent ?? '', row.querySelectorAll('svg path, svg circle').length].join('|'),
+        flash: row.classList.contains('is-flash'),
+      })),
+      boxes: Object.fromEntries([...document.querySelectorAll('[data-anchor-id]')].map((e) => [e.dataset.anchorId, box(e)])),
+      toast: document.querySelector('.Toast')?.textContent ?? null,
+      selection: document.querySelector('[data-math-selection]')?.dataset.mathSelection ?? null,
+      openLine: document.querySelector('.math-element__field')?.value ?? null,
+      focus: document.activeElement?.className ?? null,
+      undo: document.querySelector('[data-testid="button-undo"]')?.disabled ?? null,
+    }
+  }
+  // What a key costs (section 17, 0.5.0): each key event to its next paint, and the tasks over 50 ms.
+  window.__timing = () => {
+    const seen = { events: [], long: [] }
+    new PerformanceObserver((list) => list.getEntries().forEach((e) => seen.events.push({ name: e.name, duration: e.duration }))).observe({ type: 'event', durationThreshold: 16 })
+    new PerformanceObserver((list) => list.getEntries().forEach((e) => seen.long.push(e.duration))).observe({ type: 'longtask' })
+    window.__timed = seen
   }
   // Every control of the shown tab that the panel's edge cuts, and every box that scrolls sideways.
   window.__cut = () => {
@@ -366,6 +423,32 @@ const CHART_SHEET = JSON.stringify({
   files: {},
   excalimathpad: { format: 2 },
 })
+// The pump sheet (section 15) in six elements, in reading order: by each element's top, then its left.
+const PUMP_ROWS = [...(await readFile(join(root, 'docs/acceptance/pump-sizing.md'), 'utf8')).matchAll(/^\| (c|\d+[a-z]?) \| `(.+?)` \|/gm)].map(([, id, source]) => ({ n: id === 'c' ? 0 : parseInt(id, 10), source }))
+const RENAME_ELEMENTS = [
+  { id: 'calc', title: 'Fluid and pipe', x: 40, y: 40, from: 0, to: 10 },
+  { id: 'fn', x: 40, y: 400, from: 11, to: 15 },
+  { id: 'duty', x: 520, y: 410, from: 16, to: 23 },
+  { id: 'curve', x: 40, y: 640, from: 24, to: 28 },
+  { id: 'curves', x: 520, y: 700, from: 29, to: 31 },
+  { id: 'suction', x: 40, y: 860, from: 32, to: 36 },
+]
+const RENAME_SHEET = JSON.stringify({
+  type: 'excalidraw',
+  version: 2,
+  elements: RENAME_ELEMENTS.map(({ id, title, x, y, from, to }) => ({
+    id,
+    type: 'rectangle',
+    x,
+    y,
+    width: 160,
+    height: 60,
+    customData: { kind: 'math', source: PUMP_ROWS.filter(({ n }) => n >= from && n <= to).map(({ source }) => source).join('\n'), ...(title ? { title } : {}) },
+  })),
+  appState: {},
+  files: {},
+  excalimathpad: { format: 2 },
+})
 const inside = (inner, outer) => !!inner && !!outer && inner.left >= outer.left - 0.5 && inner.right <= outer.right + 0.5 && inner.top >= outer.top - 0.5 && inner.bottom <= outer.bottom + 0.5
 
 const { chromium } = createRequire(import.meta.url)('playwright')
@@ -378,6 +461,7 @@ const px = (n) => (n === null || n === undefined ? 'none' : Math.round(n * 10) /
 
 /** A window of `width` px on `url`, and `act` with its checks. */
 async function run(where, width, act, { data = null, url = '/', height = 800 } = {}) {
+  if (ONLY && !where.startsWith(ONLY)) return
   const context = await browser.newContext({ viewport: { width, height }, deviceScaleFactor: 1 })
   // The web app asks Excalidraw's CDN for its canvas fonts: nothing leaves this machine.
   await context.route((to) => !to.href.startsWith(origin), (route) => route.abort())
@@ -929,6 +1013,156 @@ try {
     )
   }, { data: null, height: 1700 })
 
+  // A rename from a Variables row (section 4, Renaming a name, 0.5.0, #261), on the pump sheet.
+  await run('rename', 1280, async ({ tab, row, start }) => {
+    await start(null, RENAME_SHEET)
+    await tab.waitForFunction(() => document.querySelectorAll('.math-element__plot-chart > svg').length === 1, null, { timeout: 60_000 })
+    await tab.waitForTimeout(500)
+    const shot = async (name) => SHOTS && (await tab.screenshot({ path: join(SHOTS, `rename-${name}.png`) }))
+    const read = async (name, wait = 350) => {
+      await tab.waitForTimeout(wait)
+      if (name) await shot(name)
+      return tab.evaluate(() => window.__rename())
+    }
+    const pencil = (name) => tab.locator(`.sheet-sidebar [aria-label="Rename ${name}"]`).first()
+    const retype = async (text) => {
+      await tab.keyboard.press('Control+A')
+      await tab.keyboard.type(text, { delay: 120 })
+    }
+    const sources = (s) => s.lines.map((l) => l.source)
+    const results = (s) => s.lines.map((l) => l.result)
+    const holding = (s, name) => s.lines.filter((l) => new RegExp(`(^|[^\\w])${name}(?![\\w])`).test(l.source.split('#')[0]))
+    const same = (a, b) => JSON.stringify(a) === JSON.stringify(b)
+    // Where each element is: a renamed line can change a box's size, never its place.
+    const places = (s) => Object.entries(s.boxes).map(([id, box]) => [id, px(box.left), px(box.top)])
+
+    const before = await read('launch')
+    row('the pump sheet is up in six elements, each row of Variables ending in a ✎', Object.keys(before.boxes).length === 6 && before.rows.includes('Rename rho') && before.rows.includes('Rename Hs') && before.rows.length >= 30, `${before.rows.length} rows`)
+    await pencil('rho').click()
+    let s = await read('form')
+    row('the ✎ opens the form under its row, inside the panel, and doesn’t jump', s.form && inside(s.form, s.panel) && s.selection === null && !s.lines.some((l) => l.flash) && same(s.boxes, before.boxes), s.form && `form ${px(s.form.left)}–${px(s.form.right)}, panel ${px(s.panel.left)}–${px(s.panel.right)}`)
+    row('its field has the keyboard, the old name in it, selected', s.field?.focused && s.field.value === 'rho' && s.field.selected === 'rho')
+    const listed = s.listed[0] ?? []
+    row(
+      'it lists the eight lines it changes, by element, the name marked',
+      s.counts[0]?.text === 'Changes 8 lines:' && listed.length === 8 && listed[0].where === 'Fluid and pipe, line 2' && listed[0].source === 'rho = 998.2 kg/m^3' && listed.every((l) => l.marked.length >= 1 && l.marked.every((m) => m === 'rho')) && new Set(listed.map((l) => l.where.split(',')[0])).size === 5,
+      listed.map((l) => l.where).join(' | '),
+    )
+    row('the old name dims Rename and says nothing', s.rename?.disabled && s.reason === null)
+
+    // What a key in the field costs (section 17, 0.5.0): the engine runs twice for each.
+    await tab.evaluate(() => window.__timing())
+    await retype('rho_w')
+    s = await read('typed')
+    const timed = await tab.evaluate(() => window.__timed)
+    const keys = timed.events.filter((e) => e.name === 'keydown' || e.name === 'input' || e.name === 'keypress').map((e) => e.duration)
+    row(
+      'a new name: Rename is enabled, and no result would change',
+      s.field?.value === 'rho_w' && s.rename && !s.rename.disabled && s.reason === null && s.counts.length === 1,
+      `a key to its paint: ${keys.length ? `at most ${Math.max(...keys)} ms over ${keys.length} slow events` : 'under 16 ms each'}; tasks over 50 ms: ${timed.long.length ? timed.long.map((d) => Math.round(d)).join(', ') + ' ms' : 'none'}`,
+    )
+    row('nothing is written until Rename', same(sources(s), sources(before)) && s.undo === true)
+
+    for (const [name, reason] of [['mu', 'mu is already a name on this sheet.'], ['plot', 'plot is reserved.'], ['2x', "2x isn't a name."]]) {
+      await retype(name)
+      s = await read(`refused ${name}`)
+      row(`${name} is refused: Rename dimmed, the reason under the field`, s.rename?.disabled && s.reason?.text === reason && !s.reason.warning && s.reason.color === 'rgb(224, 49, 49)', s.reason?.text)
+    }
+    await retype('m')
+    s = await read('shadow')
+    const changing = s.listed[1] ?? []
+    row('m is allowed: the amber shadow warning, Rename enabled', s.rename && !s.rename.disabled && s.reason?.text === '⚠ m shadows the unit m' && s.reason.warning && s.reason.color === 'rgb(232, 89, 12)', s.reason?.text)
+    row('a rename that changes results says which lines, in amber, Rename enabled', /^This changes \d+ results:$/.test(s.counts[1]?.text ?? '') && s.counts[1].color === 'rgb(232, 89, 12)' && changing.length > 1 && changing.some((l) => l.source === 'L_p = 150 m') && !s.rename.disabled, `${s.counts[1]?.text} ${changing.slice(0, 4).map((l) => l.where).join(' | ')}…`)
+    row('typing and Ctrl+A in the field reached nothing else', s.selection === null && s.openLine === null && same(sources(s), sources(before)) && s.field?.focused)
+
+    await retype('rho_w')
+    await tab.locator('.sheet-rename__button', { hasText: 'Rename' }).click()
+    s = await read('renamed', 150)
+    const renamed = holding(s, 'rho_w')
+    row('Rename changes its eight lines, in the five elements they are in', renamed.length === 8 && new Set(renamed.map((l) => l.id)).size === 5 && holding(s, 'rho').length === 0 && sources(s).filter((line, i) => line !== sources(before)[i]).length === 8, renamed.map((l) => `${l.id} ${l.line + 1}`).join(', '))
+    row('every result is as it was', same(results(s), results(before)))
+    row('the toast says so', s.toast === 'Renamed rho to rho_w in 8 lines. Ctrl+Z takes it back.', s.toast)
+    row('every changed line flashes where it is, and no other', s.lines.filter((l) => l.flash).length === 8 && s.lines.every((l) => l.flash === renamed.includes(l)), `${s.lines.filter((l) => l.flash).length} lines flash`)
+    row('the view doesn’t scroll, and nothing is selected', same(places(s), places(before)) && s.selection === null, `selection ${s.selection}`)
+    row('the form closes, and its row shows the new name', s.form === null && s.rows.includes('Rename rho_w') && !s.rows.includes('Rename rho'))
+    s = await read('flash over', 1600)
+    row('the flash is over after about 1.5 s', !s.lines.some((l) => l.flash))
+
+    await tab.keyboard.press('Control+Z')
+    s = await read('undone')
+    row('one Ctrl+Z puts every line back', same(sources(s), sources(before)) && same(results(s), results(before)) && s.undo === true)
+    row('undoing shows nothing extra: no flash, no selection', !s.lines.some((l) => l.flash) && s.selection === null)
+    // Excalidraw takes Ctrl+Y on Windows only; this Chromium isn't Windows, so redo's other key.
+    await tab.keyboard.press('Control+Shift+Z')
+    s = await read('redone')
+    row('redo (Ctrl+Y on Windows, Ctrl+Shift+Z here) renames again', holding(s, 'rho_w').length === 8 && holding(s, 'rho').length === 0 && same(results(s), results(before)))
+    await tab.keyboard.press('Control+Z')
+
+    // Section 17, 0.5.0: an anchor nudged and not yet recorded, then a rename that changes it.
+    // The first element is the one the open panel leaves in view.
+    const first = before.boxes.calc
+    await tab.mouse.click(first.left + 6, first.top + 6)
+    await tab.keyboard.press('ArrowRight')
+    s = await read('nudged')
+    const nudged = s.boxes.calc.left - first.left
+    row('an element is nudged with the arrow key', s.selection === 'one' && nudged >= 0.5, `${px(nudged)} px`)
+    await pencil('rho').click()
+    await retype('rho_w')
+    await tab.keyboard.press('Enter')
+    s = await read('renamed after a nudge')
+    row('Enter renames, and the form closes', holding(s, 'rho_w').length === 8 && s.form === null && s.openLine === null)
+    await tab.keyboard.press('Control+Z')
+    s = await read('nudge kept')
+    row('after a nudge, one Ctrl+Z still puts every line back, the element where the nudge left it', same(sources(s), sources(before)) && Math.abs(s.boxes.calc.left - first.left - nudged) < 0.01, `${px(s.boxes.calc.left - first.left)} px`)
+    await tab.keyboard.press('Control+Z')
+    s = await read('nudge undone')
+    row('the next Ctrl+Z takes the nudge back: its own step, before the rename’s', same(sources(s), sources(before)) && Math.abs(s.boxes.calc.left - first.left) < 0.01, `${px(s.boxes.calc.left - first.left)} px`)
+
+    // A line open and half typed: the form's field leaves it, as its own step before the rename's.
+    await tab.keyboard.press('Escape')
+    const line = await tab.locator('[data-anchor-id="calc"] [data-line="4"]').boundingBox()
+    await tab.mouse.dblclick(line.x + 20, line.y + line.height / 2)
+    await tab.waitForTimeout(500)
+    await tab.keyboard.type(' + 1 m')
+    await tab.click('.sheet-sidebar .sheet-tab[title="Variables"]')
+    s = await read('line open')
+    row('a line is open and half typed, with Variables shown', s.openLine === 'L_p = 150 m + 1 m' && s.rows.includes('Rename rho'), s.openLine)
+    await pencil('rho').click()
+    s = await read('line left')
+    row('the ✎’s field takes the keyboard, and the line is left and written', s.field?.focused && s.openLine === null && s.lines.some((l) => l.source === 'L_p = 150 m + 1 m'))
+    await retype('rho_w')
+    await tab.keyboard.press('Enter')
+    s = await read('renamed after a line')
+    row('the rename is written', holding(s, 'rho_w').length === 8)
+    await tab.keyboard.press('Control+Z')
+    s = await read('rename undone')
+    row('Ctrl+Z takes the rename back and keeps the line', holding(s, 'rho_w').length === 0 && s.lines.some((l) => l.source === 'L_p = 150 m + 1 m'))
+    await tab.keyboard.press('Control+Z')
+    s = await read('line undone')
+    row('the next Ctrl+Z takes the line back: its own step, before the rename’s', same(sources(s), sources(before)))
+
+    // Esc cancels, and reaches nothing else.
+    await pencil('rho').click()
+    await retype('rho_w')
+    await tab.keyboard.press('Escape')
+    s = await read('cancelled')
+    row('Esc cancels: the form closes and nothing is written', s.form === null && same(sources(s), sources(before)))
+  })
+
+  // The form at the panel's least width (section 17's check for M4e, with the form open).
+  await run('rename 280 px', 1280, async ({ tab, row, start }) => {
+    await start({ sheetPanelWidth: 280 }, RENAME_SHEET)
+    await tab.locator('.sheet-sidebar [aria-label="Rename rho"]').first().click()
+    await tab.keyboard.press('Control+A')
+    await tab.keyboard.type('m')
+    await tab.waitForTimeout(500)
+    if (SHOTS) await tab.screenshot({ path: join(SHOTS, 'rename-280.png') })
+    const s = await tab.evaluate(() => window.__rename())
+    const cut = await tab.evaluate(() => window.__cut())
+    row('the panel is 280 px, and the form is inside it', Math.abs(s.panel.width - 272) < 0.5 && inside(s.form, s.panel), s.form && `form ${px(s.form.width)} px in ${px(s.panel.width)} px`)
+    row('its field, its two lists and its buttons fit: nothing is cut, nothing scrolls sideways', s.field.box.width >= 160 && s.listed.length === 2 && inside(s.rename.box, s.form) && inside(s.cancel, s.form) && cut.cut.length === 0 && cut.sideways.length === 0, `field ${px(s.field.box.width)} px${cut.cut.length ? `; cut: ${cut.cut.join(' | ')}` : ''}${cut.sideways.length ? `; scrolls: ${cut.sideways.join(' | ')}` : ''}`)
+  })
+
   // The web app: the width survives a reload, in the browser's own storage.
   await run('web', 1280, async ({ tab, row, read, drag, docked }) => {
     const open = async () => {
@@ -964,4 +1198,4 @@ if (failed.length || errors.length || results.length === 0) {
   for (const error of errors) console.error(`  - ${error}`)
   process.exit(1)
 }
-console.log('Panel run passed: 320 px, icon tabs, the drag handle, docking by width, every tab usable at 280 px, the Format tab’s sample, the charts, the Page row and the page breaks.')
+console.log('Panel run passed: 320 px, icon tabs, the drag handle, docking by width, every tab usable at 280 px, the Format tab’s sample, the charts, the Page row, the page breaks and a rename from a Variables row.')

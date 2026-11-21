@@ -38,7 +38,7 @@ what to read for an issue and where to write.
   **panel run** (`scripts/panel-run.mjs`,
   M4e, #198: the Sheet panel's widths, docking, drag handle and 280 px, in
   the built plugin and web app; the sample, #199; the charts, #200; the Page
-  row and the page breaks, M5, #80), and the **print run** (`scripts/print-run.mjs`, M5, #81:
+  row and the page breaks, M5, #80; a rename, #261), and the **print run** (`scripts/print-run.mjs`, M5, #81:
   the built web app's and plugin's Print… in Chromium PDFs, read by `scripts/pdf-read.mjs`). `npm test` holds the **typing test**
   (`src/typing.test.tsx`, M4e, #193: the guide's examples and the acceptance
   sheets, a character at a time); `npm run test:probe` is the **odd-values
@@ -119,7 +119,7 @@ an issue touches that module ([`CLAUDE.md`](CLAUDE.md) has the reading route).
   elements at build time, and its dialog. Depends on: nothing.
   [`docs/context/guide.md`](docs/context/guide.md)
 - **panel** (`src/panel/`) — the Sheet panel's tabs, drawn inside Excalidraw's sidebar:
-  Variables, Problems, Format with its Rules list, Symbols, Constants and Settings.
+  Variables with its rename form, Problems, Format with its Rules list, Symbols, Constants and Settings.
   Depends on: math, overlay (KaTeX), print. [`docs/context/panel.md`](docs/context/panel.md)
 - **print** (`src/print/`) — the print pages (spec section 11): `printPages`, one pure function
   from the scene's boxes, the overlay's measured rows (`printRows`) and the Page to the pages and
@@ -329,7 +329,8 @@ and everything downstream recalculates. Engine: math.js, client-side.
   take two steps when something was selected (`addMath.excalidraw.test.tsx`).
 - **Source writes go through `writeAnchorSource`,** which takes the lines'
   `formats` in the same write: whatever changes the number of lines must keep
-  the two in step (ADR 0002). A plain spread isn't recorded
+  the two in step (ADR 0002). A rename's several anchors go in one
+  `writeAnchorSources`, one undo step (0.5.0). A plain spread isn't recorded
   by undo, and `EVENTUALLY` or the default capture drops later updates to that
   anchor off the stack. Excalidraw's own nudge and Link leave the anchor in that
   same state, so the write first records their change as its own step (spec

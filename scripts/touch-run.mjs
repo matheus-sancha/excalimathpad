@@ -15,7 +15,10 @@
 // Rules list with the line still open (M4e, #197), and the Format tab's sample
 // (M4e, #199: on the phone's bottom sheet 72 px at most, scrolling inside, and
 // never a chart or a table); on the tablet, a mouse keeps hover. On both
-// there is no Print…: no command and no ☰ item (section 11, M5, #81).
+// there is no Print…: no command and no ☰ item (section 11, M5, #81). A
+// rename from a Variables row (0.5.0, #261): the ✎ and the form's buttons are
+// 40 px or more, the form fits the panel (the bottom sheet on the phone), and
+// its toast names Undo.
 // The tablet lies on its side (1180 px), where the panel docks; held upright
 // (820 px) it is too narrow to dock, so an edit opens no panel and Math
 // settings opens it floating, with the quick keys (M4e, #198). It
@@ -519,6 +522,61 @@ try {
       await tab.locator('.sheet-sidebar [aria-label="Done (Esc)"]').scrollIntoViewIfNeeded()
       await pressPanel('Done (Esc)')
       await pause()
+
+      // A rename by touch (section 4, Renaming a name, 0.5.0, #261): the ✎ on a Variables row, and
+      // its form in the panel, the bottom sheet on a phone, with buttons of 40 px or more.
+      await tabTo('Variables')
+      const pencil = tab.locator('.sheet-sidebar .sheet-panel__rename').first()
+      const old = (await pencil.getAttribute('aria-label')).replace(/^Rename /, '')
+      const linesBefore = await tab.evaluate(() => [...document.querySelectorAll('[data-anchor-id] [data-line]')].map((r) => r.getAttribute('aria-label')))
+      await pencil.scrollIntoViewIfNeeded()
+      const pencilBox = await pencil.boundingBox()
+      await tap(await pointOf('.sheet-sidebar .sheet-panel__rename', 1000))
+      await pause()
+      await tab.keyboard.press('ControlOrMeta+a')
+      await tab.keyboard.type(`${old}_t`)
+      await pause()
+      await tab.locator('.sheet-rename__button').first().scrollIntoViewIfNeeded()
+      const formed = await tab.evaluate((phone) => {
+        const box = (e) => {
+          const { left, right, width, height } = e.getBoundingClientRect()
+          return { left, right, width, height }
+        }
+        const form = document.querySelector('.sheet-sidebar .sheet-rename')
+        if (!form) return null
+        const field = form.querySelector('.sheet-rename__field')
+        return {
+          form: box(form),
+          panel: box(document.querySelector(phone ? '.sheet-bottom' : '.sheet-sidebar')),
+          field: { value: field.value, focused: document.activeElement === field, ...box(field) },
+          buttons: [...form.querySelectorAll('.sheet-rename__button')].map((b) => ({ name: b.textContent, disabled: b.disabled, ...box(b) })),
+          listed: form.querySelectorAll('.sheet-rename__lines li').length,
+        }
+      }, device.phone)
+      row(
+        'a Variables row’s ✎ is 40 px or more, and a tap opens the form with the keyboard in its field',
+        !!formed && pencilBox.width >= 40 && pencilBox.height >= 40 && formed.field.focused && formed.field.value === `${old}_t` && formed.listed >= 1,
+        formed ? `✎ ${Math.round(pencilBox.width)} × ${Math.round(pencilBox.height)} px, field: ${formed.field.value}` : 'no form',
+      )
+      row(
+        `the form fits the ${device.phone ? 'bottom sheet' : 'panel'}, its Rename and Cancel 40 px or more`,
+        !!formed && formed.form.left >= formed.panel.left - 0.5 && formed.form.right <= formed.panel.right + 0.5 && formed.buttons.length === 2 && formed.buttons.every((b) => b.width >= 40 && b.height >= 40 && b.left >= formed.form.left && b.right <= formed.form.right) && !formed.buttons[0].disabled,
+        formed ? `form ${Math.round(formed.form.width)} of ${Math.round(formed.panel.width)} px; ${formed.buttons.map((b) => `${b.name} ${Math.round(b.width)} × ${Math.round(b.height)}`).join(', ')}` : 'no form',
+      )
+      await tap(await pointOf('.sheet-rename__button.is-primary', 1000))
+      await pause()
+      const toast = await tab.evaluate(() => document.querySelector('.Toast')?.textContent ?? null)
+      const renamedRows = await tab.locator(`.sheet-sidebar [aria-label="Rename ${old}_t"]`).count()
+      row(
+        'Rename by touch writes it, closes the form, and the toast names Undo',
+        new RegExp(`^Renamed ${old} to ${old}_t in \\d+ lines?\\. Undo takes it back\\.$`).test(toast ?? '') && renamedRows === 1 && (await tab.locator('.sheet-rename').count()) === 0,
+        `toast: ${toast}`,
+      )
+      // One undo puts every line back (the keyboard is the canvas's again). As iOS, Excalidraw's undo is ⌘Z.
+      await tab.keyboard.press(device.platform ? 'Meta+z' : 'Control+z')
+      await pause()
+      const linesAfter = await tab.evaluate(() => [...document.querySelectorAll('[data-anchor-id] [data-line]')].map((r) => r.getAttribute('aria-label')))
+      row('one undo takes the rename back', JSON.stringify(linesAfter) === JSON.stringify(linesBefore), linesAfter.filter((l, i) => l !== linesBefore[i]).join(' | '))
 
       if (device.upright) {
         // Held upright the tablet is too narrow for the panel to dock (section 8, M4e, #198).

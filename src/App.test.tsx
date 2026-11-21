@@ -1090,5 +1090,257 @@ describe('App', () => {
       await waitFor(() => expect(resultsOf(element)).toBe('0.4543 bar 5.412 kW'))
       expect(screen.getByLabelText('Unit system')).toHaveValue('custom')
     })
+
+    // Section 4, Renaming a name: The form, on a Variables row, and Afterwards (0.5.0, #261).
+    describe('renaming a name from its Variables row', () => {
+      const sourceOf = (id: string) =>
+        [...document.querySelectorAll(`[data-anchor-id="${id}"] [data-line]`)].map((row) => row.getAttribute('aria-label'))
+      const rowOf = (id: string, line: number) => document.querySelector(`[data-anchor-id="${id}"] [data-line="${line}"]`)!
+      const form = () => screen.queryByRole('group', { name: /^Rename / })
+      const field = (name: string) => screen.getByRole<HTMLInputElement>('textbox', { name: `Rename ${name} to` })
+      const renameButton = () => within(form()!).getByRole('button', { name: 'Rename' })
+      /** A press as the browser sends it: the panel keeps focus where it is, then the click. */
+      const press = (button: HTMLElement) => {
+        fireEvent.pointerDown(button)
+        fireEvent.mouseDown(button)
+        fireEvent.click(button)
+      }
+      const start = async (elements = sampleSheet()) => {
+        renderApp({ initialElements: elements })
+        await ready()
+        await screen.findAllByRole('list', { name: 'Lines' })
+        fireEvent.click(await sheetButton())
+        await screen.findByRole('searchbox', { name: 'Filter names' })
+      }
+      const open = async (name: string, nth = 0) => {
+        press(screen.getAllByRole('button', { name: `Rename ${name}` })[nth])
+        await waitFor(() => expect(form()).not.toBeNull())
+      }
+      const type = (name: string, text: string) => fireEvent.change(field(name), { target: { value: text } })
+
+      it('every row ends in a ✎, a function’s too, and a press on it opens the form and doesn’t jump', async () => {
+        await start(
+          createMathAnchorElements([{ id: 'm1', x: 100, y: 100, width: 300, height: 72, source: 'a = 2\nf(x) = a * x' }]),
+        )
+        expect(screen.getByRole('button', { name: 'Rename a' })).toHaveAttribute('title', 'Rename a')
+        expect(screen.getByRole('button', { name: 'Rename f' })).toHaveTextContent('✎')
+
+        await open('a')
+
+        // The field holds the old name, selected, and has the keyboard.
+        expect(field('a')).toHaveFocus()
+        expect(field('a')).toHaveValue('a')
+        expect([field('a').selectionStart, field('a').selectionEnd]).toEqual([0, 1])
+        expect(field('a')).toHaveAttribute('type', 'text')
+        expect(within(form()!).getByText('Changes 2 lines:')).toBeInTheDocument()
+        expect(within(form()!).getAllByRole('listitem').map((item) => item.textContent)).toEqual([
+          'Element 1, line 1a = 2',
+          'Element 1, line 2f(x) = a * x',
+        ])
+        // The old name: Rename is dimmed, and nothing is said.
+        expect(renameButton()).toBeDisabled()
+        expect(within(form()!).queryByRole('status')).toBeNull()
+        // No jump: nothing selected, nothing flashing.
+        expect(document.querySelector('[data-math-selection]')).toBeNull()
+        expect(document.querySelector('.is-flash')).toBeNull()
+        expect(document.title).toBe('Untitled')
+      })
+
+      it('Rename writes every changed line of every element as one undo step, then the toast, the flash and the new row', async () => {
+        await start()
+        const { canUndo, undo, redo } = undoControls(document)
+        await open('R')
+        type('R', 'R_1')
+        // Nothing is written until Rename.
+        expect(sourceOf('math-inputs')).toEqual(['R = 10 kohm', 'I = 2 mA'])
+        expect(canUndo()).toBe(false)
+
+        press(renameButton())
+
+        await waitFor(() => expect(sourceOf('math-result')).toEqual(['U = I * R_1']))
+        expect(sourceOf('math-inputs')).toEqual(['R_1 = 10 kohm', 'I = 2 mA'])
+        const [, result] = screen.getAllByRole('list', { name: 'Lines' })
+        expect(resultsOf(result)).toBe('20 V')
+        expect(await screen.findByText('Renamed R to R_1 in 2 lines. Ctrl+Z takes it back.')).toBeInTheDocument()
+        // Every changed line flashes where it is, and no other; nothing is selected.
+        expect(rowOf('math-inputs', 0)).toHaveClass('is-flash')
+        expect(rowOf('math-inputs', 1)).not.toHaveClass('is-flash')
+        expect(rowOf('math-result', 0)).toHaveClass('is-flash')
+        expect(document.querySelector('[data-math-selection]')).toBeNull()
+        // The form closes, its row shows the new name, and the sheet is dirty.
+        expect(form()).toBeNull()
+        expect(await screen.findByRole('button', { name: 'R_1: 10 kohm' })).toBeInTheDocument()
+        await waitFor(() => expect(document.title).toBe('● Untitled'))
+        // The keyboard is the canvas's again, so Ctrl+Z reaches the sheet.
+        expect(document.activeElement).toHaveClass('excalidraw')
+
+        undo()
+        await waitFor(() => expect(sourceOf('math-result')).toEqual(['U = I * R']))
+        expect(sourceOf('math-inputs')).toEqual(['R = 10 kohm', 'I = 2 mA'])
+        expect(canUndo()).toBe(false)
+
+        redo()
+        await waitFor(() => expect(sourceOf('math-result')).toEqual(['U = I * R_1']))
+        expect(sourceOf('math-inputs')).toEqual(['R_1 = 10 kohm', 'I = 2 mA'])
+      })
+
+      it('refuses a name the sheet assigns, a reserved word and text that isn’t a name: Rename dimmed, the reason shown', async () => {
+        await start()
+        const { canUndo } = undoControls(document)
+        await open('R')
+
+        for (const [name, reason] of [
+          ['U', 'U is already a name on this sheet.'],
+          ['plot', 'plot is reserved.'],
+          ['2x', "2x isn't a name."],
+        ]) {
+          type('R', name)
+          await waitFor(() => expect(within(form()!).getByRole('status')).toHaveTextContent(reason))
+          expect(renameButton()).toBeDisabled()
+          // Enter writes nothing while the name is refused.
+          fireEvent.keyDown(field('R'), { key: 'Enter', code: 'Enter' })
+          expect(form()).not.toBeNull()
+        }
+        type('R', '')
+        await waitFor(() => expect(within(form()!).queryByRole('status')).toBeNull())
+        expect(renameButton()).toBeDisabled()
+        expect(sourceOf('math-inputs')).toEqual(['R = 10 kohm', 'I = 2 mA'])
+        expect(canUndo()).toBe(false)
+      })
+
+      it('allows a unit’s name under the amber shadow warning, and says which results a rename would change', async () => {
+        await start(
+          createMathAnchorElements([{ id: 'm1', x: 100, y: 100, width: 300, height: 72, source: 'L = 2\nd = 3 m * L' }]),
+        )
+        await open('L')
+
+        type('L', 'm')
+
+        await waitFor(() => expect(within(form()!).getByText('⚠ m shadows the unit m')).toHaveClass('is-warning'))
+        expect(within(form()!).getByText('This changes 1 result:')).toHaveClass('is-warning')
+        expect(within(form()!).getByRole('list', { name: 'This changes 1 result:' })).toHaveTextContent('Element 1, line 2d = 3 m * L')
+        expect(renameButton()).toBeEnabled()
+      })
+
+      it('Enter renames and Esc cancels, and neither reaches the canvas', async () => {
+        await start()
+        // One math element selected: Enter on the canvas would open its line, Esc deselect it.
+        const excalidraw = document.querySelector<HTMLElement>('.excalidraw')!
+        fireEvent.keyDown(excalidraw, { key: 'a', code: 'KeyA', ctrlKey: true })
+        await waitFor(() => expect(document.querySelector('[data-math-selection]')).not.toBeNull())
+
+        await open('R')
+        type('R', 'R_1')
+        fireEvent.keyDown(field('R'), { key: 'Escape', code: 'Escape' })
+
+        expect(form()).toBeNull()
+        expect(document.querySelector('[data-math-selection]')).not.toBeNull()
+        expect(sourceOf('math-inputs')).toEqual(['R = 10 kohm', 'I = 2 mA'])
+        expect(document.title).toBe('Untitled')
+        expect(document.activeElement).toHaveClass('excalidraw')
+
+        await open('R')
+        type('R', 'R_1')
+        fireEvent.keyDown(field('R'), { key: 'Enter', code: 'Enter' })
+
+        await waitFor(() => expect(sourceOf('math-inputs')).toEqual(['R_1 = 10 kohm', 'I = 2 mA']))
+        expect(form()).toBeNull()
+        expect(lineField()).toBeNull()
+        expect(document.querySelector('[data-math-selection]')).not.toBeNull()
+      })
+
+      it('a name assigned twice has two rows, each form lists its own reach, and one form is open at a time', async () => {
+        await start(
+          createMathAnchorElements([{ id: 'm1', x: 100, y: 100, width: 300, height: 96, source: 'k = 1\nx = k\nk = k + 1\ny = k' }]),
+        )
+        expect(screen.getAllByRole('button', { name: 'Rename k' })).toHaveLength(2)
+
+        await open('k', 0)
+        expect(within(form()!).getAllByRole('listitem').map((item) => item.textContent)).toEqual([
+          'Element 1, line 1k = 1',
+          'Element 1, line 2x = k',
+          'Element 1, line 3k = k + 1',
+        ])
+
+        // A ✎ pressed on another row moves the form there.
+        press(screen.getAllByRole('button', { name: 'Rename k' })[1])
+        await waitFor(() =>
+          expect(within(form()!).getAllByRole('listitem').map((item) => item.textContent)).toEqual([
+            'Element 1, line 3k = k + 1',
+            'Element 1, line 4y = k',
+          ]),
+        )
+        expect(screen.getAllByRole('group', { name: /^Rename / })).toHaveLength(1)
+
+        type('k', 'k_2')
+        press(renameButton())
+        await waitFor(() => expect(sourceOf('m1')).toEqual(['k = 1', 'x = k', 'k_2 = k + 1', 'y = k_2']))
+      })
+
+      it('with a line open and half typed, the ✎’s field leaves it as its own undo step, before the rename’s', async () => {
+        // An editor wide enough to dock the panel: it opens at launch, on Variables.
+        editorWidth(1440)
+        renderApp({
+          initialElements: createMathAnchorElements([{ id: 'm1', x: 100, y: 100, width: 300, height: 72, source: 'a = 1\nb = a' }]),
+        })
+        await ready()
+        await screen.findByRole('searchbox', { name: 'Filter names' })
+        const { undo } = undoControls(document)
+        const excalidraw = document.querySelector<HTMLElement>('.excalidraw')!
+        fireEvent.keyDown(excalidraw, { key: 'a', code: 'KeyA', ctrlKey: true })
+        await waitFor(() => expect(document.querySelector('[data-math-selection]')).not.toBeNull())
+        fireEvent.keyDown(excalidraw, { key: 'Enter', code: 'Enter' })
+        await waitFor(() => expect(lineField()).not.toBeNull())
+        fireEvent.input(lineField()!, { target: { value: 'b = a + 1' } })
+        // The edit showed Format; Variables is picked during it, and the line stays open.
+        fireEvent.mouseDown(screen.getByRole('tab', { name: 'Variables' }))
+        await screen.findByRole('searchbox', { name: 'Filter names' })
+        expect(lineField()).not.toBeNull()
+
+        await open('a')
+
+        // The form's field took the keyboard: the line is left, and written.
+        await waitFor(() => expect(lineField()).toBeNull())
+        expect(sourceOf('m1')).toEqual(['a = 1', 'b = a + 1'])
+        expect(field('a')).toHaveFocus()
+        type('a', 'a_1')
+        await waitFor(() => expect(renameButton()).toBeEnabled())
+        press(renameButton())
+        await waitFor(() => expect(sourceOf('m1')).toEqual(['a_1 = 1', 'b = a_1 + 1']))
+
+        undo()
+        await waitFor(() => expect(sourceOf('m1')).toEqual(['a = 1', 'b = a + 1']))
+        undo()
+        await waitFor(() => expect(sourceOf('m1')).toEqual(['a = 1', 'b = a']))
+      })
+
+      it('closes the form when the filter is typed in, and it doesn’t come back when its row does', async () => {
+        await start()
+        await open('R')
+        const filter = screen.getByRole('searchbox', { name: 'Filter names' })
+
+        fireEvent.change(filter, { target: { value: 'U' } })
+        expect(form()).toBeNull()
+        fireEvent.change(filter, { target: { value: '' } })
+
+        expect(screen.getByRole('button', { name: 'Rename R' })).toHaveAttribute('aria-expanded', 'false')
+        expect(form()).toBeNull()
+      })
+
+      it('closes the form when its row’s line no longer assigns the name', async () => {
+        await start()
+        const { undo } = undoControls(document)
+        await open('R')
+        type('R', 'R_1')
+        press(renameButton())
+        await waitFor(() => expect(sourceOf('math-inputs')).toEqual(['R_1 = 10 kohm', 'I = 2 mA']))
+        await open('R_1')
+
+        undo()
+
+        await waitFor(() => expect(form()).toBeNull())
+        expect(await screen.findByRole('button', { name: 'R: 10 kohm' })).toBeInTheDocument()
+      })
+    })
   })
 })

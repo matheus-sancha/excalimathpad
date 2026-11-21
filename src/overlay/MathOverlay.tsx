@@ -203,8 +203,8 @@ export interface MathOverlayProps {
    * failure screen shows the line being typed).
    */
   onTyped?: (text: string | null) => void
-  /** The line a jump from the panel flashes. */
-  flash?: FlashLine | null
+  /** The lines a jump from the panel or a rename flashes. */
+  flash?: FlashLines | null
   /** How results show: the sheet's unit system and Digits (section 5). */
   settings?: DisplaySettings
   /** The sheet's result colour (section 4, Colours and rules, M4c). */
@@ -233,10 +233,13 @@ export interface EvaluatedElement {
   formats?: string
 }
 
-/** A line to flash; a new `key` flashes it again. */
-export interface FlashLine {
-  anchorId: string
-  line: number
+/**
+ * The lines to flash, at once: one for a jump from the panel, every changed
+ * line after a rename (section 4, Renaming a name, 0.5.0). A new `key` flashes
+ * them again.
+ */
+export interface FlashLines {
+  lines: readonly { anchorId: string; line: number }[]
   key: number
 }
 
@@ -734,7 +737,7 @@ export function MathOverlay({
           onEscape={onEscape}
           onBlurLine={onBlurLine}
           forwardWheel={forwardWheel}
-          flash={flash?.anchorId === anchor.id ? flash : null}
+          flash={flashOf(flash, anchor.id)}
           suggest={edit?.anchorId === anchor.id ? suggestForEdit : null}
           wrapRoom={own ? wrapRoom : null}
           onCaretRow={onCaretRow}
@@ -766,6 +769,12 @@ function storedFormat(anchors: readonly MathAnchor[], edit: LineEdit | null): st
   if (!edit || !anchor) return ''
   if (edit.stored !== undefined) return edit.stored
   return lineFormats(anchor.formats, splitLines(anchor.source).length)[edit.lineIndex] ?? ''
+}
+
+/** One element's lines among those to flash, or null when it has none. */
+function flashOf(flash: FlashLines | null, anchorId: string): { lines: readonly number[]; key: number } | null {
+  const lines = flash?.lines.filter((line) => line.anchorId === anchorId).map(({ line }) => line) ?? []
+  return flash && lines.length > 0 ? { lines, key: flash.key } : null
 }
 
 /** The open line's or title's field: the overlay holds at most one. */
