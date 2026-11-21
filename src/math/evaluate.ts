@@ -486,8 +486,11 @@ export interface SheetBlock {
   formats?: string
 }
 
-/** A line of the sheet, parsed once before anything is evaluated. */
-type ParsedLine =
+/**
+ * A line of the sheet, parsed once before anything is evaluated. Exported for
+ * a rename (`rename.ts`, section 14, 0.5.0), which reads a line's names from it.
+ */
+export type ParsedLine =
   /**
    * A blank line or a comment line: never evaluated, so its result is empty,
    * unless its clause has a problem, which is its error (section 3, M4d).
@@ -624,22 +627,9 @@ export function evaluateSheet(
   // one that defines what its text assigns, and its guard below rethrows this.
   const parseFailures = new Map<ParsedLine, unknown>()
   const parse = (shown: string, stored: string): ParsedLine => {
-    const text = withFormat(shown, stored)
-    try {
-      const line = parseLine(text)
-      // A line that didn't parse shows as its text, which doesn't hold a stored format.
-      return line.kind === 'syntax-error' ? { ...line, source: shown } : line
-    } catch (error) {
-      let defines: string[] = []
-      try {
-        defines = statementNames(text)
-      } catch {
-        // The names are lost with the parse.
-      }
-      const line: ParsedLine = { kind: 'syntax-error', message: UNEXPECTED_LINE, defines, source: shown }
-      parseFailures.set(line, error)
-      return line
-    }
+    const { line, failure } = readStoredLine(shown, stored)
+    if (failure !== undefined) parseFailures.set(line, failure.error)
+    return line
   }
   const sheet = blocks.map(({ id, source, formats = '' }) => {
     const sources = splitLines(source)
@@ -2081,6 +2071,63 @@ function parseLine(text: string): ParsedLine {
       source: text,
     }
   }
+}
+
+/**
+ * A line as `evaluateSheet` reads it: its text with its stored clause joined
+ * (ADR 0005, step 2), then every line form. Never throws: a parse that threw
+ * is a line that didn't parse, which defines what its text assigns, with the
+ * failure beside it (section 4, Unexpected failures).
+ */
+function readStoredLine(shown: string, stored: string): { line: ParsedLine; failure?: { error: unknown } } {
+  const text = withFormat(shown, stored)
+  try {
+    const line = parseLine(text)
+    // A line that didn't parse shows as its text, which doesn't hold a stored format.
+    return { line: line.kind === 'syntax-error' ? { ...line, source: shown } : line }
+  } catch (error) {
+    let defines: string[] = []
+    try {
+      defines = statementNames(text)
+    } catch {
+      // The names are lost with the parse.
+    }
+    return { line: { kind: 'syntax-error', message: UNEXPECTED_LINE, defines, source: shown }, failure: { error } }
+  }
+}
+
+/**
+ * One line as the engine reads it, for a rename (section 14, 0.5.0): the same
+ * line forms, parsed by the same parser, so what a rename takes for a use is
+ * what `evaluateSheet` reads. `stored` is the line's stored clause.
+ */
+export function readSheetLine(shown: string, stored = ''): ParsedLine {
+  return readStoredLine(shown, stored).line
+}
+
+/** A rule's condition, parsed as `evaluateSheet` parses it before it runs the rule; it throws as that parse does. */
+export function parseCondition(condition: string): MathNode {
+  return parseSheet(condition)
+}
+
+/**
+ * Whether text is a name a line can assign (section 4, Renaming a name): a
+ * word the parser reads as one name on the left of `=`. So `2x`, `a b`, `x.y`
+ * and `true` are not, and a unit's or a built-in's name is (`m`, `in`, `pi`).
+ */
+export function isAssignableName(text: string): boolean {
+  if (!/^[A-Za-z_]\w*$/.test(text)) return false
+  try {
+    const node = parse(`${text} = 1`)
+    return isAssignmentNode(node) && !node.index && node.name === text
+  } catch {
+    return false
+  }
+}
+
+/** The words a line can't assign (section 3): the line forms' own, and `if`. */
+export function isReservedName(name: string): boolean {
+  return RESERVED.includes(name) || name === IF_FN
 }
 
 /** Every name a line split by `;` assigns, or its first target if it doesn't parse. */

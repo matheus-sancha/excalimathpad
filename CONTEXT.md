@@ -103,7 +103,8 @@ an issue touches that module ([`CLAUDE.md`](CLAUDE.md) has the reading route).
 - **math** (`src/math/`) — the engine: `evaluateSheet(blocks)` gives each line its result
   and its typeset form, and never throws; `limits.ts` refuses a call that would build more
   than 10,000 values or freeze, before math.js runs it. Reads the app's line forms before math.js
-  (ADR 0005). Depends on: `mathjs`. [`docs/context/math.md`](docs/context/math.md)
+  (ADR 0005). `planRename` (`rename.ts`, 0.5.0) plans a rename from that same reading.
+  Depends on: `mathjs`. [`docs/context/math.md`](docs/context/math.md)
 - **overlay** (`src/overlay/`) — draws math elements over the canvas as typeset grids, and
   holds the line edit, the unit slot, tables and plots. Depends on: canvas, math, print, `katex`
   (lazily). [`docs/context/overlay.md`](docs/context/overlay.md)
