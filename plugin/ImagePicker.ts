@@ -20,22 +20,23 @@ export const IMAGE_TYPES: Readonly<Record<string, string>> = {
   svg: 'image/svg+xml',
 }
 
-/** What the picker's field says before anything is typed. */
-export const PICK_IMAGE_PLACEHOLDER = 'Pick an image from the vault to place on the sheet'
-
-/** Opens the picker; resolves with the picked image's bytes, or null when it closes without a pick. */
-export function pickVaultImage(app: App): Promise<PickedImage | null> {
-  return new Promise((resolve) => new VaultImageModal(app, resolve).open())
+/**
+ * Opens the picker; resolves with the picked image's bytes, or null when it
+ * closes without a pick. `placeholder` is what its field says before anything
+ * is typed, worded as it opens (section 13, In a vault).
+ */
+export function pickVaultImage(app: App, placeholder: string): Promise<PickedImage | null> {
+  return new Promise((resolve) => new VaultImageModal(app, placeholder, resolve).open())
 }
 
 class VaultImageModal extends FuzzySuggestModal<TFile> {
   private settled = false
   private readonly resolve: (image: PickedImage | null) => void
 
-  constructor(app: App, resolve: (image: PickedImage | null) => void) {
+  constructor(app: App, placeholder: string, resolve: (image: PickedImage | null) => void) {
     super(app)
     this.resolve = resolve
-    this.setPlaceholder(PICK_IMAGE_PLACEHOLDER)
+    this.setPlaceholder(placeholder)
   }
 
   getItems(): TFile[] {

@@ -3,7 +3,8 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { notices, TFile, TFolder, type WorkspaceLeaf } from './obsidian.ts'
 import { DEFAULT_SETTINGS, readSheet } from '../../src/file/sheetFormat.ts'
 import { en } from '../../src/text/en.ts'
-import { NEW_SHEET, NEW_SHEET_ICON } from '../main.ts'
+import { ptBR } from '../../src/text/ptBR.ts'
+import { NEW_SHEET_ICON } from '../main.ts'
 import { conflictBase, freeSheetPath } from '../names.ts'
 import { SheetView } from '../SheetView.ts'
 import { vaultWith, type Vault } from './harness.ts'
@@ -20,7 +21,8 @@ afterEach(async () => {
   for (const leaf of [...vault.app.workspace.leaves]) await act(() => leaf.detach())
 })
 
-const command = () => vault.recorded.commands.find(({ name }) => name === NEW_SHEET)!
+const NEW_SHEET = en.vault.newSheet
+const command = () => vault.recorded.commands.find(({ id }) => id === 'new-sheet')!
 const created = () => vault.app.vault.creates.map(({ path }) => path)
 const lastLeaf = (): WorkspaceLeaf => vault.app.workspace.leaves.at(-1)!
 
@@ -105,6 +107,34 @@ describe('the command, the ribbon and the folder menu', () => {
   })
 })
 
+describe('in Português (section 8, Language: In Obsidian)', () => {
+  const PT = { language: 'pt-BR' }
+
+  it('registers the command, the ribbon and the folder item in the language data.json holds at load', async () => {
+    vault = await vaultWith({ 'Projects/notes.md': '# notes' }, PT)
+    expect(command().name).toBe('Nova folha')
+    expect(vault.recorded.ribbon.map(({ title }) => title)).toEqual(['Nova folha'])
+    const menu = vault.app.workspace.fileMenu(new TFolder('Projects'))
+    expect(menu.items.map(({ title }) => title)).toEqual(['Nova folha'])
+  })
+
+  it('names new sheets Sem título, Sem título 1…, and a file that exists keeps its name', async () => {
+    vault = await vaultWith({ 'Untitled.excalimathpad': '{}' }, PT)
+    await act(async () => command().callback!())
+    await act(async () => command().callback!())
+    expect(created()).toEqual(['Sem título.excalimathpad', 'Sem título 1.excalimathpad'])
+    expect(vault.app.vault.files.get('Untitled.excalimathpad')).toBe('{}')
+  })
+
+  it("a create that fails says so in Português, with Obsidian's reason as it arrives", async () => {
+    vault = await vaultWith({}, PT)
+    vault.app.vault.failNext = new Error('Disk full.')
+    await act(async () => command().callback!())
+    expect(notices).toEqual([ptBR.vault.createFailed('Sem título.excalimathpad', 'Disk full')])
+    expect(notices[0]).toBe('Não foi possível criar Sem título.excalimathpad: Disk full.')
+  })
+})
+
 describe('the names (plugin/names.ts)', () => {
   it('finds the first free name in a folder, the root included', () => {
     const taken = new Set(['A/Untitled.excalimathpad', 'Untitled.excalimathpad', 'Untitled 1.excalimathpad'])
@@ -115,9 +145,15 @@ describe('the names (plugin/names.ts)', () => {
   })
 
   it('names a conflict copy by local date and time, to the minute', () => {
-    expect(conflictBase('pump-sizing', new Date(2026, 10, 14, 15, 32, 59))).toBe(
+    expect(conflictBase('pump-sizing', new Date(2026, 10, 14, 15, 32, 59), en)).toBe(
       'pump-sizing (conflict 2026-11-14 1532)',
     )
-    expect(conflictBase('a', new Date(2027, 0, 2, 3, 4))).toBe('a (conflict 2027-01-02 0304)')
+    expect(conflictBase('a', new Date(2027, 0, 2, 3, 4), en)).toBe('a (conflict 2027-01-02 0304)')
+  })
+
+  it('names a conflict copy in Português as (conflito …)', () => {
+    expect(conflictBase('pump-sizing', new Date(2026, 10, 14, 15, 32), ptBR)).toBe(
+      'pump-sizing (conflito 2026-11-14 1532)',
+    )
   })
 })

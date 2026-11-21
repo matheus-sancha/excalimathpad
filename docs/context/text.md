@@ -30,7 +30,9 @@ reader). English until a sheet shows another. Read a word with:
 - `onLanguage(listener)` where text already handed out must follow a change: the canvas
   hint's `--math-hint` and `--math-hint-touch` (`markMathSelection`), CSS `content`.
 - `wordsFor(language)` for what is worded before any sheet shows a language (the plugin's
-  `onload`, from `data.json`).
+  `onload`, from `data.json`). The plugin reads its `vault` group this way for its notices
+  and file names too, in `data.json`'s language at that moment, since New sheet can run with
+  no sheet tab open ([plugin](plugin.md)).
 
 `shownLanguage()` answers which one is shown; `SheetLanguage` (`en`, `pt-BR`) is defined
 here and re-exported by `src/canvas/language.ts`, which keeps the choice and its memory.
@@ -48,5 +50,7 @@ build stamp's tooltip, More tools' heading, items and badge (`SheetCanvas.tsx`);
 welcome hint, with its touch wording after a touch press; the canvas hint
 (`mathSelection.ts`); the window title and the name beside ☰ (`FileChrome.tsx`,
 `displayName`), the save picker's file type (`fileAccess.ts`) and the browser's own Print
-line (`--math-print-line` on `<html>`, read by `src/index.css`). The image-too-big toast is
+line (`--math-print-line` on `<html>`, read by `src/index.css`); and, in `vault` (issue 6),
+the plugin's commands, ribbon, folder item, notices, image picker and file names
+(`plugin/`). The image-too-big toast is
 Excalidraw's own `errors.fileTooBig`, from its `t`, not a word of these tables.

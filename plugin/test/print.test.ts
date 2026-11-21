@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest'
+import { en } from '../../src/text/en.ts'
+import { ptBR } from '../../src/text/ptBR.ts'
 import { appStyles, paperNotice } from '../print.ts'
 
 /**
@@ -10,8 +12,17 @@ import { appStyles, paperNotice } from '../print.ts'
 
 describe('the notice before the dialog (section 13, In a vault)', () => {
   it('names the paper of the sheet’s Page setting, in sentence case', () => {
-    expect(paperNotice({ size: 'A4', orientation: 'portrait' })).toBe('Choose A4, portrait in the print dialog.')
-    expect(paperNotice({ size: 'Letter', orientation: 'landscape' })).toBe('Choose Letter, landscape in the print dialog.')
+    expect(paperNotice({ size: 'A4', orientation: 'portrait' }, en)).toBe('Choose A4, portrait in the print dialog.')
+    expect(paperNotice({ size: 'Letter', orientation: 'landscape' }, en)).toBe(
+      'Choose Letter, landscape in the print dialog.',
+    )
+  })
+
+  it('words the stored paper and orientation through the table in Português', () => {
+    expect(paperNotice({ size: 'A4', orientation: 'portrait' }, ptBR)).toBe('Escolha A4, retrato na janela de impressão.')
+    expect(paperNotice({ size: 'Letter', orientation: 'landscape' }, ptBR)).toBe(
+      'Escolha Carta, paisagem na janela de impressão.',
+    )
   })
 })
 

@@ -13,7 +13,20 @@ view for `.excalimathpad` only and keeps the panel's open state, its width
 read there dropped). The view hands App the language memory as `language`, beside `panelMemory`. It registers New sheet and `SHEET_COMMANDS` (Add math,
 Toggle Math settings, Open Math guide, and Print…, marked `computer` and skipped where
 `Platform.isMobile`), whose `checkCallback` offers each only while
-`getActiveViewOfType(SheetView)` has that command in `commands`; none has a hotkey. `SheetView.ts` is the `TextFileView`:
+`getActiveViewOfType(SheetView)` has that command in `commands`; none has a hotkey.
+**The plugin's own words** (0.6.0, spec section 8, Language: In Obsidian; section 13, In a
+vault) are the `vault` group of the text tables ([text](text.md)), read through
+`wordsFor` in the language `data.json` holds: `main.ts`'s `words()` and the view's
+`vaultWords(memory.language)`. The command names (a `SHEET_COMMANDS` entry's `name` is its
+key), the ribbon's tooltip and the folder item are worded once, at `onload`, so they change
+after a restart. Everything else is worded when it is made, so it follows a choice in ☰ at
+once, with no sheet tab open too: the notices (`writeFailed`, `conflict`, `createFailed`;
+`errorReason` passes Obsidian's reason through as it arrives), the lookbehind message, the
+image picker's placeholder (handed to `pickVaultImage` as it opens), the paper notice
+(`paperNotice(page, text)`, the stored `A4`/`Letter` and `portrait`/`landscape` worded
+through `paperSize` and `orientation`), New sheet's base name (`untitled`) and the conflict
+copy's (`conflictBase(…, text)`, `conflictCopy`). A name is only written, never read back.
+The view's newer and unreadable messages are still `MESSAGES` (`src/file/sheetSession.ts`). `SheetView.ts` is the `TextFileView`:
 `setViewData` runs the **lookbehind check** (`hasLookbehind`; without it,
 "Excalimathpad needs iOS 16.4 or later."), then `readSheet`; a newer or
 unreadable file shows section 13's message in the view and nothing mounts;
@@ -39,10 +52,12 @@ file afresh (Obsidian's text can predate the last write, or catch it
 half-done: 0.1.0's beta), ignores its own text (`known`), reloads an idle tab in place (`VaultSheet.reload`: no undo step,
 scroll and zoom kept), and for a busy one (`busy()`: unwritten work or a
 line open) writes the tab's version beside the sheet with `vault.create`
-under `names.ts`'s `conflictBase` and `freeSheetPath` (never over a file),
+under `names.ts`'s `conflictBase` and `freeSheetPath` (never over a file; `(conflict …)` or
+`(conflito …)` by the language at that moment),
 then reloads; no save runs meanwhile (`reconciling`). `main.ts` adds **New
 sheet** (the command, the ribbon icon, a folder's `file-menu`), placed by
-`fileManager.getNewFileParent` and named `Untitled`, `Untitled 1`…
+`fileManager.getNewFileParent` and named `Untitled`, `Untitled 1`… (`Sem título`… in
+Português).
 `ImagePicker.ts` is the **vault image picker**, a `FuzzySuggestModal` over
 the vault's image files that reads only the one picked (`readBinary`).
 `styles.css`
