@@ -1439,7 +1439,8 @@ that hovers keeps hover.
   `)` is its own key.
 - **The canvas hint** for one selected math element reads "Double-tap a line, or tap Edit in
   Math settings" after a touch press, and the desktop wording again after a mouse or pen press
-  ([Selected math element](#selected-math-element)).
+  ([Selected math element](#selected-math-element)). **The welcome screen's hint** follows the
+  last press the same way ([section 8](#8-app-chrome)).
 
 ### Selected math element
 
@@ -1992,7 +1993,10 @@ command and first ☰ item. There is no app bar: the chrome lives inside Excalid
   dropdown closed. A sheet with warnings alone shows no badge.
 - An empty untitled sheet shows Excalidraw's welcome screen: the app's name, the hint
   "Press M, or choose Add math under More tools, then click the sheet to place math", and Open… (Ctrl+O).
-  Excalidraw's own logo and collaboration items are left out.
+  Excalidraw's own logo and collaboration items are left out. After a touch press the hint reads
+  "Tap More tools, then Add math, then tap the sheet", and the first wording again after a mouse
+  or pen press, in both homes: "on touch" is the last press, as for the canvas hint
+  ([Touch](#touch)). Before any press it is the first wording.
 
 ### Add math
 
@@ -2249,8 +2253,9 @@ From M4d, in the plugin. The web app's chrome above is unchanged.
   **Print…** is the first item, with no key, and a separator follows it; on a phone or tablet
   there is none ([section 11](#11-print)).
 - **No file name** beside ☰ and no `document.title`: Obsidian's tab header names the sheet.
-- **The welcome screen** keeps the name and the hint, without Open…. On touch the hint reads
-  "Tap More tools, then Add math, then tap the sheet".
+- **The welcome screen** keeps the name and the hint, without Open…. On touch (after a touch
+  press, as on the web: [section 8](#8-app-chrome)) the hint reads "Tap More tools, then Add
+  math, then tap the sheet".
 - **Theme:** Excalimathpad's own light or dark mode, whatever Obsidian's. Dark mode in ☰
   (Alt+Shift+D) switches it, and the choice is remembered in the plugin's `data.json`: every
   sheet tab opened after it opens in that mode, after a restart too. Light until one is chosen.
@@ -3209,6 +3214,7 @@ The wording of every user-facing message. `<…>` is filled in. Numbers follow
 | A save that fails | `Couldn't save pump-sizing.excalimathpad: <reason>` | M1 |
 | The picker or the file read fails | `Couldn't open the file: <reason>` | M1 |
 | Hint, one math element selected | `Double-click a line or press Enter to edit` (on touch: `Double-tap a line, or tap Edit in Math settings`, M4d) | M1 |
+| Welcome hint | `Press M, or choose Add math under More tools, then click the sheet to place math` (on touch: `Tap More tools, then Add math, then tap the sheet`, M4d; in both homes) | M1 |
 | Browser's Print, on the web | `Use Print… from the app's menu` | M5 |
 | The pages couldn't be built (notice) | `The pages couldn't be built, so nothing was printed.` | M5 |
 
@@ -3273,7 +3279,6 @@ The wording of every user-facing message. `<…>` is filled in. Numbers follow
 | A newer or unreadable file | The two file messages above, in the view; it never writes the file | M4d |
 | Print…, on a computer, before the system's print dialog opens (notice, until it closes) | `Choose A4, portrait in the print dialog.`, with the sheet's Page: `Choose Letter, landscape in the print dialog.` | M5 |
 | No regex lookbehind (iOS below 16.4) | `Excalimathpad needs iOS 16.4 or later.` | M4d |
-| Welcome hint, on touch | `Tap More tools, then Add math, then tap the sheet` | M4d |
 
 Decided in: [solve](https://github.com/matheus-sancha/excalimathpad/issues/19),
 [functions](https://github.com/matheus-sancha/excalimathpad/issues/27),
@@ -4322,6 +4327,12 @@ Each section above ends with its own tickets.
 
 ## Changes since agreed
 
+- 2026-11-21, [sections 8](#8-app-chrome), [4](#touch) and [13](#13-messages) (found while making
+  the 0.7.0 text inventory, decided by Matheus): **the welcome screen's touch hint is built, and
+  shows on the web too.** The code showed the computer wording on every device. "On touch" is
+  read as the last press, as the canvas hint reads it, so the welcome hint switches with each
+  press in both homes; the web, agreed with the computer wording only, now shows the touch
+  wording after a touch press. The row moves from the vault's table to the App table.
 - 2026-11-21, [sections 4](#renaming-a-name) and [14](#14-engineering-constraints) (#260, found
   while building, for Matheus to confirm on the PR):
   - **The test that holds the rename sets three of the Math guide's examples aside.** Section 14

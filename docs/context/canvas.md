@@ -105,7 +105,9 @@ content sits among Excalidraw's DOM layers, and the dark theme's filter.
 `cancelPlacing`, `isPlacing`) and `watchPlacing`, which turns the placing
 click into a new anchor, selected in the same write, and holds the crosshair.
 `mathAnchor.ts` also has `removeAnchor`, the one-step removal of an element
-left empty. `SheetCanvas` draws the welcome screen, and the app's two
+left empty. `SheetCanvas` draws the welcome screen (`SheetWelcome`: its hint is
+`WELCOME_HINT`, or `WELCOME_HINT_TOUCH` while `touch` is set, chosen in React,
+spec section 8), and the app's two
 items in Excalidraw's More tools dropdown: Add math and Math settings, which
 opens the Sheet panel. `panelPresses.ts` holds `SHEET_SIDEBAR_CLASS`,
 `isInSheetPanel` and `keepPanelPresses` (see Load-bearing), and `LINE_FIELD`

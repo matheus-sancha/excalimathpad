@@ -177,7 +177,7 @@ export interface SheetCanvasProps {
   phone?: boolean
   /**
    * The last press in the view was a touch (section 4, Touch, M4d): the hint
-   * for one math element names the taps.
+   * for one math element and the welcome screen's hint name the taps.
    */
   touch?: boolean
 }
@@ -497,7 +497,7 @@ export function SheetCanvas({
           language={langCode}
           onLanguage={chooseLanguage}
         />
-        <SheetWelcome fileMenu={fileMenu} />
+        <SheetWelcome fileMenu={fileMenu} touch={touch} />
         <LanguageShown onShown={followLanguage} />
         {sheetPanel && !phone && (
           <Sidebar
@@ -679,14 +679,16 @@ function SettingsIcon() {
 /**
  * Excalidraw's welcome screen, shown on an empty sheet: the app's name, the
  * hint for Add math, and Open… (docs/spec-v1.md section 8). Excalidraw's own
- * logo and collaboration items are left out.
+ * logo and collaboration items are left out. The hint names the taps while the
+ * last press was a touch, as the hint for one math element does (section 4,
+ * Touch).
  */
-function SheetWelcome({ fileMenu }: { fileMenu?: FileMenu }) {
+function SheetWelcome({ fileMenu, touch }: { fileMenu?: FileMenu; touch: boolean }) {
   return (
     <WelcomeScreen>
       <WelcomeScreen.Center>
         <WelcomeScreen.Center.Logo>Excalimathpad</WelcomeScreen.Center.Logo>
-        <WelcomeScreen.Center.Heading>{WELCOME_HINT}</WelcomeScreen.Center.Heading>
+        <WelcomeScreen.Center.Heading>{touch ? WELCOME_HINT_TOUCH : WELCOME_HINT}</WelcomeScreen.Center.Heading>
         {fileMenu && (
           <WelcomeScreen.Center.Menu>
             <WelcomeScreen.Center.MenuItem onSelect={fileMenu.open} shortcut="Ctrl+O">
@@ -699,7 +701,11 @@ function SheetWelcome({ fileMenu }: { fileMenu?: FileMenu }) {
   )
 }
 
+/** The welcome screen's hint (spec section 8). */
 export const WELCOME_HINT = 'Press M, or choose Add math under More tools, then click the sheet to place math'
+
+/** The same hint after a touch press (spec sections 8 and 13). */
+export const WELCOME_HINT_TOUCH = 'Tap More tools, then Add math, then tap the sheet'
 
 /**
  * The ☰ menu: the app's file items first, then the Excalidraw items v1 keeps,

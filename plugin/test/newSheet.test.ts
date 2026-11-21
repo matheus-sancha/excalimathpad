@@ -1,8 +1,8 @@
-import { act, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { notices, TFile, TFolder, type WorkspaceLeaf } from './obsidian.ts'
 import { DEFAULT_SETTINGS, readSheet } from '../../src/file/sheetFormat.ts'
-import { WELCOME_HINT } from '../../src/canvas/SheetCanvas.tsx'
+import { WELCOME_HINT, WELCOME_HINT_TOUCH } from '../../src/canvas/SheetCanvas.tsx'
 import { NEW_SHEET, NEW_SHEET_ICON } from '../main.ts'
 import { conflictBase, freeSheetPath } from '../names.ts'
 import { SheetView } from '../SheetView.ts'
@@ -47,6 +47,32 @@ describe('the command, the ribbon and the folder menu', () => {
     expect(lastLeaf().view).toBeInstanceOf(SheetView)
     expect((lastLeaf().view as unknown as SheetView).file?.path).toBe('Untitled.excalimathpad')
     expect(await screen.findByText(WELCOME_HINT, {}, { timeout: 10_000 })).toBeInTheDocument()
+  })
+
+  it("the welcome screen's hint names the taps after a touch press (spec section 8, Inside an Obsidian tab)", async () => {
+    vault = await vaultWith({})
+    await act(async () => command().callback!())
+    await screen.findByText(WELCOME_HINT, {}, { timeout: 10_000 })
+    // The view's container hears the press (App's touch, section 4, Touch).
+    const canvas = document.querySelector('canvas.interactive')!
+    const press = (pointerType: string) => {
+      const event = { clientX: 300, clientY: 400, button: 0, pointerId: 2, pointerType, isPrimary: true }
+      act(() => {
+        fireEvent.pointerDown(canvas, { ...event, buttons: 1 })
+      })
+      act(() => {
+        fireEvent.pointerUp(canvas, event)
+      })
+    }
+
+    press('touch')
+    expect(await screen.findByText('Tap More tools, then Add math, then tap the sheet')).toBeInTheDocument()
+    expect(screen.queryByText(WELCOME_HINT)).toBeNull()
+    expect(screen.queryByText('Open…')).toBeNull()
+
+    press('mouse')
+    expect(await screen.findByText(WELCOME_HINT)).toBeInTheDocument()
+    expect(screen.queryByText(WELCOME_HINT_TOUCH)).toBeNull()
   })
 
   it('names the next ones Untitled 1, Untitled 2…, never over a file', async () => {

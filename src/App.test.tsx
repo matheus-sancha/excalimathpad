@@ -1,7 +1,7 @@
 import { act, createEvent, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { describe, expect, it, onTestFinished } from 'vitest'
 import App from './App.tsx'
-import { WELCOME_HINT } from './canvas/SheetCanvas.tsx'
+import { WELCOME_HINT, WELCOME_HINT_TOUCH } from './canvas/SheetCanvas.tsx'
 import { fakeFileAccess, fakeRecovery } from './test/files.ts'
 import { clickOnCanvas, doubleClickLine, linePoint } from './test/gestures.ts'
 import { createMathAnchorElements } from './canvas/mathAnchor.ts'
@@ -99,6 +99,34 @@ describe('App', () => {
 
       fireEvent.click(screen.getByText('Open…'))
       await waitFor(() => expect(files.open).toHaveBeenCalled())
+    })
+
+    // Told by the last press, as the hint for one math element is (section 4, Touch).
+    it("the welcome screen's hint names the taps after a touch press, and the keys again after a mouse press", async () => {
+      renderApp()
+      await ready()
+      expect(await screen.findByText(WELCOME_HINT)).toBeInTheDocument()
+      expect(screen.queryByText(WELCOME_HINT_TOUCH)).toBeNull()
+      const canvas = document.querySelector('canvas.interactive')!
+      const press = (pointerType: string) => {
+        const event = { clientX: 300, clientY: 400, button: 0, pointerId: 2, pointerType, isPrimary: true }
+        act(() => {
+          fireEvent.pointerDown(canvas, { ...event, buttons: 1 })
+        })
+        act(() => {
+          fireEvent.pointerUp(canvas, event)
+        })
+      }
+
+      press('touch')
+      expect(await screen.findByText('Tap More tools, then Add math, then tap the sheet')).toBeInTheDocument()
+      expect(screen.queryByText(WELCOME_HINT)).toBeNull()
+
+      press('mouse')
+      expect(
+        await screen.findByText('Press M, or choose Add math under More tools, then click the sheet to place math'),
+      ).toBeInTheDocument()
+      expect(screen.queryByText(WELCOME_HINT_TOUCH)).toBeNull()
     })
   })
 
