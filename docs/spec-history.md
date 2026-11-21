@@ -612,6 +612,16 @@ The items with a recorded result. Those still open are in
   since a shared CI machine's times aren't the user's. The first run's results weren't passed in to halve it,
   as [#279](https://github.com/matheus-sancha/excalimathpad/pull/279) suggested: it isn't needed while the key
   doesn't wait for the check.
+- The offer's card on a narrow editor and beside an element at the window's right edge. **Passed (#262)**
+  in headless Chromium (the panel run, the built plugin, the pump sheet in six elements, `rho` changed to
+  `rho_w` in its line):
+  - At 1280 px with the panel docked, the view puts the first element's right side under the panel, so the
+    card has no room to its right: it is drawn under its line, inside the visible area and short of the panel.
+    Left with ↓, it first covered the next line, the one being typed; so a card that would cover the open line
+    goes under it ([section 4](spec-v1.md#renaming-a-name), As built), and the run checks it is clear of it.
+  - On a 640 px editor (the panel closed) the card is under its line, its buttons whole, inside the editor.
+  - On a 2560 px window there is room: the card is beside the line, 8 px right of its element, at its row.
+  - The element on the pump sheet is about 610 px wide (its comment line), so on 1920 px there is no room either.
 
 ## 18. Decision index
 

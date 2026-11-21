@@ -56,6 +56,15 @@
 //   it; with a line open and half typed, the line is its own step before it
 //   (section 17's checks for 0.5.0, with what a key in the field costs). At
 //   280 px the form fits the panel.
+// - The offer on a committed line (section 4, Renaming a name, 0.5.0, #262),
+//   on the same sheet with real keys: `rho` changed to `rho_w` and left with
+//   ↓ shows the card, "in 7 lines", beside its line; the next line is typed
+//   while it waits, and the count opens the list and keeps the line; Rename
+//   commits that line first, then changes the uses with every result the
+//   same; the Ctrl+Z steps come back the uses first; Keep writes nothing.
+//   With the element under the docked panel at its right, and on a 640 px
+//   editor, the card is under its line, clear of the open line, inside the
+//   visible area; on a 2560 px window it is beside its line (section 17).
 //
 // Run: `node scripts/panel-run.mjs` (`npm run test:panel`), after
 // `npm run build`. PANEL_RUN_SHOTS=<folder> keeps a screenshot of each step;
@@ -175,6 +184,38 @@ const READ = `
       openLine: document.querySelector('.math-element__field')?.value ?? null,
       focus: document.activeElement?.className ?? null,
       undo: document.querySelector('[data-testid="button-undo"]')?.disabled ?? null,
+    }
+  }
+  // The rename's offer (section 4, The offer, on a committed line, 0.5.0): each card, and where the line field is.
+  window.__offer = () => {
+    const box = (element) => {
+      if (!element) return null
+      const { left, top, right, bottom, width, height } = element.getBoundingClientRect()
+      return { left, top, right, bottom, width, height }
+    }
+    const field = document.querySelector('.math-element__field')
+    return {
+      cards: [...document.querySelectorAll('.math-offer')].map((card) => ({
+        name: card.getAttribute('aria-label'),
+        line: card.dataset.offer,
+        text: card.querySelector('.math-offer__ask').textContent,
+        box: box(card),
+        listed: [...card.querySelectorAll('.math-offer__lines li')].map((li) => li.querySelector('.math-offer__where').textContent),
+        results: card.querySelector('.math-offer__results')?.textContent ?? null,
+        buttons: [...card.querySelectorAll('button')].map((b) => ({ name: b.textContent, focusable: b.tabIndex >= 0, box: box(b) })),
+      })),
+      // The fluid element's second line, where the runs change rho, and its body.
+      rho: box(document.querySelector('[data-anchor-id="calc"] [data-line="1"]')),
+      calc: box(document.querySelector('[data-anchor-id="calc"] .math-element__body')),
+      editor: box(document.querySelector('.excalidraw')),
+      panel: box(document.querySelector('.excalidraw .sidebar.sheet-sidebar')),
+      openLine: field?.value ?? null,
+      field: box(field),
+      caret: field?.selectionStart ?? null,
+      focused: document.activeElement === field && field !== null,
+      sources: [...document.querySelectorAll('[data-anchor-id] [data-line]')].map((row) => row.getAttribute('aria-label')),
+      results: [...document.querySelectorAll('[data-anchor-id] [data-line]')].map((row) => row.querySelector('.math-element__result')?.dataset.text ?? ''),
+      toast: document.querySelector('.Toast')?.textContent ?? null,
     }
   }
   // What a key costs (section 17, 0.5.0): each key event to its next paint, and the tasks over 50 ms.
@@ -1149,6 +1190,119 @@ try {
     row('Esc cancels: the form closes and nothing is written', s.form === null && same(sources(s), sources(before)))
   })
 
+  // The offer on a committed line (section 4, Renaming a name, 0.5.0, #262), on the pump sheet with real keys.
+  await run('offer', 1280, async ({ tab, row, start }) => {
+    await start(null, RENAME_SHEET)
+    await tab.waitForFunction(() => document.querySelectorAll('.math-element__plot-chart > svg').length === 1, null, { timeout: 60_000 })
+    await tab.waitForTimeout(500)
+    const read = async (name, wait = 400) => {
+      await tab.waitForTimeout(wait)
+      if (SHOTS && name) await tab.screenshot({ path: join(SHOTS, `offer-${name}.png`) })
+      return tab.evaluate(() => window.__offer())
+    }
+    const holding = (s, name) => s.sources.filter((line) => new RegExp(`(^|[^\\w])${name}(?![\\w])`).test(line.split('#')[0]))
+    const same = (a, b) => JSON.stringify(a) === JSON.stringify(b)
+    const openRho = async () => {
+      const line = await tab.locator('[data-anchor-id="calc"] [data-line="1"]').boundingBox()
+      await tab.mouse.dblclick(line.x + 20, line.y + line.height / 2)
+      await tab.waitForTimeout(500)
+      // `rho = 998.2 kg/m^3`: the caret to the name's end, then `_w`.
+      await tab.keyboard.press('Home')
+      for (let i = 0; i < 3; i += 1) await tab.keyboard.press('ArrowRight')
+      await tab.keyboard.type('_w', { delay: 80 })
+    }
+    const before = await read('launch')
+    row('the pump sheet is up, and no card shows', before.cards.length === 0 && holding(before, 'rho').length === 8, `${holding(before, 'rho').length} lines hold rho`)
+
+    await openRho()
+    await tab.keyboard.press('ArrowDown')
+    let s = await read('card')
+    const [card] = s.cards
+    row('rho changed to rho_w in its line and left with ↓ shows the card, with its count', s.cards.length === 1 && card.text === 'Rename rho to rho_w in 7 lines?' && card.name === 'Rename rho to rho_w in 7 lines?', card?.text)
+    row('Rename and Keep rho, neither in the tab order', same(card?.buttons.map((b) => b.name), ['in 7 lines', 'Rename', 'Keep rho']) && card.buttons.every((b) => !b.focusable))
+    const rowBox = s.rho
+    const body = s.calc
+    const field = s.field
+    const clear = (a, b) => !b || a.right <= b.left || a.left >= b.right || a.bottom <= b.top || a.top >= b.bottom
+    row(
+      'the element runs under the panel, so the card is under its line, inside the visible area and clear of the open line',
+      card && card.box.top >= rowBox.bottom - 0.5 && card.box.right <= s.panel.left + 0.5 && card.box.left >= s.editor.left && clear(card.box, field),
+      card && `card ${px(card.box.left)}–${px(card.box.right)} at ${px(card.box.top)}, row ends ${px(rowBox.bottom)}, open line ${px(field?.top)}–${px(field?.bottom)}, panel from ${px(s.panel.left)}`,
+    )
+    row('the next line is open, with the keyboard', s.openLine === 'mu = 1.002 cP' && s.focused, s.openLine)
+    await tab.keyboard.press('End')
+    await tab.keyboard.type(' * 1', { delay: 80 })
+    await tab.locator('.math-offer__count').click()
+    s = await read('list')
+    row('the next line is typed while the card waits; the count opens the list and keeps the line', s.cards.length === 1 && s.openLine === 'mu = 1.002 cP * 1' && s.focused && s.caret === s.openLine.length && s.cards[0].listed.length === 7 && !s.cards[0].listed.includes('Fluid and pipe, line 2'), s.cards[0]?.listed.slice(0, 2).join(' | '))
+    await tab.locator('.math-offer__button', { hasText: 'Rename' }).click()
+    s = await read('renamed', 600)
+    row('Rename commits the open line, then changes the uses; no line is open', holding(s, 'rho_w').length === 8 && holding(s, 'rho').length === 0 && s.sources.includes('mu = 1.002 cP * 1') && s.openLine === null && s.cards.length === 0, `${holding(s, 'rho_w').length} lines hold rho_w`)
+    // `mu`'s line, typed `* 1`, is no longer a plain input and shows its value.
+    const others = (t) => t.results.filter((_, i) => t.sources[i] !== 'mu = 1.002 cP * 1' && t.sources[i] !== 'mu = 1.002 cP')
+    row('every other result is as it was', same(others(s), others(before)))
+    row('the toast says so', s.toast === 'Renamed rho to rho_w in 7 lines. Ctrl+Z takes it back.', s.toast)
+    await tab.keyboard.press('Control+Z')
+    s = await read('undo uses')
+    row('the first Ctrl+Z puts the uses back', holding(s, 'rho_w').length === 1 && holding(s, 'rho').length === 7 && s.sources.includes('mu = 1.002 cP * 1'))
+    await tab.keyboard.press('Control+Z')
+    s = await read('undo next line')
+    row('the next takes back the line typed while the card waited', s.sources.includes('mu = 1.002 cP') && holding(s, 'rho_w').length === 1)
+    await tab.keyboard.press('Control+Z')
+    s = await read('undo line')
+    row('the next puts the name back', same(s.sources, before.sources))
+
+    // Without a second line typed: two Ctrl+Z put the sheet back, the uses first.
+    await openRho()
+    await tab.keyboard.press('Escape')
+    s = await read('esc')
+    row('Esc makes the offer too', s.cards.length === 1 && s.cards[0].text === 'Rename rho to rho_w in 7 lines?')
+    await tab.locator('.math-offer__button', { hasText: 'Rename' }).click()
+    s = await read('renamed again', 600)
+    row('Rename renames', holding(s, 'rho_w').length === 8)
+    await tab.keyboard.press('Control+Z')
+    s = await read('undo 1')
+    const usesBack = holding(s, 'rho_w').length === 1 && holding(s, 'rho').length === 7
+    await tab.keyboard.press('Control+Z')
+    s = await read('undo 2')
+    row('two Ctrl+Z put the sheet back, the uses first', usesBack && same(s.sources, before.sources))
+
+    // Keep writes nothing; the card goes.
+    await openRho()
+    await tab.keyboard.press('ArrowDown')
+    await read()
+    await tab.locator('.math-offer__button', { hasText: 'Keep rho' }).click()
+    s = await read('kept')
+    row('Keep writes nothing, the card goes, the line stays open', s.cards.length === 0 && holding(s, 'rho').length === 7 && s.openLine === 'mu = 1.002 cP' && s.focused)
+    await tab.keyboard.press('Escape')
+    await tab.keyboard.press('Control+Z')
+    await read()
+  })
+
+  // Section 17, 0.5.0: the card on a wide window, beside its element, and on a narrow editor, under its line.
+  for (const [where, width] of [['offer wide', 2560], ['offer narrow', 640]]) {
+    await run(where, width, async ({ tab, row, start }) => {
+      await start(null, RENAME_SHEET)
+      await tab.waitForTimeout(500)
+      const line = await tab.locator('[data-anchor-id="calc"] [data-line="1"]').boundingBox()
+      await tab.mouse.dblclick(line.x + 20, line.y + line.height / 2)
+      await tab.waitForTimeout(500)
+      await tab.keyboard.press('Home')
+      for (let i = 0; i < 3; i += 1) await tab.keyboard.press('ArrowRight')
+      await tab.keyboard.type('_w')
+      await tab.keyboard.press('Escape')
+      await tab.waitForTimeout(500)
+      if (SHOTS) await tab.screenshot({ path: join(SHOTS, `${where.replaceAll(' ', '-')}.png`) })
+      const s = await tab.evaluate(() => window.__offer())
+      const [card] = s.cards
+      const right = s.panel && s.panel.width > 0 && s.panel.left > s.editor.left + 1 ? Math.min(s.editor.right, s.panel.left) : s.editor.right
+      const beside = card && card.box.left >= s.calc.right && Math.abs(card.box.top - s.rho.top) < 1
+      const under = card && card.box.top >= s.rho.bottom - 0.5
+      row(width > 1000 ? 'with room to its right, the card is beside its line' : 'with no room to its right, the card is under its line', width > 1000 ? beside : under, card && `card ${px(card.box.left)}–${px(card.box.right)} at ${px(card.box.top)}; element ends ${px(s.calc.right)}, row ${px(s.rho.top)}–${px(s.rho.bottom)}`)
+      row('the card is inside the visible area, nothing cut', card && card.box.left >= s.editor.left - 0.5 && card.box.right <= right + 0.5 && card.buttons.every((b) => b.box.right <= card.box.right + 0.5), card && `card ${px(card.box.left)}–${px(card.box.right)} of ${px(s.editor.left)}–${px(right)}`)
+    })
+  }
+
   // The form at the panel's least width (section 17's check for M4e, with the form open).
   await run('rename 280 px', 1280, async ({ tab, row, start }) => {
     await start({ sheetPanelWidth: 280 }, RENAME_SHEET)
@@ -1198,4 +1352,4 @@ if (failed.length || errors.length || results.length === 0) {
   for (const error of errors) console.error(`  - ${error}`)
   process.exit(1)
 }
-console.log('Panel run passed: 320 px, icon tabs, the drag handle, docking by width, every tab usable at 280 px, the Format tab’s sample, the charts, the Page row, the page breaks and a rename from a Variables row.')
+console.log('Panel run passed: 320 px, icon tabs, the drag handle, docking by width, every tab usable at 280 px, the Format tab’s sample, the charts, the Page row, the page breaks, a rename from a Variables row and the offer on a committed line.')

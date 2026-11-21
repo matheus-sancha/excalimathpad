@@ -58,7 +58,14 @@ tab's form hands App a `RenameRequest`, and `rename` leaves an open line
 (`applyRename`) and writes them in one `writeAnchorSources`, one undo step;
 then the keyboard goes to the canvas, Excalidraw's toast says it
 (`RENAME_WORDS.renamed`, "Undo" on touch), and every changed line flashes
-through the overlay's `flash`, with no scroll and no selection.
+through the overlay's `flash`, with no scroll and no selection. **The offer's
+Rename** (#262) comes the same way: `MathOverlay`'s `onRenameOffer` hands
+`rename` an `OfferRename` (the same shape as a `RenameRequest`) once the open
+line is left. On a phone the overlay draws no card: `onOffers` hands App the
+offers waiting (`OffersShown`), App draws the newest as an `OfferCard` with
+`row` in the panel's `offer` slot, answers it through the line relay's
+`answerOffer`, and opens the bottom sheet (`showAutomatically`) when a new
+offer comes.
 **Touch** (M4d, #147): App holds `touch`, whether the last press in the
 view was a touch (`pointerType`, so a mouse or a pen that hovers turns it
 back), and hands it to the overlay and the Format tab's hint; on touch, while

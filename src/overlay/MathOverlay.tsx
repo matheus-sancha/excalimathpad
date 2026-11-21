@@ -51,6 +51,7 @@ import { writeArgumentUnit } from '../math/tableLine.ts'
 import { writePlotClauses, type PlotClause } from '../math/plotLine.ts'
 import type { DisplaySettings } from '../math/display.ts'
 import type { SymbolInsert } from '../math/symbols.ts'
+import { assignedName, type RenamePlan, type RenameTarget } from '../math/rename.ts'
 import {
   applyLineMove,
   startLineEdit,
@@ -68,6 +69,8 @@ import { Boundary } from '../failure/Boundary.tsx'
 import { TEXT_COLOR_VALUES } from './textColors.ts'
 import { PlacingGhost } from './PlacingGhost.tsx'
 import { readingOrder } from './readingOrder.ts'
+import { followOffers, noteCommit, type FollowedOffer, type RenameOffer } from './renameOffer.ts'
+import { OfferCard } from './OfferCard.tsx'
 import { constantSuggestions, FUNCTION_SUGGESTIONS, sheetNames, suggest, unitSuggestions, type Suggested } from './suggest.ts'
 import { isPlainAt, planInsert } from './symbolInsert.ts'
 import { fieldRoom, wrapWidthTo } from './wrapRoom.ts'
@@ -160,6 +163,28 @@ export interface LineEditControl {
    * opens its last line and inserts at its end; null does nothing.
    */
   insert(insert: SymbolInsert, anchorId?: string | null): void
+  /**
+   * The answer to a rename's offer (section 4, The offer, on a committed
+   * line), from its card or a phone's row: Keep writes nothing and keeps an
+   * open line as it is; Rename leaves the open line first, as a click on the
+   * canvas does, then hands the rename to `onRenameOffer`.
+   */
+  answerOffer(key: number, answer: 'rename' | 'keep'): void
+}
+
+/** A rename an offer's Rename asks for: written as the form's Rename is (section 4, Renaming a name). */
+export interface OfferRename {
+  target: RenameTarget
+  newName: string
+  plan: RenamePlan
+}
+
+/** The offers waiting, newest last, for a phone's row (section 8, On a phone). */
+export interface OffersShown {
+  followed: readonly FollowedOffer[]
+  /** The scene's blocks in reading order, as JSON, for the card's check. */
+  blocks: string
+  titles: ReadonlyMap<string, string | null>
 }
 
 /** What is open, for the Sheet panel (section 8): a line or the title, and its typed text. */
@@ -218,6 +243,13 @@ export interface MathOverlayProps {
   phone?: boolean
   /** ↑ or ↓ moved the caret between the rows of the open, wrapped field (section 4): the view follows it. */
   onCaretRow?: () => void
+  /** An offer's Rename (section 4, The offer, on a committed line): the plan to write, one undo step. */
+  onRenameOffer?: (rename: OfferRename) => void
+  /**
+   * The offers waiting, on each change (section 8, On a phone): with `phone`
+   * the overlay draws no card, and the bottom sheet shows the newest as a row.
+   */
+  onOffers?: (offers: OffersShown) => void
 }
 
 /** One math element as evaluated: what the Sheet panel lists. */
@@ -292,6 +324,8 @@ export function MathOverlay({
   touch = false,
   phone = false,
   onCaretRow,
+  onRenameOffer,
+  onOffers,
 }: MathOverlayProps) {
   const overlayRef = useRef<HTMLDivElement>(null)
   const store = useMemo(() => createSceneStore(api), [api])
@@ -303,7 +337,20 @@ export function MathOverlay({
   // Events read the latest edit from here: a field being removed can report its
   // blur while the render that removed it is still committing.
   const editRef = useRef(edit)
+  // The name the open line assigned when its edit opened (section 4, The offer): a
+  // commit that changes it makes the offer, even when a save or a press wrote the line before.
+  const opened = useRef<{ anchorId: string; line: number; name: string | null } | null>(null)
   const changeEdit = (next: LineEdit | null) => {
+    const was = opened.current
+    if (!next || next.lineIndex === TITLE_LINE) opened.current = null
+    else if (was?.anchorId !== next.anchorId || was.line !== next.lineIndex) {
+      const anchor = findAnchor(next.anchorId)
+      opened.current = {
+        anchorId: next.anchorId,
+        line: next.lineIndex,
+        name: anchor ? nameAt(anchor.source, anchor.formats, next.lineIndex) : null,
+      }
+    }
     editRef.current = next
     // Before the render: if that render fails, the failure screen still has the text.
     onTyped?.(next?.text ?? null)
@@ -403,6 +450,63 @@ export function MathOverlay({
   const wrapRoom =
     wrap && edit && wrap.anchorId === edit.anchorId && wrap.lineIndex === edit.lineIndex ? wrap.room : null
 
+  // The offers waiting (section 4, The offer, on a committed line): UI state,
+  // followed on the scene as it is after each change, so a line being typed
+  // doesn't drop one. Rename and Keep answer them; nothing else writes.
+  const [offers, setOffers] = useState<readonly RenameOffer[]>([])
+  const offerKey = useRef(0)
+  const sceneBlocks = JSON.stringify(
+    readingOrder(anchors).map((id): SheetBlock => {
+      const anchor = anchors.find((candidate) => candidate.id === id)
+      return { id, source: anchor?.source ?? '', formats: anchor?.formats ?? '' }
+    }),
+  )
+  const { checked, followed } = useMemo(
+    () => ({ checked: offers, followed: followOffers(offers, JSON.parse(sceneBlocks) as SheetBlock[]) }),
+    [offers, sceneBlocks],
+  )
+  const followedRef = useRef(followed)
+  useEffect(() => {
+    followedRef.current = followed
+    // An offer gone (or moved with its line) is gone from the state too; one made since is kept.
+    const kept = new Map(followed.map(({ offer }) => [offer.key, offer]))
+    const seen = new Set(checked.map(({ key }) => key))
+    setOffers((now) => {
+      const next = now.flatMap((offer) => (!seen.has(offer.key) ? [offer] : (kept.get(offer.key) ?? [])))
+      return sameOffers(now, next) ? now : next
+    })
+  }, [checked, followed])
+  const titles = useMemo(
+    () => new Map((JSON.parse(titlesKey) as [string, { title: string }][]).map(([id, { title }]) => [id, title || null])),
+    [titlesKey],
+  )
+  const onOffersRef = useRef(onOffers)
+  useEffect(() => {
+    onOffersRef.current = onOffers
+  })
+  useEffect(() => {
+    onOffersRef.current?.({ followed, blocks: sceneBlocks, titles })
+  }, [followed, sceneBlocks, titles])
+  const cards = useRef(new Map<number, HTMLDivElement>())
+  // Each card beside its line, or under it where there is no room to its right.
+  useLayoutEffect(() => placeCards(overlayRef.current, canvasRoot, phone, followed, cards.current))
+
+  const answerOffer = (key: number, answer: 'rename' | 'keep') => {
+    const waiting = followedRef.current.find(({ offer }) => offer.key === key)
+    if (!waiting) return
+    setOffers((now) => now.filter((offer) => offer.key !== key))
+    if (answer === 'keep') return
+    // The open line is committed first, as its own step; the rename is planned on the scene it leaves.
+    moveEdit({ kind: 'leave' })
+    const blocks = readingOrder(store.getSnapshot().anchors).flatMap((id): SheetBlock[] => {
+      const anchor = findAnchor(id)
+      return anchor ? [{ id, source: anchor.source, formats: anchor.formats }] : []
+    })
+    const plan = followOffers([waiting.offer], blocks)[0]?.plan
+    const { anchorId, line, from, to } = waiting.offer
+    if (plan) onRenameOffer?.({ target: { id: anchorId, line, name: from }, newName: to, plan })
+  }
+
   // The unit slots (section 5): the hovered row, and the slot whose field is open.
   const [slotHover, setSlotHover] = useState<SlotTarget | null>(null)
   const [unitEdit, setUnitEdit] = useState<SlotTarget | null>(null)
@@ -473,6 +577,21 @@ export function MathOverlay({
       // The line's text and its format go in that one write (section 7).
       writeAnchorSource(api, current.anchorId, next.source, next.formats)
       writeAnchorTitle(api, current.anchorId, next.title)
+      // A line left as one line's edit, its name changed, makes the offer (section 4).
+      if (makesOffer(move, current)) {
+        const was = opened.current
+        const before =
+          was?.anchorId === current.anchorId && was.line === current.lineIndex
+            ? was.name
+            : nameAt(anchor.source, anchor.formats, current.lineIndex)
+        const commit = {
+          anchorId: current.anchorId,
+          line: current.lineIndex,
+          before,
+          after: nameAt(next.source, next.formats, current.lineIndex),
+        }
+        setOffers((offers) => noteCommit(offers, commit, ++offerKey.current))
+      }
     }
     changeEdit(next.edit)
   }
@@ -598,6 +717,7 @@ export function MathOverlay({
     },
     suggest: (text, caret) => suggestRef.current?.(text, caret) ?? null,
     rewrap: measureWrap,
+    answerOffer,
     insert(insert, anchorId = null) {
       if (editRef.current) return typeInsert(insert)
       const anchor = anchorId === null ? undefined : findAnchor(anchorId)
@@ -755,6 +875,23 @@ export function MathOverlay({
         </Boundary>
         )
       })}
+      {!phone &&
+        followed.map((shown) => (
+          <OfferCard
+            key={shown.offer.key}
+            ref={(node) => {
+              if (node) cards.current.set(shown.offer.key, node)
+              else cards.current.delete(shown.offer.key)
+            }}
+            followed={shown}
+            blocks={sceneBlocks}
+            titles={titles}
+            settings={settings}
+            touch={touch}
+            onRename={() => answerOffer(shown.offer.key, 'rename')}
+            onKeep={() => answerOffer(shown.offer.key, 'keep')}
+          />
+        ))}
       {tip && <HoverTip key={tip.key} tip={tip} room={() => tipRoom(overlayRef.current, canvasRoot)} />}
       {placing && <PlacingGhost canvasRoot={canvasRoot} zoom={viewport.zoom} />}
     </div>
@@ -762,6 +899,79 @@ export function MathOverlay({
 }
 
 const runNow = (write: () => void) => write()
+
+/** The one name line `index` of an element assigns, read as the engine reads it, or null. */
+function nameAt(source: string, formats: string, index: number): string | null {
+  const lines = splitLines(source)
+  if (index < 0 || index >= lines.length) return null
+  return assignedName(lines[index], lineFormats(formats, lines.length)[index])
+}
+
+/**
+ * The commits that can make an offer (section 4, Which commits make it): the
+ * ones that leave a line as one line's edit. ↑ / ↓, a click on another line or
+ * outside, Esc and a drag; Enter only at the end of the line, since inside its
+ * text it splits the line in two. Not a join, and not the Format tab's Edit title.
+ */
+function makesOffer(move: LineMove, edit: LineEdit): boolean {
+  if (edit.lineIndex === TITLE_LINE) return false
+  if (move.kind === 'split') return move.from === move.to && move.to === edit.text.length
+  return move.kind === 'up' || move.kind === 'down' || move.kind === 'leave'
+}
+
+function sameOffers(a: readonly RenameOffer[], b: readonly RenameOffer[]): boolean {
+  return a.length === b.length && a.every((offer, i) => offer.key === b[i].key && offer.line === b[i].line)
+}
+
+/** The room between a card and its line, and between two cards, in px. */
+const CARD_GAP = 8
+
+/**
+ * Places each card beside its line (section 4, The offer): to the right of its
+ * element, at the line's row, where the visible area has room for it; else
+ * under the row. A card that would cover the open line's field goes under the
+ * field, so the line being typed stays in view, and one that would cover a
+ * card placed before it goes under that one. A card whose line isn't drawn is
+ * hidden.
+ */
+function placeCards(
+  overlay: HTMLElement | null,
+  canvasRoot: HTMLElement,
+  phone: boolean,
+  followed: readonly FollowedOffer[],
+  cards: ReadonlyMap<number, HTMLElement>,
+) {
+  if (!overlay || followed.length === 0) return
+  const origin = overlay.getBoundingClientRect()
+  const area = visibleArea(canvasRoot, phone)
+  const placed: { left: number; top: number; right: number; bottom: number }[] = []
+  for (const { offer } of followed) {
+    const card = cards.get(offer.key)
+    if (!card) continue
+    const element = elementOf(overlay, offer.anchorId)
+    const body = element?.querySelector<HTMLElement>(':scope > .math-element__body') ?? element
+    const row = element?.querySelector<HTMLElement>(`[data-line="${offer.line}"]`)
+    card.hidden = !body || !row
+    if (!body || !row) continue
+    const width = card.offsetWidth
+    const height = card.offsetHeight
+    const line = row.getBoundingClientRect()
+    const right = body.getBoundingClientRect().right
+    const beside = right + CARD_GAP + width <= area.right
+    const box = beside
+      ? { left: right + CARD_GAP, top: line.top }
+      : { left: Math.max(area.left, Math.min(line.left, area.right - width)), top: line.bottom + 4 }
+    // Never over the open line, where the next line is being typed: under it instead.
+    const field = overlay.querySelector('.math-element__field')?.getBoundingClientRect()
+    const covers = (other: { left: number; top: number; right: number; bottom: number }) =>
+      box.left < other.right && box.left + width > other.left && box.top < other.bottom && box.top + height > other.top
+    if (field && covers(field)) box.top = field.bottom + 4
+    for (const other of placed) if (covers(other)) box.top = other.bottom + CARD_GAP
+    placed.push({ ...box, right: box.left + width, bottom: box.top + height })
+    card.style.left = `${box.left - origin.left}px`
+    card.style.top = `${box.top - origin.top}px`
+  }
+}
 
 /** The stored format of the line `edit` is on (section 3, M4e), as the Rules list has typed it if it has: none for the title. */
 function storedFormat(anchors: readonly MathAnchor[], edit: LineEdit | null): string {

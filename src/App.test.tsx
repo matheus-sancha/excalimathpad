@@ -3,7 +3,7 @@ import { describe, expect, it, onTestFinished } from 'vitest'
 import App from './App.tsx'
 import { WELCOME_HINT } from './canvas/SheetCanvas.tsx'
 import { fakeFileAccess, fakeRecovery } from './test/files.ts'
-import { clickOnCanvas } from './test/gestures.ts'
+import { clickOnCanvas, doubleClickLine, linePoint } from './test/gestures.ts'
 import { createMathAnchorElements } from './canvas/mathAnchor.ts'
 import { sampleSheet } from './test/sheets.ts'
 import { linesOf, resultsOf } from './test/sheetView.ts'
@@ -1344,3 +1344,257 @@ describe('App', () => {
     })
   })
 })
+
+// Section 4, Renaming a name: The offer, on a committed line (0.5.0, #262).
+describe('the offer to rename, on a committed line', () => {
+  const sourceOf = (id: string) =>
+    [...document.querySelectorAll(`[data-anchor-id="${id}"] [data-line]`)].map((row) => row.getAttribute('aria-label'))
+  const cards = () => screen.queryAllByRole('group', { name: /^Rename .* in \d+ lines?\?$/ })
+  const card = (name: string) => screen.queryByRole('group', { name })
+  /** A press as the browser sends it: the card keeps focus where it is, then the click. */
+  const press = (button: HTMLElement) => {
+    fireEvent.pointerDown(button)
+    const kept = !fireEvent.mouseDown(button)
+    fireEvent.click(button)
+    return kept
+  }
+  const type = (text: string) => fireEvent.input(lineField()!, { target: { value: text } })
+  const key = (name: string) => fireEvent.keyDown(lineField()!, { key: name })
+  const pump = () =>
+    createMathAnchorElements([
+      { id: 'fluid', x: 100, y: 100, width: 300, height: 72, source: 'rho = 1000 kg/m^3\nmu = 1 cP' },
+      { id: 'use', x: 100, y: 300, width: 300, height: 72, source: 'a = rho * 2\nb = rho + 1 kg/m^3' },
+    ])
+  const start = async (elements = pump()) => {
+    renderApp({ initialElements: elements })
+    await ready()
+    await screen.findAllByRole('list', { name: 'Lines' })
+    return undoControls(document)
+  }
+  /** Opens line `n` (1-based) of `id` and types `text` in it. */
+  const edit = (id: string, n: number, text: string) => {
+    doubleClickLine(id, n)
+    expect(lineField()).not.toBeNull()
+    type(text)
+  }
+
+  it('↓ commits the line and shows the card with its count; the next line is typed while it waits; Rename changes the uses; two Ctrl+Z put the sheet back, the uses first', async () => {
+    const { undo } = await start()
+    edit('fluid', 1, 'rho_w = 1000 kg/m^3')
+    key('ArrowDown')
+
+    const asked = await screen.findByRole('group', { name: 'Rename rho to rho_w in 2 lines?' })
+    expect(asked).toHaveTextContent('Rename rho to rho_w in 2 lines?')
+    expect(within(asked).getByRole('button', { name: 'Keep rho' })).toBeInTheDocument()
+    expect(sourceOf('fluid')).toEqual(['rho_w = 1000 kg/m^3', 'mu = 1 cP'])
+    // The next line is open and has the keyboard; typing in it keeps the card.
+    expect(lineField()).toHaveValue('mu = 1 cP')
+    expect(lineField()).toHaveFocus()
+    type('mu = 2 cP')
+    expect(card('Rename rho to rho_w in 2 lines?')).not.toBeNull()
+    // Until it is answered, the uses show what the sheet computes from the typed text.
+    expect(sourceOf('use')).toEqual(['a = rho * 2', 'b = rho + 1 kg/m^3'])
+
+    // The count opens the list of lines, and keeps the line open.
+    expect(press(within(asked).getByRole('button', { name: 'in 2 lines' }))).toBe(true)
+    expect(within(asked).getAllByRole('listitem').map((item) => item.textContent)).toEqual([
+      'Element 2, line 1a = rho * 2',
+      'Element 2, line 2b = rho + 1 kg/m^3',
+    ])
+    expect(lineField()).toHaveValue('mu = 2 cP')
+
+    expect(press(within(asked).getByRole('button', { name: 'Rename' }))).toBe(true)
+
+    // The open line is committed first, and no line is open afterwards.
+    await waitFor(() => expect(sourceOf('use')).toEqual(['a = rho_w * 2', 'b = rho_w + 1 kg/m^3']))
+    expect(sourceOf('fluid')).toEqual(['rho_w = 1000 kg/m^3', 'mu = 2 cP'])
+    expect(lineField()).toBeNull()
+    expect(cards()).toHaveLength(0)
+    expect(await screen.findByText('Renamed rho to rho_w in 2 lines. Ctrl+Z takes it back.')).toBeInTheDocument()
+    expect(document.querySelector('[data-anchor-id="use"] [data-line="0"]')).toHaveClass('is-flash')
+    expect(document.activeElement).toHaveClass('excalidraw')
+
+    undo()
+    await waitFor(() => expect(sourceOf('use')).toEqual(['a = rho * 2', 'b = rho + 1 kg/m^3']))
+    expect(sourceOf('fluid')).toEqual(['rho_w = 1000 kg/m^3', 'mu = 2 cP'])
+    undo()
+    await waitFor(() => expect(sourceOf('fluid')).toEqual(['rho_w = 1000 kg/m^3', 'mu = 1 cP']))
+    undo()
+    await waitFor(() => expect(sourceOf('fluid')).toEqual(['rho = 1000 kg/m^3', 'mu = 1 cP']))
+  })
+
+  it('Keep writes nothing, the card goes, and the open line keeps its text and caret', async () => {
+    const { undo } = await start()
+    edit('fluid', 1, 'rho_w = 1000 kg/m^3')
+    key('ArrowDown')
+    const asked = await screen.findByRole('group', { name: 'Rename rho to rho_w in 2 lines?' })
+    type('mu = 3 cP')
+    lineField()!.setSelectionRange(2, 2)
+
+    expect(press(within(asked).getByRole('button', { name: 'Keep rho' }))).toBe(true)
+
+    expect(cards()).toHaveLength(0)
+    expect(lineField()).toHaveValue('mu = 3 cP')
+    expect(lineField()).toHaveFocus()
+    expect(lineField()!.selectionStart).toBe(2)
+    expect(sourceOf('use')).toEqual(['a = rho * 2', 'b = rho + 1 kg/m^3'])
+    fireEvent.keyDown(lineField()!, { key: 'Escape' })
+    // Keep was no step: one Ctrl+Z each for the two lines.
+    undo()
+    await waitFor(() => expect(sourceOf('fluid')).toEqual(['rho_w = 1000 kg/m^3', 'mu = 1 cP']))
+    undo()
+    await waitFor(() => expect(sourceOf('fluid')).toEqual(['rho = 1000 kg/m^3', 'mu = 1 cP']))
+  })
+
+  it('goes on an undo of the line, and when the uses are edited by hand', async () => {
+    const { undo } = await start()
+    edit('fluid', 1, 'rho_w = 1000 kg/m^3')
+    key('Escape')
+    await screen.findByRole('group', { name: 'Rename rho to rho_w in 2 lines?' })
+    undo()
+    await waitFor(() => expect(cards()).toHaveLength(0))
+
+    edit('fluid', 1, 'rho_w = 1000 kg/m^3')
+    key('Escape')
+    await screen.findByRole('group', { name: 'Rename rho to rho_w in 2 lines?' })
+    edit('use', 1, 'a = rho_w * 2')
+    key('Escape')
+    await screen.findByRole('group', { name: 'Rename rho to rho_w in 1 line?' })
+    edit('use', 2, 'b = rho_w + 1 kg/m^3')
+    key('Escape')
+    await waitFor(() => expect(cards()).toHaveLength(0))
+
+  })
+
+  it('goes when its element is removed', async () => {
+    await start()
+    edit('fluid', 1, 'rho_w = 1000 kg/m^3')
+    key('Escape')
+    await screen.findByRole('group', { name: 'Rename rho to rho_w in 2 lines?' })
+    clickOnCanvas(linePoint('fluid', 1))
+    await waitFor(() => expect(document.querySelector('[data-math-selection]')).not.toBeNull())
+    fireEvent.keyDown(document.querySelector('.excalidraw')!, { key: 'Delete', code: 'Delete' })
+    await waitFor(() => expect(document.querySelector('[data-anchor-id="fluid"]')).toBeNull())
+    expect(cards()).toHaveLength(0)
+  })
+
+  it('asks about the new name when the line’s name changes again, and goes when the old name is back', async () => {
+    await start()
+    edit('fluid', 1, 'rho_w = 1000 kg/m^3')
+    key('Escape')
+    await screen.findByRole('group', { name: 'Rename rho to rho_w in 2 lines?' })
+    edit('fluid', 1, 'rho_x = 1000 kg/m^3')
+    key('Escape')
+    await screen.findByRole('group', { name: 'Rename rho to rho_x in 2 lines?' })
+    expect(cards()).toHaveLength(1)
+    edit('fluid', 1, 'rho = 1000 kg/m^3')
+    key('Escape')
+    await waitFor(() => expect(cards()).toHaveLength(0))
+  })
+
+  it('lets two offers wait at once, each by its line', async () => {
+    await start(
+      createMathAnchorElements([
+        { id: 'fluid', x: 100, y: 100, width: 300, height: 72, source: 'rho = 1000 kg/m^3\nmu = 1 cP' },
+        { id: 'use', x: 100, y: 300, width: 300, height: 72, source: 'a = rho * 2\nb = mu * 2' },
+      ]),
+    )
+    edit('fluid', 1, 'rho_w = 1000 kg/m^3')
+    key('ArrowDown')
+    type('mu_w = 1 cP')
+    key('Escape')
+    await screen.findByRole('group', { name: 'Rename mu to mu_w in 1 line?' })
+    expect(cards().map((shown) => shown.getAttribute('data-offer'))).toEqual(['fluid:0', 'fluid:1'])
+  })
+
+  it('is made by ↑, Esc, a click outside and Enter at the end of the line', async () => {
+    await start()
+    edit('fluid', 2, 'nu = 1 cP')
+    key('ArrowUp')
+    // ↑ left line 2; its name changed, but nothing reads mu.
+    expect(cards()).toHaveLength(0)
+    type('rho_w = 1000 kg/m^3')
+    // ↑ from the first line goes to the title.
+    key('ArrowUp')
+    await screen.findByRole('group', { name: 'Rename rho to rho_w in 2 lines?' })
+    fireEvent.keyDown(document.activeElement!, { key: 'Escape' })
+
+    edit('use', 1, 'a = rho_w * 2')
+    clickOnCanvas({ clientX: 900, clientY: 900 })
+    await screen.findByRole('group', { name: 'Rename rho to rho_w in 1 line?' })
+
+    edit('fluid', 1, 'rho_q = 1000 kg/m^3')
+    key('Enter')
+    await screen.findByRole('group', { name: 'Rename rho to rho_q in 1 line?' })
+  })
+
+  it('is not made by an Enter inside the text, a join or a Format tab press', async () => {
+    await start()
+    edit('fluid', 1, 'rho_w = 1000 kg/m^3')
+    lineField()!.setSelectionRange(12, 12)
+    key('Enter')
+    expect(sourceOf('fluid')).toEqual(['rho_w = 1000', ' kg/m^3', 'mu = 1 cP'])
+    key('Backspace')
+    expect(cards()).toHaveLength(0)
+    expect(lineField()).toHaveValue('rho_w = 1000 kg/m^3')
+  })
+
+  it('is not made by a Format tab press; the line, left afterwards, makes it', async () => {
+    // An editor wide enough to dock the panel: an edit opens it on Format.
+    editorWidth(1440)
+    const { undo } = await start()
+    edit('fluid', 1, 'rho_w = 1000 kg/m^3')
+    const bold = await screen.findByRole('button', { name: 'Bold (Ctrl+B)' })
+    press(bold)
+    // The press wrote the line, its new name with it, and made no offer.
+    await waitFor(() => expect(sourceOf('fluid')).toEqual(['rho_w = 1000 kg/m^3', 'mu = 1 cP']))
+    expect(lineField()).toHaveValue('rho_w = 1000 kg/m^3')
+    expect(cards()).toHaveLength(0)
+    // Before the edit is when the line opened: leaving it makes the offer.
+    key('Escape')
+    await screen.findByRole('group', { name: 'Rename rho to rho_w in 2 lines?' })
+    undo()
+    await waitFor(() => expect(cards()).toHaveLength(0))
+  })
+
+  it('is made where an older assignment higher up now feeds the lines below with no error', async () => {
+    await start(
+      createMathAnchorElements([
+        { id: 'fluid', x: 100, y: 100, width: 300, height: 72, source: 'rho = 1\nrho = 1000' },
+        { id: 'use', x: 100, y: 300, width: 300, height: 48, source: 'a = rho * 2' },
+      ]),
+    )
+    edit('fluid', 2, 'rho_w = 1000')
+    key('Escape')
+    await screen.findByRole('group', { name: 'Rename rho to rho_w in 1 line?' })
+  })
+
+  it('says on the card a rename that would change a result', async () => {
+    await start(
+      createMathAnchorElements([{ id: 'fluid', x: 100, y: 100, width: 300, height: 72, source: 'L = 2\na = L * 3\nd = 5 m' }]),
+    )
+    edit('fluid', 1, 'm = 2')
+    key('Escape')
+    const asked = await screen.findByRole('group', { name: 'Rename L to m in 1 line?' })
+    expect(await within(asked).findByText('This changes 1 result:')).toBeInTheDocument()
+  })
+
+  it('is never saved: the file holds nothing of it', async () => {
+    const { files } = renderApp({ initialElements: pump() })
+    await ready()
+    await screen.findAllByRole('list', { name: 'Lines' })
+    edit('fluid', 1, 'rho_w = 1000 kg/m^3')
+    key('Escape')
+    await screen.findByRole('group', { name: 'Rename rho to rho_w in 2 lines?' })
+    act(() => {
+      document
+        .querySelector('.excalidraw')!
+        .dispatchEvent(new KeyboardEvent('keydown', { key: 's', ctrlKey: true, bubbles: true, cancelable: true }))
+    })
+    await waitFor(() => expect(files.saveAs).toHaveBeenCalledOnce())
+    const saved = files.disk.get('Untitled.excalimathpad')!
+    expect(saved).toContain('rho_w = 1000 kg/m^3')
+    expect(saved).not.toMatch(/offer|Keep rho/i)
+  })
+})
+

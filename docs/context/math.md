@@ -256,7 +256,17 @@ newName, settings)` takes the sheet's blocks in reading order, one assignment
 them as they are), the `refusal` if there is one (with a refusal a line's
 text is as it is, and nothing may be written), the shadow `warning`, and
 `changes`, the lines whose result would differ. Null for a line that doesn't
-assign the name. `applyRename(blocks, lines)` gives the blocks with a plan
+assign the name. **The offer** (spec section 4, The offer, on a committed
+line, #262) has its own entry: `planOffer(blocks, { id, line, from, to },
+settings, check)` swaps the line's own `to` back to `from` (the places
+`findUses` finds for `to` on that line), reads the reach and the uses of
+`from` from there, and keeps only the lines whose text changes, their `uses`
+placed in the text as it stands (`unswapped`). It refuses nothing, and is null
+when the line doesn't assign `to` or no line would change. "Changes a result"
+compares the sheet as it was before the name changed with the renamed one;
+`check` false runs no engine and leaves `changes` empty. `assignedName(text,
+stored)` is the one name a line defines, or null. `markParts(text, spans)` cuts
+a line at its uses for the form's and the card's lists. `applyRename(blocks, lines)` gives the blocks with a plan
 written, line ends kept, and `formats` untouched where no stored clause
 changed. It has no reader of its own: `evaluate.ts` exports the engine's,
 `readSheetLine(shown, stored)` (a `ParsedLine`, never throws),

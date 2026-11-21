@@ -198,6 +198,32 @@ rows, from the body's top in scene units, the canvas's zoom taken out.
 print view reads in its copies; `printViews(stage)` gives each drawn element's
 view, laid-out size and rows, by anchor id, and the overlay's `--math-*` colours
 (#81).
+**A rename's offer** (spec section 4, The offer, on a committed line, 0.5.0,
+#262): `MathOverlay` holds `offers` (`RenameOffer`: anchor, line, `from`,
+`to`, `key`), UI state. `changeEdit` notes the name a line assigns as its edit
+opens (`opened`, from the scene, `assignedName`); `moveEdit` compares it with
+the name written, for the moves `makesOffer` allows (↑ / ↓, leave, and a split
+only at the end of the line), and `noteCommit` (`renameOffer.ts`, pure) makes,
+re-asks or drops an offer. On every render `followOffers` runs the offers on
+the scene's own sources in reading order (`planOffer` without its check):
+one whose element is gone, whose line no longer assigns `to` or that has no
+line left to change is dropped, and one whose line moved with a split or join
+follows it when its element assigns `to` on one line; an effect prunes the
+state to match. `OfferCard.tsx` draws one: the question with the count as a
+button that opens the list (`offerLines`, as the form lists them, the element
+named as `elementLabel` names it), the amber "This changes" from
+`planOffer`'s check in a deferred render of the scene's blocks, and Rename and
+Keep, all `tabIndex={-1}`, and the card prevents `mousedown`, so an open line
+keeps its field, text and caret. The cards are the overlay's fourth part that
+takes pointer events; a press on one never reaches the canvas, its sibling.
+`placeCards`, a layout effect after each render, puts each card to the right
+of its element's body at its row where `visibleArea` has room, else under the
+row, then under the open field if it would cover it, then under an earlier
+card. `answerOffer` (also on the control, for a phone's row) drops the offer;
+for Rename it leaves the open line (`moveEdit` leave, its own step), plans
+again on the scene and hands `onRenameOffer` the plan. With `phone` no card is
+drawn and `onOffers` reports `OffersShown`. `OFFER_WORDS` is section 13's
+wording.
 `caretRow.ts` gives the follow rule its row (0.2.1, #191): the open
 field's box and, in a wrapped field, the row the caret is on; narrowed to
 the caret, measured on the field's hidden copy, when the row is wider than

@@ -18,6 +18,7 @@ import {
   type EvaluatedElement,
   type FlashLines,
   type LineEditControl,
+  type OffersShown,
 } from './overlay/MathOverlay.tsx'
 import { sessionPanelMemory, type PanelMemory } from './panel/panelMemory.ts'
 import { ConstantsTab, ProblemsTab, VariablesTab } from './panel/SheetPanel.tsx'
@@ -29,6 +30,7 @@ import { SettingsTab } from './panel/SettingsTab.tsx'
 import { DEFAULT_SETTINGS, readSheet, type SheetSettings } from './file/sheetFormat.ts'
 import { errorCount, type PanelTarget } from './panel/sheetPanel.ts'
 import type { RenameRequest } from './panel/RenameForm.tsx'
+import { OfferCard } from './overlay/OfferCard.tsx'
 import { RENAME_WORDS } from './panel/renameForm.ts'
 import { applyRename } from './math/rename.ts'
 import { createDialogHost } from './file/dialogs.ts'
@@ -519,6 +521,30 @@ function Sheet({
     [canvas, line, touch],
   )
 
+  // On a phone a rename's offer is a row at the top of the bottom sheet, the
+  // newest of those waiting, and the sheet opens for a new one (section 8, On a phone).
+  const [offers, setOffers] = useState<OffersShown | null>(null)
+  const newest = offers?.followed.at(-1) ?? null
+  const newestKey = newest?.offer.key
+  useEffect(() => {
+    if (!phone || !canvas || newestKey === undefined) return
+    const now = canvas.sheetPanel()
+    if (!now.open) showAutomatically({ open: true, tab: now.tab })
+  }, [phone, canvas, newestKey, showAutomatically])
+  const offerRow =
+    phone && offers && newest ? (
+      <OfferCard
+        followed={newest}
+        blocks={offers.blocks}
+        titles={offers.titles}
+        settings={settings}
+        row={{ total: offers.followed.length }}
+        touch
+        onRename={() => line.current?.answerOffer(newest.offer.key, 'rename')}
+        onKeep={() => line.current?.answerOffer(newest.offer.key, 'keep')}
+      />
+    ) : undefined
+
   // The flash lasts about 1.5 s; with reduced motion it is an outline that
   // stays until the next click. Either way, the next click clears it: on the
   // page on the web, inside the view in a vault.
@@ -626,6 +652,7 @@ function Sheet({
             ),
             // On touch, while a line or the title is open (section 4, Touch).
             quickKeys: touch && editing ? <QuickKeys onInsert={insert} /> : undefined,
+            offer: offerRow,
             compact: editing,
             symbols: tab(<SymbolsTab canInsert={canInsert} onInsert={insert} />),
             variables: tab(
@@ -681,6 +708,8 @@ function Sheet({
               phone={phone}
               onCaretRow={() => followCaret(canvas, phone)}
               flash={flash}
+              onRenameOffer={rename}
+              onOffers={phone ? setOffers : undefined}
             />
             {web && <FileChrome session={web.session} dialogs={web.dialogs} canvasRoot={canvas.root} print={print} />}
           </>

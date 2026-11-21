@@ -134,7 +134,8 @@ above the tab icons; it carries `SHEET_SIDEBAR_CLASS` and
 each change through the slot's `onChange`, as the sidebar does. It sits
 above the on-screen keyboard (how far the visual viewport's bottom falls
 short of its box) at about half the visible height, short while `compact`.
-The sidebar takes `quickKeys` too, above its tab triggers. `moreTools.ts` finds the open dropdown
+On a phone the slot's `offer` (0.5.0, #262: a rename's offer, as App draws it)
+sits above the quick keys, at the very top. The sidebar takes `quickKeys` too, above its tab triggers. `moreTools.ts` finds the open dropdown
 (`useMoreToolsSlot`, a box of the app's own appended to it; Math settings
 sits in a `display: contents` wrapper carrying `sidebar-trigger`, so a
 floating panel's outside click ignores it without Excalidraw's square-button

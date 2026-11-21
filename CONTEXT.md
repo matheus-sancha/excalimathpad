@@ -38,7 +38,7 @@ what to read for an issue and where to write.
   **panel run** (`scripts/panel-run.mjs`,
   M4e, #198: the Sheet panel's widths, docking, drag handle and 280 px, in
   the built plugin and web app; the sample, #199; the charts, #200; the Page
-  row and the page breaks, M5, #80; a rename, #261), and the **print run** (`scripts/print-run.mjs`, M5, #81:
+  row and the page breaks, M5, #80; a rename, #261, and its offer, #262), and the **print run** (`scripts/print-run.mjs`, M5, #81:
   the built web app's and plugin's Print… in Chromium PDFs, read by `scripts/pdf-read.mjs`). `npm test` holds the **typing test**
   (`src/typing.test.tsx`, M4e, #193: the guide's examples and the acceptance
   sheets, a character at a time); `npm run test:probe` is the **odd-values
@@ -106,7 +106,7 @@ an issue touches that module ([`CLAUDE.md`](CLAUDE.md) has the reading route).
   (ADR 0005). `planRename` (`rename.ts`, 0.5.0) plans a rename from that same reading.
   Depends on: `mathjs`. [`docs/context/math.md`](docs/context/math.md)
 - **overlay** (`src/overlay/`) — draws math elements over the canvas as typeset grids, and
-  holds the line edit, the unit slot, tables and plots. Depends on: canvas, math, print, `katex`
+  holds the line edit, a rename's offer, the unit slot, tables and plots. Depends on: canvas, math, print, `katex`
   (lazily). [`docs/context/overlay.md`](docs/context/overlay.md)
 - **file** (`src/file/`) — the sheet file (ADR 0004): format 2 and its migration from 1, the
   session (save, open, the clean mark, the recovery copy) over ports, and the vault's
@@ -344,8 +344,8 @@ and everything downstream recalculates. Engine: math.js, client-side.
   includes it, and each row's `offsetTop` already counts it: the line hit
   needs no offset. The gestures read its box from `[data-title]`.
 - **A control that acts on the open line never takes focus** (spec section
-  14, M4d): every Sheet panel control, the Format tab's, the quick keys and
-  the bottom sheet's included, prevents
+  14, M4d): every Sheet panel control, the Format tab's, the quick keys,
+  the bottom sheet's and a rename offer's card included, prevents
   `mousedown` and are out of the tab order (`tabIndex={-1}`), since a blur
   leaves the line. For the panel, `keepPanelPresses` (`panelPresses.ts`)
   prevents every press that isn't on a field, in the bubble phase above

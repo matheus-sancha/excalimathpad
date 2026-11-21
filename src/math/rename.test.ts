@@ -4,7 +4,7 @@ import truePositionDoc from '../../docs/acceptance/true-position.md?raw'
 import { examples, sections } from '../test/guideExamples.ts'
 import { evaluateSheet, type SheetBlock } from './evaluate.ts'
 import { lineFormats, storeFormats } from './lineForm.ts'
-import { applyRename, planRename, type RenamePlan } from './rename.ts'
+import { applyRename, assignedName, planOffer, planRename, type RenamePlan } from './rename.ts'
 import renameSource from './rename.ts?raw'
 
 /**
@@ -542,4 +542,108 @@ describe('every name of the Math guide and the acceptance sheets, renamed and re
     const names = sheets.flatMap(({ block }) => evaluateSheet([block]).get('a')!.flatMap((line) => line.variables.map(({ name }) => name)))
     for (const name of [...Object.keys(CHANGED), ...RESERVED]) expect(names).toContain(name)
   })
+})
+
+describe('the offer on a committed line (section 4, The offer, on a committed line)', () => {
+  /** The offer's plan for line `line`, which now assigns `to` and assigned `from`. */
+  const offer = (lines: readonly string[], line: number, from: string, to: string, formats?: readonly string[]) =>
+    planOffer(sheet(lines, formats), { id: 'a', line, from, to })
+  const offered = (lines: readonly string[], line: number, from: string, to: string) => {
+    const found = offer(lines, line, from, to)
+    if (found === null) throw new Error('no offer')
+    return { found, after: applyRename(sheet(lines), found.lines)[0].source.split('\n') }
+  }
+
+  it('reads the name a line assigns as the engine does', () => {
+    expect(assignedName('rho = 1000 kg/m^3')).toBe('rho')
+    expect(assignedName('fact(n) = n * fact(n - 1)')).toBe('fact')
+    expect(assignedName('Q_op = solve Hs(Q) = Hp(Q), Q in 1 .. 30 L/s')).toBe('Q_op')
+    expect(assignedName('rho = 1000 *')).toBe('rho')
+    expect(assignedName('rho * 2')).toBeNull()
+    expect(assignedName('# rho = 1')).toBeNull()
+    expect(assignedName('')).toBeNull()
+  })
+
+  it('writes the uses below, not the line, which already holds the new name', () => {
+    const { found, after } = offered(['rho_w = 1000', 'a = rho * 2', 'b = rho + a # rho'], 0, 'rho', 'rho_w')
+    expect(after).toEqual(['rho_w = 1000', 'a = rho_w * 2', 'b = rho_w + a # rho'])
+    expect(found.lines.map(({ line }) => line)).toEqual([1, 2])
+    expect(found.refusal).toBeNull()
+    expect(found.changes).toEqual([])
+  })
+
+  it('marks the uses where they stand in the text as it is now', () => {
+    const found = offer(['rho_w = 1000', 'a = rho * rho'], 0, 'rho', 'rho_w')!
+    expect(found.lines[0].uses).toEqual([
+      { start: 4, end: 7 },
+      { start: 10, end: 13 },
+    ])
+  })
+
+  it('stops at the next line that assigns the old name, and keeps its left side', () => {
+    const { after } = offered(['rho_w = 1000', 'a = rho', 'rho = rho * 1.1', 'b = rho'], 0, 'rho', 'rho_w')
+    expect(after).toEqual(['rho_w = 1000', 'a = rho_w', 'rho = rho_w * 1.1', 'b = rho'])
+  })
+
+  it('is made where an older assignment higher up now feeds the lines below with no error', () => {
+    const lines = ['rho = 1', 'x = 2', 'rho_w = 1000', 'a = rho * 2']
+    expect(evaluateSheet(sheet(lines)).get('a')![3].result.kind).toBe('value')
+    const { after } = offered(lines, 2, 'rho', 'rho_w')
+    expect(after).toEqual(['rho = 1', 'x = 2', 'rho_w = 1000', 'a = rho_w * 2'])
+  })
+
+  it('is no offer when no line in the old reach still reads the old name', () => {
+    expect(offer(['rho_w = 1000', 'a = rho_w * 2'], 0, 'rho', 'rho_w')).toBeNull()
+    expect(offer(['rho_w = 1000', 'a = 2 # rho'], 0, 'rho', 'rho_w')).toBeNull()
+    expect(offer(['a = rho', 'rho_w = 1000'], 1, 'rho', 'rho_w')).toBeNull()
+  })
+
+  it('is no offer when the line doesn’t assign the new name', () => {
+    expect(offer(['rho = 1000', 'a = rho'], 0, 'rho', 'rho_w')).toBeNull()
+    expect(offer(['rho_w = 1000', 'a = rho'], 1, 'rho', 'rho_w')).toBeNull()
+    expect(offer(['rho_w = 1000', 'a = rho'], 0, 'rho_w', 'rho_w')).toBeNull()
+  })
+
+  it('renames a function’s calls, and its own call when its line still reads the old name', () => {
+    const { found, after } = offered(['f(n) = n == 0 ? 1 : n * fact(n - 1)', 'y = fact(4)'], 0, 'fact', 'f')
+    expect(after).toEqual(['f(n) = n == 0 ? 1 : n * f(n - 1)', 'y = f(4)'])
+    expect(found.lines[0].uses).toEqual([{ start: 24, end: 28 }])
+  })
+
+  it('refuses nothing: a name the sheet assigns again below is offered too', () => {
+    const { found, after } = offered(['rho_w = 1000', 'a = rho', 'rho_w = 2'], 0, 'rho', 'rho_w')
+    expect(found.refusal).toBeNull()
+    expect(after).toEqual(['rho_w = 1000', 'a = rho_w', 'rho_w = 2'])
+  })
+
+  it('follows a use in a rule stored beside its line', () => {
+    const found = offer(['lim_v = 3', 'v = 2 m/s'], 0, 'lim', 'lim_v', ['', '@bold if v > lim'])!
+    expect(found.lines.map(({ line, text, stored }) => [line, text, stored])).toEqual([[1, 'v = 2 m/s', '@bold if v > lim_v']])
+  })
+
+  it('says a rename that would change a result, against the sheet as it was before the name changed', () => {
+    // `m` shadows the metre below its line: renaming `L` to `m` changes `d`.
+    const found = offer(['m = 2', 'a = L * 3', 'd = 5 m'], 0, 'L', 'm')!
+    expect(found.changes.map(({ line }) => line)).toEqual([2])
+    expect(offer(['rho_w = 1000', 'a = rho'], 0, 'rho', 'rho_w')!.changes).toEqual([])
+  })
+
+  it('runs no engine without the check: the count first, the amber line after', () => {
+    const found = planOffer(sheet(['m = 2', 'a = L * 3', 'd = 5 m']), { id: 'a', line: 0, from: 'L', to: 'm' }, undefined, false)!
+    expect(found.lines.map(({ line }) => line)).toEqual([1])
+    expect(found.changes).toEqual([])
+  })
+
+  it('on the pump sheet, rho changed to rho_w in its line offers its uses below', () => {
+    const block: SheetBlock = { id: 'a', source: [...pumpDoc.matchAll(/^\| (c|\d+[a-z]?) \| `(.+?)` \|/gm)].map(([, , source]) => source).join('\n') }
+    const lines = block.source.split('\n')
+    const at = lines.findIndex((line) => line.startsWith('rho = '))
+    lines[at] = lines[at].replace('rho', 'rho_w')
+    const blocks = [{ ...block, source: lines.join('\n') }]
+    const found = planOffer(blocks, { id: 'a', line: at, from: 'rho', to: 'rho_w' })!
+    const form = planRename([block], { id: 'a', line: at, name: 'rho' }, 'rho_w')!
+    expect(found.lines.map(({ line }) => line)).toEqual(form.lines.map(({ line }) => line).filter((line) => line !== at))
+    expect(found.changes).toEqual([])
+    expect(applyRename(blocks, found.lines)[0].source).toBe(applyRename([block], form.lines)[0].source)
+  }, 30_000)
 })

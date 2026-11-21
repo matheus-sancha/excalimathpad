@@ -18,7 +18,10 @@
 // there is no Print…: no command and no ☰ item (section 11, M5, #81). A
 // rename from a Variables row (0.5.0, #261): the ✎ and the form's buttons are
 // 40 px or more, the form fits the panel (the bottom sheet on the phone), and
-// its toast names Undo.
+// its toast names Undo. The offer on a committed line (0.5.0, #262): on the
+// phone a row at the top of the bottom sheet, above the quick keys, which
+// opens the sheet for it and counts "1 of 2"; on the tablet the card; Rename
+// and Keep 40 px or more.
 // The tablet lies on its side (1180 px), where the panel docks; held upright
 // (820 px) it is too narrow to dock, so an edit opens no panel and Math
 // settings opens it floating, with the quick keys (M4e, #198). It
@@ -577,6 +580,100 @@ try {
       await pause()
       const linesAfter = await tab.evaluate(() => [...document.querySelectorAll('[data-anchor-id] [data-line]')].map((r) => r.getAttribute('aria-label')))
       row('one undo takes the rename back', JSON.stringify(linesAfter) === JSON.stringify(linesBefore), linesAfter.filter((l, i) => l !== linesBefore[i]).join(' | '))
+
+      // The offer on a committed line (section 4, Renaming a name, 0.5.0, #262): on a phone a
+      // row at the top of the bottom sheet, above the quick keys, which opens the sheet for it;
+      // on a tablet whose panel docks, the card beside the line. Buttons of 40 px or more.
+      const offers = () =>
+        tab.evaluate(() => {
+          const box = (e) => {
+            if (!e) return null
+            const { left, top, right, bottom, width, height } = e.getBoundingClientRect()
+            return { left, top, right, bottom, width, height }
+          }
+          const sheet = document.querySelector('.sheet-bottom')
+          return {
+            cards: [...document.querySelectorAll('.math-offer')].map((card) => ({
+              row: card.classList.contains('is-row'),
+              inSheet: !!sheet && sheet.contains(card),
+              text: card.querySelector('.math-offer__ask').textContent,
+              box: box(card),
+              buttons: [...card.querySelectorAll('button')].map((b) => ({ name: b.textContent, ...box(b) })),
+            })),
+            keys: box(document.querySelector('.sheet-quick-keys')),
+          }
+        })
+      // Earlier steps may have panned the view: the wheel brings a line back near the top.
+      const bringIntoView = async (selector) => {
+        const box = await tab.locator(selector).first().boundingBox()
+        if (!box || (box.y > 90 && box.y < 300)) return
+        await tab.mouse.move(empty.x, empty.y)
+        await tab.mouse.wheel(0, box.y - 150)
+        await pause()
+      }
+      if (await panelOpen()) await closePanel()
+      await tap(empty)
+      await bringIntoView(lineOf('calc', 1))
+      await doubleTap(await pointOf(lineOf('calc', 1)))
+      await tab.keyboard.press('ControlOrMeta+a')
+      await tab.keyboard.type('a_t = 2 m')
+      await tab.locator('.sheet-sidebar [aria-label="Down (↓)"]').scrollIntoViewIfNeeded()
+      await pressPanel('Down (↓)')
+      await pause()
+      let o = await offers()
+      const [offer] = o.cards
+      const fingers = (card) => card.buttons.every((b) => b.width >= 40 && b.height >= 40)
+      if (device.phone) {
+        row(
+          'the offer is a row at the top of the bottom sheet, above the quick keys, its buttons 40 px or more',
+          o.cards.length === 1 && offer.row && offer.inSheet && offer.text === 'Rename a to a_t in 1 line?' && !!o.keys && offer.box.bottom <= o.keys.top + 0.5 && fingers(offer),
+          offer ? `${offer.text}; row ends ${Math.round(offer.box.bottom)}, keys from ${Math.round(o.keys?.top ?? -1)}; ${offer.buttons.map((b) => `${b.name} ${Math.round(b.width)} × ${Math.round(b.height)}`).join(', ')}` : 'no offer',
+        )
+      } else {
+        row(
+          'the offer is a card beside the line, its buttons 40 px or more',
+          o.cards.length === 1 && !offer.row && offer.text === 'Rename a to a_t in 1 line?' && fingers(offer),
+          offer ? `${offer.text}; ${offer.buttons.map((b) => `${b.name} ${Math.round(b.width)} × ${Math.round(b.height)}`).join(', ')}` : 'no offer',
+        )
+      }
+      row('the next line is open while it waits', (await fieldText()) === 'b = a * 3')
+      await pressPanel('Done (Esc)')
+      await pause()
+      if (device.phone) {
+        // A second offer, made with the sheet closed: the sheet opens for it, showing the newest and "1 of 2".
+        if (await panelOpen()) await closePanel()
+        await tap(empty)
+        await bringIntoView(lineOf('plot', 0))
+        await doubleTap(await pointOf(lineOf('plot', 0)))
+        await tab.keyboard.press('ControlOrMeta+a')
+        await tab.keyboard.type('x_t = 0 .. 4')
+        await pressPanel('Done (Esc)')
+        await pause()
+        o = await offers()
+        row(
+          'with two waiting, the sheet opens for the newest, with "1 of 2"',
+          (await panelOpen()) && o.cards.length === 1 && o.cards[0].row && o.cards[0].text.startsWith('1 of 2') && o.cards[0].text.includes('Rename x to x_t'),
+          o.cards[0]?.text ?? 'no offer',
+        )
+        await tap(await pointOf('.math-offer__button.is-primary', 1000))
+        await pause()
+        o = await offers()
+        row('its Rename renames, and the other offer shows next', o.cards.length === 1 && o.cards[0].text === 'Rename a to a_t in 1 line?', o.cards[0]?.text ?? 'none')
+      }
+      await tap(await pointOf('.math-offer__button.is-primary', 1000))
+      await pause()
+      const offered = await tab.evaluate(() => [...document.querySelectorAll('[data-anchor-id] [data-line]')].map((r) => r.getAttribute('aria-label')))
+      row('Rename by touch renames the uses', offered.includes('b = a_t * 3') && (await offers()).cards.length === 0, offered.join(' | '))
+      // Undone step by step (selections are Excalidraw's own steps between them), the sheet is as it was.
+      const sheetLines = () => tab.evaluate(() => [...document.querySelectorAll('[data-anchor-id] [data-line]')].map((r) => r.getAttribute('aria-label')))
+      let presses = 0
+      while (presses < 8 && JSON.stringify(await sheetLines()) !== JSON.stringify(linesBefore)) {
+        await tab.keyboard.press(device.platform ? 'Meta+z' : 'Control+z')
+        await pause(200)
+        presses += 1
+      }
+      const unoffered = await sheetLines()
+      row('undo takes back the renames and the lines', JSON.stringify(unoffered) === JSON.stringify(linesBefore), `${presses} presses${unoffered.some((l, i) => l !== linesBefore[i]) ? `; ${unoffered.filter((l, i) => l !== linesBefore[i]).join(' | ')}` : ''}`)
 
       if (device.upright) {
         // Held upright the tablet is too narrow for the panel to dock (section 8, M4e, #198).

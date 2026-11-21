@@ -1,7 +1,15 @@
 import type { DisplaySettings } from '../math/display.ts'
 import { splitLines, type SheetBlock } from '../math/evaluate.ts'
 import { lineFormats } from '../math/lineForm.ts'
-import { planRename, type NameSpan, type RenameLineRef, type RenamePlan, type RenameTarget } from '../math/rename.ts'
+import {
+  markParts,
+  planRename,
+  type MarkedPart,
+  type NameSpan,
+  type RenameLineRef,
+  type RenamePlan,
+  type RenameTarget,
+} from '../math/rename.ts'
 import { elementLabel, type PanelElement } from './sheetPanel.ts'
 
 /**
@@ -31,11 +39,7 @@ export const RENAME_WORDS = {
     `Renamed ${from} to ${to} in ${count === 1 ? '1 line' : `${count} lines`}. ${touch ? 'Undo' : 'Ctrl+Z'} takes it back.`,
 } as const
 
-/** A stretch of a line's text; `marked` where the old name stands as a use. */
-export interface MarkedPart {
-  text: string
-  marked: boolean
-}
+export type { MarkedPart }
 
 /** A line the form lists: "Fluid and pipe, line 2" and its source. */
 export interface RenameFormLine extends RenameLineRef {
@@ -103,17 +107,4 @@ export function renameFormView(
     changes: plan.changes.map((ref) => line(ref, [], [])),
     canRename: plan.refusal === null,
   }
-}
-
-/** A text cut at each span, the spans marked. */
-function markParts(text: string, spans: readonly NameSpan[]): MarkedPart[] {
-  const parts: MarkedPart[] = []
-  let from = 0
-  for (const { start, end } of spans) {
-    if (start > from) parts.push({ text: text.slice(from, start), marked: false })
-    parts.push({ text: text.slice(start, end), marked: true })
-    from = end
-  }
-  if (from < text.length || parts.length === 0) parts.push({ text: text.slice(from), marked: false })
-  return parts
 }

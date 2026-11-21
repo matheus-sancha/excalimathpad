@@ -1376,6 +1376,28 @@ As built (#261):
   count ("1 of 2"). The sheet opens for it if it was closed. The form is the same in the
   bottom sheet's Variables tab. A tablet whose panel docks shows the card.
 
+As built (#262):
+
+- **The card's count is the lines its Rename writes:** the uses, not the line itself, whose
+  new name is already written. The toast counts the same lines ("in 7 lines" on the pump
+  sheet, where the form says "Changes 8 lines:"). The line itself is counted only where it
+  still reads the old name, as a function's own call does.
+- **"Before the edit" is when the line opened.** A save (Ctrl+S) or a Format tab press that
+  writes the line before it is left doesn't lose the offer: the commit that leaves the line
+  compares the name it assigns with the one it assigned when its edit opened. The save and the
+  press themselves make no offer.
+- **A card follows the sheet as it is written, not as it is typed.** While a use is being
+  typed by hand the card waits, and it goes, or counts one line fewer, when that line is left.
+  "Changes a result" is said against the sheet as it was before the name changed, as the
+  form says it against the sheet as it is.
+- **A card never covers the open line.** Where it would, it goes under the open line's field,
+  so the line typed after ↓ stays in view. Two cards that would overlap are stacked, the
+  newer under the older. A card whose line isn't drawn isn't shown.
+- **A line moved by a split or a join above it in its element** keeps its card when that
+  element assigns the new name on one line only; otherwise the card goes.
+- **On a phone, the row's Rename shows the next offer waiting,** if there is one.
+- **By touch the card's buttons and its count are 40 px,** on a tablet as on a phone.
+
 **Afterwards**
 
 - **A toast:** "Renamed rho to rho_w in 7 lines. Ctrl+Z takes it back." (on touch, "Undo
@@ -3778,7 +3800,17 @@ Evidence: [`obsidian-plugin.md`](research/obsidian-plugin.md).
   the new one. It is made at the line commit, by comparing the name the line assigned in
   the scene before the write with the one it assigns after, and it is dropped by the rules
   of [section 4](#renaming-a-name) on every later sheet run. Nothing of it is in the scene
-  or the file.
+  or the file. As built (#262): "before the write" is when the line's edit opened
+  (`MathOverlay`'s `opened`), the name is `assignedName` (the engine's reading of the line:
+  the one name it defines), and the rules run on the scene's sources, not the typed text
+  (`followOffers`).
+- **The offer's plan is the form's plan** (`planOffer`, `rename.ts`): the line's new name is
+  swapped back for the old one where the line assigns it, `planRename`'s reading finds the
+  reach and the uses from there, and only the lines whose text the rename changes are kept.
+  So the card, the phone's row and Rename show and write exactly what the form would have
+  for the old name, less the line already written. Without its check (`check` false) it runs
+  no engine: the card draws its count at once, and its amber line follows as a deferred
+  render, as the form's does.
 - **The card is drawn in the overlay and takes presses,** the overlay's fourth part that
   does, after the line's field, the unit field and the plot settings. Its buttons are
   no-focus controls, and a press on it isn't the canvas's: Keep and the count never leave an
@@ -4247,8 +4279,7 @@ M1 to M5, is in [`docs/spec-history.md`](spec-history.md#17-verify-first), with 
 
 **0.5.0**
 
-- The offer's card on a narrow editor and beside an element at the window's right edge, and
-  the offer's row above a real on-screen keyboard.
+- The offer's row above a real on-screen keyboard.
 - Under Português: every place a test or a run finds Excalidraw's DOM by its English text;
   whether Excalidraw redraws in the new language at once with a line open, or only after
   the menu closes; the plugin's `main.js` with `pt-BR` in it, against its budget.
