@@ -9,7 +9,7 @@
 //
 // It covers what the device checklist can't leave to chance: a double tap
 // opens a line (and a drawing on top keeps Excalidraw's own), the Format tab's
-// Done, ↑ ↓ and Edit, the canvas hint by tap and by click, a tap's tips and the slots and ⚙ a touch selection
+// Done, ↑ ↓ and Edit, the canvas hint by tap and by click (in English, then Português, 0.6.0), a tap's tips and the slots and ⚙ a touch selection
 // shows, the quick keys and their undo, the panel's open and restore, the
 // suggestions opening above the field, and a rule's condition typed in the
 // Rules list with the line still open (M4e, #197), and the Format tab's sample
@@ -329,6 +329,30 @@ try {
           byMouse === JSON.stringify('Double-click a line or press Enter to edit'),
         `tap: ${byTouch}, click: ${byMouse}`,
       )
+      // The same hint in Português (section 13, App, 0.6.0), then back to English for the checks after.
+      const language = async (code, rectangle) => {
+        await tab.click('[data-testid="main-menu-trigger"]')
+        await tab.selectOption('[data-testid="language-select"]', code)
+        await tab
+          .waitForFunction((start) => document.querySelector('[data-testid="toolbar-rectangle"]')?.closest('label')?.title.startsWith(start), rectangle, { timeout: 10_000 })
+          .catch(() => null)
+        await tab.click('[data-testid="main-menu-trigger"]')
+        await pause()
+      }
+      await language('pt-BR', 'Retângulo')
+      await tap(empty)
+      await tap(await pointOf(lineOf('calc', 1)))
+      const ptTouch = await canvasHint()
+      await tab.mouse.click(first.x, first.y)
+      await pause()
+      const ptMouse = await canvasHint()
+      row(
+        'in Português the canvas hint names the taps after a tap, and the keys after a click',
+        ptTouch === JSON.stringify('Toque duas vezes em uma linha, ou toque em Editar em Configurações de cálculo') &&
+          ptMouse === JSON.stringify('Clique duas vezes em uma linha ou pressione Enter para editar'),
+        `tap: ${ptTouch}, click: ${ptMouse}`,
+      )
+      await language('en', 'Rectangle')
 
       // A tap on a gutter mark shows its message at once; the next tap anywhere closes it.
       await tap(empty)

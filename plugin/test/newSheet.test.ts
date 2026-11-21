@@ -2,7 +2,7 @@ import { act, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { notices, TFile, TFolder, type WorkspaceLeaf } from './obsidian.ts'
 import { DEFAULT_SETTINGS, readSheet } from '../../src/file/sheetFormat.ts'
-import { WELCOME_HINT } from '../../src/canvas/SheetCanvas.tsx'
+import { en } from '../../src/text/en.ts'
 import { NEW_SHEET, NEW_SHEET_ICON } from '../main.ts'
 import { conflictBase, freeSheetPath } from '../names.ts'
 import { SheetView } from '../SheetView.ts'
@@ -46,7 +46,7 @@ describe('the command, the ribbon and the folder menu', () => {
     expect(vault.app.workspace.leafRequests.at(-1)).toBe('tab')
     expect(lastLeaf().view).toBeInstanceOf(SheetView)
     expect((lastLeaf().view as unknown as SheetView).file?.path).toBe('Untitled.excalimathpad')
-    expect(await screen.findByText(WELCOME_HINT, {}, { timeout: 10_000 })).toBeInTheDocument()
+    expect(await screen.findByText(en.welcome.hint, {}, { timeout: 10_000 })).toBeInTheDocument()
   })
 
   it('names the next ones Untitled 1, Untitled 2…, never over a file', async () => {
@@ -90,7 +90,7 @@ describe('the command, the ribbon and the folder menu', () => {
   it('a new sheet, opened and closed untouched, is never written again', async () => {
     vault = await vaultWith({})
     await act(async () => command().callback!())
-    await screen.findByText(WELCOME_HINT, {}, { timeout: 10_000 })
+    await screen.findByText(en.welcome.hint, {}, { timeout: 10_000 })
     await act(() => new Promise((resolve) => setTimeout(resolve, 50)))
     await act(() => lastLeaf().detach())
     expect(vault.app.vault.writes).toEqual([])

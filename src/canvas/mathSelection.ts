@@ -1,5 +1,6 @@
 import type { ExcalidrawImperativeAPI } from '@excalidraw/excalidraw/types'
 import { isMathAnchor } from './mathAnchor.ts'
+import { onLanguage, words } from '../text/words.ts'
 
 /**
  * What a selection of only math elements shows (docs/spec-v1.md section 4,
@@ -10,12 +11,6 @@ import { isMathAnchor } from './mathAnchor.ts'
  * with its contract test (`mathSelection.excalidraw.test.tsx`), per ADR 0001.
  */
 export type MathSelection = 'one' | 'several' | null
-
-/** The hint for one selected math element (spec section 13). */
-export const MATH_HINT = 'Double-click a line or press Enter to edit'
-
-/** The same hint after a touch press (spec section 4, Touch). */
-export const MATH_HINT_TOUCH = 'Double-tap a line, or tap Edit in Math settings'
 
 type SelectionApi = Pick<ExcalidrawImperativeAPI, 'getSceneElements' | 'getAppState' | 'onChange'>
 
@@ -29,12 +24,18 @@ export function mathSelection(api: Pick<SelectionApi, 'getSceneElements' | 'getA
 
 /**
  * Keeps `data-math-selection` on `root` in step with the selection, and the
- * hint's texts in `--math-hint` and `--math-hint-touch`. Returns the function
+ * hint's texts (spec section 13, App; section 4, Touch) in `--math-hint` and
+ * `--math-hint-touch`, in the language shown (0.6.0). Returns the function
  * that stops.
  */
 export function markMathSelection(api: SelectionApi, root: HTMLElement): () => void {
-  root.style.setProperty('--math-hint', JSON.stringify(MATH_HINT))
-  root.style.setProperty('--math-hint-touch', JSON.stringify(MATH_HINT_TOUCH))
+  const word = () => {
+    const { hint } = words()
+    root.style.setProperty('--math-hint', JSON.stringify(hint.selected))
+    root.style.setProperty('--math-hint-touch', JSON.stringify(hint.selectedTouch))
+  }
+  word()
+  const stopWords = onLanguage(word)
   const mark = () => {
     const selection = mathSelection(api)
     if (selection) root.dataset.mathSelection = selection
@@ -44,6 +45,7 @@ export function markMathSelection(api: SelectionApi, root: HTMLElement): () => v
   const stop = api.onChange(mark)
   return () => {
     stop()
+    stopWords()
     delete root.dataset.mathSelection
   }
 }

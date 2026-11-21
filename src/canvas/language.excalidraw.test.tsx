@@ -7,13 +7,15 @@ import { sampleSheet } from '../test/sheets.ts'
 import { doubleClickLine } from '../test/gestures.ts'
 import { resultsOf } from '../test/sheetView.ts'
 import type { LanguageMemory, SheetLanguage } from './language.ts'
+import { en } from '../text/en.ts'
+import { ptBR } from '../text/ptBR.ts'
 
 /**
  * ☰ → Language (docs/spec-v1.md section 8, Language, 0.5.0), in the web home,
  * against the real Excalidraw component: the row sits just below Dark mode,
  * English is shown until a language is chosen, Português translates
- * Excalidraw's own text and leaves the app's own in English, and a choice is
- * remembered per device. It is never the sheet's: no undo step, no dirty mark.
+ * Excalidraw's own text and, from 0.6.0, the app's chrome with it, at once,
+ * and a choice is remembered per device. It is never the sheet's: no undo step, no dirty mark.
  * No key on the row reaches Excalidraw (section 14). The plugin's home is in
  * `plugin/test/tab.test.ts`.
  */
@@ -32,13 +34,15 @@ function fakeLanguageMemory(language: SheetLanguage | null = null) {
 async function renderApp(props: Partial<Parameters<typeof App>[0]> = {}) {
   render(<App files={fakeFileAccess()} recovery={fakeRecovery()} {...props} />)
   await screen.findByTestId('file-name')
-  await waitFor(() => expect(document.title).toBe('Untitled'))
+  await waitFor(() => expect(document.title).toMatch(/^(Untitled|Sem título)$/))
 }
 
 const openMenu = () => fireEvent.click(screen.getByTestId('main-menu-trigger'))
 const languageSelect = () => screen.getByTestId<HTMLSelectElement>('language-select')
 const rectangleTool = () => document.querySelector('[data-testid="toolbar-rectangle"]')!.closest('label')!
 const mathElements = () => screen.queryAllByRole('list', { name: 'Lines' })
+/** The box the canvas fills, which carries the hint's texts for the stylesheet. */
+const hintRoot = () => document.querySelector<HTMLElement>('.excalidraw')!.parentElement!
 const ANCHOR = 'math-inputs'
 
 /** Each ☰ entry's text, items and the Language row alike, in their order. */
@@ -90,24 +94,77 @@ describe('☰ → Language (section 8, Language)', () => {
     expect(languageSelect().value).toBe('en')
   })
 
-  it('translates Excalidraw’s own text and leaves the app’s own in English', async () => {
+  it('translates Excalidraw’s own text and the app’s chrome with it, at once, with ☰ still open (0.6.0)', async () => {
     const memory = fakeLanguageMemory()
     await renderApp({ language: memory })
+    const printLine = () => document.documentElement.style.getPropertyValue('--math-print-line')
+    expect(screen.getByText(en.welcome.hint)).toBeInTheDocument()
+    expect(printLine()).toBe(JSON.stringify("Use Print… from the app's menu"))
     openMenu()
     await choose('pt-BR')
     await shownIn('pt-BR')
 
     expect(memory.told).toEqual(['pt-BR'])
-    // Excalidraw's own ☰ items are in Portuguese; the app's and the row's label stay English.
+    // Excalidraw's own ☰ items and the app's, and the row's label, all in Portuguese, the menu still open.
     const entries = menuEntries()
     expect(entries).toContain('Modo escuro')
-    expect(entries).toEqual(expect.arrayContaining(['Open…', 'Save', 'Save as…', 'Print…', 'Math guide', 'Language']))
+    expect(entries).toEqual(expect.arrayContaining(['Abrir…', 'Salvar', 'Salvar como…', 'Imprimir…', 'Guia de cálculo', 'Idioma']))
+    expect(entries).not.toEqual(expect.arrayContaining(['Open…']))
     expect(languageSelect().value).toBe('pt-BR')
-    // More tools keeps the app's two items in English.
+    expect(screen.getByTestId('build-stamp').title).toBe('Esta versão')
+    // The welcome hint, the window title, the name beside ☰ and the browser's Print line.
+    expect(screen.getByText(ptBR.welcome.hint)).toBeInTheDocument()
+    expect(document.title).toBe('Sem título')
+    expect(screen.getByTestId('file-name').textContent).toBe('Sem título')
+    expect(printLine()).toBe(JSON.stringify('Use Imprimir… no menu do app'))
+    // More tools: the Cálculo heading and its two items.
+    openMenu()
+    await waitFor(() => expect(document.querySelector('[data-testid="language-select"]')).toBeNull())
     fireEvent.click(document.querySelector('.App-toolbar__extra-tools-trigger')!)
-    await waitFor(() => expect(screen.getByRole('button', { name: /Add math/ })).toBeInTheDocument())
-    expect(screen.getByRole('button', { name: /Math settings/ })).toBeInTheDocument()
-    expect(document.querySelector('.math-tools__heading')?.textContent).toBe('Math')
+    await waitFor(() => expect(screen.getByRole('button', { name: /Adicionar cálculo/ })).toBeInTheDocument())
+    expect(screen.getByRole('button', { name: /Adicionar cálculo/ }).title).toBe('Adicionar cálculo — M')
+    expect(screen.getByRole('button', { name: /Configurações de cálculo/ })).toBeInTheDocument()
+    expect(document.querySelector('.math-tools__heading')?.textContent).toBe('Cálculo')
+
+    // And back to English, the same way.
+    fireEvent.click(document.querySelector('.App-toolbar__extra-tools-trigger')!)
+    openMenu()
+    await choose('en')
+    await shownIn('en')
+    expect(menuEntries()).toEqual(expect.arrayContaining(['Open…', 'Save', 'Save as…', 'Print…', 'Math guide', 'Language']))
+    expect(document.title).toBe('Untitled')
+    expect(printLine()).toBe(JSON.stringify("Use Print… from the app's menu"))
+  })
+
+  it('words the canvas hint in the language shown, by mouse and by touch', async () => {
+    await renderApp({ language: fakeLanguageMemory(), initialElements: sampleSheet() })
+    await waitFor(() => expect(mathElements()).toHaveLength(2))
+    const hint = (name: string) => hintRoot().style.getPropertyValue(name)
+    expect(hint('--math-hint')).toBe(JSON.stringify('Double-click a line or press Enter to edit'))
+    openMenu()
+    await choose('pt-BR')
+    await shownIn('pt-BR')
+    expect(hint('--math-hint')).toBe(JSON.stringify('Clique duas vezes em uma linha ou pressione Enter para editar'))
+    expect(hint('--math-hint-touch')).toBe(
+      JSON.stringify('Toque duas vezes em uma linha, ou toque em Editar em Configurações de cálculo'),
+    )
+  })
+
+  it('words the welcome hint for touch after a touch press, in both languages', async () => {
+    await renderApp({ language: fakeLanguageMemory() })
+    expect(screen.getByText(en.welcome.hint)).toBeInTheDocument()
+    const canvas = document.querySelector('canvas.interactive')!
+    fireEvent.pointerDown(canvas, { pointerType: 'touch', pointerId: 1, isPrimary: true })
+    fireEvent.pointerUp(canvas, { pointerType: 'touch', pointerId: 1, isPrimary: true })
+    expect(await screen.findByText('Tap More tools, then Add math, then tap the sheet')).toBeInTheDocument()
+    openMenu()
+    await choose('pt-BR')
+    await shownIn('pt-BR')
+    expect(screen.getByText('Toque em Mais ferramentas, depois em Adicionar cálculo, e então toque na folha')).toBeInTheDocument()
+    // A mouse press brings back the keys' wording.
+    fireEvent.pointerDown(canvas, { pointerType: 'mouse', pointerId: 2, isPrimary: true })
+    fireEvent.pointerUp(canvas, { pointerType: 'mouse', pointerId: 2, isPrimary: true })
+    expect(await screen.findByText(ptBR.welcome.hint)).toBeInTheDocument()
   })
 
   it('opens in the language last chosen, and back to English when it is chosen', async () => {
@@ -133,7 +190,7 @@ describe('☰ → Language (section 8, Language)', () => {
     await choose('pt-BR')
     await shownIn('pt-BR')
 
-    expect(document.title).toBe('Untitled')
+    expect(document.title).toBe('Sem título')
     expect(screen.getByTestId('file-name').textContent).not.toMatch('●')
     expect(undo.canUndo()).toBe(couldUndo)
     expect(results()).toEqual(before)

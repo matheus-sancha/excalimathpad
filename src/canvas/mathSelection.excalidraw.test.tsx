@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { convertToExcalidrawElements, FONT_FAMILY } from '@excalidraw/excalidraw'
 import { SheetCanvas, type SheetCanvasHandle } from './SheetCanvas.tsx'
 import { createMathAnchorElements } from './mathAnchor.ts'
-import { MATH_HINT, MATH_HINT_TOUCH } from './mathSelection.ts'
+import { en } from '../text/en.ts'
 import { sceneLoaded } from '../test/excalidraw.ts'
 import { clickOnCanvas } from '../test/gestures.ts'
 
@@ -115,10 +115,10 @@ describe('the selection mark', () => {
   it('carries the hint’s text for the stylesheet', async () => {
     const { root } = await mount()
 
-    expect(root.style.getPropertyValue('--math-hint')).toBe(JSON.stringify(MATH_HINT))
-    expect(MATH_HINT).toBe('Double-click a line or press Enter to edit')
-    expect(root.style.getPropertyValue('--math-hint-touch')).toBe(JSON.stringify(MATH_HINT_TOUCH))
-    expect(MATH_HINT_TOUCH).toBe('Double-tap a line, or tap Edit in Math settings')
+    expect(root.style.getPropertyValue('--math-hint')).toBe(JSON.stringify(en.hint.selected))
+    expect(en.hint.selected).toBe('Double-click a line or press Enter to edit')
+    expect(root.style.getPropertyValue('--math-hint-touch')).toBe(JSON.stringify(en.hint.selectedTouch))
+    expect(en.hint.selectedTouch).toBe('Double-tap a line, or tap Edit in Math settings')
   })
 })
 

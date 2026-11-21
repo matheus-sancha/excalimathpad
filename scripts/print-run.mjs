@@ -17,7 +17,8 @@
 //   back with its `●` after; the scene (its recovery copy), the `●` and the undo history are as
 //   they were, and the print view is gone.
 // - The browser's own Print (no Print…) prints the one line "Use Print… from
-//   the app's menu", on one page.
+//   the app's menu", on one page; under ☰ → Language → Português, "Use
+//   Imprimir… no menu do app" (0.6.0).
 // - Section 17's web items for M5: a drawing taller than a page, an image in
 //   a drawing and dark mode, in one PDF; KaTeX 0.16.47's fonts; and a
 //   hand-set Scale (`page.pdf`'s `scale`, the dialog's own setting).
@@ -580,6 +581,13 @@ try {
     })
     const read = readPdf(await tab.pdf({ preferCSSPageSize: true }))
     row(where, 'the browser’s own Print prints the one line', read.pages.length === 1 && norm(read.pages[0].text) === norm("Use Print… from the app's menu"), `${read.pages.length} page, "${read.pages[0]?.text.replace(/\s+/g, '')}"`)
+    // In Português (section 13, App, 0.6.0): the line is CSS `content`, set from the text table.
+    await tab.click('[data-testid="main-menu-trigger"]')
+    await tab.selectOption('[data-testid="language-select"]', 'pt-BR')
+    await tab.waitForFunction(() => document.querySelector('[data-testid="toolbar-rectangle"]')?.closest('label')?.title.startsWith('Retângulo'), null, { timeout: 10_000 }).catch(() => null)
+    await tab.keyboard.press('Escape')
+    const portuguese = readPdf(await tab.pdf({ preferCSSPageSize: true }))
+    row(where, 'and in Português, the line in Português', portuguese.pages.length === 1 && norm(portuguese.pages[0].text) === norm('Use Imprimir… no menu do app'), `${portuguese.pages.length} page, "${portuguese.pages[0]?.text.replace(/\s+/g, '')}"`)
     await context.close()
   }
 

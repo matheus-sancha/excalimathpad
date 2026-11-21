@@ -1,5 +1,6 @@
 import type { FileAccess, PickedFile, SheetFileHandle } from './fileAccess.ts'
 import type { RecoveryStore } from './recovery.ts'
+import { words } from '../text/words.ts'
 import {
   DEFAULT_SETTINGS,
   readSheet,
@@ -462,9 +463,12 @@ export function suggestedName(name: string | null): string {
   return `${name.replace(/\.[^.]*$/, '')}${SHEET_EXTENSION}`
 }
 
-/** The name without its extension, for the window title: `pump-sizing`, or `Untitled`. */
+/**
+ * The name without its extension, for the window title: `pump-sizing`, or
+ * `Untitled` in the language shown (`Sem título`, section 8, Language, 0.6.0).
+ */
 export function displayName(name: string | null): string {
-  return name ? name.replace(/\.[^.]*$/, '') : 'Untitled'
+  return name ? name.replace(/\.[^.]*$/, '') : words().file.untitled
 }
 
 /** The error's own words. A DOMException isn't an `Error` in every realm, so read `message`. */

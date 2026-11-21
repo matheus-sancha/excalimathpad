@@ -1364,7 +1364,7 @@ try {
     row('Português shows at once, the menu still open', /^Retângulo/.test(await rectangle()) && !!(await tab.$('[data-testid="language-select"]')), await rectangle())
     row('its texts come from the app’s own address, and it is remembered in the browser’s storage', fetched.length > 0 && fetched.every((url) => url.startsWith(`${origin}/`)) && stored === 'pt-BR', `${fetched.map((url) => url.slice(origin.length)).join(', ')}; stored ${stored}`)
     const title = await tab.title()
-    row('the sheet isn’t dirty', title === 'Untitled', `title ${title}`)
+    row('the sheet isn’t dirty, and its title is in Português (0.6.0)', title === 'Sem título', `title ${title}`)
     await tab.keyboard.press('Escape')
     await open()
     row('the language survives a reload', /^Retângulo/.test(await rectangle()), await rectangle())

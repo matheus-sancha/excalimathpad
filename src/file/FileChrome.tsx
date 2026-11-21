@@ -5,6 +5,7 @@ import { ABOVE_DRAWING_BELOW_UI_Z_INDEX } from '../canvas/layers.ts'
 import type { Choice, DialogHost, PendingDialog } from './dialogs.ts'
 import type { SheetFileHandle } from './fileAccess.ts'
 import { displayName, type SheetSession } from './sheetSession.ts'
+import { useWords } from '../text/words.ts'
 import './FileChrome.css'
 
 export interface FileChromeProps {
@@ -26,6 +27,7 @@ export function FileChrome({ session, dialogs, canvasRoot, print }: FileChromePr
   const { name, dirty } = useSyncExternalStore(session.subscribe, session.getState)
   const pending = useSyncExternalStore(dialogs.subscribe, dialogs.getPending)
   const besideMenu = useBesideMenu(canvasRoot)
+  const words = useWords()
 
   useEffect(() => {
     const detach = session.attach()
@@ -33,9 +35,14 @@ export function FileChrome({ session, dialogs, canvasRoot, print }: FileChromePr
     return detach
   }, [session])
 
+  // The window title, and the line the browser's own Print shows (`src/index.css`),
+  // in the language shown (section 8, Language, 0.6.0).
   useEffect(() => {
     document.title = `${dirty ? '● ' : ''}${displayName(name)}`
-  }, [name, dirty])
+  }, [name, dirty, words])
+  useEffect(() => {
+    document.documentElement.style.setProperty('--math-print-line', JSON.stringify(words.print.browserLine))
+  }, [words])
 
   useEffect(() => {
     const onBeforeUnload = (event: BeforeUnloadEvent) => {
@@ -89,7 +96,7 @@ export function FileChrome({ session, dialogs, canvasRoot, print }: FileChromePr
         }}
       >
         {dirty ? '● ' : ''}
-        {name ?? 'Untitled'}
+        {name ?? words.file.untitled}
       </div>
       {pending && createPortal(<FileDialog dialog={pending} />, document.body)}
     </>
