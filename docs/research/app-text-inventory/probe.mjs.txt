@@ -1,0 +1,4 @@
+const { evaluateSheet } = await import('/home/user/excalimathpad/src/math/evaluate.ts')
+const lines = ['a = (1 + 2', 'b = 3 +', 'c = 2 m + 3 s', 'd = sin(1, 2)', 'e = [1, 2] * [3, 4, 5]', 'f = foo', 'g = 1 m in xyz', 'h = 3 kg in m', 'k = sqrt("x")', 'l = 2 ]', 'm = 5 $', 'n = [1,2][5]', 'p = 1e400 m', 'q = det([1,2])', 'r = 1 .. 5 step', 's = 1 m < 2', 't = gcd(1.5, 2)']
+const r = evaluateSheet([{ id: 'x', source: lines.join('\n') }])
+for (const [i, l] of r.get("x").entries()) console.log(lines[i].padEnd(26), "→", l.result.kind, l.result.message ?? "")

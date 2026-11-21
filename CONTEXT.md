@@ -6,7 +6,7 @@ a Vite + React + TypeScript app that builds to static files; there is no
 server. v1 target: for anyone, built around Matheus's own engineering work;
 free and best effort. M4d adds an Obsidian community plugin built from this
 source (`docs/spec-v1.md` section 12a, ADR 0006): **one source, two builds**.
-M1 to M5 are built and out, with the beta 0.5.0; 0.6.0 comes before 1.0.0 (spec section 16).
+M1 to M5 are built and out, with beta 0.5.0; two betas precede 1.0.0 (spec section 16).
 
 This file holds the model, the terms, the load-bearing rules and where things
 are. It is read by every build session, so it has a budget
@@ -534,3 +534,5 @@ marked with a milestone aren't built yet.
   only code that imports `obsidian`, built by esbuild into one `main.js`, with
   no network and nothing stored outside the vault (M4d; the bundle and the
   view are built, #135, and the tab's chrome, #137).
+- [ADR 0007](docs/adr/0007-engine-returns-message-codes.md) — the engine
+  returns message codes (0.6.0).

@@ -1,0 +1,64 @@
+// Extract candidate user-visible strings from the app's source with the TS AST.
+const ts = require('/home/user/excalimathpad/node_modules/typescript');
+const fs = require('fs'); const path = require('path');
+const root = '/home/user/excalimathpad';
+const files = require('child_process').execSync(
+  "find src plugin buildStamp.ts -type f \\( -name '*.ts' -o -name '*.tsx' \\) | grep -v -E '\\.test\\.|\\.probe\\.|src/test/|\\.d\\.ts$|plugin/test/'",
+  { cwd: root }).toString().trim().split('\n').sort();
+const out = [];
+const visibleAttrs = new Set(['title','aria-label','placeholder','label','alt','aria-description','aria-valuetext']);
+function looksText(s) {
+  if (!s || !/[A-Za-z]/.test(s)) return false;
+  if (/^[a-z0-9]+([-_][a-z0-9]+)*$/.test(s) && !/\s/.test(s)) return false;     // identifiers, css classes, keys
+  if (/^[a-z][a-zA-Z0-9]*$/.test(s)) return false;                              // camelCase ids
+  if (/^(\.|\/|@|#|--|https?:|data:|\w+\/)/.test(s) && !/\s/.test(s)) return false; // paths, selectors
+  if (/^[a-z-]+( [a-z0-9-]+)+$/.test(s) && s.split(' ').every(w=>/^[a-z0-9]+(-[a-z0-9]+)+$|^ex[a-z]*$/.test(w))) return false; // class lists
+  return true;
+}
+for (const f of files) {
+  const src = fs.readFileSync(path.join(root, f), 'utf8');
+  const sf = ts.createSourceFile(f, src, ts.ScriptTarget.Latest, true, f.endsWith('x') ? ts.ScriptKind.TSX : ts.ScriptKind.TS);
+  function ctx(node) {
+    let p = node.parent, chain = [];
+    while (p && chain.length < 4) { chain.push(ts.SyntaxKind[p.kind]); p = p.parent; }
+    return chain.join('<');
+  }
+  function attrName(node) {
+    let p = node.parent; if (p && ts.isJsxExpression(p)) p = p.parent;
+    return p && ts.isJsxAttribute(p) ? p.name.getText() : null;
+  }
+  function inImportOrType(node) {
+    for (let p = node.parent; p; p = p.parent) {
+      if (ts.isImportDeclaration(p) || ts.isExportDeclaration(p) || ts.isLiteralTypeNode(p) || ts.isTypeNode(p)) return true;
+      if (ts.isCallExpression(p) && /^(require|import)$/.test(p.expression.getText())) return true;
+      if (ts.isElementAccessExpression(p) && p.argumentExpression === node) return true;
+      if (ts.isPropertyAssignment(p) && p.name === node) return true;
+      if (ts.isCaseClause(p) && p.expression === node) return true;
+      if (ts.isBinaryExpression(p) && /^(===|!==|==|!=)$/.test(p.operatorToken.getText())) return true;
+      if (ts.isStatement(p)) break;
+    }
+    return false;
+  }
+  function add(node, kind, text) {
+    const line = sf.getLineAndCharacterOfPosition(node.getStart()).line + 1;
+    out.push({ file: f, line, kind, attr: attrName(node), ctx: ctx(node), text: text.replace(/\s+/g,' ').trim() });
+  }
+  function visit(node) {
+    if (ts.isJsxText(node)) { const t = node.getText().trim(); if (t && /[A-Za-z]/.test(t)) add(node, 'jsxtext', t); }
+    else if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) {
+      const a = attrName(node);
+      if (a && !visibleAttrs.has(a)) {} 
+      else if (!inImportOrType(node) && looksText(node.text)) add(node, a ? 'attr' : 'string', node.text);
+    } else if (ts.isTemplateExpression(node)) {
+      const t = node.head.text + node.templateSpans.map(s => '${' + s.expression.getText() + '}' + s.literal.text).join('');
+      const lits = node.head.text + node.templateSpans.map(s=>s.literal.text).join('');
+      if (/[A-Za-z]{2}/.test(lits) && !inImportOrType(node)) add(node, 'template', t);
+      node.templateSpans.forEach(s => visit(s.expression)); return;
+    }
+    ts.forEachChild(node, visit);
+  }
+  visit(sf);
+}
+fs.writeFileSync('strings.json', JSON.stringify(out, null, 1));
+const byFile = {}; for (const o of out) byFile[o.file] = (byFile[o.file]||0)+1;
+console.log(out.length); console.log(Object.entries(byFile).sort((a,b)=>b[1]-a[1]).map(([f,n])=>n+' '+f).join('\n'));
