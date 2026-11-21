@@ -62,6 +62,32 @@ export const en = {
   },
   /** The engine's messages, by code (section 13; ADR 0007): read through `wordMessage` (`engine.ts`). */
   engine: engineEn,
+  /** The plugin's own words in Obsidian (section 8, Language: In Obsidian; section 13, In a vault). */
+  vault: {
+    /** The command, the ribbon's tooltip and the folder menu's item (section 7, A sheet in a vault). */
+    newSheet: 'New sheet',
+    /** The commands that act on the active sheet tab (section 8, Inside an Obsidian tab). */
+    addMath: 'Add math',
+    toggleMathSettings: 'Toggle Math settings',
+    openMathGuide: 'Open Math guide',
+    print: 'Print…',
+    /** A new sheet's name, before its number and extension: `Untitled`, `Untitled 1`… */
+    untitled: 'Untitled',
+    /** A busy tab's own version after an outside change, without extension; `stamp` is `YYYY-MM-DD HHmm`. */
+    conflictCopy: (name: string, stamp: string) => `${name} (conflict ${stamp})`,
+    /** Notices. Names as given; `reason` is Obsidian's, as it arrives. */
+    conflict: (sheet: string, copy: string) => `${sheet} changed elsewhere. Your version was saved beside it as ${copy}.`,
+    writeFailed: (file: string, reason: string) => `Couldn't save ${file}: ${reason}. Your work is still open.`,
+    createFailed: (file: string, reason: string) => `Couldn't create ${file}: ${reason}.`,
+    noLookbehind: 'Excalimathpad needs iOS 16.4 or later.',
+    /** The vault image picker's field. */
+    pickImage: 'Pick an image from the vault to place on the sheet',
+    /** Print…'s notice: the paper to choose in the system's dialog. */
+    paper: (size: string, orientation: string) => `Choose ${size}, ${orientation} in the print dialog.`,
+    /** The stored Page setting's words, as the paper notice names them. */
+    paperSize: { A4: 'A4', Letter: 'Letter' },
+    orientation: { portrait: 'portrait', landscape: 'landscape' },
+  },
 }
 
 /** The shape every text table has: the English table's keys, each word a string or a function of its arguments. */

@@ -8,7 +8,9 @@ import App from '../../src/App.tsx'
 import { MESSAGES } from '../../src/file/sheetSession.ts'
 import { fakeFileAccess, fakeRecovery } from '../../src/test/files.ts'
 import { linesOf, resultsOf } from '../../src/test/sheetView.ts'
-import { hasLookbehind, NO_LOOKBEHIND, SheetView, VIEW_TYPE } from '../SheetView.ts'
+import { hasLookbehind, SheetView, VIEW_TYPE } from '../SheetView.ts'
+import { en } from '../../src/text/en.ts'
+import { ptBR } from '../../src/text/ptBR.ts'
 import { pumpSheet, vaultWith } from './harness.ts'
 
 const PUMP = 'Calcs/pump-sizing.excalimathpad'
@@ -88,20 +90,32 @@ describe('the lookbehind check (section 12a; iOS below 16.4)', () => {
     ).toBe(false)
   })
 
-  it('shows the message and neither opens nor writes the sheet', async () => {
+  const withoutLookbehind = async (language: 'en' | 'pt-BR' | null) => {
     const vault = await vaultWith({ [PUMP]: pumpSheet() })
     const memory = {
       panel: { rememberedOpen: () => null, rememberOpen: () => {}, rememberedWidth: () => null, rememberWidth: () => {} },
       theme: { rememberedTheme: () => null, rememberTheme: () => {} },
-      language: { rememberedLanguage: () => null, rememberLanguage: () => {} },
+      language: { rememberedLanguage: () => language, rememberLanguage: () => {} },
     }
     vault.app.views.set(VIEW_TYPE, (leaf) => new SheetView(leaf as never, memory, { lookbehind: () => false }) as never)
     const leaf = await act(() => vault.open(PUMP))
     open.push(leaf)
-    expect(leaf.view?.containerEl).toHaveTextContent(NO_LOOKBEHIND)
+    return { vault, leaf }
+  }
+
+  it('shows the message and neither opens nor writes the sheet', async () => {
+    const { vault, leaf } = await withoutLookbehind(null)
+    expect(leaf.view?.containerEl).toHaveTextContent(en.vault.noLookbehind)
+    expect(leaf.view?.containerEl).toHaveTextContent('Excalimathpad needs iOS 16.4 or later.')
     expect(mathElements()).toHaveLength(0)
     await act(() => leaf.detach())
     expect(vault.app.vault.writes).toEqual([])
+  })
+
+  it('shows it in Português when data.json holds Português (section 13, In a vault)', async () => {
+    const { leaf } = await withoutLookbehind('pt-BR')
+    expect(leaf.view?.containerEl).toHaveTextContent(ptBR.vault.noLookbehind)
+    expect(leaf.view?.containerEl).toHaveTextContent('O Excalimathpad precisa do iOS 16.4 ou mais recente.')
   })
 })
 
