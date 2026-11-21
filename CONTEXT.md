@@ -233,7 +233,7 @@ and everything downstream recalculates. Engine: math.js, client-side.
 
 ## Load-bearing
 
-- **Excalidraw is wrapped, never forked or patched** ([ADR 0001](docs/adr/0001-wrap-excalidraw-unforked.md)).
+- **Excalidraw is wrapped, never forked or patched** ([ADR 0001](docs/adr/0001-wrap-excalidraw-unforked.md)). Pinned: `0.18.0-9fbeaed`.
   Math lives outside it, in the overlay and side panel. Reaching into
   Excalidraw internals or patching `node_modules` breaks upgrades.
 - **Every ancestor of the canvas has a definite height** (`src/index.css`,
@@ -425,8 +425,8 @@ and everything downstream recalculates. Engine: math.js, client-side.
   says why each host and each library `<style>`/`<link>` site is harmless.
 - **Excalidraw's typings give some of its API as `any`** (its `.d.ts` imports
   types the package doesn't ship; `setCursor` indexes a private member).
-  `setCanvasCursor` (`addMath.ts`), `clearHistory` (`sceneFile.ts`) and
-  `toMathAnchor`'s `angle` state their shapes, so the type-aware lint passes.
+  `setCanvasCursor` (`addMath.ts`) and `clearHistory` (`sceneFile.ts`) state
+  their shapes, so the type-aware lint passes.
 - **Obsidian's lint runs over shipping code only**, as the community scanner
   does: tests and Node scripts are left out. Its exceptions are named in
   `eslint.config.mjs`: the web-only modules, `execCommand('insertText')` (the

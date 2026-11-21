@@ -1,9 +1,13 @@
 import {
   CaptureUpdateAction,
+  getCommonBounds,
   hashElementsVersion,
-  restore,
+  restoreAppState,
+  restoreElements,
   serializeAsJSON,
 } from '@excalidraw/excalidraw'
+import type { ImportedDataState } from '@excalidraw/excalidraw/data/types'
+import type { ExcalidrawElement } from '@excalidraw/excalidraw/element/types'
 import type { AppState, ExcalidrawImperativeAPI } from '@excalidraw/excalidraw/types'
 
 /**
@@ -21,7 +25,7 @@ export type SceneFileApi = Pick<
   | 'updateScene'
   | 'addFiles'
   | 'history'
-  | 'scrollToContent'
+  | 'setViewport'
   | 'onChange'
 >
 
@@ -56,7 +60,14 @@ export function sceneReady(api: Pick<SceneFileApi, 'getAppState' | 'onChange'>) 
  * The app state a saved file keeps: what Excalidraw's own "local" save keeps.
  * Anything else (selection, scroll, zoom, theme, open dialogs) is never saved.
  */
-export const SAVED_APP_STATE = ['viewBackgroundColor', 'gridModeEnabled', 'gridSize', 'gridStep'] as const
+export const SAVED_APP_STATE = [
+  'viewBackgroundColor',
+  'gridModeEnabled',
+  'gridSize',
+  'gridStep',
+  // Excalidraw's lock on a group of several elements, saved with the scene since the canary.
+  'lockedMultiSelections',
+] as const
 
 type SavedAppState = Pick<AppState, (typeof SAVED_APP_STATE)[number]>
 
@@ -101,9 +112,13 @@ export function loadScene(
   scene: Record<string, unknown>,
   { keepView = false }: { keepView?: boolean } = {},
 ) {
-  const restored = restore(scene, api.getAppState(), null, {
-    repairBindings: true,
-  })
+  // Excalidraw's `restore` took the whole file; since the canary its halves are separate.
+  const data = scene as ImportedDataState
+  const restored = {
+    elements: restoreElements(data.elements, null, { repairBindings: true }),
+    appState: restoreAppState(data.appState, api.getAppState()),
+    files: data.files ?? {},
+  }
   api.updateScene({
     elements: restored.elements,
     appState: {
@@ -118,8 +133,38 @@ export function loadScene(
   if (files.length > 0) api.addFiles(files)
   clearHistory(api)
   if (!keepView && restored.elements.length > 0) {
-    api.scrollToContent(undefined, { fitToViewport: false, animate: false })
+    api.setViewport({ target: contentToShow(restored.elements, api.getAppState()), fit: 'none', animation: false })
   }
+}
+
+/** What `contentToShow` reads of the view: its size, zoom and place, as Excalidraw's app state holds them. */
+export type ContentView = Pick<AppState, 'width' | 'height' | 'zoom' | 'scrollX' | 'scrollY' | 'offsetLeft' | 'offsetTop'>
+
+/**
+ * What an opened sheet is centred on, at the zoom it has: all of it where it
+ * fits the view, else the one element whose centre is nearest. This is the
+ * rule of Excalidraw 0.18.1's `scrollToContent`, which `setViewport` no longer
+ * has: it centres whatever it is given, so a sheet larger than the view would
+ * open on the empty middle between its elements.
+ */
+export function contentToShow<T extends ExcalidrawElement>(elements: readonly T[], view: ContentView): readonly T[] {
+  const [x1, y1, x2, y2] = getCommonBounds(elements)
+  const zoom = view.zoom.value
+  if ((x2 - x1) * zoom <= view.width && (y2 - y1) * zoom <= view.height) return elements
+  // 0.18.1 measured from the scene point under the window's (scrollX, scrollY): kept, so a sheet opens where it did.
+  const fromX = (view.scrollX - view.offsetLeft) / zoom - view.scrollX
+  const fromY = (view.scrollY - view.offsetTop) / zoom - view.scrollY
+  let nearest = elements[0]
+  let least = Infinity
+  for (const element of elements) {
+    const [ex1, ey1, ex2, ey2] = getCommonBounds([element])
+    const distance = Math.hypot((ex1 + ex2) / 2 - fromX, (ey1 + ey2) / 2 - fromY)
+    if (distance < least) {
+      least = distance
+      nearest = element
+    }
+  }
+  return [nearest]
 }
 
 /**

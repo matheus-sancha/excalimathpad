@@ -100,7 +100,7 @@ export function sizeWritesWait(app: AppState): boolean {
       app.newElement ||
       app.multiElement ||
       app.editingTextElement ||
-      app.editingLinearElement,
+      app.selectedLinearElement?.isEditing,
   )
 }
 

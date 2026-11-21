@@ -29,7 +29,7 @@
     "version": "node scripts/version.mjs"
   },
   "dependencies": {
-    "@excalidraw/excalidraw": "^0.18.1",
+    "@excalidraw/excalidraw": "0.18.0-9fbeaed",
     "@observablehq/plot": "0.6.17",
     "katex": "^0.16.47",
     "mathjs": "^15.2.0",

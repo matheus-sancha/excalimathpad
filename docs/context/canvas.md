@@ -5,7 +5,10 @@ model, the terms and the load-bearing rules, and names every module; the behavio
 [the spec](../spec-v1.md), by the section numbers cited here. Read this file when an issue
 touches this module, and keep it true in the pull request that changes the module.
 
-**canvas** (`src/canvas/`) — everything that knows Excalidraw. `SheetCanvas`
+**canvas** (`src/canvas/`) — everything that knows Excalidraw, which on the branch
+`excalidraw-upgrade` is the pinned canary `0.18.0-9fbeaed` (spec section 8, The Excalidraw
+upgrade; ADR 0001). The sentences below that name 0.18.1 are each rewritten by the upgrade
+issue that redoes its contract. `SheetCanvas`
 is the official, unforked component; its `onReady` hands out a
 `SheetCanvasHandle`: Excalidraw's imperative API plus `forwardWheel`,
 `focusCanvas`, and `addMath` and `toggleSheetPanel`, what the two More tools
@@ -63,7 +66,13 @@ Excalidraw's canvas by node name, so it holds in a pop-out window. `sceneFile.ts
 the Excalidraw half of the sheet file: `serializeScene`, `loadScene` (no undo
 step, clears history; `keepView` keeps scroll and zoom, for a vault's
 outside change), `saveKey`, the key dirty is measured by, and `emptyScene`,
-a New sheet's scene.
+a New sheet's scene. `loadScene` restores a file through Excalidraw's `restoreElements`
+and `restoreAppState` and then centres the view with `setViewport` on
+`contentToShow(elements, appState)`: the whole sheet where it fits the view, else the
+element nearest the point Excalidraw 0.18.1's `scrollToContent` measured from, since
+`setViewport` centres whatever it is given (`contentToShow.test.ts`). The saved app
+state (`SAVED_APP_STATE`) is the background, the grid's three keys and, since the canary,
+`lockedMultiSelections`.
 `SheetCanvas`'s `embeds={false}` passes Excalidraw `validateEmbeddable={false}`,
 so no embed loads an iframe (the plugin's no-network rule).
 `SheetCanvas` also turns off Excalidraw's own open, save and export and draws
@@ -149,7 +158,7 @@ snaps back. It also says when a size write waits (`sizeWritesWait`).
 `printScene.ts` is the scene's half of the print view (spec section 11, M5, #81;
 [print](print.md)): `drawingBoxes` (each drawing's box from `getCommonBounds`,
 Excalidraw text included, never an anchor), `anchorPlaces`, and `drawingsSvg(api,
-top, bottom)`, the drawings that cross a page as one SVG from `exportToSvg` (no
+top, bottom)`, the drawings that cross a page as one SVG from `exportScene` (no
 anchors, light, no background, the scene's images; `inlineFonts` for a frame), with
 its scene top-left. It writes nothing. The only module that imports
 Excalidraw at runtime; tests may too, and other modules may import its

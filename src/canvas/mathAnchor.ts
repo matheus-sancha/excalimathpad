@@ -184,9 +184,8 @@ export function toMathAnchor(element: ExcalidrawElement): MathAnchor {
     y,
     width,
     height,
-    // Excalidraw types it as its `Radians` brand, from a module its published
-    // typings don't ship, so it reads as `any`: it is a number in radians.
-    angle: element.angle as number,
+    // Excalidraw's `Radians` brand: a number in radians. (Its typings ship the brand since the canary.)
+    angle: element.angle,
     locked,
     opacity,
     source: readSource(element),

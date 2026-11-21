@@ -20,12 +20,12 @@ export function deselectAll(api: Pick<ExcalidrawImperativeAPI, 'updateScene'>) {
  * the second Esc's deselect, so a jump adds no undo step.
  */
 export function jumpToAnchor(
-  api: Pick<ExcalidrawImperativeAPI, 'getSceneElements' | 'scrollToContent' | 'updateScene'>,
+  api: Pick<ExcalidrawImperativeAPI, 'getSceneElements' | 'setViewport' | 'updateScene'>,
   anchorId: string,
 ) {
   const anchor = api.getSceneElements().find((element) => element.id === anchorId)
   if (!anchor) return
-  api.scrollToContent(anchor, { fitToContent: false, animate: true })
+  api.setViewport({ target: anchor, fit: 'none', animation: true })
   api.updateScene({
     appState: { selectedElementIds: { [anchorId]: true }, selectedGroupIds: {}, editingGroupId: null },
     captureUpdate: CaptureUpdateAction.NEVER,

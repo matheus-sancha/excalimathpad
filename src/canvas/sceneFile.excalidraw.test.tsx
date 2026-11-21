@@ -110,7 +110,7 @@ describe('serializeScene and loadScene on real Excalidraw', () => {
     const { api } = await mount()
     act(() => {
       api.updateScene({
-        elements: api.getSceneElements().map((e) => newElementWith(e, { isDeleted: true })),
+        elements: api.getSceneElementsIncludingDeleted().map((e) => newElementWith(e, { isDeleted: true })),
         captureUpdate: CaptureUpdateAction.IMMEDIATELY,
       })
     })
@@ -178,7 +178,7 @@ describe('saveKey on real Excalidraw', () => {
 
     act(() => {
       api.updateScene({
-        elements: api.getSceneElements().map((e) => newElementWith(e, { isDeleted: true })),
+        elements: api.getSceneElementsIncludingDeleted().map((e) => newElementWith(e, { isDeleted: true })),
         captureUpdate: CaptureUpdateAction.IMMEDIATELY,
       })
     })

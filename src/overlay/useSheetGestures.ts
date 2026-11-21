@@ -297,7 +297,7 @@ function canvasState(app: AppState, elements: readonly ExcalidrawElement[]): Can
     placing: isPlacing(app),
     busy: Boolean(
       app.editingTextElement ||
-        app.editingLinearElement ||
+        app.selectedLinearElement?.isEditing ||
         app.newElement ||
         app.multiElement ||
         app.openMenu ||

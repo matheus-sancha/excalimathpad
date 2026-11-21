@@ -1,26 +1,14 @@
-import { exportToSvg as excalidrawExportToSvg, getCommonBounds } from '@excalidraw/excalidraw'
+import { exportScene, getCommonBounds } from '@excalidraw/excalidraw'
 import type { ExcalidrawElement, NonDeletedExcalidrawElement } from '@excalidraw/excalidraw/element/types'
-import type { BinaryFiles, ExcalidrawImperativeAPI } from '@excalidraw/excalidraw/types'
+import type { ExcalidrawImperativeAPI } from '@excalidraw/excalidraw/types'
 import { isMathAnchor } from './mathAnchor.ts'
-
-/**
- * Excalidraw 0.18.1's `exportToSvg`, with the shape this file uses stated:
- * its `.d.ts` imports types the package doesn't ship, so the type-aware lint
- * reads it as an error type (CONTEXT.md, Load-bearing).
- */
-const exportToSvg = excalidrawExportToSvg as (options: {
-  elements: readonly NonDeletedExcalidrawElement[]
-  appState: { exportBackground: boolean; exportWithDarkMode: boolean; exportScale: number; exportEmbedScene: boolean }
-  files: BinaryFiles | null
-  exportPadding: number
-  skipInliningFonts?: true
-}) => Promise<SVGSVGElement>
 
 /**
  * The scene's half of the print view (docs/spec-v1.md section 11, Print, and
  * section 14, Print): the drawings' boxes for the page breaks, the math
  * anchors' places, and the drawings as SVG for each page, from Excalidraw's
- * public `getCommonBounds` and `exportToSvg`. Nothing here writes the scene.
+ * public `getCommonBounds` and `exportScene` (`exportToSvg` until the canary).
+ * Nothing here writes the scene.
  */
 export type PrintSceneApi = Pick<ExcalidrawImperativeAPI, 'getSceneElements' | 'getFiles'>
 
@@ -83,12 +71,10 @@ export async function drawingsSvg(
   })
   if (elements.length === 0) return null
   const [x, y] = getCommonBounds(elements)
-  const svg = await exportToSvg({
-    elements,
-    appState: { exportBackground: false, exportWithDarkMode: false, exportScale: 1, exportEmbedScene: false },
-    files: api.getFiles(),
-    exportPadding: 0,
-    ...(inlineFonts ? {} : { skipInliningFonts: true as const }),
+  const svg = await exportScene({
+    type: 'svg',
+    data: { elements, files: api.getFiles() },
+    config: { canvasBackgroundColor: false, theme: 'light', scale: 1, padding: 0, ...(inlineFonts ? {} : { skipInliningFonts: true as const }) },
   })
   return { svg, x, y }
 }

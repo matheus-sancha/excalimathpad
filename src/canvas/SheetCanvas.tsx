@@ -399,7 +399,7 @@ export function SheetCanvas({
       style={{ width: '100%', height: '100%', ['--sheet-panel-width' as string]: `${panelWidth}px` }}
     >
       <Excalidraw
-        excalidrawAPI={setApi}
+        onExcalidrawAPI={setApi}
         initialData={initialData}
         UIOptions={uiOptions}
         aiEnabled={!vault}
@@ -713,7 +713,7 @@ function SheetMenu({
       <MainMenu.DefaultItems.Help />
       <MainMenu.DefaultItems.ClearCanvas />
       <MainMenu.Separator />
-      <MainMenu.DefaultItems.ToggleTheme />
+      <MainMenu.DefaultItems.ToggleTheme allowSystemTheme={false} />
       <MainMenu.DefaultItems.ChangeCanvasBackground />
       {/* Text, not an item: it takes no focus and no click (section 12, Hosted build). */}
       <div className="build-stamp" data-testid="build-stamp" title="This build">
