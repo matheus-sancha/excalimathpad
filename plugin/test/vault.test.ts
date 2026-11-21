@@ -5,8 +5,8 @@ import { readSheet, writeSheet, DEFAULT_SETTINGS } from '../../src/file/sheetFor
 import { MESSAGES } from '../../src/file/sheetSession.ts'
 import { doubleClickLine } from '../../src/test/gestures.ts'
 import { linesOf } from '../../src/test/sheetView.ts'
-import { PICK_IMAGE_PLACEHOLDER } from '../ImagePicker.ts'
-import { conflictNotice, SheetView, writeFailedNotice } from '../SheetView.ts'
+import { en } from '../../src/text/en.ts'
+import { SheetView } from '../SheetView.ts'
 import { vaultWith, type Vault } from './harness.ts'
 
 /**
@@ -66,8 +66,8 @@ async function openTab(path = SHEET) {
   return { leaf, view: leaf.view as unknown as SheetView & { saveRequests: number } }
 }
 
-async function setUp(files: Record<string, string> = { [SHEET]: START }) {
-  vault = await vaultWith(files)
+async function setUp(files: Record<string, string> = { [SHEET]: START }, data: unknown = null) {
+  vault = await vaultWith(files, data)
   return openTab()
 }
 
@@ -182,12 +182,22 @@ describe('a failed write (section 7; section 13, In a vault)', () => {
     commitLine(2, 'b = a * 8')
     vault.app.vault.failNext = new Error('Permission denied.')
     await act(() => view.save())
-    expect(notices).toEqual([writeFailedNotice('pump.excalimathpad', 'Permission denied')])
+    expect(notices).toEqual([en.vault.writeFailed('pump.excalimathpad', 'Permission denied')])
     expect(notices[0]).toBe("Couldn't save pump.excalimathpad: Permission denied. Your work is still open.")
     expect(fileText()).toBe(START)
     expect(shownLines()).toContain('b = a * 8')
     await act(() => view.save())
     expect(sourceIn(fileText())).toBe('a = 2 m\nb = a * 8')
+  })
+
+  it("in Português, with Obsidian's reason as it arrives (section 8, Language)", async () => {
+    const { view } = await setUp(undefined, { language: 'pt-BR' })
+    commitLine(2, 'b = a * 8')
+    vault.app.vault.failNext = new Error('EACCES: permission denied, open pump.excalimathpad.')
+    await act(() => view.save())
+    expect(notices).toEqual([
+      'Não foi possível salvar pump.excalimathpad: EACCES: permission denied, open pump.excalimathpad. Seu trabalho continua aberto.',
+    ])
   })
 })
 
@@ -244,13 +254,27 @@ describe('an outside change (section 7: sync, git, another app, another tab)', (
     const copy = 'Calcs/pump (conflict 2026-11-14 1532).excalimathpad'
     await waitFor(() => expect(vault.app.vault.creates.map(({ path }) => path)).toEqual([copy]))
     expect(sourceIn(vault.app.vault.creates[0].data)).toBe('a = 2 m\nb = a * 10')
-    expect(notices).toEqual([conflictNotice('pump', 'pump (conflict 2026-11-14 1532)')])
+    expect(notices).toEqual([en.vault.conflict('pump', 'pump (conflict 2026-11-14 1532)')])
     expect(notices[0]).toBe('pump changed elsewhere. Your version was saved beside it as pump (conflict 2026-11-14 1532).')
     // Then it reloads: the tab shows the outside version, which stays in the file.
     await waitFor(() => expect(shownLines()).toEqual(['a = 2 m', 'b = a * 3', 'c = b + 1 m']))
     await act(() => view.save())
     expect(writes()).toEqual([])
     expect(fileText()).toBe(OUTSIDE)
+  })
+
+  it('in Português the copy is (conflito …) and the notice says so (section 7; section 13, In a vault)', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date(2026, 10, 14, 15, 32))
+    await setUp(undefined, { language: 'pt-BR' })
+    commitLine(2, 'b = a * 10')
+    act(() => vault.app.vault.changeOutside(SHEET, OUTSIDE))
+    await waitFor(() =>
+      expect(vault.app.vault.creates.map(({ path }) => path)).toEqual(['Calcs/pump (conflito 2026-11-14 1532).excalimathpad']),
+    )
+    expect(notices).toEqual([
+      'pump foi alterado em outro lugar. Sua versão foi salva ao lado como pump (conflito 2026-11-14 1532).',
+    ])
   })
 
   it('a line still being typed goes into the copy, and the line closes', async () => {
@@ -513,9 +537,17 @@ describe('the vault image picker (section 12a, Reach: one image the user picks)'
     await openTab()
     pressImageTool()
     expect(picker().isOpen).toBe(true)
-    expect(picker().placeholder).toBe(PICK_IMAGE_PLACEHOLDER)
+    expect(picker().placeholder).toBe(en.vault.pickImage)
+    expect(picker().placeholder).toBe('Pick an image from the vault to place on the sheet')
     expect(picker().shown()).toEqual(['Assets/logo.SVG', 'Assets/pump-curve.png'])
     expect(vault.app.vault.binaryReads).toEqual([])
+  })
+
+  it('words its field in Português when data.json holds Português', async () => {
+    vault = await vaultWith(files, { language: 'pt-BR' })
+    await openTab()
+    pressImageTool()
+    expect(picker().placeholder).toBe('Escolha uma imagem do cofre para colocar na folha')
   })
 
   it('reads only the picked image and copies it into the sheet, which then saves it', async () => {
