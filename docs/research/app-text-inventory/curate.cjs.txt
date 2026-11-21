@@ -1,0 +1,22 @@
+const a=require('./strings.json');
+const drop = (o) => {
+  const t=o.text;
+  if (o.attr==='className') return true;
+  if (/^(is|has)-|^text-|^math-|^sheet-|^print-view|^excalimathpad-|^dropdown|__/.test(t)) return true;
+  if (/^[.:\[@<]|^\(prefers|^input,|^\.\w|\{ |^M\d|^[A-Z]{1,3}$|^[SMLX]{1,2}$|px$|^translate|^rotate|^scale|^calc\(|^data:|^invert|^SHA|^en-US|^pt-BR$|^typed\.|^\$1|^export default|^\?guide|^Tab$|^IndexedDB|^\(\?<=/.test(t)) return true;
+  if (/\\(mathrm|text|left|begin|mathit|infty|cdot|hbar|mu|coloneqq|lbrack|textbackslash|textasciicircum|textasciitilde)|\{\}\^/.test(t)) return true;
+  if (/^\$\{[^}]+\}px|\$\{[^}]+\}:\$\{/.test(t)) return true;
+  if (o.file==='src/math/unitSystems.ts' || o.file==='src/math/appUnits.ts') return true; // unit expressions
+  if (o.file==='src/overlay/katexFonts.ts') return true; // build-time check
+  if (o.file==='src/guide/markdown.ts') return true; // build-time errors for the guide's author
+  if (/^(Gamma|Delta|Theta|Lambda|Xi|Pi|Sigma|Upsilon|Phi|Psi|Omega|Caligraphic|Fraktur|SansSerif|Script)$/.test(t)) return true;
+  if (/^(SQRT2|SQRT1_2|LN2|LN10|LOG2E|LOG10E|G|R|N_A|Z_0|R_inf|Infinity|A4|Letter)$/.test(t)) return true; // names, paper sizes
+  if (/^__|^math\.js ConditionalNode|^App needs|^The print frame has no|^This document takes no|^Excalimathpad: the print|KaTeX/.test(t)) return true; // internal throws
+  if (/^(Brent|labels direct|Obsidian plugin|Untitled\$\{SHEET_EXTENSION\}|\$\{SHEET_EXTENSION\},|\$\{HEADING|\[id=|\$\{element\.anchorId|Sheet units|Electrical)$/.test(t)) return true;
+  return false;
+};
+const kept=a.filter(o=>!drop(o)); const dropped=a.filter(drop);
+require('fs').writeFileSync('kept.json',JSON.stringify(kept,null,1));
+console.log('kept',kept.length,'dropped',dropped.length);
+const by={};for(const o of kept){by[o.file]=(by[o.file]||0)+1}
+console.log(Object.entries(by).sort((x,y)=>x[0]<y[0]?-1:1).map(([f,n])=>n+'\t'+f).join('\n'));

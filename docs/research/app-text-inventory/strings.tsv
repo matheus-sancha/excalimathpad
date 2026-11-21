@@ -1,0 +1,602 @@
+file	line	kind	attr	text
+plugin/ImagePicker.ts	24	string		Pick an image from the vault to place on the sheet
+plugin/SheetView.ts	22	string		Excalimathpad needs iOS 16.4 or later.
+plugin/SheetView.ts	26	template		${sheet} changed elsewhere. Your version was saved beside it as ${copy}.
+plugin/SheetView.ts	30	template		Couldn't save ${file}: ${reason}. Your work is still open.
+plugin/SheetView.ts	33	template		Couldn't create ${file}: ${reason}.
+plugin/SheetView.ts	311	string		Untitled
+plugin/SheetView.ts	312	string		Untitled
+plugin/main.ts	30	string		New sheet
+plugin/main.ts	42	string		Add math
+plugin/main.ts	43	string		Toggle Math settings
+plugin/main.ts	44	string		Open Math guide
+plugin/main.ts	45	string		Print…
+plugin/names.ts	25	string		Untitled
+plugin/names.ts	34	template		${basename} (conflict ${date} ${two(at.getHours())}${two(at.getMinutes())})
+plugin/print.ts	29	template		Choose ${size}, ${orientation} in the print dialog.
+src/App.tsx	790	string		Untitled
+src/canvas/BottomSheet.tsx	52	attr	aria-label	Math settings
+src/canvas/BottomSheet.tsx	59	attr	aria-label	Math settings tabs
+src/canvas/BottomSheet.tsx	79	attr	aria-label	Close
+src/canvas/BottomSheet.tsx	80	attr	title	Close
+src/canvas/PanelResizeHandle.tsx	5	string		Resize the panel
+src/canvas/SheetCanvas.tsx	86	string		Format
+src/canvas/SheetCanvas.tsx	87	string		Symbols
+src/canvas/SheetCanvas.tsx	88	string		Variables
+src/canvas/SheetCanvas.tsx	89	string		Problems
+src/canvas/SheetCanvas.tsx	90	string		Constants
+src/canvas/SheetCanvas.tsx	91	string		Settings
+src/canvas/SheetCanvas.tsx	446	jsxtext		Math
+src/canvas/SheetCanvas.tsx	449	attr	label	Add math
+src/canvas/SheetCanvas.tsx	452	attr	title	Add math — M
+src/canvas/SheetCanvas.tsx	468	attr	label	Math settings
+src/canvas/SheetCanvas.tsx	470	attr	title	Math settings: variables, problems and settings
+src/canvas/SheetCanvas.tsx	688	jsxtext		Excalimathpad
+src/canvas/SheetCanvas.tsx	693	jsxtext		Open…
+src/canvas/SheetCanvas.tsx	702	string		Press M, or choose Add math under More tools, then click the sheet to place math
+src/canvas/SheetCanvas.tsx	729	jsxtext		Print…
+src/canvas/SheetCanvas.tsx	737	jsxtext		Open…
+src/canvas/SheetCanvas.tsx	740	jsxtext		Save
+src/canvas/SheetCanvas.tsx	743	jsxtext		Save as…
+src/canvas/SheetCanvas.tsx	746	jsxtext		Print…
+src/canvas/SheetCanvas.tsx	753	jsxtext		Math guide
+src/canvas/SheetCanvas.tsx	764	attr	title	This build
+src/canvas/imageTool.ts	34	string		File is too big. Maximum allowed size is 4MB.
+src/canvas/imageTool.ts	46	string		label.ToolIcon
+src/canvas/language.ts	10	string		English
+src/canvas/language.ts	11	string		Português (Brasil)
+src/canvas/language.ts	15	string		Language
+src/canvas/language.ts	37	string		excalimathpad.language
+src/canvas/mathSelection.ts	15	string		Double-click a line or press Enter to edit
+src/canvas/mathSelection.ts	18	string		Double-tap a line, or tap Edit in Math settings
+src/failure/details.ts	11	string		this element hit an unexpected error in Excalimathpad
+src/failure/details.ts	12	string		this chart hit an unexpected error in Excalimathpad
+src/failure/details.ts	13	string		this tab hit an unexpected error in Excalimathpad
+src/failure/details.ts	14	string		This sheet hit an unexpected error in Excalimathpad.
+src/failure/details.ts	15	string		Your sheet is kept up to the last finished line.
+src/failure/details.ts	16	string		You were typing:
+src/failure/details.ts	17	string		Reload the sheet
+src/failure/details.ts	18	string		Copy details
+src/failure/details.ts	19	string		Copy
+src/failure/details.ts	20	string		Copied
+src/failure/details.ts	21	string		Report this error
+src/failure/details.ts	22	string		(no sheet content is included)
+src/failure/details.ts	50	string		a line
+src/failure/details.ts	51	string		an element
+src/failure/details.ts	52	string		a chart
+src/failure/details.ts	53	string		a tab
+src/failure/details.ts	54	string		the view
+src/failure/details.ts	70	template		Excalimathpad ${home.version}${build}
+src/failure/details.ts	72	template		What failed: ${WHAT[what]}
+src/file/FileChrome.tsx	92	string		Untitled
+src/file/FileChrome.tsx	106	string		Restore
+src/file/FileChrome.tsx	107	string		Discard
+src/file/FileChrome.tsx	108	string		Save
+src/file/FileChrome.tsx	109	string		Don't save
+src/file/FileChrome.tsx	110	string		Cancel
+src/file/dialogs.ts	28	template		Restore unsaved changes to ${name}?
+src/file/dialogs.ts	28	string		Restore unsaved changes to an untitled sheet?
+src/file/dialogs.ts	31	template		Save changes to ${name ?? `Untitled${SHEET_EXTENSION}`}?
+src/file/fileAccess.ts	42	string		Excalimathpad sheet
+src/file/fileAccess.ts	106	string		permission to write the file was refused
+src/file/fileAccess.ts	129	template		${SHEET_EXTENSION},.excalidraw,application/json
+src/file/fileAccess.ts	139	string		this browser cannot write back to a file
+src/file/fileAccess.ts	142	string		this browser cannot read a file again
+src/file/sheetSession.ts	121	string		This sheet was saved by a newer Excalimathpad. Update the app.
+src/file/sheetSession.ts	122	string		This file isn't a sheet, so it wasn't opened.
+src/file/sheetSession.ts	123	template		Couldn't save ${name}: ${reason}
+src/file/sheetSession.ts	124	template		Couldn't open the file: ${reason}
+src/file/sheetSession.ts	467	string		Untitled
+src/guide/MathGuide.tsx	8	template		${HEADING_ID_PREFIX}math-guide
+src/guide/MathGuide.tsx	35	string		a[href^="#"]
+src/guide/MathGuide.tsx	64	attr	aria-label	Close
+src/guide/MathGuide.tsx	64	attr	title	Close (Esc)
+src/math/conditionals.ts	29	string		if: the condition must be one value; use a list line instead
+src/math/conditionals.ts	31	string		if: the condition must be true or false
+src/math/conditionals.ts	46	string		if needs 3 arguments: if(cond, a, b)
+src/math/conditionals.ts	101	string		can't compare text with a number
+src/math/conditionals.ts	105	template		can't compare ${show(unit)} with ${bare}: give the ${bare} a unit
+src/math/conditionals.ts	114	string		text can only be compared with == or !=
+src/math/constants.ts	27	string		Mathematical
+src/math/constants.ts	29	string		Circle circumference over diameter
+src/math/constants.ts	31	string		Euler's number
+src/math/constants.ts	32	string		Golden ratio
+src/math/constants.ts	33	string		Imaginary unit
+src/math/constants.ts	35	string		Square root of 2
+src/math/constants.ts	36	string		Square root of ½
+src/math/constants.ts	37	string		Natural logarithm of 2
+src/math/constants.ts	38	string		Natural logarithm of 10
+src/math/constants.ts	39	string		Base-2 logarithm of e
+src/math/constants.ts	40	string		Base-10 logarithm of e
+src/math/constants.ts	44	string		Universal
+src/math/constants.ts	46	string		Speed of light in vacuum
+src/math/constants.ts	47	string		Newtonian constant of gravitation
+src/math/constants.ts	48	string		Planck constant
+src/math/constants.ts	49	string		Reduced Planck constant
+src/math/constants.ts	53	string		Adopted values
+src/math/constants.ts	55	string		Standard acceleration of gravity
+src/math/constants.ts	56	string		Molar mass constant
+src/math/constants.ts	57	string		Molar mass of carbon-12
+src/math/constants.ts	61	string		Physico-chemical
+src/math/constants.ts	63	string		Molar gas constant
+src/math/constants.ts	64	string		Boltzmann constant
+src/math/constants.ts	65	string		Avogadro constant
+src/math/constants.ts	66	string		Stefan–Boltzmann constant
+src/math/constants.ts	67	string		Atomic mass constant
+src/math/constants.ts	68	string		Faraday constant
+src/math/constants.ts	69	string		Molar volume of an ideal gas (273.15 K, 101.325 kPa)
+src/math/constants.ts	70	string		Loschmidt constant (273.15 K, 101.325 kPa)
+src/math/constants.ts	71	string		Molar Planck constant
+src/math/constants.ts	72	string		First radiation constant
+src/math/constants.ts	73	string		Second radiation constant
+src/math/constants.ts	74	string		Wien displacement law constant
+src/math/constants.ts	75	string		Sackur–Tetrode constant (1 K, 100 kPa)
+src/math/constants.ts	79	string		Electromagnetic
+src/math/constants.ts	81	string		Elementary charge
+src/math/constants.ts	82	string		Vacuum electric permittivity
+src/math/constants.ts	83	string		Vacuum magnetic permeability
+src/math/constants.ts	84	string		Characteristic impedance of vacuum
+src/math/constants.ts	85	string		Coulomb constant
+src/math/constants.ts	86	string		Bohr magneton
+src/math/constants.ts	87	string		Nuclear magneton
+src/math/constants.ts	88	string		Magnetic flux quantum
+src/math/constants.ts	89	string		Conductance quantum
+src/math/constants.ts	90	string		Inverse conductance quantum
+src/math/constants.ts	91	string		Von Klitzing constant
+src/math/constants.ts	95	string		Atomic and nuclear
+src/math/constants.ts	97	string		Electron mass
+src/math/constants.ts	98	string		Proton mass
+src/math/constants.ts	99	string		Neutron mass
+src/math/constants.ts	100	string		Deuteron mass
+src/math/constants.ts	101	string		Bohr radius
+src/math/constants.ts	102	string		Fine-structure constant
+src/math/constants.ts	103	string		Rydberg constant
+src/math/constants.ts	104	string		Classical electron radius
+src/math/constants.ts	105	string		Hartree energy
+src/math/constants.ts	106	string		Quantum of circulation
+src/math/constants.ts	107	string		Thomson cross section
+src/math/constants.ts	108	string		Fermi coupling constant
+src/math/constants.ts	109	string		Weak mixing angle
+src/math/constants.ts	110	string		Efimov factor
+src/math/constants.ts	114	string		Planck units
+src/math/constants.ts	116	string		Planck length
+src/math/constants.ts	117	string		Planck mass
+src/math/constants.ts	118	string		Planck time
+src/math/constants.ts	119	string		Planck charge
+src/math/constants.ts	120	string		Planck temperature
+src/math/display.ts	17	string		a complex value with a unit can't be shown
+src/math/display.ts	252	string		not a unit expression
+src/math/evaluate.ts	103	template		${short} is already a math.js name
+src/math/evaluate.ts	179	template		${name} is not supported in a math element
+src/math/evaluate.ts	286	template		Undefined symbol ${name}
+src/math/evaluate.ts	302	string		this line hit an unexpected error in Excalimathpad
+src/math/evaluate.ts	783	template		if ${rule.condition}: ${message}
+src/math/evaluate.ts	795	string		not true or false
+src/math/evaluate.ts	797	string		a rule can't assign; write ==
+src/math/evaluate.ts	811	string		not true or false
+src/math/evaluate.ts	815	string		Units do not match
+src/math/evaluate.ts	839	template		${name} has ${list.length} values, the line has ${length}
+src/math/evaluate.ts	854	string		a table has no result; use its list names
+src/math/evaluate.ts	887	template		${rule.text}: ${counts[index]} of ${length} points
+src/math/evaluate.ts	901	string		a rule needs a value
+src/math/evaluate.ts	979	template		${reserved} is a line form: choose another name
+src/math/evaluate.ts	980	template		${IF_FN} is a function: choose another name
+src/math/evaluate.ts	985	string		Set a function's display unit on the line that calls it
+src/math/evaluate.ts	992	string		a plot takes its units on its arguments: plot(Q_s in L/s, …)
+src/math/evaluate.ts	994	template		Unknown plot setting ${unknown.text}
+src/math/evaluate.ts	1001	string		a table takes its units on its arguments: table(Q_s in L/s)
+src/math/evaluate.ts	1020	template		Unknown unit ${line.display.name}
+src/math/evaluate.ts	1028	template		text has no unit: take off "in ${line.displayText}"
+src/math/evaluate.ts	1086	template		pass ${outside} as an argument
+src/math/evaluate.ts	1126	template		a range solve can't use the list ${list}; use a solve function with a guess
+src/math/evaluate.ts	1149	string		a range takes single values, not a list
+src/math/evaluate.ts	1163	string		a table needs a list, such as table(Q_s)
+src/math/evaluate.ts	1170	string		a table needs a list, such as table(Q_s)
+src/math/evaluate.ts	1174	template		${listed[0].name} has ${length} values, ${other.name} has ${(other.value as SheetList).length}
+src/math/evaluate.ts	1202	string		a plot needs x and at least one y: plot(Q_s, Hs(Q_s))
+src/math/evaluate.ts	1211	template		x must be a list: ${xArg.text} is a single value
+src/math/evaluate.ts	1215	template		${xArg.text} has ${length} values, ${line.args[i].text} has ${value.length}
+src/math/evaluate.ts	1228	template		${arg.text}: every point failed. ${failure?.replace(/^\d+ of \d+ points failed\. /, '') ?? ''}
+src/math/evaluate.ts	1236	template		${ys[0].arg.text} is ${article(kinds[0])}, ${ys[other].arg.text} is ${article(kinds[other])}: one plot shows one kind
+src/math/evaluate.ts	1277	template		${axis} log needs values above 0
+src/math/evaluate.ts	1286	template		${axis} ${range.text}: the range must be the axis's kind
+src/math/evaluate.ts	1294	template		mark ${text}: one value of x's kind
+src/math/evaluate.ts	1300	string		equal scales need x and y of the same kind
+src/math/evaluate.ts	1302	string		equal with both x and y ranges typed: leave one out
+src/math/evaluate.ts	1327	template		x must be a list: ${xArg.text} is a single value
+src/math/evaluate.ts	1328	string		a plot needs x and at least one y: plot(Q_s, Hs(Q_s))
+src/math/evaluate.ts	1333	template		${ys[0].arg.text} against ${xArg.text}
+src/math/evaluate.ts	1338	template		point ${text}: a point is two single values, (x, y)
+src/math/evaluate.ts	1357	template		circle ${text}: the centre is two single values, (x0, y0)
+src/math/evaluate.ts	1364	template		circle ${text}: the radius is one positive value of the axes' kind
+src/math/evaluate.ts	1367	template		circle ${text}
+src/math/evaluate.ts	1460	string		a failed point
+src/math/evaluate.ts	1462	string		a value
+src/math/evaluate.ts	1463	string		a number
+src/math/evaluate.ts	1465	template		in ${point.value.toSI().formatUnits()}
+src/math/evaluate.ts	1465	string		a value
+src/math/evaluate.ts	1471	string		a
+src/math/evaluate.ts	1471	string		in
+src/math/evaluate.ts	1472	template		an ${kind}
+src/math/evaluate.ts	1530	template		${names[0]} has ${length} values, ${names[other]} has ${lists[other].length}
+src/math/evaluate.ts	1591	template		${isSymbolNode(arg) ? arg.name : arg.toString()} has a failed point
+src/math/evaluate.ts	1630	template		${size.join(' × ')} matrix
+src/math/evaluate.ts	1659	template		failed: ${point.message}
+src/math/evaluate.ts	1683	template		At ${origin.name} = ${likeList(origin.list, input.value)}
+src/math/evaluate.ts	1683	template		At point ${i + 1}
+src/math/evaluate.ts	1684	template		${failed} of ${list.length} points failed. ${where}: ${point.message}
+src/math/evaluate.ts	1916	template		${expression} in ${displayUnit}
+src/math/evaluate.ts	1967	template		${expression} in ${displayUnit}
+src/math/evaluate.ts	2150	string		one statement per line: split the line at the ;
+src/math/evaluate.ts	2223	template		${name} has an error above
+src/math/evaluate.ts	2225	template		${name} is defined below
+src/math/functions.ts	68	template		${name} needs ${params.length} ${noun}, got ${args.length}
+src/math/functions.ts	70	template		${name} calls itself without end
+src/math/functions.ts	77	template		${name} calls itself without end
+src/math/functions.ts	85	template		in ${name}(${args.map(argText).join(', ')}): ${message}
+src/math/functions.ts	118	template		${called[1]} is a value, not a function: write ${called[1]} * (...) to multiply
+src/math/functions.ts	122	template		${name} is a function: call it with ${name}(...)
+src/math/indexes.ts	76	string		x_r[2]
+src/math/indexes.ts	77	string		an index goes on a name: x_r[2]
+src/math/indexes.ts	82	template		${label}: an index is a whole number from 1
+src/math/indexes.ts	85	template		${name} has ${count(value.length)}
+src/math/indexes.ts	93	template		${name} has ${count(length)}
+src/math/indexes.ts	97	template		${name} has ${count(1)}
+src/math/indexes.ts	104	string		1 value
+src/math/indexes.ts	104	template		${n} values
+src/math/limits.ts	42	string		a range's ends must be finite numbers
+src/math/limits.ts	43	template		has more than ${LIMIT_TEXT} points
+src/math/limits.ts	44	template		has more than ${LIMIT_TEXT} values
+src/math/limits.ts	45	string		is too large to compute
+src/math/limits.ts	211	string		the step
+src/math/limits.ts	211	string		the end
+src/math/limits.ts	211	string		the start
+src/math/limits.ts	212	template		${which} is ${infinite(value)}
+src/math/limits.ts	296	template		${NOT_FINITE}: ${codeText(end)} is ${infinite(again.end.value)}
+src/math/limits.ts	316	string		not a number
+src/math/lineForm.ts	219	string		rules need a math line
+src/math/lineForm.ts	234	template		Unknown format @${bad} in @${parts.name}
+src/math/lineForm.ts	236	template		Unknown format ${segment.split(/\s+/)[0]}
+src/math/lineForm.ts	512	template		${expression} in ${unit.trim()}
+src/math/lists.ts	65	template		the range's ${what} must be a number or a quantity
+src/math/lists.ts	78	template		a range with units needs a step, such as "step 1${unit ? ` ${unit}` : ''}"
+src/math/lists.ts	82	string		start, end and step must be the same kind
+src/math/lists.ts	87	template		step ${showStep(step)} never reaches the end
+src/math/lists.ts	92	template		${name ?? 'the range'} has more than 10,000 points
+src/math/lists.ts	92	string		the range
+src/math/lists.ts	134	template		${list.length} values
+src/math/lists.ts	134	template		${ok.length} of ${list.length} values
+src/math/lists.ts	158	template		${failed} failed
+src/math/plotLine.ts	147	template		mark ${clause.expression}
+src/math/plotLine.ts	149	template		point ${clause.expression}
+src/math/plotLine.ts	151	template		circle ${clause.expression}
+src/math/plotLine.ts	159	template		${clause.axis} log
+src/math/plotLine.ts	163	template		size ${clause.size}
+src/math/plotLine.ts	165	template		title "${clause.text.replace(/["\\]/g, (c) => `\\${c}`)}"
+src/math/rename.ts	134	template		${newName} shadows
+src/math/rename.ts	489	template		${newName} isn't a name.
+src/math/rename.ts	490	template		${newName} is reserved.
+src/math/rename.ts	492	template		${newName} is already a name on this sheet.
+src/math/solve.ts	164	string		a side of the equation is not a number or a quantity
+src/math/solve.ts	205	template		${mismatch}: ${equation} units do not match
+src/math/solve.ts	224	template		${what}: not a number or a quantity
+src/math/solve.ts	228	template		guess ${unknown}
+src/math/solve.ts	231	template		guess ${unknown} = ${parts.guessText}
+src/math/solve.ts	235	template		; last inner error: ${state.lastInner}
+src/math/solve.ts	237	template		no convergence for ${unknown} after ${outcome.iterations} iterations
+src/math/solve.ts	242	string		the equation has no value near the guess
+src/math/solve.ts	243	template		searched ${range(outcome.searched, (x) => text.show(trial(x), guessUnit))}
+src/math/solve.ts	244	template		no root near ${near()} (${where})${inner()}
+src/math/solve.ts	262	template		for ${unknown} = ${fromText} .. ${toText}
+src/math/solve.ts	263	template		for ${unknown}
+src/math/solve.ts	264	template		for ${unknown}
+src/math/solve.ts	267	template		${label}: the ends must be the same kind
+src/math/solve.ts	268	template		${label}: from must be below to
+src/math/solve.ts	274	template		${unknown} in ${range([a.number, b.number], shown)}
+src/math/solve.ts	276	template		no convergence for ${unknown} after ${outcome.iterations} iterations
+src/math/solve.ts	278	template		more than 100 roots for ${where}: narrow the range
+src/math/solve.ts	281	string		(the equation has no value in the range)
+src/math/solve.ts	283	template		; last inner error: ${state.lastInner}
+src/math/solve.ts	285	template		no root found for ${where}${why}
+src/math/solve.ts	312	template		solve needs a guess: ", guess ${unknown} = <value>"
+src/math/solveLine.ts	46	template		${name}: a parameter isn't a name
+src/math/solveLine.ts	56	template		solve needs a range: ", for ${unknown} = <from> .. <to>"
+src/math/solveLine.ts	59	template		a solve function takes a guess: ", guess ${unknown} = <value>"
+src/math/solveLine.ts	62	template		solve needs a guess: ", guess ${unknown} = <value>"
+src/math/solveLine.ts	65	string		solve needs one equation: "<left side> = <right side>"
+src/math/solveLine.ts	70	template		for ${unknown} needs two ends and no step: "for ${unknown} = <from> .. <to>"
+src/math/symbols.ts	17	string		Greek
+src/math/symbols.ts	18	string		Operators
+src/math/symbols.ts	19	string		Functions
+src/math/symbols.ts	20	string		Logic
+src/math/symbols.ts	21	string		Sheet forms
+src/math/symbols.ts	89	string		type _ for a subscript
+src/math/symbols.ts	101	string		α:alpha β:beta γ:gamma δ:delta ϵ:epsilon ζ:zeta η:eta θ:theta ι:iota κ:kappa λ:lambda μ:mu
+src/math/symbols.ts	102	string		ν:nu ξ:xi π:pi ρ:rho σ:sigma τ:tau υ:upsilon ϕ:phi χ:chi ψ:psi ω:omega
+src/math/symbols.ts	104	string		ε:varepsilon ϑ:vartheta ϖ:varpi ϱ:varrho ς:varsigma φ:varphi
+src/math/symbols.ts	105	string		Γ:Gamma Δ:Delta Θ:Theta Λ:Lambda Ξ:Xi Π:Pi Σ:Sigma Υ:Upsilon Φ:Phi Ψ:Psi Ω:Omega
+src/math/symbols.ts	127	string		divided by
+src/math/symbols.ts	128	string		x²
+src/math/symbols.ts	129	string		xⁿ
+src/math/symbols.ts	129	string		to the power
+src/math/symbols.ts	130	string		square root
+src/math/symbols.ts	131	string		cube root
+src/math/symbols.ts	132	string		nthRoot(x, n)
+src/math/symbols.ts	133	string		|x|
+src/math/symbols.ts	133	string		absolute value
+src/math/symbols.ts	134	string		n!
+src/math/symbols.ts	136	string		a matrix, or an index
+src/math/symbols.ts	137	string		less than
+src/math/symbols.ts	138	string		greater than
+src/math/symbols.ts	139	string		less than or equal to
+src/math/symbols.ts	140	string		greater than or equal to
+src/math/symbols.ts	146	string		e to the power x
+src/math/symbols.ts	147	string		natural logarithm, or log(x, base)
+src/math/symbols.ts	148	string		base-10 logarithm
+src/math/symbols.ts	149	string		base-2 logarithm
+src/math/symbols.ts	150	string		pow(x, y)
+src/math/symbols.ts	154	string		inverse sine
+src/math/symbols.ts	155	string		inverse cosine
+src/math/symbols.ts	156	string		inverse tangent
+src/math/symbols.ts	157	string		atan2(y, x)
+src/math/symbols.ts	158	string		hyperbolic sine
+src/math/symbols.ts	159	string		hyperbolic cosine
+src/math/symbols.ts	160	string		hyperbolic tangent
+src/math/symbols.ts	161	string		smallest value
+src/math/symbols.ts	162	string		largest value
+src/math/symbols.ts	163	string		sum of a list
+src/math/symbols.ts	164	string		mean of a list
+src/math/symbols.ts	165	string		number of values in a list
+src/math/symbols.ts	166	string		round(x) or round(x, digits)
+src/math/symbols.ts	167	string		round down
+src/math/symbols.ts	168	string		round up
+src/math/symbols.ts	169	string		sign: -1, 0 or 1
+src/math/symbols.ts	170	string		mod(x, y)
+src/math/symbols.ts	171	string		hypot(a, b)
+src/math/symbols.ts	172	string		n!
+src/math/symbols.ts	177	string		if()
+src/math/symbols.ts	177	string		if(cond, a, b)
+src/math/symbols.ts	178	string		cond ? a : b
+src/math/symbols.ts	179	string		equal to
+src/math/symbols.ts	180	string		not equal to
+src/math/symbols.ts	181	string		both true
+src/math/symbols.ts	182	string		either true
+src/math/symbols.ts	183	string		not true
+src/math/symbols.ts	184	string		a condition that holds
+src/math/symbols.ts	185	string		a condition that fails
+src/math/symbols.ts	186	string		a text: "OK"
+src/math/symbols.ts	191	string		a solved value
+src/math/symbols.ts	192	string		x = solve x^2 = 2, for x = 0 .. 10
+src/math/symbols.ts	194	string		a solve’s search range
+src/math/symbols.ts	194	string		x = solve x^2 = 2, for x = 0 .. 10
+src/math/symbols.ts	195	string		a range
+src/math/symbols.ts	195	string		r = 1 .. 10
+src/math/symbols.ts	196	string		a range’s step
+src/math/symbols.ts	196	string		r = 1 .. 10 step 0.5
+src/math/symbols.ts	197	string		table()
+src/math/symbols.ts	197	string		table(a, b, …)
+src/math/symbols.ts	197	string		r = 1 .. 3
+src/math/symbols.ts	197	string		table(r, r^2)
+src/math/symbols.ts	198	string		plot()
+src/math/symbols.ts	198	string		plot(x, y1, …)
+src/math/symbols.ts	198	string		r = 1 .. 3
+src/math/symbols.ts	198	string		plot(r, r^2)
+src/math/symbols.ts	199	string		the result in a unit
+src/math/symbols.ts	199	string		v = 3 m/s in km/h
+src/math/symbols.ts	200	string		a value out of a list
+src/math/symbols.ts	201	string		r = 1 .. 10
+src/math/symbols.ts	202	string		x = r[2]
+src/math/symbols.ts	205	string		a solve function’s starting value
+src/math/symbols.ts	206	string		f(a) = solve x^2 = a, guess x = 1
+src/math/symbols.ts	207	string		y = f(2)
+src/math/symbols.ts	228	template		type _ for a subscript: ${entry.spelling}_w
+src/math/symbols.ts	230	template		${entry.spelling} — also the constant ${entry.constant}; a sheet may take the name ${subscript}
+src/math/typeset.ts	137	template		${nameTex(parts.unknown)}=${toTex(parts.range.from, names)}\ldots ${toTex(parts.range.to, names)}
+src/math/typeset.ts	151	template		${toTex(parts.start, names)}\ldots ${toTex(parts.end, names)}
+src/math/typeset.ts	302	template		${prefix}ohm
+src/math/warnings.ts	53	string		the unit
+src/math/warnings.ts	53	string		the built-in
+src/math/warnings.ts	64	template		${name} shadows ${what(name)} ${name}
+src/math/warnings.ts	69	template		${name} reads as ${what(name)} ${name} here: its definition failed
+src/math/warnings.ts	71	template		${name} reads as ${what(name)} ${name} here: the variable is defined below
+src/math/warnings.ts	80	template		${name} isn't defined above this line
+src/math/warnings.ts	109	string		the unit
+src/math/warnings.ts	109	string		the built-in
+src/math/warnings.ts	122	template		${entry.name} shadows ${what(entry.name)} ${entry.name}
+src/math/warnings.ts	128	template		${used} reads as ${what(used)} ${used} here: its definition failed
+src/math/warnings.ts	130	template		${used} reads as ${what(used)} ${used} here: the variable is defined below
+src/math/warnings.ts	139	template		${used} isn't defined above this line
+src/overlay/FailedElement.tsx	36	string		Title
+src/overlay/FailedElement.tsx	36	string		Line source
+src/overlay/FailedElement.tsx	68	attr	aria-label	Title
+src/overlay/FailedElement.tsx	72	attr	aria-label	Lines
+src/overlay/MathElementView.tsx	219	attr	aria-label	Lines
+src/overlay/MathElementView.tsx	306	attr	aria-label	Sample
+src/overlay/MathElementView.tsx	364	attr	aria-label	Sample title
+src/overlay/MathElementView.tsx	406	attr	aria-label	Title
+src/overlay/MathElementView.tsx	413	attr	label	Title
+src/overlay/MathElementView.tsx	721	template	data-unit-slot	${index}:gear
+src/overlay/MathElementView.tsx	879	template		Scan + Brent, roots found in ${range}
+src/overlay/MathElementView.tsx	880	template		${points} points
+src/overlay/MathElementView.tsx	882	template		Root ${i + 1}: ${root.value}${root.touching ? ' (touching)' : ''}, residual ${root.residual}
+src/overlay/MathElementView.tsx	882	string		(touching)
+src/overlay/MathElementView.tsx	884	template		${rejected} ${rejected === 1 ? 'crossing' : 'crossings'} rejected as poles or jumps
+src/overlay/MathElementView.tsx	890	template		Residual: ${residual}
+src/overlay/MathElementView.tsx	891	template		Bracket: ${bracket}
+src/overlay/MathElementView.tsx	1123	string		Line source
+src/overlay/MathElementView.tsx	1374	attr	aria-label	Suggestions
+src/overlay/OfferCard.tsx	61	jsxtext		Rename
+src/overlay/OfferCard.tsx	61	jsxtext		to
+src/overlay/PlotSettings.tsx	63	attr	aria-label	Plot settings
+src/overlay/PlotSettings.tsx	69	attr	label	Mark
+src/overlay/PlotSettings.tsx	71	attr	label	Mark
+src/overlay/PlotSettings.tsx	73	attr	placeholder	Q_op; Q_d
+src/overlay/PlotSettings.tsx	82	attr	label	Point
+src/overlay/PlotSettings.tsx	84	attr	label	Point
+src/overlay/PlotSettings.tsx	86	attr	placeholder	(Q_d, H_d)
+src/overlay/PlotSettings.tsx	96	attr	label	Circle
+src/overlay/PlotSettings.tsx	98	attr	label	Circle
+src/overlay/PlotSettings.tsx	100	attr	placeholder	r; (x0, y0) r
+src/overlay/PlotSettings.tsx	104	attr	label	Series names
+src/overlay/PlotSettings.tsx	106	attr	aria-label	Series names
+src/overlay/PlotSettings.tsx	112	jsxtext		Legend
+src/overlay/PlotSettings.tsx	113	jsxtext		At line ends
+src/overlay/PlotSettings.tsx	116	attr	label	Points
+src/overlay/PlotSettings.tsx	119	attr	aria-label	Points
+src/overlay/PlotSettings.tsx	125	template	label	${axis} axis
+src/overlay/PlotSettings.tsx	127	template	aria-label	${axis} scale
+src/overlay/PlotSettings.tsx	136	jsxtext		Linear
+src/overlay/PlotSettings.tsx	137	jsxtext		Log
+src/overlay/PlotSettings.tsx	140	template	label	${axis} from
+src/overlay/PlotSettings.tsx	147	template	label	${axis} to
+src/overlay/PlotSettings.tsx	154	attr	label	Equal scales
+src/overlay/PlotSettings.tsx	158	attr	aria-label	Equal scales
+src/overlay/PlotSettings.tsx	164	attr	label	Size
+src/overlay/PlotSettings.tsx	166	attr	aria-label	Size
+src/overlay/PlotSettings.tsx	180	attr	label	Title
+src/overlay/PlotSettings.tsx	182	attr	label	Title
+src/overlay/PlotSettings.tsx	184	attr	placeholder	None
+src/overlay/UnitField.tsx	61	attr	aria-label	Unit
+src/overlay/UnitField.tsx	93	attr	aria-label	Units
+src/overlay/printRows.ts	27	string		thead tr
+src/overlay/printRows.ts	29	string		tbody tr
+src/overlay/renameOffer.ts	107	template		Rename ${from} to ${to} in ${count === 1 ? '1 line' : `${count} lines`}?
+src/overlay/renameOffer.ts	107	string		1 line
+src/overlay/renameOffer.ts	107	template		${count} lines
+src/overlay/renameOffer.ts	109	string		in 1 line
+src/overlay/renameOffer.ts	109	template		in ${count} lines
+src/overlay/renameOffer.ts	110	string		Rename
+src/overlay/renameOffer.ts	111	template		Keep ${from}
+src/overlay/renameOffer.ts	113	template		${index} of ${total}
+src/overlay/renameOffer.ts	114	string		This changes 1 result:
+src/overlay/renameOffer.ts	114	template		This changes ${count} results:
+src/overlay/renameOffer.ts	148	template		${title ? title : `Element ${index + 1}`}, line ${ref.line + 1}
+src/overlay/renameOffer.ts	148	template		Element ${index + 1}
+src/overlay/suggest.ts	126	string		bold row
+src/overlay/suggest.ts	127	string		underlined row
+src/overlay/suggest.ts	131	string		text colour
+src/overlay/suggest.ts	142	string		bold comment
+src/overlay/suggest.ts	143	string		not italic
+src/overlay/suggest.ts	144	string		underlined comment
+src/overlay/suggest.ts	151	string		a rule: the format applies while true
+src/overlay/suggest.ts	151	string		if
+src/overlay/suggest.ts	207	template		${signature} · solve function
+src/panel/ConditionField.tsx	149	attr	aria-label	Suggestions
+src/panel/FormatTab.tsx	60	attr	label	Edit (Enter)
+src/panel/FormatTab.tsx	61	jsxtext		Edit
+src/panel/FormatTab.tsx	79	attr	aria-label	Sample
+src/panel/FormatTab.tsx	92	attr	aria-label	Move the edit
+src/panel/FormatTab.tsx	101	attr	label	Done (Esc)
+src/panel/FormatTab.tsx	102	jsxtext		Done
+src/panel/FormatTab.tsx	104	attr	label	Up (↑)
+src/panel/FormatTab.tsx	107	attr	label	Down (↓)
+src/panel/FormatTab.tsx	140	attr	label	Style
+src/panel/FormatTab.tsx	158	attr	label	Style
+src/panel/FormatTab.tsx	175	string		Align left
+src/panel/FormatTab.tsx	176	string		Centre
+src/panel/FormatTab.tsx	177	string		Align right
+src/panel/FormatTab.tsx	184	attr	label	Style
+src/panel/FormatTab.tsx	194	attr	label	Align
+src/panel/QuickKeys.tsx	13	attr	aria-label	Quick keys
+src/panel/RenameForm.tsx	77	jsxtext		Rename
+src/panel/RenameForm.tsx	77	jsxtext		to
+src/panel/RulesList.tsx	128	attr	aria-label	Rules
+src/panel/RulesList.tsx	130	jsxtext		Rules
+src/panel/RulesList.tsx	131	jsxtext		first true wins, top to bottom
+src/panel/RulesList.tsx	143	template	aria-label	Rule ${n}: ${rule.text}
+src/panel/RulesList.tsx	147	template	label	Format of rule ${n}
+src/panel/RulesList.tsx	151	jsxtext		Aa
+src/panel/RulesList.tsx	154	jsxtext		if
+src/panel/RulesList.tsx	156	template	label	Condition of rule ${n}
+src/panel/RulesList.tsx	172	template	label	Move rule ${n} up
+src/panel/RulesList.tsx	180	template	label	Move rule ${n} down
+src/panel/RulesList.tsx	186	template	label	Remove rule ${n}
+src/panel/RulesList.tsx	197	attr	label	+ Add rule
+src/panel/RulesList.tsx	198	jsxtext		+ Add rule
+src/panel/RulesList.tsx	208	template	aria-label	Rule ${n} format
+src/panel/RulesList.tsx	219	attr	label	Style
+src/panel/RulesList.tsx	239	jsxtext		true, overridden
+src/panel/RulesList.tsx	243	jsxtext		of
+src/panel/SettingsTab.tsx	32	string		Portrait
+src/panel/SettingsTab.tsx	33	string		Landscape
+src/panel/SettingsTab.tsx	37	string		SI with prefixes
+src/panel/SettingsTab.tsx	38	string		SI base units
+src/panel/SettingsTab.tsx	39	string		USCS
+src/panel/SettingsTab.tsx	60	jsxtext		Unit system
+src/panel/SettingsTab.tsx	78	jsxtext		Custom
+src/panel/SettingsTab.tsx	85	jsxtext		Starts from
+src/panel/SettingsTab.tsx	99	attr	aria-label	Custom units
+src/panel/SettingsTab.tsx	130	jsxtext		Result colour
+src/panel/SettingsTab.tsx	145	jsxtext		Page
+src/panel/SettingsTab.tsx	148	attr	aria-label	Paper size
+src/panel/SettingsTab.tsx	161	attr	aria-label	Orientation
+src/panel/SettingsTab.tsx	202	jsxtext		Digits
+src/panel/SheetPanel.tsx	71	attr	placeholder	Filter names
+src/panel/SheetPanel.tsx	72	attr	aria-label	Filter names
+src/panel/SheetPanel.tsx	81	string		No name matches.
+src/panel/SheetPanel.tsx	81	string		No variables yet.
+src/panel/SheetPanel.tsx	153	jsxtext		No problems.
+src/panel/SheetPanel.tsx	213	attr	placeholder	Filter constants
+src/panel/SheetPanel.tsx	214	attr	aria-label	Filter constants
+src/panel/SheetPanel.tsx	220	jsxtext		No constant matches.
+src/panel/SheetPanel.tsx	227	template		${row.short} or ${row.name}
+src/panel/SheetPanel.tsx	236	template	hover	Insert ${name}
+src/panel/SymbolsTab.tsx	19	string		Open a line to insert
+src/panel/SymbolsTab.tsx	32	attr	placeholder	Filter symbols
+src/panel/SymbolsTab.tsx	33	attr	aria-label	Filter symbols
+src/panel/SymbolsTab.tsx	39	jsxtext		No symbol matches.
+src/panel/formatControls.tsx	11	string		Bold (Ctrl+B)
+src/panel/formatControls.tsx	12	string		Italic (Ctrl+I)
+src/panel/formatControls.tsx	13	string		Underline (Ctrl+U)
+src/panel/formatControls.tsx	45	attr	label	Size
+src/panel/formatControls.tsx	50	template	label	Size ${each}
+src/panel/formatControls.tsx	77	attr	label	Text
+src/panel/formatControls.tsx	101	attr	label	Highlight
+src/panel/formatTab.ts	66	template		Title — ${label}
+src/panel/formatTab.ts	66	string		First line ↓
+src/panel/formatTab.ts	68	template		${label}, line ${target.lineIndex + 1}
+src/panel/formatTab.ts	69	string		Edit title ↑
+src/panel/formatTab.ts	69	string		Add title ↑
+src/panel/formatTab.ts	78	template		Math line — ${where}
+src/panel/formatTab.ts	89	template		Comment line — ${where}
+src/panel/formatTab.ts	91	template		Line — ${where}
+src/panel/formatTab.ts	98	string		the text colour
+src/panel/formatTab.ts	99	string		the highlight
+src/panel/formatTab.ts	115	template		A rule sets ${PROPERTIES[kind]} while ${rule.condition}.
+src/panel/formatTab.ts	121	string		Open a line or a title to format it: double-click it, or select its element and press Enter.
+src/panel/formatTab.ts	122	string		Double-tap a line, or tap Edit
+src/panel/formatTab.ts	123	string		This line takes no format.
+src/panel/formatTab.ts	125	string		Its chart is drawn on the sheet.
+src/panel/formatTab.ts	127	string		a rule needs a condition
+src/panel/panelMemory.ts	19	string		excalimathpad.sheetPanel
+src/panel/panelMemory.ts	20	string		excalimathpad.sheetPanelWidth
+src/panel/quickKeys.ts	20	string		Underscore
+src/panel/quickKeys.ts	21	string		To the power
+src/panel/quickKeys.ts	22	string		Equals
+src/panel/quickKeys.ts	23	string		Open bracket
+src/panel/quickKeys.ts	24	string		Close bracket
+src/panel/quickKeys.ts	25	string		Times
+src/panel/quickKeys.ts	26	string		Divide
+src/panel/quickKeys.ts	27	string		Comma
+src/panel/quickKeys.ts	28	string		Range
+src/panel/quickKeys.ts	29	string		Quotes
+src/panel/renameForm.ts	30	template		Rename ${name}
+src/panel/renameForm.ts	32	template		Rename ${name} to
+src/panel/renameForm.ts	33	string		Changes 1 line:
+src/panel/renameForm.ts	33	template		Changes ${count} lines:
+src/panel/renameForm.ts	34	string		This changes 1 result:
+src/panel/renameForm.ts	34	template		This changes ${count} results:
+src/panel/renameForm.ts	35	string		Rename
+src/panel/renameForm.ts	36	string		Cancel
+src/panel/renameForm.ts	39	template		Renamed ${from} to ${to} in ${count === 1 ? '1 line' : `${count} lines`}. ${touch ? 'Undo' : 'Ctrl+Z'} takes it back.
+src/panel/renameForm.ts	39	string		1 line
+src/panel/renameForm.ts	39	template		${count} lines
+src/panel/renameForm.ts	39	string		Undo
+src/panel/renameForm.ts	39	string		Ctrl+Z
+src/panel/renameForm.ts	93	template		${elementLabel(element, index)}, line ${ref.line + 1}
+src/panel/sheetPanel.ts	56	template		Element ${index + 1}
+src/panel/sheetPanel.ts	85	string		solve function
+src/panel/sheetPanel.ts	117	template		${label}, line ${lineIndex + 1}${name ? ` · ${name}` : ''}
+src/print/printSheet.ts	15	string		The pages couldn't be built, so nothing was printed.
+src/print/printView.ts	221	template		${index + 1} of ${pages.length}
+src/shell/AppShell.tsx	40	attr	aria-label	Side panel
