@@ -1,0 +1,25 @@
+// Where an opened sheet and a jump land, DOM only: run on 0.4.1's build and on the canary's.
+import { launch, pumpSheet } from './harness.mjs'
+const out = {}
+for (const [w, h] of [[1500, 900], [1100, 700], [1900, 1000]]) {
+  for (const which of ['pump', 'small', 'wide']) {
+    const { tab, start, close, errors } = await launch({ width: w, height: h })
+    try {
+      const sheet = which === 'pump' ? await pumpSheet()
+        : JSON.stringify({ type: 'excalidraw', version: 2, elements: [
+            { id: 'calc', type: 'rectangle', x: 40, y: 120, width: 160, height: 60, customData: { kind: 'math', source: 'a = 2 m\nb = a * 3\nc = b / 4 s' } },
+            ...(which === 'wide' ? [{ id: 'far', type: 'rectangle', x: 4000, y: 3000, width: 160, height: 60, customData: { kind: 'math', source: 'z = 1' } }] : []),
+          ], appState: {}, files: {}, excalimathpad: { format: 2 } })
+      await start(sheet)
+      const at = async (id) => { const l = tab.locator(`[data-anchor-id="${id}"]`); if (!(await l.count())) return null; const b = await l.boundingBox(); return b ? [Math.round(b.x), Math.round(b.y)] : null }
+      const opened = { calc: await at('calc'), far: await at('far') }
+      // a jump: click the last variable row in the panel
+      const rows = tab.locator('.sheet-sidebar [data-jump], .sheet-sidebar .sheet-variables__row, .sheet-sidebar li button, .sheet-sidebar [role=button]')
+      const n = await rows.count()
+      let jumped = null
+      if (n) { await rows.nth(n - 1).click(); await tab.waitForTimeout(1200); jumped = { calc: await at('calc'), far: await at('far'), pump: await at('pump') } }
+      out[`${w}x${h} ${which}`] = { opened, rows: n, jumped, errors: errors.length }
+    } finally { await close() }
+  }
+}
+for (const [k, v] of Object.entries(out)) console.log(k, JSON.stringify(v))

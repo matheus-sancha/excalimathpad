@@ -306,6 +306,38 @@ describe('writeAnchorSource after a change Excalidraw did not capture', () => {
     await waitFor(() => expect(sourceOf()).toBe('a = 1'))
   })
 
+  // What `writeAnchorSource` is for: Excalidraw's own captured write carries a pending change along.
+  it('control: one captured write after a nudge is one step, which undo takes with the nudge', async () => {
+    const { api, container, canUndo, undo, sourceOf } = await mountSelected()
+    nudge(container)
+    act(() => {
+      api.updateScene({
+        elements: api
+          .getSceneElementsIncludingDeleted()
+          .map((e) => newElementWith(e, { customData: { ...e.customData, source: 'a = 1' } })),
+        captureUpdate: CaptureUpdateAction.IMMEDIATELY,
+      })
+    })
+
+    undo()
+    await waitFor(() => expect(sourceOf()).toBe(SOURCE))
+    expect(api.getSceneElements()[0].x).toBe(100)
+    expect(canUndo()).toBe(false)
+  })
+
+  it('adds no step, and one to the version, when nothing is pending', async () => {
+    const { api, canUndo, undo, sourceOf, write } = await mountSelected()
+    const before = api.getSceneElements()[0].version
+
+    write('a = 1')
+
+    // One for the capture that looks for a pending change, one for the write.
+    expect(api.getSceneElements()[0].version).toBe(before + 2)
+    undo()
+    await waitFor(() => expect(sourceOf()).toBe(SOURCE))
+    expect(canUndo()).toBe(false)
+  })
+
   it('keeps lines on either side of a nudge as separate steps', async () => {
     const { api, container, undo, sourceOf, write } = await mountSelected()
     write('one')

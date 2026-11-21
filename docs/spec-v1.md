@@ -3305,20 +3305,24 @@ Engineer's design gate. Tested on Excalidraw 0.18.1, math.js 15.2 and Chromium.
   `newElementWith(el, { customData: { ...el.customData, source } })`. A plain `{ ...el, customData }` is
   silently not recorded. Never `EVENTUALLY` or the default: afterwards later updates to that anchor drop
   off the undo stack. ([undo research](https://github.com/matheus-sancha/excalimathpad/issues/10))
-- **A change Excalidraw didn't capture comes first:** its arrow-key nudge and Link editor leave
-  the anchor's `version` ahead of its last captured copy. `updateScene` then swaps the anchor for
-  that copy before capturing, so a source write lands but adds no step, and undo can't reach it.
-  `writeAnchorSource` first parks `version` at 0 in an uncaptured update, then captures with
-  `version` one above where it was. So each write adds 2 to `version`, and it adds no step when
-  nothing was pending. This relies on how `updateScene` compares versions, which isn't public, so
-  a contract test pins it. Matheus accepted this for now on 2026-11-04.
+- **A change Excalidraw didn't capture comes first:** its arrow-key nudge and Link editor change
+  the anchor with no capture. Excalidraw's store keeps a snapshot of what undo has recorded, and the
+  next captured write of that anchor would carry the pending change along: the nudge and the line
+  as one step. `writeAnchorSource` first captures the anchor as it is, with only `version` one
+  higher, then captures the write. The store reads the higher `version` as a change and then
+  compares `versionNonce` with its snapshot's; Excalidraw gives a new nonce with every change it
+  makes, so there is a first step only when something was pending. Each write still adds 2 to
+  `version`. None of this is public, so contract tests pin it, with the control of one captured
+  write taking a nudge with it. Matheus accepted the two entries on 2026-11-04.
   ([#41](https://github.com/matheus-sancha/excalimathpad/issues/41))
-- **That comparison has to go at the next Excalidraw upgrade:** upstream's `App.tsx` no longer calls
-  `filterUncomittedElements` (checked on `master` at `7ded689ca`, 2026-11-04). In the review of
-  [PR 47](https://github.com/matheus-sancha/excalimathpad/pull/47), on the `next` build
-  `0.18.0-3c916c5`, this workaround left an extra undo entry on plain line commits, and the contract
-  tests failed. Removing it then likely means a nudge and the next line share one undo step, unless
-  upstream's new store offers something better.
+- **Until the Excalidraw upgrade** the same result came from another route: 0.18.1's `updateScene`
+  swapped an anchor whose `version` was ahead of its last captured copy for that copy, so the write
+  parked `version` at 0 first. The canary's store doesn't compare versions that way, and that route
+  left an extra undo entry on every plain line commit there (15 contract tests, #267).
+- **A chosen width is written with no capture of its own** (the upgrade, #267), while Excalidraw is
+  still finishing the resize: the resize's own capture then holds the width, so it is one step. On
+  0.18.1 that write was `NEVER`; on the canary a `NEVER` write puts the new width into the store's
+  snapshot first, and the resize leaves no step at all.
 - **Size:** `newElementWith` + `CaptureUpdateAction.NEVER`, only for anchors whose size changed by more
   than half a pixel. Snap-back must also restore `x` and `y`: the top-right handle moved `y` by 45 px.
   ([auto-size](https://github.com/matheus-sancha/excalimathpad/issues/29))
@@ -3764,10 +3768,12 @@ the six Playwright runs and the bundle audit fail. Each group below is one issue
   which draws the drawings of a printed page; `appState.editingLinearElement` is
   `selectedLinearElement?.isEditing`. The scene's saved state gains a key,
   `lockedMultiSelections`.
-- **Undo:** [Scene writes](#14-engineering-constraints) already says the version
-  comparison goes at this upgrade. 18 contract tests on undo steps fail on the canary. Every
-  rule of [section 6](#6-undo) is to hold as written; one that can't is brought back to
-  Matheus before a test is changed.
+- **Undo:** [Scene writes](#14-engineering-constraints) said the version comparison goes at
+  this upgrade, and it has (#267): 15 contract tests on undo steps failed on the canary, and
+  every rule of [section 6](#6-undo) holds again as written, by the route Scene writes now
+  describes. With real keys in Chromium, one sequence of line edits, a nudge and then a
+  line, two lines, and a chosen width gives the same states step by step on 0.4.1 and on
+  the upgrade. Ctrl+Y redoes on every system on the canary; 0.18.1 bound it on Windows only.
 - **Excalidraw's DOM,** each a contract in `src/canvas/` with its test against the installed
   package: tools are `<button>`s with no radio, and the image tool is "Insert image" in More
   tools, which the vault's picker takes over; More tools' own items are more, in another
@@ -4211,8 +4217,6 @@ M1 to M5, is in [`docs/spec-history.md`](spec-history.md#17-verify-first), with 
 - What Zen mode hides, with a line open and with the Sheet panel docked.
 - Whether CodeMirror and Mermaid to Excalidraw 3.6.0 can be trimmed from the plugin, and the
   two sizes afterwards.
-- Why the 18 undo tests fail, beyond their messages, and whether a nudge and the next line
-  can still be two steps.
 - A sticky note and a fill on a printed page.
 - Under Português, that an empty text shows in English on screen: read from the package only.
 - In Obsidian, by hand: the new keys against Obsidian's own; copy and paste in a real
