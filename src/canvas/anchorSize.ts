@@ -120,11 +120,13 @@ export type ResizeApi = SizeWriteApi & Pick<ExcalidrawImperativeAPI, 'onPointerU
  * - **Width unchanged** (a top or bottom handle): the box goes back, as the
  *   snap-back always did.
  *
- * The write is `NEVER`, made while Excalidraw is still finishing the gesture,
- * so it lands in the resize's own undo step: one Ctrl+Z restores the width
- * before it, or automatic (`anchorSize.excalidraw.test.tsx`). A snap-back that
- * changes nothing runs through `keepClean`; a width change marks the sheet
- * dirty. Drawings keep their resize, and the rotate handle is left alone.
+ * A width is written with no capture of its own, while Excalidraw is still
+ * finishing the gesture: the resize's own capture then holds it, so one Ctrl+Z
+ * restores the width before it, or automatic (`anchorSize.excalidraw.test.tsx`).
+ * A `NEVER` write there would put the new width into what undo already holds,
+ * and the resize would leave no step (the canary's store; it was `NEVER` on
+ * 0.18.1). A snap-back that changes nothing is `NEVER`, through `keepClean`, so
+ * it leaves no step and a clean sheet; a width change marks the sheet dirty. Drawings keep their resize, and the rotate handle is left alone.
  * `floorOf` measures an element's floor in scene units (0 when it can't).
  * Returns the unsubscribe.
  */
@@ -159,9 +161,8 @@ export function settleResizes(
       })
     })
     if (!changed) return
-    const run = () => api.updateScene({ elements, captureUpdate: CaptureUpdateAction.NEVER })
-    if (widthSet) run()
-    else keepClean(run)
+    if (widthSet) api.updateScene({ elements })
+    else keepClean(() => api.updateScene({ elements, captureUpdate: CaptureUpdateAction.NEVER }))
   })
 }
 

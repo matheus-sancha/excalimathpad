@@ -1,0 +1,43 @@
+// Undo with real keys, DOM only: the same script on the 0.4.1 build and on the upgrade branch.
+import { launch } from './harness.mjs'
+const { tab, start, close, errors } = await launch({ width: 1500, height: 900 })
+const sheet = JSON.stringify({ type: 'excalidraw', version: 2, elements: [
+  { id: 'calc', type: 'rectangle', x: 40, y: 120, width: 160, height: 60, customData: { kind: 'math', source: 'a = 2 m\nb = a * 3\nc = b / 4 s' } },
+  { id: 'two', type: 'rectangle', x: 40, y: 400, width: 160, height: 60, customData: { kind: 'math', source: 'p = 3 bar' } },
+], appState: {}, files: {}, excalimathpad: { format: 2 } })
+const out = []
+try {
+  await start(sheet)
+  const el = (id = 'calc') => tab.evaluate((id) => { const e = window.__file().elements.find((e) => e.id === id); return { x: Math.round(e.x), w: Math.round(e.width), src: e.customData.source.split('\n')[0], chosen: e.customData.width === undefined ? null : Math.round(e.customData.width) } }, id)
+  const focus = () => tab.evaluate(() => document.querySelector('.excalidraw').focus())
+  const undo = async () => { await focus(); await tab.keyboard.press('Control+z'); await tab.waitForTimeout(350) }
+  const redo = async () => { await focus(); await tab.keyboard.press('Control+y'); await tab.waitForTimeout(350) }
+  const row = async (line, id = 'calc') => tab.locator(`[data-anchor-id="${id}"] [data-line="${line}"]`).boundingBox()
+  const edit = async (line, text, id = 'calc') => { const r = await row(line, id); await tab.mouse.click(r.x + 20, r.y + 12); await tab.waitForTimeout(700); await tab.mouse.dblclick(r.x + 20, r.y + 12); await tab.waitForTimeout(500); await tab.keyboard.press('End'); await tab.keyboard.type(text); await tab.keyboard.press('Escape'); await tab.waitForTimeout(500) }
+  const log = async (what) => out.push([what, JSON.stringify(await el()), JSON.stringify(await el('two'))])
+
+  await log('start')
+  // 1. a line, then undo and redo
+  await edit(0, ' + 1 m'); await log('line 0 edited')
+  await undo(); await log('undo')
+  await redo(); await log('redo')
+  await undo(); await log('undo again')
+  // 2. a nudge, then a line: two steps
+  const r = await row(1); await tab.mouse.click(r.x + 20, r.y + 12); await tab.waitForTimeout(500); await focus()
+  await tab.keyboard.press('ArrowRight'); await tab.keyboard.press('ArrowRight'); await tab.waitForTimeout(300); await log('nudged twice')
+  await edit(0, ' + 5 m'); await log('then line 0 edited')
+  await undo(); await log('undo 1')
+  await undo(); await log('undo 2')
+  await undo(); await log('undo 3')
+  await redo(); await redo(); await redo(); await log('redo x3')
+  await undo(); await undo(); await undo(); await undo(); await log('undo x4')
+  // 3. two lines are two steps, newest first
+  await edit(0, ' + 7 m'); await edit(1, ' + 8 m'); await log('two lines edited')
+  await undo(); await log('undo 1'); await undo(); await log('undo 2')
+  // 4. a width by the right handle is one step
+  await tab.keyboard.press('Escape'); const b = await tab.locator('[data-anchor-id="calc"]').boundingBox()
+  await tab.mouse.click(b.x + 20, b.y + 12); await tab.waitForTimeout(600)
+  await tab.mouse.move(b.x + b.width + 1, b.y + b.height / 2); await tab.mouse.down(); await tab.mouse.move(b.x + b.width + 60, b.y + b.height / 2, { steps: 6 }); await tab.mouse.move(b.x + b.width + 121, b.y + b.height / 2, { steps: 6 }); await tab.mouse.up(); await tab.waitForTimeout(600)
+  await log('right handle dragged +120')
+  await undo(); await log('undo'); await redo(); await log('redo'); await undo(); await log('undo again')
+} finally { for (const o of out) console.log(o.join(' | ')); console.log(JSON.stringify(errors)); await close() }

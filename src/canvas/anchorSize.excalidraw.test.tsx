@@ -1,5 +1,6 @@
 import { act, fireEvent, render, waitFor } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
+import { newElementWith } from '@excalidraw/excalidraw'
 import { SheetCanvas, type SheetCanvasHandle } from './SheetCanvas.tsx'
 import { settleResizes, sizeWritesWait, writeAnchorSizes } from './anchorSize.ts'
 import { createMathAnchorElements, writeAnchorSource } from './mathAnchor.ts'
@@ -83,9 +84,9 @@ describe('size writes on real Excalidraw', () => {
   it('control: a size change Excalidraw didn’t capture would be a second step', async () => {
     const { anchor, api, canUndo, commit, undo } = await mount()
     act(() => {
-      // The default capture leaves the change pending, as a nudge does.
+      // The default capture leaves the change pending, as a nudge does: a new element, with its own nonce.
       api.updateScene({
-        elements: api.getSceneElements().map((element) => ({ ...element, width: 260, version: element.version + 1 })),
+        elements: api.getSceneElements().map((element) => newElementWith(element, { width: 260 })),
       })
     })
 

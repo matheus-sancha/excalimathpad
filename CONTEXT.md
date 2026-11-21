@@ -328,14 +328,13 @@ and everything downstream recalculates. Engine: math.js, client-side.
   take two steps when something was selected (`addMath.excalidraw.test.tsx`).
 - **Source writes go through `writeAnchorSource`,** which takes the lines'
   `formats` in the same write: whatever changes the number of lines must keep
-  the two in step (ADR 0002). A plain spread isn't recorded
-  by undo, and `EVENTUALLY` or the default capture drops later updates to that
-  anchor off the stack. Excalidraw's own nudge and Link leave the anchor in that
-  same state, so the write first records their change as its own step (spec
-  section 14). That relies on how `updateScene` compares versions, which isn't
+  the two in step (ADR 0002). A change made with no capture, as Excalidraw's
+  own nudge and Link make, stays pending, and the next captured write of that
+  anchor would carry it into its step. So the write first captures the anchor
+  with only `version` raised: a step only when something was pending (spec
+  section 14). That relies on the store comparing `versionNonce`, which isn't
   public; `mathAnchor.excalidraw.test.tsx` holds the contract against the
-  installed package. Upstream has dropped that comparison, so this has to change
-  at the next Excalidraw upgrade.
+  installed package, with its control.
 - **`focusCanvas` queries `.excalidraw`,** the element that hears Excalidraw's
   keys. It lives in `src/canvas/`, and `SheetCanvas.test.tsx` pins it.
 - **The header is in the body, above the grid.** So the measured size

@@ -366,30 +366,31 @@ export function removeAnchor(api: RemoveApi, anchorId: string): boolean {
 /**
  * Records, as its own undo step, any change Excalidraw made to the anchor
  * without capturing it: its arrow-key nudge and its Link editor do this. Adds no
- * step if there is none, though `version` still goes up. Returns the anchor as
- * the scene now holds it.
+ * step if there is none, though `version` still goes up by one. Returns the
+ * anchor as the scene now holds it.
  *
- * While the anchor's `version` is ahead of Excalidraw's last captured copy,
- * `updateScene` swaps it for that copy before capturing, so a write lands in the
- * scene but records nothing, and undo can't reach it. No public call flushes
- * this, and `updateScene` compares against the scene's current version. So the
- * first update parks the version at 0 without capturing, and the second captures
- * with the version one above where it was. Only this anchor is recorded, so a
+ * Excalidraw's store (the canary, `0.18.0-9fbeaed`) keeps a snapshot of what
+ * undo has recorded. A change made with no capture stays out of it, and the
+ * next captured write of that element would carry it along: a nudge and the
+ * line after it as one step. So this captures the anchor first, as it is, with
+ * only its `version` raised. The store reads a higher `version` as "changed",
+ * and then compares `versionNonce` with its snapshot's: Excalidraw gives a new
+ * nonce on every change it makes, so the nonces differ only when something is
+ * pending, and only then is there a step. Only this anchor is recorded, so a
  * nudge of several elements can split (docs/spec-v1.md section 6).
  *
- * That comparison isn't public API, and upstream has already dropped it, so this
- * has to change at the next Excalidraw upgrade: `mathAnchor.excalidraw.test.tsx`
- * fails then. Removing this likely means a nudge and the next line share one undo
- * step, unless upstream's new store offers something better (spec section 14).
+ * None of that is public API: `mathAnchor.excalidraw.test.tsx` holds it against
+ * the installed package, with the control of what one captured write does
+ * without this. Until the canary this parked the anchor's `version` at 0, for
+ * 0.18.1's `updateScene`, which compared versions (spec section 14).
  */
 function recordPendingChange(api: SourceWriteApi, anchor: ExcalidrawElement) {
-  api.updateScene({ elements: withElement(api, { ...anchor, version: 0 }) })
-  const committed = newElementWith(anchor, {}, true)
+  const flushed = { ...anchor, version: anchor.version + 1 }
   api.updateScene({
-    elements: withElement(api, committed),
+    elements: withElement(api, flushed),
     captureUpdate: CaptureUpdateAction.IMMEDIATELY,
   })
-  return committed
+  return flushed
 }
 
 function withElement(api: SourceWriteApi, next: ExcalidrawElement) {
