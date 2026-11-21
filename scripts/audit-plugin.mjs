@@ -19,17 +19,22 @@ export const FILES = ['main.js', 'manifest.json', 'styles.css']
 export const MAX_BYTES = 5_000_000
 
 /**
- * Each file's budget, from 1.0.0 (#203): the size of the build that becomes
- * 1.0.0 plus 5%, rounded up to the next 1,000 bytes (main.js 3,403,718,
- * styles.css 555,370). Raise one only on purpose, in a commit that says what
- * was added.
+ * Each file's budget: the measured size plus 5%, rounded up to the next 1,000
+ * bytes. Set at 1.0.0 (#203: main.js 3,403,718, styles.css 555,370), and set
+ * again by the Excalidraw upgrade (#269), from its build on the canary
+ * 0.18.0-9fbeaed with CodeMirror trimmed: main.js 3,904,270, styles.css
+ * 605,789. Raise one only on purpose, in a commit that says what was added.
  */
 export const BUDGET = {
-  'main.js': 3_574_000,
-  'styles.css': 584_000,
+  'main.js': 4_100_000,
+  'styles.css': 637_000,
 }
 
-/** Text that must not appear in any delivered file, and why. */
+/**
+ * Text that must not appear in any delivered file, and why. A name in the
+ * allowlist's `text` is taken out before the count: it holds one of these
+ * words and is no use of it.
+ */
 export const FORBIDDEN = [
   ['./fonts/', 'a font path Excalidraw would fetch: every font is a data: URL or local:'],
   ['esm.sh', "Excalidraw's CDN fallback"],
@@ -75,10 +80,12 @@ export function auditBundle({ files, sizes, packageVersion, allowlist }) {
     problems.push(`manifest.json's version ${version} isn't package.json's ${packageVersion}`)
   }
 
+  const allowedText = Object.keys(allowlist.text ?? {}).filter((key) => !key.startsWith('$'))
   for (const [name, text] of Object.entries(files)) {
     if (name === 'manifest.json') continue
+    const counted = allowedText.reduce((rest, allowed) => rest.replaceAll(allowed, ''), text)
     for (const [needle, why] of FORBIDDEN) {
-      const count = text.split(needle).length - 1
+      const count = counted.split(needle).length - 1
       if (count > 0) problems.push(`${name}: ${count} × "${needle}" (${why})`)
     }
     for (const match of text.matchAll(CREATE_ELEMENT)) {

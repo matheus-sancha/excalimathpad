@@ -418,9 +418,10 @@ and everything downstream recalculates. Engine: math.js, client-side.
   `localStorage` stay out of `main.js`; importing one into App at run time
   fails the audit. `esbuild.plugin.mjs`'s trims and rewrites
   ([`docs/context/plugin.md`](docs/context/plugin.md)) each depend on the
-  text of Excalidraw 0.18.1, math.js or KaTeX; the build or the audit fails an
-  upgrade that moves one. The audit's allowlist (`scripts/plugin-allowlist.json`)
-  says why each host and each library `<style>`/`<link>` site is harmless.
+  text of the pinned Excalidraw, math.js or KaTeX; the build (a zero in
+  `TALLY`) or the audit fails an upgrade that moves one. The audit's allowlist
+  (`scripts/plugin-allowlist.json`) says why each host, allowed name and
+  library `<style>`/`<link>` site is harmless.
 - **Excalidraw's typings give some of its API as `any`** (its `.d.ts` imports
   types the package doesn't ship; `setCursor` indexes a private member).
   `setCanvasCursor` (`addMath.ts`) and `clearHistory` (`sceneFile.ts`) state
@@ -474,8 +475,8 @@ and everything downstream recalculates. Engine: math.js, client-side.
   names the file.
 - Where the Sheet panel floats (an editor at or below its docking width), it
   covers Excalidraw's More tools; its ✕ closes it.
-- The plugin's `main.js` is about 3.40 MB and `styles.css` 0.56 MB; the audit
-  fails either over its budget (`BUDGET`, about 5% above, #203) or above
+- The plugin's `main.js` is about 3.90 MB and `styles.css` 0.61 MB; the audit
+  fails either over its budget (`BUDGET`, about 5% above, #203, #269) or above
   5,000,000 bytes, Obsidian Sync Standard's cap.
 - Excalidraw listens on the global `document` (copy, cut, paste, `keyup`,
   pointer moves and ups, scroll and others) and `window` (resize, blur, focus,

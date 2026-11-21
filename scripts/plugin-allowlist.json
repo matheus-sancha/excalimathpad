@@ -18,8 +18,14 @@
     "embed.reddit.com": "Excalidraw's embed pattern; never loaded (validateEmbeddable false)",
     "giphy.com": "Excalidraw's embed pattern; never loaded (validateEmbeddable false)",
     "gist.github.com": "Excalidraw's embed pattern; never loaded (validateEmbeddable false)",
+    "drive.google.com": "Excalidraw's embed pattern for a Google Drive video, and the address it gives that embed's iframe; never loaded (validateEmbeddable false)",
+    "www.instagram.com": "The address Excalidraw gives an Instagram embed's iframe; never loaded (validateEmbeddable false)",
     "libraries.excalidraw.com": "A link in Excalidraw's Publish library dialog, which the plugin never opens",
     "mermaid.js.org": "Links in Excalidraw's Mermaid dialog, which is trimmed from the plugin"
+  },
+  "text": {
+    "$comment": "A name that holds a forbidden word and is no use of it. The audit takes each out of the text before it counts the forbidden words, so the word anywhere else still fails.",
+    "localStorageQuotaExceeded": "The name of one of Excalidraw's messages (\"Browser storage quota exceeded. Changes will not be saved.\"), in its English texts and in every locale kept. A key in a table of texts reads and writes nothing, and no code in Excalidraw's package asks for the message: excalidraw.com's own app does, for its own browser storage"
   },
   "elementCreation": {
     "$comment": "Each createElement(\"style\" | \"link\") must sit near one of these words, which mark library code the app never reaches. The network-blocked run also fails on any <style> or <link> added at run time.",
