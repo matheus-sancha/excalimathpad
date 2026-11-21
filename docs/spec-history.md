@@ -603,7 +603,8 @@ The items with a recorded result. Those still open are in
     back in their five elements with the element still 1 px right; the next moved it back.
 - The cost of "changes a result" on the pump sheet: the engine run twice at each key in the form's field.
   **Measured (#261)** in headless Chromium on the pump sheet in six elements (the panel run, the built plugin,
-  keys 120 ms apart): one check, `planRename` with its two engine runs, was one task of 64 to 97 ms. That is
+  keys 120 ms apart): one check, `planRename` with its two engine runs, was one task of 64 to 105 ms over two
+  runs. That is
   felt if it stands between a key and its letter, so the check waits: the form's check is a deferred render
   ([section 14](spec-v1.md#14-engineering-constraints), 0.5.0), and each key reached its paint in 32 ms or
   less, with the check in a task of its own after it. No timer was needed: a run of keys faster than the check
