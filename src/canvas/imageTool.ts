@@ -1,19 +1,22 @@
 import { CaptureUpdateAction, convertToExcalidrawElements } from '@excalidraw/excalidraw'
 import type { BinaryFileData, DataURL, ExcalidrawImperativeAPI } from '@excalidraw/excalidraw/types'
 import type { FileId } from '@excalidraw/excalidraw/element/types'
+import { closeMoreTools } from './moreTools.ts'
 
 /**
  * Excalidraw's image tool, taken over in a vault (M4d, docs/spec-v1.md section
- * 12a, Data protection: Reach). Excalidraw 0.18 opens the operating system's
- * file picker from inside `setActiveTool`, which can read any file on the
- * disk; the plugin may read only one image the user picks from the vault. So a
- * press on the tool, or its key `9`, is stopped before Excalidraw hears it, the
- * vault's own picker opens instead, and the picked image is copied into the
- * sheet as Excalidraw stores any image (a `files` entry and an image element).
+ * 12a, Data protection: Reach). Excalidraw opens the operating system's file
+ * picker from inside `setActiveTool`, which can read any file on the disk; the
+ * plugin may read only one image the user picks from the vault. So a press on
+ * the tool, or its key `9`, is stopped before Excalidraw hears it, the vault's
+ * own picker opens instead, and the picked image is copied into the sheet as
+ * Excalidraw stores any image (a `files` entry and an image element).
  *
  * This relies on behaviour that isn't public API (the tool's
- * `data-testid="toolbar-image"` radio inside a `label.ToolIcon`, and its
- * numeric key), so it lives here with its contract tests
+ * `data-testid="toolbar-image"`, and its numeric key). Since the canary
+ * (`0.18.0-9fbeaed`) the tool is "Insert image", a menu item of More tools; on
+ * 0.18.1 it was a radio inside a `label.ToolIcon` on the toolbar. So it lives
+ * here with its contract tests
  * (`imageTool.excalidraw.test.tsx`), per ADR 0001. Images dropped or pasted on
  * the canvas stay Excalidraw's: the user handed those over themselves.
  */
@@ -24,7 +27,7 @@ export interface PickedImage {
   bytes: ArrayBuffer
 }
 
-/** The tool's radio, as Excalidraw 0.18 marks it. */
+/** The tool's item in More tools, as Excalidraw marks it. */
 export const IMAGE_TOOL_SELECTOR = '[data-testid="toolbar-image"]'
 
 /** Excalidraw's own cap on an image file (`MAX_ALLOWED_FILE_BYTES`, 4 MiB). */
@@ -42,14 +45,16 @@ export function takeOverImageTool(root: HTMLElement, keys: EventTarget, pick: ()
   const isTool = (target: EventTarget | null) => {
     const element = target as Element | null
     if (typeof element?.closest !== 'function' || !root.contains(element)) return false
-    if (element.matches(IMAGE_TOOL_SELECTOR)) return true
-    return !!element.closest('label.ToolIcon')?.querySelector(IMAGE_TOOL_SELECTOR)
+    // The press lands on the item or on its icon, text or key inside it.
+    return !!element.closest(IMAGE_TOOL_SELECTOR)
   }
-  // The label's click is what checks the radio; cancelling it keeps the tool as it was.
+  // The item's click is what starts the tool; stopped here it never reaches Excalidraw's menu,
+  // which then stays open, so More tools is closed as choosing an item closes it.
   const onClick = (event: Event) => {
     if (!isTool(event.target)) return
     event.preventDefault()
     event.stopPropagation()
+    closeMoreTools(root)
     pick()
   }
   const onKeyDown = (event: Event) => {

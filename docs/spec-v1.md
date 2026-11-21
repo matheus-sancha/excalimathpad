@@ -1385,7 +1385,10 @@ that hovers keeps hover.
   `)` is its own key.
 - **The canvas hint** for one selected math element reads "Double-tap a line, or tap Edit in
   Math settings" after a touch press, and the desktop wording again after a mouse or pen press
-  ([Selected math element](#selected-math-element)).
+  ([Selected math element](#selected-math-element)). From the Excalidraw upgrade a phone has no
+  canvas hint, for math or for anything else: Excalidraw's hint is part of its toolbar, which
+  its phone layout doesn't draw. The Format tab's own hint says the same there ("Double-tap a
+  line, or tap Edit"). A tablet and a computer keep the canvas hint.
 
 ### Selected math element
 
@@ -1397,6 +1400,12 @@ that hovers keeps hover.
 
 Actions stays whole, including Link. The panel can still cover math at the left of the
 view; that's accepted.
+
+**Where Excalidraw's panel is compact** (a tablet and a phone, from the Excalidraw upgrade):
+it is a row of buttons, and for math alone the row has no stroke or background colour; its
+style button opens Opacity alone; Duplicate and Delete stay, and Actions opens Layers and
+Actions (with Align for several). On a phone Duplicate and Delete are inside Actions, as
+Excalidraw puts them.
 
 **Anchor style is fixed, except opacity:** stroke `#868e96`, dashed, thin; background
 `#ffffff01`, solid; roughness 0; sharp corners. If paste styles, a mixed selection or a
@@ -2232,7 +2241,8 @@ From M4d, in the plugin. The web app's chrome above is unchanged.
 From M4d, in the plugin on a phone (`Platform.isPhone`). A tablet follows the docking rule
 above, by the editor's width (1229 px until M4e).
 
-- **The Sheet panel is a bottom sheet** across the view instead of the right sidebar. While a
+- **The Sheet panel is a bottom sheet** across the view instead of the right sidebar, over
+  Excalidraw's own bottom bar. While a
   line is open it sits just above the on-screen keyboard and is short: the quick keys, the
   tab icons and a few rows of the tab, which scroll inside it. With no line open it is
   taller, about half the view. Its ✕ closes it, as Math settings does. The tab contents are
@@ -3149,7 +3159,7 @@ The wording of every user-facing message. `<…>` is filled in. Numbers follow
 | Opening with unsaved changes | `Save changes to pump-sizing.excalimathpad?` Save, Don't save, Cancel | M1 |
 | A save that fails | `Couldn't save pump-sizing.excalimathpad: <reason>` | M1 |
 | The picker or the file read fails | `Couldn't open the file: <reason>` | M1 |
-| Hint, one math element selected | `Double-click a line or press Enter to edit` (on touch: `Double-tap a line, or tap Edit in Math settings`, M4d) | M1 |
+| Hint, one math element selected | `Double-click a line or press Enter to edit` (on touch: `Double-tap a line, or tap Edit in Math settings`, M4d; none on a phone from the Excalidraw upgrade) | M1 |
 | Browser's Print, on the web | `Use Print… from the app's menu` | M5 |
 | The pages couldn't be built (notice) | `The pages couldn't be built, so nothing was printed.` | M5 |
 
@@ -3769,13 +3779,35 @@ the six Playwright runs and the bundle audit fail. Each group below is one issue
   rule of [section 6](#6-undo) is to hold as written; one that can't is brought back to
   Matheus before a test is changed.
 - **Excalidraw's DOM,** each a contract in `src/canvas/` with its test against the installed
-  package: tools are `<button>`s with no radio, and the image tool is "Insert image" in More
-  tools, which the vault's picker takes over; More tools' own items are more, in another
-  order; the reduced panel's CSS no longer matches, so the whole panel shows; the hint's
-  markup changed, though the app's hint still shows; the docking width's four checks
-  fail; the pop-out bridge's copy and paste fail (with real keys in one window they work);
-  the view adds one listener on `document` beyond Excalidraw's; the touch run stops on a
-  phone. The z-indexes are unchanged.
+  package, redone for the canary (#268):
+  - **The image tool** is a menu item of More tools, still `[data-testid="toolbar-image"]`;
+    the vault's takeover stops its click there and closes More tools, since Excalidraw's menu
+    no longer hears the click that would.
+  - **More tools' own items** are eight, in a new order; Web Embed and Mermaid to Excalidraw
+    still share one test id, so the plugin hides them as before.
+  - **The reduced panel:** the panel's list is `.selected-shape-actions` (it was
+    `.panelColumn`), with the same order around Opacity. The compact panel of a tablet and a
+    phone is new: its two colours are hidden, and in its opened style sections everything
+    before Opacity. jsdom applies no stylesheet, so the touch run holds the compact one.
+  - **The hint** keeps its one span, with Excalidraw's keys now in `<kbd>`; a phone has none.
+  - **The docking width** is read by Excalidraw only on a `resize` now, not when the prop
+    changes: `SheetCanvas` sends one, on the view's window and the code's, each time a new
+    width crosses the docking width, and at no other time.
+  - **Copy** is written into the clipboard event itself and the event stopped (0.18.1 wrote
+    with the Clipboard API); **paste** reads the event's `items`. The pop-out bridge needs no
+    change: its copy of the event carries the same data and passes the stop back. With the
+    bridge off, a drag, a placing click and a paste still fail in a pop-out, so it stays.
+  - **A menu of Excalidraw's adds a `keydown` on the document** each time it mounts and takes
+    it off when it goes; the no-global-listener contract counts the listeners left standing,
+    not every add, so a remount isn't one.
+  - **The phone's bottom bar** has a layer of its own (`--zIndex-ui-bottom`, 60), above where
+    the bottom sheet was: the sheet sits one above that variable, under Excalidraw's menus and
+    dialogs.
+  - **Excalidraw's own behaviour that the contracts state:** a click on a locked element
+    selects nothing, what lies under it included (0.18.1 selected what lay under it), and
+    Esc deselects by itself. A locked math element still edits on a double-click, and the
+    second Esc is still the app's own write, which is no undo step.
+  - The z-indexes of the canvas, the overlay and the UI are unchanged.
 - **The plugin's bundle:** the canary's two `localStorage` uses are removed by the build;
   CodeMirror, a new dependency that makes a `<style>` at run time, and the larger Mermaid to
   Excalidraw are trimmed if the plugin never mounts them; the two new embed hosts go on the
@@ -4247,6 +4279,9 @@ Each section above ends with its own tickets.
   - **The plugin's memory gains nine preferences,** and both budgets are set again from the
     upgraded build.
   - **The image tool is in More tools,** not the toolbar: Excalidraw's own change.
+  - **A phone has no canvas hint** for a selected math element (#268): Excalidraw's phone
+    layout no longer draws a hint. Chosen by Matheus over the app drawing its own; the Format
+    tab's hint says the same there.
 
   Read by the session where the tickets were silent, **for Matheus to confirm on the pull
   request:**

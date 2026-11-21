@@ -101,13 +101,17 @@ describe('Excalidraw’s items hidden in the plugin (section 8, Inside an Obsidi
     expect(items).toEqual(['Web Embed', 'Mermaid to Excalidraw'])
     const headings = Array.from(document.querySelectorAll(VAULT_HIDDEN.generateHeading), labelOf)
     expect(headings).toEqual(['Generate'])
-    // The rest stays: Frame tool, Laser pointer and the app's own items.
+    // The rest stays: Excalidraw's other tools, the canary's new ones among them, and the app's own items.
     const kept = Array.from(
       document.querySelectorAll('.App-toolbar__extra-tools-dropdown .dropdown-menu-item'),
     ).filter((item) => !item.matches(VAULT_HIDDEN.embedAndMermaid))
     expect(kept.map((item) => item.querySelector('.dropdown-menu-item__text')?.textContent)).toEqual([
+      'Insert image',
       'Frame tool',
+      'Draw to shape',
       'Laser pointer',
+      'Bucket fill',
+      'Lasso selection',
       'Add math',
     ])
   })

@@ -268,7 +268,7 @@ and everything downstream recalculates. Engine: math.js, client-side.
   holds the phase contracts and `gestures.excalidraw.test.tsx` the gestures,
   against the installed package, each with the control of what Excalidraw does
   without the app; jsdom runs Excalidraw's hit-testing. **Two taps reach the
-  app first** (M4d, #147): Excalidraw 0.18.1's double tap is a native
+  app first** (M4d, #147): Excalidraw's double tap is a native
   `touchstart` listener on its interactive canvas that calls its double-click
   handler itself (on iOS it also cancels every touch, so no `click` follows a
   tap). A `dblclick` listener never sees it, so the app's capture
@@ -297,14 +297,13 @@ and everything downstream recalculates. Engine: math.js, client-side.
   adds no undo step (`anchorStyle.excalidraw.test.tsx`, with the control).
   Moved later, it would leave an entry that undoes nothing visible.
 - **The reduced panel and the hint are CSS on Excalidraw's DOM**
-  (`SheetCanvas.css`): the panel's children that have Opacity
-  (`label.control-label`) after them are hidden, and `.HintViewer`'s span is
-  replaced through `::after`, by a second rule under `data-math-touch` on
-  touch. Neither is public API;
-  `mathSelection.excalidraw.test.tsx` pins the order, the class and the span,
-  with a desktop-sized container, since jsdom's 0-wide one gets the phone
-  layout. jsdom applies no stylesheet, so the touch run reads the hint's
-  computed `::after` after a tap and after a click, on all four devices.
+  (`SheetCanvas.css`): what comes before Opacity (`label.control-label`) is
+  hidden in the full panel and in the compact one's opened sections, with the
+  compact one's two colours; `.HintViewer`'s span is replaced through
+  `::after`, by a second rule under `data-math-touch`. A phone has no hint.
+  None is public API: `mathSelection.excalidraw.test.tsx` pins the full panel
+  and the span (a desktop-sized container; jsdom applies no stylesheet), the
+  touch run the compact panel and the hint's computed `::after`.
 - **Size writes go through `writeAnchorSizes`, wrapped in `keepClean`.** A
   `NEVER` write also updates Excalidraw's captured copy of the anchor, which is
   why a line commit after size writes is still one step
@@ -359,8 +358,8 @@ and everything downstream recalculates. Engine: math.js, client-side.
   #198): `docksAbove(width)` (`src/canvas/panelWidth.ts`), 640 px plus the
   panel's width. `SheetCanvas` passes it to Excalidraw
   (`UIOptions.dockedSidebarBreakpoint`) and answers `panelDocks()` from it;
-  App asks only that. A second copy docks the panel where the app thinks it
-  floats; the panel run holds it.
+  App asks only that. Excalidraw reads it again only on a `resize`, which
+  `SheetCanvas` sends when a width crosses it. The panel run holds it.
 - **A field inside Excalidraw's container is `type="text"`.** Excalidraw
   runs its letter shortcuts on a key from any input that isn't text, number
   or password, so a `type="search"` filter in the Sheet panel lost the
@@ -451,7 +450,7 @@ and everything downstream recalculates. Engine: math.js, client-side.
   dialog box from the main body into the pop-out whose sheet had the last
   press or key (each view notes that on its own container), and gives the main
   body a `removeChild` that finds a moved box. Every one of these is
-  Excalidraw 0.18.1's text; the pop-out run fails an upgrade that moves it.
+  Excalidraw's text; the pop-out run fails an upgrade that moves it.
 - **Callbacks handed around unbound are function properties**, not methods
   (`SheetSession`, `DialogHost`, the scene store): the type-aware lint's
   `unbound-method` holds them to it.
@@ -479,7 +478,7 @@ and everything downstream recalculates. Engine: math.js, client-side.
 - The plugin's `main.js` is about 3.40 MB and `styles.css` 0.56 MB; the audit
   fails either over its budget (`BUDGET`, about 5% above, #203) or above
   5,000,000 bytes, Obsidian Sync Standard's cap.
-- Excalidraw 0.18.1 listens on the global `document` (copy, cut, paste, `keyup`,
+- Excalidraw listens on the global `document` (copy, cut, paste, `keyup`,
   pointer moves and ups, scroll and others) and `window` (resize, blur, focus,
   message, unload) by itself. The plugin's own code adds none
   (`plugin/test/SheetView.test.ts`, against Excalidraw alone). In a pop-out

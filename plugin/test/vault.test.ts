@@ -486,10 +486,15 @@ describe('the vault image picker (section 12a, Reach: one image the user picks)'
     'Assets/logo.SVG': new TextEncoder().encode('<svg xmlns="http://www.w3.org/2000/svg"/>').buffer,
   }
 
-  const pressImageTool = () =>
+  // Since the canary the image tool is "Insert image", an item of More tools.
+  const pressImageTool = () => {
     act(() => {
-      fireEvent.click(document.querySelector('[data-testid="toolbar-image"]')!.closest('label')!)
+      document.querySelector<HTMLElement>('.App-toolbar__extra-tools-trigger')!.click()
     })
+    act(() => {
+      fireEvent.click(document.querySelector('[data-testid="toolbar-image"]')!)
+    })
+  }
   const picker = () => modals.at(-1) as FuzzySuggestModal<unknown>
 
   beforeEach(() => {

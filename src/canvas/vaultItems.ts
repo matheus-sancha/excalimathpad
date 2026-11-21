@@ -8,7 +8,7 @@ export const VAULT_CLASS = 'sheet-canvas--vault'
 /**
  * Excalidraw's items hidden in the plugin (docs/spec-v1.md section 8, Inside
  * an Obsidian tab), by the selectors `SheetCanvas.css` hides under
- * `VAULT_CLASS`. Excalidraw 0.18.1 has no prop for any of them. Web Embed and
+ * `VAULT_CLASS`. Excalidraw has no prop for any of them (0.18.1, and the canary `0.18.0-9fbeaed`). Web Embed and
  * Mermaid to Excalidraw share one test id there, and the Generate heading over
  * them is a plain `div`, left empty once they go. Its command palette needs no
  * hiding: the package doesn't render it unless the host does.

@@ -188,8 +188,9 @@ describe('double-click (section 14: stopped at the stage)', () => {
     expect(positionOf()).toEqual({ x: 100, y: 50 })
   })
 
-  // Excalidraw's hit-testing skips the locked anchor and selects what lies
-  // under it; the locked element still owns the double-click (review of #51).
+  // A click on a locked anchor selects nothing since the canary, the drawing
+  // under it included (0.18.1 selected what lay under it); the locked element
+  // still owns the double-click (review of #51).
   it('a locked math element over a filled drawing edits, and the drawing gets no label', async () => {
     const [drawing] = convertToExcalidrawElements(
       [
@@ -212,7 +213,7 @@ describe('double-click (section 14: stopped at the stage)', () => {
     const { selected, editingText, textElements } = await mount({ elements: [drawing, locked] })
 
     clickOnCanvas(linePoint('m1', 2, 200))
-    expect(selected()).toEqual(['d1'])
+    expect(selected()).toEqual([])
     doubleClickLine('m1', 2)
 
     expect(field()!.value).toBe('b = 2')
@@ -228,7 +229,7 @@ describe('double-click (section 14: stopped at the stage)', () => {
     const { selected, editingText, textElements } = await mount({ elements: [below, locked] })
 
     clickOnCanvas(linePoint('m1', 1, 200))
-    expect(selected()).toEqual(['m2'])
+    expect(selected()).toEqual([])
     doubleClickLine('m1', 1)
 
     expect(field()!.value).toBe('a = 1')
@@ -289,13 +290,15 @@ describe('Enter (section 14: stopped on document)', () => {
 })
 
 describe('Esc', () => {
-  it('without the overlay, Excalidraw keeps the selection', async () => {
+  // 0.18.1 kept the selection on Esc, which is why the second Esc is the app's own write.
+  it('without the overlay, Excalidraw deselects by itself since the canary', async () => {
     const { key, selected } = await mount({ overlay: false })
     clickOnCanvas({ clientX: 300, clientY: 74 })
+    expect(selected()).toEqual(['m1'])
 
     key('Escape')
 
-    expect(selected()).toEqual(['m1'])
+    expect(selected()).toEqual([])
   })
 
   it('the first leaves the line with the element selected; the second deselects', async () => {

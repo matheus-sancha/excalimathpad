@@ -2,8 +2,10 @@ import { useEffect, useState } from 'react'
 
 /**
  * The app's items in Excalidraw's More tools dropdown (docs/spec-v1.md
- * section 8): Add math and Math settings sit under Frame, Web Embed and Laser
- * pointer, with no buttons of their own on the canvas.
+ * section 8): Add math and Math settings sit under Excalidraw's own tools
+ * (Insert image, Frame, Web Embed, Draw to shape, Laser pointer, Bucket fill,
+ * Lasso selection, Mermaid to Excalidraw), with no buttons of their own on the
+ * canvas.
  *
  * Excalidraw has no slot for this, so the items are drawn into a box of the
  * app's own, appended to the dropdown each time it opens. That relies on the

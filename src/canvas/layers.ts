@@ -3,10 +3,13 @@
  * one stacking context with the overlay: the shell's stage (`isolation:
  * isolate`), where neither slot sets a z-index, on purpose.
  *
- * Excalidraw 0.18.1 (`--zIndex-*` in its packaged `index.css`): canvas 1,
- * interactiveCanvas 2, svgLayer 3, wysiwyg 3 (its own text editor),
- * canvasButtons 3 (element link buttons), layerUI 4 (toolbar, panels, menus),
- * then eye-dropper, hyperlink, modal, popup, toast above that.
+ * Excalidraw (`--zIndex-*` in its packaged `index.css`; the same on 0.18.1 and
+ * the canary `0.18.0-9fbeaed`): canvas 1, interactiveCanvas 2, svgLayer 3,
+ * wysiwyg 3 (its own text editor), canvasButtons 3 (element link buttons),
+ * layerUI 4 (toolbar, panels, menus), then eye-dropper, hyperlink, modal,
+ * popup, toast above that. The canary adds layers for its own UI: ui-bottom
+ * 60 (the phone's bottom bar), ui-context-menu 90, ui-top 100, ui-main-menu
+ * 110, ui-library 120; the phone's bottom sheet sits one above ui-bottom.
  *
  * We use 2: a tie with the interactive canvas, which the overlay wins only by
  * coming later in the DOM (the AppShell renders the overlay slot after the
