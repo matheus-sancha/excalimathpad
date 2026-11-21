@@ -1,4 +1,5 @@
 import type { PrintLayout, PrintPage, PrintRow } from './pages.ts'
+import { words } from '../text/words.ts'
 
 /**
  * The print view (docs/spec-v1.md section 11, Print, and section 14, Print):
@@ -34,7 +35,7 @@ export interface PrintParts {
   elements: readonly PrintElementView[]
   /** For each page, the drawings that cross it; null where none does. */
   drawings: readonly (PageDrawings | null)[]
-  /** The footer: the file's name ("Untitled" unsaved) and the print date, `YYYY-MM-DD`. */
+  /** The footer: the file's name ("Untitled" unsaved, in the language shown) and the print date, `YYYY-MM-DD` in both languages. */
   footer: { name: string; date: string }
   /** The overlay's colours (`--math-*`), which its views read from their ancestor. */
   colors: Readonly<Record<string, string>>
@@ -218,7 +219,8 @@ export function buildPrintView(doc: Document, parts: PrintParts): HTMLElement {
     date.textContent = footer.date
     const count = doc.createElement('span')
     count.className = 'print-view__count'
-    count.textContent = `${index + 1} of ${pages.length}`
+    // `2 of 3`, `2 de 3`: the footer's one word, in the language shown (section 11, Furniture).
+    count.textContent = words().printView.pageOf(index + 1, pages.length)
     foot.append(name, date, count)
 
     paper.append(frame, foot)

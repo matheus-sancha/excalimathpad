@@ -2,10 +2,10 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useSyncExternalStore } fro
 import { createPortal } from 'react-dom'
 import { useBesideMenu, useFileRoutes, type FileRouteHandlers } from '../canvas/fileRoutes.ts'
 import { ABOVE_DRAWING_BELOW_UI_Z_INDEX } from '../canvas/layers.ts'
-import type { Choice, DialogHost, PendingDialog } from './dialogs.ts'
+import { dialogTitle, type Choice, type DialogHost, type PendingDialog } from './dialogs.ts'
 import type { SheetFileHandle } from './fileAccess.ts'
 import { displayName, type SheetSession } from './sheetSession.ts'
-import { useWords } from '../text/words.ts'
+import { useWords, type Words } from '../text/words.ts'
 import './FileChrome.css'
 
 export interface FileChromeProps {
@@ -109,15 +109,18 @@ function asFileHandle(value: unknown): SheetFileHandle | null {
     : null
 }
 
-const LABELS: Record<Choice, string> = {
-  restore: 'Restore',
-  discard: 'Discard',
-  save: 'Save',
-  'dont-save': "Don't save",
-  cancel: 'Cancel',
-}
+/** Each choice's button, in the language shown (section 13, App). */
+const label = (choice: Choice, { dialogs }: Words): string =>
+  ({
+    restore: dialogs.restoreButton,
+    discard: dialogs.discard,
+    save: dialogs.save,
+    'dont-save': dialogs.dontSave,
+    cancel: dialogs.cancel,
+  })[choice]
 
 function FileDialog({ dialog }: { dialog: PendingDialog }) {
+  const words = useWords()
   const firstRef = useRef<HTMLButtonElement>(null)
   useLayoutEffect(() => firstRef.current?.focus(), [dialog])
 
@@ -133,7 +136,7 @@ function FileDialog({ dialog }: { dialog: PendingDialog }) {
         }}
       >
         <p id="file-dialog-title" className="file-dialog__title">
-          {dialog.title}
+          {dialogTitle(dialog, words)}
         </p>
         <div className="file-dialog__buttons">
           {dialog.choices.map((choice, i) => (
@@ -144,7 +147,7 @@ function FileDialog({ dialog }: { dialog: PendingDialog }) {
               className={i === 0 ? 'file-dialog__primary' : undefined}
               onClick={() => dialog.answer(choice)}
             >
-              {LABELS[choice]}
+              {label(choice, words)}
             </button>
           ))}
         </div>

@@ -1378,6 +1378,52 @@ describe('the offer to rename, on a committed line', () => {
     type(text)
   }
 
+  describe('in Português (section 13, Rename and Language, 0.6.0)', () => {
+    const portuguese = { rememberedLanguage: () => 'pt-BR' as const, rememberLanguage: () => {} }
+    const startInPortuguese = async () => {
+      renderApp({ initialElements: pump(), language: portuguese })
+      await screen.findByTestId('file-name')
+      await waitFor(() => expect(document.title).toBe('Sem título'))
+      await screen.findAllByRole('list', { name: 'Lines' })
+    }
+    /** A press by a finger, as the browser sends it. */
+    const tap = (button: HTMLElement) => {
+      fireEvent.pointerDown(button, { pointerType: 'touch', isPrimary: true })
+      fireEvent.mouseDown(button)
+      fireEvent.click(button)
+    }
+
+    it('words the card, its lines and the toast, which names Ctrl+Z', async () => {
+      await startInPortuguese()
+      edit('fluid', 1, 'rho_w = 1000 kg/m^3')
+      key('Escape')
+
+      const asked = await screen.findByRole('group', { name: 'Renomear rho para rho_w em 2 linhas?' })
+      expect(asked.querySelector('.math-offer__ask')).toHaveTextContent('Renomear rho para rho_w em 2 linhas?')
+      expect(within(asked).getByRole('button', { name: 'Manter rho' })).toBeInTheDocument()
+      press(within(asked).getByRole('button', { name: 'em 2 linhas' }))
+      expect(within(asked).getAllByRole('listitem').map((item) => item.textContent)).toEqual([
+        'Bloco 2, linha 1a = rho * 2',
+        'Bloco 2, linha 2b = rho + 1 kg/m^3',
+      ])
+
+      press(within(asked).getByRole('button', { name: 'Renomear' }))
+      expect(await screen.findByText('rho foi renomeado para rho_w em 2 linhas. Ctrl+Z desfaz.')).toBeInTheDocument()
+    })
+
+    it('names Excalidraw’s own Desfazer in the toast after a rename by touch', async () => {
+      await startInPortuguese()
+      edit('fluid', 1, 'rho_w = 1000 kg/m^3')
+      key('Escape')
+
+      const asked = await screen.findByRole('group', { name: 'Renomear rho para rho_w em 2 linhas?' })
+      tap(within(asked).getByRole('button', { name: 'Renomear' }))
+      expect(
+        await screen.findByText('rho foi renomeado para rho_w em 2 linhas. Toque em Desfazer para voltar.'),
+      ).toBeInTheDocument()
+    })
+  })
+
   it('↓ commits the line and shows the card with its count; the next line is typed while it waits; Rename changes the uses; two Ctrl+Z put the sheet back, the uses first', async () => {
     const { undo } = await start()
     edit('fluid', 1, 'rho_w = 1000 kg/m^3')

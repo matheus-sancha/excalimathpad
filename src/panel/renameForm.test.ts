@@ -134,9 +134,4 @@ describe('the rename’s words (section 13)', () => {
     expect([RENAME_WORDS.lines(7), RENAME_WORDS.lines(1)]).toEqual(['Changes 7 lines:', 'Changes 1 line:'])
     expect([RENAME_WORDS.results(2), RENAME_WORDS.results(1)]).toEqual(['This changes 2 results:', 'This changes 1 result:'])
   })
-
-  it('the toast names Ctrl+Z, and Undo on touch', () => {
-    expect(RENAME_WORDS.renamed('rho', 'rho_w', 7, false)).toBe('Renamed rho to rho_w in 7 lines. Ctrl+Z takes it back.')
-    expect(RENAME_WORDS.renamed('rho', 'rho_w', 1, true)).toBe('Renamed rho to rho_w in 1 line. Undo takes it back.')
-  })
 })

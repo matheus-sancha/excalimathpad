@@ -8,19 +8,23 @@ import { sampleSheet } from '../test/sheets.ts'
 import { linesOf } from '../test/sheetView.ts'
 import type { RecoveryCopy } from './recovery.ts'
 import { writeSheet } from './sheetFormat.ts'
+import { ptBR } from '../text/ptBR.ts'
+import { showLanguage } from '../text/words.ts'
 
 /**
  * The file chrome in the whole app, on the real Excalidraw: the menu, the keys
  * it takes from Excalidraw, the name and title, and the two questions.
  */
-async function mount(copy: RecoveryCopy | null = null) {
+async function mount(copy: RecoveryCopy | null = null, { portuguese = false } = {}) {
   const files = fakeFileAccess()
   const recovery = fakeRecovery(copy)
-  const view = render(<App files={files} recovery={recovery} initialElements={sampleSheet()} />)
+  // Português as a device remembers it (section 8, Language).
+  const language = portuguese ? { rememberedLanguage: () => 'pt-BR' as const, rememberLanguage: () => {} } : undefined
+  const view = render(<App files={files} recovery={recovery} initialElements={sampleSheet()} language={language} />)
   await screen.findAllByRole('list', { name: 'Lines' })
   const name = await screen.findByTestId('file-name')
   // The session takes the clean mark once Excalidraw has loaded the sheet.
-  if (!copy) await waitFor(() => expect(document.title).toBe('Untitled'))
+  if (!copy) await waitFor(() => expect(document.title).toBe(portuguese ? 'Sem título' : 'Untitled'))
   return { files, recovery, name, container: view.container }
 }
 
@@ -576,5 +580,82 @@ describe('a sheet saved by 0.2.x (format 1)', () => {
       formats: '@red @text-green if v > 2 m/s @bold @text-red if v > 3 m/s',
     })
     expect(row(1)).toHaveClass('is-bold', 'is-red', 'is-text-green')
+  })
+})
+
+describe('in Português (section 13, App, 0.6.0)', () => {
+  const toast = () => document.querySelector('.Toast__message')?.textContent ?? null
+
+  it('asks the recovery copy’s question and offers its buttons in Português', async () => {
+    const { recovery } = await mount({ text: sheetText(['x = 7 m']), name: null, handle: null }, { portuguese: true })
+
+    const dialog = await screen.findByRole('alertdialog')
+    expect(dialog).toHaveTextContent('Restaurar as alterações não salvas de uma folha sem título?')
+    expect(within(dialog).getAllByRole('button').map((b) => b.textContent)).toEqual(['Restaurar', 'Descartar'])
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Descartar' }))
+    await waitFor(() => expect(recovery.current()).toBeNull())
+  })
+
+  it('names the file in the recovery question as it is', async () => {
+    await mount({ text: sheetText(['x = 7 m']), name: 'pump-sizing.excalimathpad', handle: null }, { portuguese: true })
+    expect(await screen.findByRole('alertdialog')).toHaveTextContent(
+      'Restaurar as alterações não salvas de pump-sizing.excalimathpad?',
+    )
+  })
+
+  it('asks about unsaved changes to Sem título.excalimathpad, with Salvar, Não salvar and Cancelar', async () => {
+    const { files } = await mount(null, { portuguese: true })
+    commitLine(1, 'R = 1 kohm')
+    files.open.mockResolvedValue({ name: 'pump.excalimathpad', text: sheetText(['x = 1']), handle: null })
+
+    fireEvent.keyDown(canvasRoot(), { key: 'o', ctrlKey: true })
+
+    const dialog = await screen.findByRole('alertdialog')
+    expect(dialog).toHaveTextContent('Salvar as alterações em Sem título.excalimathpad?')
+    expect(within(dialog).getAllByRole('button').map((b) => b.textContent)).toEqual(['Salvar', 'Não salvar', 'Cancelar'])
+    fireEvent.keyDown(dialog, { key: 'Escape' })
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull())
+  })
+
+  it('suggests Sem título.excalimathpad for a new sheet’s Save as', async () => {
+    const { files } = await mount(null, { portuguese: true })
+    fireEvent.keyDown(canvasRoot(), { key: 's', ctrlKey: true })
+    await waitFor(() => expect(files.saveAs).toHaveBeenCalledOnce())
+    expect(files.saveAs.mock.calls[0][0]).toBe('Sem título.excalimathpad')
+  })
+
+  it('refuses a newer file in Português', async () => {
+    const { files } = await mount(null, { portuguese: true })
+    files.open.mockResolvedValue({
+      name: 'future.excalimathpad',
+      text: JSON.stringify({ type: 'excalidraw', elements: [], excalimathpad: { format: 3 } }),
+      handle: null,
+    })
+    fireEvent.keyDown(canvasRoot(), { key: 'o', ctrlKey: true })
+    expect(await screen.findByText('Esta folha foi salva por um Excalimathpad mais novo. Atualize o app.')).toBeInTheDocument()
+  })
+
+  it('words its own reason in Português, and passes the browser’s through as it arrives', async () => {
+    const { files } = await mount(null, { portuguese: true })
+    files.saveAs.mockRejectedValueOnce(new DOMException('The request is not allowed by the user agent.', 'NotAllowedError'))
+    fireEvent.keyDown(canvasRoot(), { key: 's', ctrlKey: true })
+    await waitFor(() =>
+      expect(toast()).toBe('Não foi possível salvar Sem título.excalimathpad: The request is not allowed by the user agent.'),
+    )
+
+    files.open.mockRejectedValueOnce(new Error(ptBR.dialogs.reasons.cannotReadAgain))
+    fireEvent.keyDown(canvasRoot(), { key: 'o', ctrlKey: true })
+    await waitFor(() => expect(toast()).toBe('Não foi possível abrir o arquivo: este navegador não consegue ler um arquivo de novo'))
+  })
+
+  it('re-words a question already open when the language changes', async () => {
+    await mount({ text: sheetText(['x = 7 m']), name: null, handle: null })
+    const dialog = await screen.findByRole('alertdialog')
+    expect(dialog).toHaveTextContent('Restore unsaved changes to an untitled sheet?')
+
+    act(() => showLanguage('pt-BR'))
+    onTestFinished(() => showLanguage('en'))
+    expect(dialog).toHaveTextContent('Restaurar as alterações não salvas de uma folha sem título?')
+    expect(within(dialog).getByRole('button', { name: 'Restaurar' })).toBeInTheDocument()
   })
 })

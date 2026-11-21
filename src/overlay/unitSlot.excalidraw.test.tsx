@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it, onTestFinished } from 'vitest'
 import type { ExcalidrawElement } from '@excalidraw/excalidraw/element/types'
 import { SheetCanvas, type SheetCanvasHandle } from '../canvas/SheetCanvas.tsx'
@@ -14,6 +14,7 @@ import {
   ROW_TOP,
 } from '../test/gestures.ts'
 import { MathOverlay } from './MathOverlay.tsx'
+import { showLanguage } from '../text/words.ts'
 
 /**
  * The unit slot against the real Excalidraw 0.18.1 (docs/spec-v1.md sections 5,
@@ -124,6 +125,19 @@ describe('the unit slot (docs/spec-v1.md section 5)', () => {
     expect(lineField()).toBeNull()
     const options = screen.getAllByRole('option').map((option) => option.textContent)
     expect(options[0]).toBe('Sheet units45.43 kPa')
+    expect(options).toContain('bar0.4543 bar')
+  })
+
+  it('names its field and list, and Sheet units, in the language shown; the units stay as they are (0.6.0)', async () => {
+    await mount()
+    act(() => showLanguage('pt-BR'))
+    onTestFinished(() => showLanguage('en'))
+
+    clickOnCanvas(onSlot('m1', 1))
+
+    expect(screen.getByRole('textbox', { name: 'Unidade' })).toHaveFocus()
+    const options = within(screen.getByRole('listbox', { name: 'Unidades' })).getAllByRole('option').map((option) => option.textContent)
+    expect(options[0]).toBe('Unidades da folha45.43 kPa')
     expect(options).toContain('bar0.4543 bar')
   })
 

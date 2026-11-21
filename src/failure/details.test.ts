@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { failureDetails, failureOf, FAILURE_MESSAGES, scrub, sheetWords, type FailureHome } from './details.ts'
+import { failureDetails, failureOf, NO_CONTENT, scrub, sheetWords, type FailureHome } from './details.ts'
 
 const WEB: FailureHome = { version: '0.3.0', stamp: 'abc1234 · 2026-11-16', home: 'web', device: null }
 const PLUGIN: FailureHome = { version: '0.3.0', stamp: '0.3.0', home: 'Obsidian plugin', device: 'tablet' }
@@ -21,22 +21,30 @@ describe('failureDetails (docs/spec-v1.md section 4, Copy details)', () => {
     stack: 'TypeError: Unexpected type of argument\n    at systemUnit (display.ts:106:12)\n    at variablesOf (evaluate.ts:900:3)\n',
   }
 
-  it('says the version and build stamp, the home, what failed and the error with its stack', () => {
-    expect(failureDetails('view', failure, WEB, []).split('\n')).toEqual([
+  it('says the version and build stamp, the home, the language, what failed and the error with its stack', () => {
+    expect(failureDetails('view', failure, WEB, [], 'en').split('\n')).toEqual([
       'Excalimathpad 0.3.0 (abc1234 · 2026-11-16)',
       'web',
+      'Language: English',
       'What failed: the view',
       'TypeError: Unexpected type of argument',
       '    at systemUnit (display.ts:106:12)',
       '    at variablesOf (evaluate.ts:900:3)',
-      FAILURE_MESSAGES.noContent,
+      NO_CONTENT,
     ])
   })
 
+  it('stays English in Português, naming the language in its own words (0.6.0)', () => {
+    const details = failureDetails('element', failure, PLUGIN, [], 'pt-BR').split('\n')
+    expect(details.slice(0, 4)).toEqual(['Excalimathpad 0.3.0', 'Obsidian plugin, tablet', 'Language: Português (Brasil)', 'What failed: an element'])
+    expect(details.at(-1)).toBe('(no sheet content is included)')
+  })
+
   it('says the plugin’s device, and its version once: the plugin’s stamp is its version', () => {
-    expect(failureDetails('chart', failure, PLUGIN, []).split('\n').slice(0, 3)).toEqual([
+    expect(failureDetails('chart', failure, PLUGIN, [], 'en').split('\n').slice(0, 4)).toEqual([
       'Excalimathpad 0.3.0',
       'Obsidian plugin, tablet',
+      'Language: English',
       'What failed: a chart',
     ])
   })
@@ -46,7 +54,7 @@ describe('failureDetails (docs/spec-v1.md section 4, Copy details)', () => {
     ['element', 'an element'],
     ['tab', 'a tab'],
   ] as const)('names a failed %s', (what, said) => {
-    expect(failureDetails(what, failure, WEB, [])).toContain(`What failed: ${said}`)
+    expect(failureDetails(what, failure, WEB, [], 'en')).toContain(`What failed: ${said}`)
   })
 
   it('cuts the sheet’s words out of the error, and leaves the stack’s frames whole', () => {
@@ -55,7 +63,7 @@ describe('failureDetails (docs/spec-v1.md section 4, Copy details)', () => {
       stack: 'Error: Undefined symbol zone_x in zone_x = r_t cos(theta) i\n    at theta (evaluate.ts:1:1)',
     }
     const words = sheetWords([{ source: 'r_t = 0.125 mm\nzone_x = r_t cos(theta) i', lines: [] }])
-    const details = failureDetails('line', leaky, WEB, words)
+    const details = failureDetails('line', leaky, WEB, words, 'en')
     expect(details).toContain('Error: Undefined symbol … in …')
     expect(details).not.toContain('zone_x')
     expect(details).not.toContain('r_t')
@@ -63,7 +71,7 @@ describe('failureDetails (docs/spec-v1.md section 4, Copy details)', () => {
   })
 
   it('keeps a stack whose first line isn’t the message (Firefox, Safari)', () => {
-    const details = failureDetails('view', { text: 'Error: x', stack: 'render@app.js:1:2\ncommit@app.js:3:4' }, WEB, [])
+    const details = failureDetails('view', { text: 'Error: x', stack: 'render@app.js:1:2\ncommit@app.js:3:4' }, WEB, [], 'en')
     expect(details).toContain('Error: x\nrender@app.js:1:2\ncommit@app.js:3:4\n')
   })
 })

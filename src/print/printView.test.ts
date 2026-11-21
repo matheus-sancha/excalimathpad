@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, onTestFinished } from 'vitest'
+import { showLanguage } from '../text/words.ts'
 import { printPages, type PrintRow } from './pages.ts'
 import { buildPrintView, printCss, printDate, PRINT_VIEW_CLASS, type PrintElementView } from './printView.ts'
 
@@ -90,6 +91,18 @@ describe('the print view', () => {
       'pump-sizing.excalimathpad2026-11-161 of 3',
       'pump-sizing.excalimathpad2026-11-162 of 3',
       'pump-sizing.excalimathpad2026-11-163 of 3',
+    ])
+  })
+
+  it('in Português, counts the pages with "de" and keeps the date ISO (section 11, Furniture, 0.6.0)', () => {
+    showLanguage('pt-BR')
+    onTestFinished(() => showLanguage('en'))
+    const { pages } = build([element('a', 0, 120)])
+
+    expect(pages.map((page) => [...page.querySelectorAll('.print-view__footer > span')].map((span) => span.textContent))).toEqual([
+      ['pump-sizing.excalimathpad', '2026-11-16', '1 de 3'],
+      ['pump-sizing.excalimathpad', '2026-11-16', '2 de 3'],
+      ['pump-sizing.excalimathpad', '2026-11-16', '3 de 3'],
     ])
   })
 
