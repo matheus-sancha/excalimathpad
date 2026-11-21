@@ -1,0 +1,52 @@
+name: Test week
+description: The maintainer's weekly record of a beta during the test period before 1.0.0.
+title: "Test week N (version)"
+body:
+  - type: markdown
+    attributes:
+      value: |
+        One issue a week, Monday to Sunday, during the test period ([spec section 16](https://github.com/matheus-sancha/excalimathpad/blob/main/docs/spec-v1.md#the-test-period)). Put the week's number and the beta in the title: "Test week 2 (0.6.0)".
+
+        A week counts only when the beta was used on real sheets; silence alone is not a pass. A quiet week brought no new bug that gives a wrong result, loses work or stops a sheet from opening. Using Excalimathpad and found something? Please use the [Bug](https://github.com/matheus-sancha/excalimathpad/issues/new?template=bug.yml) or [Idea](https://github.com/matheus-sancha/excalimathpad/issues/new?template=idea.yml) form instead.
+  - type: input
+    id: beta
+    attributes:
+      label: The beta
+      description: The version used this week, the last line of the ☰ menu.
+      placeholder: 0.6.0
+    validations:
+      required: true
+  - type: textarea
+    id: used-by
+    attributes:
+      label: Used by
+      description: Who used the beta, where (in Obsidian or the browser) and on which device. A week only the maintainer used counts.
+      placeholder: |
+        - Two testers, the plugin on a Windows 11 PC
+        - Matheus, the plugin on the work laptop
+    validations:
+      required: true
+  - type: textarea
+    id: sheets
+    attributes:
+      label: Sheets
+      description: The real sheets it was used on, by what they calculate. Nothing confidential.
+      placeholder: A pump sizing, a bolt preload check
+    validations:
+      required: true
+  - type: textarea
+    id: bugs
+    attributes:
+      label: Bugs
+      description: One line each. Say whether it gives a wrong result, loses work or stops a sheet from opening, since those end the quiet week. Each becomes its own Bug-form issue the day it is sorted, and that issue is linked here. Write "None" for none.
+      placeholder: |
+        1. Can't select area in in^2: #229
+    validations:
+      required: true
+  - type: textarea
+    id: ideas
+    attributes:
+      label: Ideas
+      description: One line each. Ideas stay as lines here and wait for after 1.0.0, unless one is pulled in by name. Write "None" for none.
+    validations:
+      required: true

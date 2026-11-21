@@ -2152,8 +2152,8 @@ From 0.5.0, in both homes, on Excalidraw 0.18.1.
 ### The Excalidraw upgrade
 
 The app moves from Excalidraw 0.18.1 to a pinned canary build, `0.18.0-9fbeaed`, because no
-release holds the five items the testers asked for. It is `0.5.0`'s last piece and slides
-alone: in `0.5.0` if it is green on the day, otherwise a `0.6.x`
+release holds the five items the testers asked for. It was `0.5.0`'s last piece and slid
+alone: it wasn't green on the day, so it ships as a `0.6.x` during test week 2
 ([The test period](#the-test-period)). Until it is merged, everything below is not built,
 and the rest of this spec describes the app on 0.18.1. What the canary was seen to do is in
 [`docs/research/excalidraw-canary.md`](research/excalidraw-canary.md).
@@ -4058,9 +4058,9 @@ with the next. The releases, by version:
 |---|---|---|---|
 | `0.4.0` | M4e and M5, v1's last two milestones | 2026-11-17 | Week 1: two testers, the plugin on a Windows 11 PC. Its feedback: [Bugs Week 1](https://github.com/matheus-sancha/excalimathpad/issues/227), [Ideas from week 1](https://github.com/matheus-sancha/excalimathpad/issues/228) |
 | `0.4.1` | Week 1's bug: a display unit that starts with `in` ([#229](https://github.com/matheus-sancha/excalimathpad/issues/229)) | 2026-11-20 | Week 1 |
-| `0.5.0` | Week 1's ideas: [renaming a name](#renaming-a-name), [Language](#language), and [the Excalidraw upgrade](#the-excalidraw-upgrade) if its branch is green and merged before the release | Due by Sunday 2026-11-22 | None of its own: `0.6.0` is due the same day |
+| `0.5.0` | Week 1's ideas: [renaming a name](#renaming-a-name), the form and the offer (#260 to #262), and [Language](#language) (#263), on Excalidraw 0.18.1. [The Excalidraw upgrade](#the-excalidraw-upgrade) wasn't green on the day (#270 to #273 open) and slid to a `0.6.x` | 2026-11-21 | None of its own: `0.6.0` is due the next day |
 | `0.6.0` | The AI features, in both homes, on their own map, [Spec for 0.6.0](https://github.com/matheus-sancha/excalimathpad/issues/238). The last beta | Due by Sunday 2026-11-22 | Week 2, 2026-11-23 to 2026-11-29 |
-| `0.6.x` | What slid from `0.5.0` or `0.6.0` (the Excalidraw upgrade, if it wasn't green), and fixes | During week 2 | The quiet week is counted from the release that completes `0.6.0`'s list |
+| `0.6.x` | What slid from `0.5.0` or `0.6.0`, and fixes. From `0.5.0`: the Excalidraw upgrade, its eight issues together (#266 to #273) | During week 2 | The quiet week is counted from the release that completes `0.6.0`'s list |
 | `1.0.0` | The last beta's code, the documents and the version (#203) | After a quiet week; at the earliest about 2026-11-30 | None |
 
 - **A test week** is Monday to Sunday. It counts when the beta was used on real sheets, by the
@@ -4087,7 +4087,7 @@ issues are closed with them when `0.5.0` is released ([#264](https://github.com/
 |---|---|
 | Can't select area in in^2 | Fixed in `0.4.1` (#229) |
 | Autoswap variables | `0.5.0`: [renaming a name](#renaming-a-name) |
-| Sticky notes, draw to shape, bucket fill, lasso selection, Excalidraw's preferences | `0.5.0`, through [the Excalidraw upgrade](#the-excalidraw-upgrade): no release after 0.18.1 holds them, so the app moves to a pinned canary build, with all five shown. Built on its own branch; if it isn't green by Sunday it ships alone as a `0.6.x` |
+| Sticky notes, draw to shape, bucket fill, lasso selection, Excalidraw's preferences | A `0.6.x` during week 2, through [the Excalidraw upgrade](#the-excalidraw-upgrade): no release after 0.18.1 holds them, so the app moves to a pinned canary build, with all five shown. Built on its own branch, it wasn't green by `0.5.0`'s release, so it ships alone |
 | Language select | `0.5.0`: [Language](#language), English and Português (Brasil), Excalidraw's own text only |
 | Web embed | Refused in the plugin through 1.0.0; it is in the web app ([section 1](#1-what-v1-is-and-what-it-isnt)) |
 | Live collaboration | Refused: not planned ([section 1](#1-what-v1-is-and-what-it-isnt)) |
@@ -4144,7 +4144,8 @@ new keys in Obsidian on the work laptop, the sheet refused by the build before i
 second device, and the device checklist, since the upgrade changes touch, panel and
 overlay code ([section 12a](#releases)). Merged before 0.5.0's release issue runs the
 Release button, the upgrade is in `0.5.0`; otherwise the branch waits and it is a `0.6.x`.
-The file's format rises in whichever release that is ([section 7](#the-file)).
+The file's format rises in whichever release that is ([section 7](#the-file)). It wasn't:
+`0.5.0` was released on 2026-11-21 with #270 to #273 open, so the upgrade is a `0.6.x`.
 
 ### The finish line
 

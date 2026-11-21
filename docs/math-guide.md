@@ -68,6 +68,7 @@ One line holds one statement. Assignment is a plain `=`; Mathcad's `:=` isn't ac
 - A Greek word becomes its letter: `rho_w` shows ρ with w below, `DeltaP` shows ΔP, `T_alpha` shows T with α below.
 - A name used above the line that defines it is an error: `x is defined below`. A name whose own line failed is an error below it: `x has an error above`.
 - `table`, `plot`, `solve` and `if` belong to the app and can't be assigned to.
+- **To rename a name** in every line that uses it, press its ✎ in the Variables tab, or change it in its own line and answer the card beside it: see [The Sheet panel](#14-the-sheet-panel).
 
 **Parsing that catches people:**
 
@@ -458,8 +459,15 @@ The Sheet panel's Symbols tab is a set of buttons that type, at the caret of the
 - An element with a title is named by its title in Variables and Problems; otherwise by its position on the sheet.
 - A press in the panel never leaves the line you are editing; only a press in a filter box does.
 - Settings are saved in the sheet's file and are not part of undo.
+- **☰ → Language**, below Dark mode, shows Excalidraw's own tools, menus and Help in English or Português (Brasil). The math, this panel, the messages and this guide stay in English. The choice is kept on this device, not in the sheet.
 - The panel is 320 px wide. Drag its left edge to make it anything from 280 to 480 px; a double-click on the edge puts 320 px back. With the edge focused, **←** and **→** move it 16 px and **Home** puts it back. The width is remembered on this device, not in the sheet.
 - The panel docks beside the sheet when the window, or the Obsidian tab, is wider than 640 px plus the panel's width (960 px at 320 px). On a narrower one it floats over the sheet, closes on a press outside it, and an edit doesn't open it: select the element, open Math settings, and press **Edit** in the Format tab. On a phone, in Obsidian, it is a sheet along the bottom, above the keyboard.
+
+**Renaming a name.** Every Variables row ends in a ✎. It opens a form under the row: type the new name, read the lines it changes, and press **Rename** or Enter (Esc cancels). It changes the line that assigns the name and every line below that uses it, up to the next line that assigns it again; notes, comments, texts in quotes, titles and the unit after `in` are left as they are.
+
+- Rename is dimmed for a name the sheet already has, a reserved word, or text that isn't a name (see [Common messages](#17-common-messages)). A unit's name is allowed, with its ⚠. If the rename would change a result, the form says so in amber, with the lines.
+- A rename is one undo step: **Ctrl+Z** takes all of it back. Every line it changed flashes.
+- **Or change the name in its own line.** When you leave the line, a card beside it asks "Rename `rho` to `rho_w` in 6 lines?". **Rename** changes those lines too, as an undo step of its own after the line's; **Keep rho** leaves them, for when you meant a new name. On a phone the card is a row at the top of the bottom sheet.
 
 ## 15. Files and recovery
 
@@ -481,7 +489,7 @@ The Sheet panel's Symbols tab is a set of buttons that type, at the caret of the
 - The commands **Add math**, **Toggle Math settings**, **Open Math guide** and, on a computer, **Print…** act on the active sheet. They have no hotkeys until you set some.
 - **Print is for a computer.** There, the **Print…** command, or **Print…** at the top of the ☰ menu, prints the whole sheet through the system's print dialog, with nothing of Obsidian's on the paper. A notice first names the paper to choose in the dialog, such as "Choose A4, portrait in the print dialog.": the dialog prints on the paper chosen there, not on the sheet's Page. For a PDF, choose the system's PDF printer, such as Microsoft Print to PDF. To move a break, look at the PDF, move something on the sheet and print again. On a phone or tablet there is no Print….
 
-**Undo** is Excalidraw's own and covers the math: one step per line you edit, one per press in the Format tab, and one per change of an element's width. While a line is open, **Ctrl+Z** undoes typing inside that line only.
+**Undo** is Excalidraw's own and covers the math: one step per line you edit, one per rename, one per press in the Format tab, and one per change of an element's width. While a line is open, **Ctrl+Z** undoes typing inside that line only.
 
 ## 16. Keys and gestures
 
@@ -568,6 +576,14 @@ Messages say what is wrong in plain words, in the result cell and in the Problem
 | This file isn't a sheet, so it wasn't opened. | The file isn't a sheet or a drawing |
 | Couldn't save … | The save failed. Your work is still open: save again |
 | … changed elsewhere. Your version was saved beside it as … | In a vault: sync or another tab changed the sheet while you had unsaved work |
+
+**Renaming,** under the rename form's field. Each dims Rename:
+
+| Message | Means |
+|---|---|
+| mu is already a name on this sheet. | A line above or below already assigns `mu`: choose another name |
+| 2x isn't a name. | A name starts with a letter and holds letters, digits and `_`, with no spaces |
+| plot is reserved. | `table`, `plot`, `solve` and `if` belong to the app |
 
 **When the app itself fails.** These messages are a fault in Excalimathpad, not in your sheet. Each stays as small as what failed, and the rest keeps working:
 
