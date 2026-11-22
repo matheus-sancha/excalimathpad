@@ -193,6 +193,12 @@ Excalidraw at runtime; tests may too, and other modules may import its
 types. This is ADR 0001's engineering rule as amended in ADR 0002. Depends
 on: `@excalidraw/excalidraw`, guide (the Math guide's dialog), text (its words).
 
+**The scene's texts** (`sceneTexts.ts`, spec section 8, Math assistant, The listing, 0.7.0,
+#308): `sceneTexts(elements)` is the one reader of Excalidraw's text elements for the
+listing, a label inside a shape or on an arrow included: each live one's id, its text as
+typed (`originalText`, not the wrapped `text`) and its box, for the reading order. The
+listing itself is [assistant](assistant.md)'s.
+
 **The Math assistant's tab and item** (spec section 8, 0.7.0, #306;
 [assistant](assistant.md)): `SHEET_PANEL_TABS` ends in `assistant`, and a tab is drawn only
 when its slot of `SheetPanelSlot` is filled, so the seventh tab is there only where App
