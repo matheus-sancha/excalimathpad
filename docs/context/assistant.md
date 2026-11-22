@@ -177,8 +177,12 @@ bytes at a time. `adapters.test.ts` runs each adapter on every fixture at severa
 sizes, an abort, a cut-short stream, a failure with nothing readable, and the canary key,
 which shows nowhere but a request's header; it fails on a fixture shaped like a key.
 `npm run assistant:record` (`scripts/assistant-record.mjs`) re-records them by hand with
-`ASSISTANT_PROVIDER` and `ASSISTANT_KEY`, takes the key and account ids out, and refuses to
-run in CI.
+`ASSISTANT_PROVIDER` and `ASSISTANT_KEY`, takes the key and account ids out, writes nothing
+unless the answer and the model list are both a 200, and refuses to run in CI. Anthropic's four
+were recorded from the live API on 2026-11-22; `messages/answer-pieces.http` keeps the
+documentation's answer in two pieces, which the live one wasn't, for the tests between pieces.
+A new fixture may not show up in `npm test` until `node_modules/.vitest-cache` is deleted:
+Vitest's module cache keeps the old list.
 
 **Size** (section 14, Size). `main.js` before the slice: **3,493,012 bytes** at `a90b6a9`
 (the same as at `c3b55a7`), against a budget of 3,574,000. The first slice may add at most

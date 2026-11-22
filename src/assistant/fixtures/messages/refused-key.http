@@ -1,7 +1,6 @@
-# from documentation, 2026-11-22, https://platform.claude.com/docs/en/api/errors
-# The page's body shape and its 401 authentication_error; the message as Anthropic answered a
-# wrong key on 2026-11-22 (docs/research/provider-shapes.md, section 1).
+# recorded 2026-11-22 from api.anthropic.com
+# by npm run assistant:record, the key and account ids taken out.
 HTTP 401
 content-type: application/json
 
-{"type":"error","error":{"type":"authentication_error","message":"Invalid Anthropic API Key"},"request_id":"req_011CSHoEeqs5C35K2UUqR7Fy"}
+{"type":"error","error":{"type":"authentication_error","message":"Invalid bearer token"},"request_id":"req_recorded"}
