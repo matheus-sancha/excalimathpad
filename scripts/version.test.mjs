@@ -2,9 +2,9 @@ import { execFileSync } from 'node:child_process'
 import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
-import { compareVersions, latestMinAppVersion, nextFiles } from './version.mjs'
+import { compareVersions, isEntry, latestMinAppVersion, nextFiles } from './version.mjs'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const manifest = { id: 'excalimathpad', version: '0.0.0', minAppVersion: '1.7.2', isDesktopOnly: true }
@@ -58,6 +58,23 @@ describe('one version (docs/spec-v1.md section 12a, Releases)', () => {
     expect(rootManifest.minAppVersion).toBe('1.7.2')
     // Nothing is released yet, or the newest line names today's floor.
     expect([null, rootManifest.minAppVersion]).toContain(latestMinAppVersion(versions))
+  })
+})
+
+describe('isEntry: whether Node was started on the script', () => {
+  const self = join(root, 'scripts/version.mjs')
+  const url = pathToFileURL(self).href
+
+  it('is true for the script itself, and false for another file or none', () => {
+    expect(isEntry(self, url)).toBe(true)
+    expect(isEntry(join(root, 'scripts/docs.test.mjs'), url)).toBe(false)
+    expect(isEntry(undefined, url)).toBe(false)
+  })
+
+  it('on Windows, ignores a difference of letter case only, as in a drive letter', () => {
+    const upper = self.toUpperCase()
+    expect(isEntry(upper, url, 'win32')).toBe(true)
+    expect(isEntry(upper, url, 'linux')).toBe(false)
   })
 })
 
