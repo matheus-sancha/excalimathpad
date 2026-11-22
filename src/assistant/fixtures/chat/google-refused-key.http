@@ -1,0 +1,6 @@
+# recorded 2026-11-22 from generativelanguage.googleapis.com, with a wrong key
+# (docs/research/provider-shapes.md, section 1): a list, not OpenAI's shape.
+HTTP 400
+content-type: application/json
+
+[{"error":{"code":400,"message":"Please pass a valid API key","status":"INVALID_ARGUMENT"}}]

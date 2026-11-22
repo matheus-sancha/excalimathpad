@@ -1,0 +1,8 @@
+# from documentation, 2026-11-22, https://openrouter.ai/docs/api_reference/errors-and-debugging
+# The page's ErrorResponse shape ({error: {code, message}}, the status equal to error.code) and
+# its 402 line, "Your account or API key has insufficient credits. Add more credits and retry
+# the request."
+HTTP 402
+content-type: application/json
+
+{"error":{"code":402,"message":"Your account or API key has insufficient credits. Add more credits and retry the request."}}

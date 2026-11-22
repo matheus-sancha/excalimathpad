@@ -1,0 +1,16 @@
+# from documentation, 2026-11-22, https://openrouter.ai/docs/api_reference/streaming
+# The page's ": OPENROUTER PROCESSING" comment line, which is skipped, and its end mark,
+# data: [DONE]; the chunks are answer.http's documented shape, with OpenRouter's model name.
+HTTP 200
+content-type: text/event-stream
+
+: OPENROUTER PROCESSING
+
+: OPENROUTER PROCESSING
+
+data: {"id":"gen-123","object":"chat.completion.chunk","created":1234567890,"model":"anthropic/claude-sonnet-5.5","choices":[{"index":0,"delta":{"role":"assistant","content":"Hello"},"finish_reason":null}]}
+
+data: {"id":"gen-123","object":"chat.completion.chunk","created":1234567890,"model":"anthropic/claude-sonnet-5.5","choices":[{"index":0,"delta":{"content":"!"},"finish_reason":"stop"}]}
+
+data: [DONE]
+

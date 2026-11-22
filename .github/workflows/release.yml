@@ -43,6 +43,10 @@ jobs:
           node-version: '22.22.2'
           cache: npm
       - run: npm ci
+      # A default model's retirement (section 12a, Releases): no release within 90 days of a
+      # default's known retirement date, or with a default last checked over 180 days ago.
+      - name: Check the Math assistant's default models
+        run: node scripts/release-models.mjs
       - run: npx playwright install --with-deps chromium
       - name: Bump the version (commit and tag, not yet pushed)
         env:

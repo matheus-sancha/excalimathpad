@@ -1,0 +1,20 @@
+# from documentation, 2026-11-22, https://platform.claude.com/docs/en/api/models-list
+# The page's example response, its one model with the capabilities taken out.
+HTTP 200
+content-type: application/json
+
+{
+  "data": [
+    {
+      "id": "claude-opus-5-5",
+      "display_name": "Claude Opus 5.5",
+      "max_input_tokens": 0,
+      "max_tokens": 0,
+      "retires_at": "2019-12-27T18:11:19.117Z",
+      "type": "model"
+    }
+  ],
+  "first_id": "first_id",
+  "has_more": true,
+  "last_id": "last_id"
+}

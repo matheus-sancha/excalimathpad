@@ -1,0 +1,16 @@
+# from documentation, 2026-11-22, https://developers.openai.com/api/reference/resources/chat/subresources/completions/streaming-events
+# The page's chat.completion.chunk example, as a stream of four with the text in delta.content,
+# ending in data: [DONE] (https://developers.openai.com/api/reference/resources/chat/subresources/completions/methods/create).
+HTTP 200
+content-type: text/event-stream
+
+data: {"id":"chatcmpl-123","object":"chat.completion.chunk","created":1694268190,"model":"gpt-6.2-astra","system_fingerprint":"fp_44709d6fcb","choices":[{"index":0,"delta":{"role":"assistant","content":""},"logprobs":null,"finish_reason":null}]}
+
+data: {"id":"chatcmpl-123","object":"chat.completion.chunk","created":1694268190,"model":"gpt-6.2-astra","system_fingerprint":"fp_44709d6fcb","choices":[{"index":0,"delta":{"content":"Hello"},"logprobs":null,"finish_reason":null}]}
+
+data: {"id":"chatcmpl-123","object":"chat.completion.chunk","created":1694268190,"model":"gpt-6.2-astra","system_fingerprint":"fp_44709d6fcb","choices":[{"index":0,"delta":{"content":"!"},"logprobs":null,"finish_reason":null}]}
+
+data: {"id":"chatcmpl-123","object":"chat.completion.chunk","created":1694268190,"model":"gpt-6.2-astra","system_fingerprint":"fp_44709d6fcb","choices":[{"index":0,"delta":{},"logprobs":null,"finish_reason":"stop"}]}
+
+data: [DONE]
+

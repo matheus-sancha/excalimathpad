@@ -130,8 +130,8 @@ an issue touches that module ([`CLAUDE.md`](CLAUDE.md) has the reading route).
   React and for code outside it (0.6.0). Depends on: math's message types. [`docs/context/text.md`](docs/context/text.md)
 - **assistant** (`src/assistant/`) — the Math assistant (0.7.0, ADR 0008), reached only through
   the two ports a home hands App. Off in every build until its switch is turned on; so far the
-  ports, the provider constants, the setup (one record per device), its card and the
-  listing. Depends on: text, math, overlay's reading order.
+  ports, the provider constants, the setup and its card, the listing and the two adapters.
+  Depends on: text, math, overlay's reading order.
   [`docs/context/assistant.md`](docs/context/assistant.md)
 - **failure** (`src/failure/`) — unexpected failures (spec section 4): the boundary, the
   failure screen, Copy details and Report this error. `App` wraps the sheet in the view's

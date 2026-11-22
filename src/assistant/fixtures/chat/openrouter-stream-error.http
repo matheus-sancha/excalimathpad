@@ -1,0 +1,8 @@
+# from documentation, 2026-11-22, https://openrouter.ai/docs/api_reference/streaming
+# The page's mid-stream error, verbatim: the status stays 200, the error is at the top level,
+# and finish_reason is "error".
+HTTP 200
+content-type: text/event-stream
+
+data: {"id":"cmpl-abc123","object":"chat.completion.chunk","created":1234567890,"model":"openai/gpt-4o","provider":"openai","error":{"code":502,"message":"Provider disconnected unexpectedly"},"choices":[{"index":0,"delta":{"content":""},"finish_reason":"error"}]}
+
