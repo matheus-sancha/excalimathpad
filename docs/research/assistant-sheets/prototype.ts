@@ -118,7 +118,7 @@ async function askOnce(name: string, system: string, turns: Turn[]): Promise<Ans
         'anthropic-version': '2023-06-01',
         'x-api-key': process.env.ANTHROPIC_API_KEY ?? 'proxy-injected',
       },
-      body: JSON.stringify({ model: name, max_tokens: 8000, system, messages: turns }),
+      body: JSON.stringify({ model: name, max_tokens: 32000, system, messages: turns }),
     })
   }
   const seconds = (performance.now() - began) / 1000
@@ -135,7 +135,10 @@ async function askOnce(name: string, system: string, turns: Turn[]): Promise<Ans
     }
   }
   return {
-    text: json.content.filter((part: { type: string }) => part.type === 'text').map((part: { text: string }) => part.text).join(''),
+    text:
+      json.content.filter((part: { type: string }) => part.type === 'text').map((part: { text: string }) => part.text).join('') +
+      // Thinking counts against max_tokens: an answer can end there with no text at all.
+      (json.stop_reason === 'max_tokens' ? '\n\n(cut at max_tokens)' : ''),
     tokensIn: json.usage.input_tokens + (json.usage.cache_read_input_tokens ?? 0) + (json.usage.cache_creation_input_tokens ?? 0),
     tokensOut: json.usage.output_tokens,
     seconds,
