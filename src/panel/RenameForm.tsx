@@ -1,7 +1,7 @@
 import { useDeferredValue, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import type { DisplaySettings } from '../math/display.ts'
 import type { RenamePlan, RenameTarget } from '../math/rename.ts'
-import { RENAME_WORDS, renameFormView, type MarkedPart, type RenameElement, type RenameFormLine } from './renameForm.ts'
+import { renameFormView, type MarkedPart, type RenameElement, type RenameFormLine } from './renameForm.ts'
 import { wordMessage } from '../text/engine.ts'
 import { useWords } from '../text/words.ts'
 
@@ -37,10 +37,12 @@ interface RenameFormProps {
 export function RenameForm({ sheet, target, settings, onRename, onCancel, onGone }: RenameFormProps) {
   const { engine } = useWords()
   const [name, setName] = useState(target.name)
+  const w = useWords()
+  const words = w.panel.rename
   // "Changes a result" runs the sheet twice (section 14, 0.5.0): the check
   // follows the typing, so a key is drawn before its check is made (section 17).
   const checked = useDeferredValue(name)
-  const view = useMemo(() => renameFormView(sheet, target, checked, settings), [sheet, target, checked, settings])
+  const view = useMemo(() => renameFormView(sheet, target, checked, settings, w), [sheet, target, checked, settings, w])
   const field = useRef<HTMLInputElement>(null)
   const form = useRef<HTMLDivElement>(null)
 
@@ -59,7 +61,7 @@ export function RenameForm({ sheet, target, settings, onRename, onCancel, onGone
 
   const submit = () => {
     // The plan for the name as it stands, if the check hasn't caught up with the typing.
-    const now = checked === name ? view : renameFormView(sheet, target, name, settings)
+    const now = checked === name ? view : renameFormView(sheet, target, name, settings, w)
     if (now?.canRename) onRename({ target, newName: name.trim(), plan: now.plan })
   }
   const onKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
@@ -74,17 +76,17 @@ export function RenameForm({ sheet, target, settings, onRename, onCancel, onGone
   }
 
   return (
-    <div ref={form} className="sheet-rename" role="group" aria-label={RENAME_WORDS.start(target.name)}>
+    <div ref={form} className="sheet-rename" role="group" aria-label={words.start(target.name)}>
       <label className="sheet-rename__heading">
         <span>
-          Rename <code>{target.name}</code> to
+          {words.heading.before} <code>{target.name}</code> {words.heading.after}
         </span>
         <input
           ref={field}
           className="sheet-rename__field"
           // Not `search`: Excalidraw runs its shortcuts on keys from any input but text, number and password.
           type="text"
-          aria-label={RENAME_WORDS.field(target.name)}
+          aria-label={words.field(target.name)}
           aria-invalid={view.reason?.kind === 'refused'}
           value={name}
           // A name, not prose: no spelling, capitals or corrections.
@@ -101,22 +103,22 @@ export function RenameForm({ sheet, target, settings, onRename, onCancel, onGone
           {view.reason.kind === 'warning' ? `⚠ ${wordMessage(engine, view.reason.message)}` : wordMessage(engine, view.reason.message)}
         </p>
       )}
-      <p className="sheet-rename__count">{RENAME_WORDS.lines(view.lines.length)}</p>
-      <Lines lines={view.lines} label={RENAME_WORDS.lines(view.lines.length)} />
+      <p className="sheet-rename__count">{words.lines(view.lines.length)}</p>
+      <Lines lines={view.lines} label={words.lines(view.lines.length)} />
       {view.changes.length > 0 && (
         <>
           <p className="sheet-rename__count is-warning" role="status">
-            {RENAME_WORDS.results(view.changes.length)}
+            {words.results(view.changes.length)}
           </p>
-          <Lines lines={view.changes} label={RENAME_WORDS.results(view.changes.length)} />
+          <Lines lines={view.changes} label={words.results(view.changes.length)} />
         </>
       )}
       <div className="sheet-rename__actions">
         <button type="button" className="sheet-rename__button is-primary" disabled={!view.canRename} onClick={submit}>
-          {RENAME_WORDS.rename}
+          {words.rename}
         </button>
         <button type="button" className="sheet-rename__button" onClick={onCancel}>
-          {RENAME_WORDS.cancel}
+          {words.cancel}
         </button>
       </div>
     </div>

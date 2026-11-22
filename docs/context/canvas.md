@@ -123,7 +123,8 @@ with `isLineField`, the mark the line's field shares with a rule's condition
 field so the keyboard can pass between them (M4e, #197). The Sheet panel
 (M4d, #143) has six icon tabs, `SHEET_PANEL_TABS`: Format, Symbols,
 Variables, Problems, Constants, Settings, each named by a label span (read
-on all; shown only on the bottom sheet's active tab) and its `title`, the
+on all; shown only on the bottom sheet's active tab, and from 0.6.0 only if
+it fits) and its `title`, both the text table's `panel.tabs` (#293), the
 error badge on Problems; in the sidebar the shown tab's name is a heading
 over its content (`.sheet-sidebar__heading`, M4e, #198). **The panel's
 width** (spec section 8, M4e, #198): `panelWidth.ts` (pure) holds
@@ -160,6 +161,11 @@ above the tab icons; it carries `SHEET_SIDEBAR_CLASS` and
 each change through the slot's `onChange`, as the sidebar does. It sits
 above the on-screen keyboard (how far the visual viewport's bottom falls
 short of its box) at about half the visible height, short while `compact`.
+Its active tab shows its name only if it fits (spec section 8, 0.6.0, #293):
+`nameFits` measures, as the row is laid out and on each of its resizes, the
+name with its icon beside the other tabs at 40 px, and the row takes
+`is-icons` when it doesn't fit, so the pill is its icon alone; its region,
+tab row and ✕ are named by `panel.region`, `panel.tabList` and `panel.close`.
 On a phone the slot's `offer` (0.5.0, #262: a rename's offer, as App draws it)
 sits above the quick keys, at the very top. The sidebar takes `quickKeys` too, above its tab triggers. `moreTools.ts` finds the open dropdown
 (`useMoreToolsSlot`, a box of the app's own appended to it; Math settings

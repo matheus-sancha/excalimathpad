@@ -1783,7 +1783,7 @@ describe('constants (docs/spec-v1.md section 5)', () => {
       expect(row.value, row.name).not.toMatch(/undefined|object/)
     }
     const c = rows.find((row) => row.name === 'speedOfLight')!
-    expect(c).toMatchObject({ short: 'c', label: 'Speed of light in vacuum', value: '2.998·10⁵ km / s', tex: 'c' })
+    expect(c).toMatchObject({ short: 'c', value: '2.998·10⁵ km / s', tex: 'c' })
     expect(rows.find((row) => row.short === 'hbar')!.tex).toBe('\\hbar')
     expect(rows.find((row) => row.short === 'R_inf')!.tex).toBe('{R}_{\\infty}')
   })

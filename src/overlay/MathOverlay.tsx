@@ -71,14 +71,12 @@ import { PlacingGhost } from './PlacingGhost.tsx'
 import { readingOrder } from './readingOrder.ts'
 import { followOffers, noteCommit, type FollowedOffer, type RenameOffer } from './renameOffer.ts'
 import { OfferCard } from './OfferCard.tsx'
-import { constantSuggestions, FUNCTION_SUGGESTIONS, sheetNames, suggest, unitSuggestions, type Suggested } from './suggest.ts'
+import { constantSuggestions, functionSuggestions, sheetNames, suggest, unitSuggestions, type Suggested } from './suggest.ts'
+import { useWords } from '../text/words.ts'
 import { isPlainAt, planInsert } from './symbolInsert.ts'
 import { fieldRoom, wrapWidthTo } from './wrapRoom.ts'
 import type { OpenField } from './caretRow.ts'
 import { FOLLOW_MARGIN, visibleArea } from '../canvas/selection.ts'
-
-/** The unit names offered while typing: fixed, so made once. */
-const UNIT_NAMES = unitSuggestions()
 import { useAnchorSizes } from './useAnchorSizes.ts'
 import { GEAR, useSheetGestures, type SlotTarget } from './useSheetGestures.ts'
 import type { Viewport } from './viewport.ts'
@@ -377,7 +375,11 @@ export function MathOverlay({
     () => evaluateSheet(JSON.parse(sheetKey) as SheetBlock[], settings),
     [sheetKey, settings],
   )
-  const constantNames = useMemo(() => constantSuggestions(listConstants(settings)), [settings])
+  // The suggestions' details are in the language shown (0.6.0), so they are made again when it changes.
+  const w = useWords()
+  const constantNames = useMemo(() => constantSuggestions(listConstants(settings), w), [settings, w])
+  const functionNames = useMemo(() => functionSuggestions(w), [w])
+  const unitNames = useMemo(() => unitSuggestions(w), [w])
 
   // The panel's view of the same run: titles name elements, so they count too.
   const titlesKey = JSON.stringify(anchors.map(({ id, title, titleFormat }) => [id, { title, titleFormat }]))
@@ -769,10 +771,11 @@ export function MathOverlay({
   const suggestForEdit =
     edit && edit.lineIndex !== TITLE_LINE
       ? ((sheet) => (text: string, caret: number) =>
-          suggest(text, caret, { sheet, constants: constantNames, functions: FUNCTION_SUGGESTIONS, units: UNIT_NAMES }))(
+          suggest(text, caret, { sheet, constants: constantNames, functions: functionNames, units: unitNames }, undefined, w))(
           sheetNames(
             readingOrder(anchors).map((id) => ({ id, lines: lines.get(id) ?? [] })),
             edit,
+            w,
           ),
         )
       : null

@@ -164,12 +164,17 @@ Constants tab its rows.
 pure data, no math.js): `SYMBOLS`, every button of the Symbols tab in its
 group (`SYMBOL_GROUPS`: Greek, Operators, Functions, Logic, Sheet forms) and
 order, each a `SymbolEntry`: its `label` (ρ, √), its `spelling` (`rho`,
-`sqrt`), its `hint`, its Greek `row`, the `constant` a Greek letter also is
-(read from `CONSTANT_GROUPS`), a sheet form's runnable `example`, and its
+`sqrt`), its Greek `row`, the `constant` a Greek letter also is (its math.js
+name, read from `CONSTANT_GROUPS`), a sheet form's runnable `example`, and its
 `insert`, a `SymbolInsert`: `mode` (`name`, `word`, `prefix`, `spaced`,
 `tight`, `wrap`), `text` and `close`. `guess` is `hidden`: a typing
-suggestion, not a button. `filterSymbols` and `symbolHover` are the tab's
-filter and hovers. It adds no grammar: a test types every entry into a
+suggestion, not a button. Its words are the text tables' (0.6.0, #293): a
+group's name is `symbols.groups`, and `symbolHint`, `symbolHover` and
+`filterSymbols` read an entry's hint by its group and spelling from the
+table they are given, the one shown by default. `constants.ts` holds no
+words either: each `ConstantGroup` has an `id`, and the tables describe each
+constant by its `name`; `listConstants` gives the group's `id` and no label.
+The kinds' names (`unitSystems.ts`) are the tables' `kinds`. It adds no grammar: a test types every entry into a
 minimal line and runs it.
 A **solve line** (spec section 9) is read as text before math.js sees it
 (`solveLine.ts`, pure): a **solved value** is `<name> = solve <lhs> = <rhs>,

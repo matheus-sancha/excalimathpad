@@ -12,7 +12,7 @@ import {
   type MathNode,
 } from 'mathjs'
 import { APP_UNITS } from './appUnits.ts'
-import { CONSTANT_GROUPS, SHORT_CONSTANTS } from './constants.ts'
+import { CONSTANT_GROUPS, SHORT_CONSTANTS, type ConstantGroupId } from './constants.ts'
 import {
   createDisplay,
   type DisplaySettings,
@@ -1846,7 +1846,6 @@ export interface ConstantRow {
   /** math.js's name, and the short one if it has one: what a line can read. */
   name: string
   short: string | null
-  label: string
   /** The name to show, typeset: the short one where there is one. */
   tex: string
   /** Its value in the sheet's system, as a result reads, and typeset. */
@@ -1854,8 +1853,9 @@ export interface ConstantRow {
   valueTex: string
 }
 
+/** A group of rows; the text tables name it (`constants.groups`) and say what each row is (`constants.description`). */
 export interface ConstantRowGroup {
-  label: string
+  id: ConstantGroupId
   rows: ConstantRow[]
 }
 
@@ -1863,9 +1863,9 @@ export interface ConstantRowGroup {
 export function listConstants(settings: DisplaySettings = DEFAULT_DISPLAY): ConstantRowGroup[] {
   const namespace = math as unknown as Record<string, unknown>
   const names: Names = { ...ENGINE_NAMES, isSheetName: () => false }
-  return CONSTANT_GROUPS.map(({ label, constants }) => ({
-    label,
-    rows: constants.map(({ name, short, label }) => {
+  return CONSTANT_GROUPS.map(({ id, constants }) => ({
+    id,
+    rows: constants.map(({ name, short }) => {
       let value: string
       try {
         value = display.show(namespace[name], null, settings)
@@ -1878,7 +1878,7 @@ export function listConstants(settings: DisplaySettings = DEFAULT_DISPLAY): Cons
       } catch {
         tex = textTex(short ?? name)
       }
-      return { name, short: short ?? null, label, tex, value, valueTex: typesetResult(value) }
+      return { name, short: short ?? null, tex, value, valueTex: typesetResult(value) }
     }),
   }))
 }

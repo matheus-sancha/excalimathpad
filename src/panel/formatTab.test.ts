@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { NO_TITLE_FORMAT } from '../canvas/mathAnchor.ts'
 import { evaluateSheet } from '../math/evaluate.ts'
+import { ptBR } from '../text/ptBR.ts'
 import { formatView, type FormatElement } from './formatTab.ts'
 
 /** A sheet of one element, evaluated as the overlay evaluates it. */
@@ -19,7 +20,10 @@ describe('formatView (docs/spec-v1.md section 4, Format tab)', () => {
     const view = formatView(sheetOf(source), { anchorId: 'm1', lineIndex: 0, text: source })
     expect(view).toMatchObject({
       kind: 'math',
-      overrides: ['A rule sets the highlight while v > 3.', 'A rule sets bold while v > 1.'],
+      overrides: [
+        { text: 'A rule sets the highlight while v > 3.', condition: 'v > 3' },
+        { text: 'A rule sets bold while v > 1.', condition: 'v > 1' },
+      ],
     })
   })
 
@@ -37,7 +41,7 @@ describe('formatView (docs/spec-v1.md section 4, Format tab)', () => {
       kind: 'math',
       text: 'v = 4',
       format: { bold: true, underline: false, color: 'red', textColor: null },
-      overrides: ['A rule sets the text colour while v > 3.'],
+      overrides: [{ text: 'A rule sets the text colour while v > 3.', condition: 'v > 3' }],
       rules: [{ condition: 'v > 3', text: '@text-red if v > 3' }],
       ruleStates: [{ kind: 'true' }],
     })
@@ -61,7 +65,7 @@ describe('formatView (docs/spec-v1.md section 4, Format tab)', () => {
     expect(formatView(sheet, { anchorId: 'm1', lineIndex: 1, text: '' })).toMatchObject({
       kind: 'blank',
       caption: 'Line — Pipe flow, line 2',
-      link: 'Edit title ↑',
+      link: 'editTitle',
     })
     expect(formatView(sheet, { anchorId: 'm1', lineIndex: 2, text: '@L # Pumps' })).toMatchObject({
       kind: 'comment',
@@ -70,9 +74,22 @@ describe('formatView (docs/spec-v1.md section 4, Format tab)', () => {
     expect(formatView(sheet, { anchorId: 'm1', lineIndex: 'title', text: 'Pipe' })).toMatchObject({
       kind: 'title',
       caption: 'Title — Pipe flow',
-      link: 'First line ↓',
+      link: 'firstLine',
       text: 'Pipe',
     })
-    expect(formatView(sheetOf('x = 1'), { anchorId: 'm1', lineIndex: 0, text: 'x = 1' })).toMatchObject({ link: 'Add title ↑' })
+    expect(formatView(sheetOf('x = 1'), { anchorId: 'm1', lineIndex: 0, text: 'x = 1' })).toMatchObject({ link: 'addTitle' })
+  })
+
+  it('words the caption and a rule’s note in the language it is given, the condition kept apart (0.6.0)', () => {
+    const source = 'v = 4 m/s @text-red if v > 3 m/s'
+    expect(formatView(sheetOf(source), { anchorId: 'm1', lineIndex: 0, text: source }, ptBR)).toMatchObject({
+      kind: 'math',
+      caption: 'Linha de cálculo — Bloco 1, linha 1',
+      link: 'addTitle',
+      overrides: [{ text: 'Uma regra define a cor do texto enquanto v > 3 m/s.', condition: 'v > 3 m/s' }],
+    })
+    expect(formatView(sheetOf('x = 1', 'Bomba'), { anchorId: 'm1', lineIndex: 'title', text: 'Bomba' }, ptBR)).toMatchObject({
+      caption: 'Título — Bomba',
+    })
   })
 })

@@ -10,9 +10,9 @@ import {
   type PanelElement,
   type PanelTarget,
 } from './sheetPanel.ts'
-import { InsertButton, OPEN_A_LINE, type InsertProps } from './SymbolsTab.tsx'
+import { InsertButton, type InsertProps } from './SymbolsTab.tsx'
 import { RenameForm, type RenameRequest } from './RenameForm.tsx'
-import { RENAME_WORDS, type RenameElement } from './renameForm.ts'
+import type { RenameElement } from './renameForm.ts'
 import { wordMessage } from '../text/engine.ts'
 import { useWords } from '../text/words.ts'
 import './SheetPanel.css'
@@ -22,7 +22,8 @@ import './SheetPanel.css'
  * section 8); the Format tab is `FormatTab.tsx`, the Symbols tab `SymbolsTab.tsx`.
  * They render inside Excalidraw's sidebar, which `src/canvas/` draws; this
  * module knows no Excalidraw. A click on a row asks to jump to its line; a
- * Variables row's ✎ opens the rename form (`RenameForm.tsx`, 0.5.0).
+ * Variables row's ✎ opens the rename form (`RenameForm.tsx`, 0.5.0). Every
+ * word is the text table's, in the language shown (`useWords`, 0.6.0).
  */
 
 interface TabProps {
@@ -56,7 +57,8 @@ export function VariablesTab({
   // The row whose form is open: its key, and the assignment it renames.
   const [renaming, setRenaming] = useState<{ key: string; target: RenameTarget } | null>(null)
   const katexReady = useKatexReady()
-  const groups = variableGroups(sheet, filter)
+  const w = useWords()
+  const groups = variableGroups(sheet, filter, w)
   const close = useCallback(() => setRenaming(null), [])
   const cancel = useCallback(() => {
     setRenaming(null)
@@ -70,8 +72,8 @@ export function VariablesTab({
         // inputs as fields, and runs its shortcuts on keys from any other.
         type="text"
         role="searchbox"
-        placeholder="Filter names"
-        aria-label="Filter names"
+        placeholder={w.panel.variables.filter}
+        aria-label={w.panel.variables.filter}
         value={filter}
         onChange={(event) => {
           setFilter(event.target.value)
@@ -80,7 +82,7 @@ export function VariablesTab({
         }}
       />
       {groups.length === 0 ? (
-        <p className="sheet-panel__empty">{filter ? 'No name matches.' : 'No variables yet.'}</p>
+        <p className="sheet-panel__empty">{filter ? w.panel.variables.noMatch : w.panel.variables.none}</p>
       ) : (
         groups.map((group) => (
           <section key={group.anchorId} className="sheet-panel__group" aria-label={group.label}>
@@ -110,8 +112,8 @@ export function VariablesTab({
                       <button
                         type="button"
                         className="sheet-panel__rename"
-                        aria-label={RENAME_WORDS.start(row.name)}
-                        title={RENAME_WORDS.start(row.name)}
+                        aria-label={w.panel.rename.start(row.name)}
+                        title={w.panel.rename.start(row.name)}
                         aria-expanded={open}
                         onClick={() =>
                           open
@@ -148,12 +150,12 @@ export function VariablesTab({
 
 /** Errors ● and warnings ⚠ in one list, in reading order. */
 export function ProblemsTab({ sheet, onJump }: TabProps) {
-  const rows = problemRows(sheet)
-  const { engine } = useWords()
+  const w = useWords()
+  const rows = problemRows(sheet, w)
   return (
     <div className="sheet-panel">
       {rows.length === 0 ? (
-        <p className="sheet-panel__empty">No problems.</p>
+        <p className="sheet-panel__empty">{w.panel.problems.none}</p>
       ) : (
         <ul className="sheet-panel__list">
           {rows.map((row) => (
@@ -163,10 +165,10 @@ export function ProblemsTab({ sheet, onJump }: TabProps) {
                 className={`sheet-panel__problem is-${row.severity}`}
                 onClick={() => onJump(row)}
               >
-                <span className="sheet-panel__mark" aria-label={row.severity}>
+                <span className="sheet-panel__mark" aria-label={w.panel.problems[row.severity]}>
                   {row.severity === 'error' ? '●' : '⚠'}
                 </span>
-                <span className="sheet-panel__message">{wordMessage(engine, row.message)}</span>
+                <span className="sheet-panel__message">{wordMessage(w.engine, row.message)}</span>
                 {row.unexpected && <span className="sheet-panel__raw">{row.unexpected.text}</span>}
                 <span className="sheet-panel__where">{row.where}</span>
               </button>
@@ -195,13 +197,16 @@ export function ProblemsTab({ sheet, onJump }: TabProps) {
 export function ConstantsTab({ settings, canInsert, onInsert }: { settings: DisplaySettings } & InsertProps) {
   const [filter, setFilter] = useState('')
   const katexReady = useKatexReady()
+  const w = useWords()
   const all = useMemo(() => listConstants(settings), [settings])
   const wanted = filter.trim().toLowerCase()
+  // What each constant is, in the language shown: the filter matches it too (section 8).
+  const describe = (name: string) => (w.constants.description as Readonly<Record<string, string>>)[name] ?? name
   const groups = all
     .map((group) => ({
       ...group,
       rows: group.rows.filter((row) =>
-        [row.name, row.short ?? '', row.label].some((text) => text.toLowerCase().includes(wanted)),
+        [row.name, row.short ?? '', describe(row.name)].some((text) => text.toLowerCase().includes(wanted)),
       ),
     }))
     .filter((group) => group.rows.length > 0)
@@ -213,21 +218,22 @@ export function ConstantsTab({ settings, canInsert, onInsert }: { settings: Disp
         // inputs as fields, and runs its shortcuts on keys from any other.
         type="text"
         role="searchbox"
-        placeholder="Filter constants"
-        aria-label="Filter constants"
+        placeholder={w.panel.constants.filter}
+        aria-label={w.panel.constants.filter}
         value={filter}
         onChange={(event) => setFilter(event.target.value)}
       />
-      {!canInsert && <p className="sheet-panel__hint">{OPEN_A_LINE}</p>}
+      {!canInsert && <p className="sheet-panel__hint">{w.panel.openALine}</p>}
       {groups.length === 0 ? (
-        <p className="sheet-panel__empty">No constant matches.</p>
+        <p className="sheet-panel__empty">{w.panel.constants.noMatch}</p>
       ) : (
         groups.map((group) => (
-          <section key={group.label} className="sheet-panel__group" aria-label={group.label}>
-            <h3 className="sheet-panel__group-label">{group.label}</h3>
+          <section key={group.id} className="sheet-panel__group" aria-label={w.constants.groups[group.id]}>
+            <h3 className="sheet-panel__group-label">{w.constants.groups[group.id]}</h3>
             <ul className="sheet-panel__list">
               {group.rows.map((row) => {
-                const names = row.short ? `${row.short} or ${row.name}` : row.name
+                const label = describe(row.name)
+                const names = row.short ? w.panel.constants.names(row.short, row.name) : row.name
                 const name = row.short ?? row.name
                 const symbol = katexReady ? texToHtml(row.tex) : null
                 const value = katexReady ? texToHtml(row.valueTex) : null
@@ -235,8 +241,8 @@ export function ConstantsTab({ settings, canInsert, onInsert }: { settings: Disp
                   <li key={row.name}>
                     <InsertButton
                       className="sheet-panel__constant"
-                      label={`${row.label}: ${names} = ${row.value}`}
-                      hover={`Insert ${name}`}
+                      label={`${label}: ${names} = ${row.value}`}
+                      hover={w.panel.constants.insert(name)}
                       dimmed={!canInsert}
                       onPress={() => onInsert({ mode: 'name', text: name })}
                     >
@@ -246,7 +252,7 @@ export function ConstantsTab({ settings, canInsert, onInsert }: { settings: Disp
                       <span className="sheet-panel__constant-value">
                         {value === null ? row.value : <span dangerouslySetInnerHTML={{ __html: value }} />}
                       </span>
-                      <span className="sheet-panel__constant-label">{row.label}</span>
+                      <span className="sheet-panel__constant-label">{label}</span>
                       <code className="sheet-panel__constant-names">{names}</code>
                     </InsertButton>
                   </li>

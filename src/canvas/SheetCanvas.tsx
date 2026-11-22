@@ -79,19 +79,6 @@ export const SHEET_PANEL = 'sheet'
 
 export { SHEET_PANEL_TABS, type SheetPanelTab } from './panelPresses.ts'
 
-/**
- * Each tab's name: its tooltip, its accessible name, the heading over its
- * content in the sidebar (M4e), and its label while active in the bottom sheet.
- */
-const TAB_NAMES: Record<SheetPanelTab, string> = {
-  format: 'Format',
-  symbols: 'Symbols',
-  variables: 'Variables',
-  problems: 'Problems',
-  constants: 'Constants',
-  settings: 'Settings',
-}
-
 /** What fills the Sheet panel (docs/spec-v1.md section 8); the canvas draws its frame. */
 export interface SheetPanelSlot {
   /** Errors (M4d: warnings alone show none): the badge on Math settings, More tools and Problems. */
@@ -539,7 +526,7 @@ export function SheetCanvas({
                       key={tab}
                       tab={tab}
                       className="excalidraw-button sidebar-tab-trigger sheet-tab"
-                      title={TAB_NAMES[tab]}
+                      title={words.panel.tabs[tab]}
                     >
                       <TabFace tab={tab} errors={sheetPanel.errors} />
                     </Sidebar.TabTrigger>
@@ -549,7 +536,7 @@ export function SheetCanvas({
               {panelTabs.map(([tab, content]) => (
                 <Sidebar.Tab key={tab} tab={tab}>
                   {/* The tabs are icons only (M4e): the shown tab's name is a heading over its content. */}
-                  <h2 className="sheet-sidebar__heading">{TAB_NAMES[tab]}</h2>
+                  <h2 className="sheet-sidebar__heading">{words.panel.tabs[tab]}</h2>
                   {content}
                 </Sidebar.Tab>
               ))}
@@ -577,7 +564,7 @@ export function SheetCanvas({
           <BottomSheet
             tabs={panelTabs.map(([tab, content]) => ({
               tab,
-              name: TAB_NAMES[tab],
+              name: words.panel.tabs[tab],
               face: <TabFace tab={tab} errors={sheetPanel.errors} />,
               content,
             }))}
@@ -600,10 +587,13 @@ export function SheetCanvas({
  * Problems' badge.
  */
 function TabFace({ tab, errors }: { tab: SheetPanelTab; errors: number }) {
+  // Each tab's name (the table's `panel.tabs`): its tooltip, its accessible name, the
+  // heading over its content in the sidebar (M4e), and the bottom sheet's active pill.
+  const { panel } = useWords()
   return (
     <>
       <TabIcon tab={tab} />
-      <span className="sheet-tab__label">{TAB_NAMES[tab]}</span>
+      <span className="sheet-tab__label">{panel.tabs[tab]}</span>
       {tab === 'problems' && errors > 0 && (
         <span className="sheet-tab__badge" aria-hidden="true">
           {errors}

@@ -1,11 +1,15 @@
 import type { TitleFormat } from '../canvas/mathAnchor.ts'
 import type { RuleState, SheetLine } from '../math/evaluate.ts'
 import { readLine, withFormat, type CommentFormat, type FormatRule, type FormatWord, type LineFormat } from '../math/lineForm.ts'
+import { words, type Words } from '../text/words.ts'
 import { elementLabel, type PanelElement } from './sheetPanel.ts'
 
 /**
  * What the Format tab shows (docs/spec-v1.md section 4, Format tab, M4d), from
- * the sheet as evaluated and what is open. Pure: `FormatTab` renders it.
+ * the sheet as evaluated and what is open. Pure: `FormatTab` renders it. Its
+ * words are the text table's (`panel.format`, 0.6.0), the one shown unless
+ * another is passed; a rule's note keeps its condition apart, so the tab can
+ * keep it whole when the note wraps (section 8, Sheet panel).
  */
 
 /** One math element as the Format tab sees it: the panel's view, and its title's format. */
@@ -22,8 +26,14 @@ export interface FormatTarget {
   stored?: string
 }
 
-/** The link beside the sample that moves the edit (section 4, Format tab). */
-export type FormatLink = 'Edit title ↑' | 'Add title ↑' | 'First line ↓'
+/** The link beside the sample that moves the edit (section 4, Format tab): its key in `panel.format.links`. */
+export type FormatLink = 'editTitle' | 'addTitle' | 'firstLine'
+
+/** "A rule sets the text colour while v > 3 m/s.": the note, and the condition it quotes. */
+export interface RuleNote {
+  text: string
+  condition: string
+}
 
 interface Open {
   anchorId: string
@@ -44,7 +54,7 @@ export type FormatView =
       /** The plain format, which the buttons show and set. */
       format: LineFormat
       /** "A rule sets the text colour while v > 3 m/s.", one per property a true rule wins. */
-      overrides: string[]
+      overrides: RuleNote[]
       /** The line's rules, those typed in its text first, then the stored ones, for the Rules list (section 4). */
       rules: readonly FormatRule[]
       /** Each rule's live state; null while the evaluation hasn't caught up with the typed rules. */
@@ -56,17 +66,22 @@ export type FormatView =
   /** A blank line, or a clause with no comment text: it takes no format. */
   | (Open & { kind: 'blank'; line: SheetLine | null })
 
-export function formatView(sheet: readonly FormatElement[], target: FormatTarget | null): FormatView {
+export function formatView(
+  sheet: readonly FormatElement[],
+  target: FormatTarget | null,
+  w: Words = words(),
+): FormatView {
   const index = target ? sheet.findIndex(({ anchorId }) => anchorId === target.anchorId) : -1
   if (!target || index === -1) return { kind: 'none' }
   const element = sheet[index]
-  const label = elementLabel(element, index)
+  const label = elementLabel(element, index, w)
+  const { captions } = w.panel.format
   const { anchorId, text } = target
   if (target.lineIndex === 'title') {
-    return { kind: 'title', anchorId, caption: `Title — ${label}`, link: 'First line ↓', text, format: element.titleFormat }
+    return { kind: 'title', anchorId, caption: captions.title(label), link: 'firstLine', text, format: element.titleFormat }
   }
-  const where = `${label}, line ${target.lineIndex + 1}`
-  const link: FormatLink = element.title ? 'Edit title ↑' : 'Add title ↑'
+  const where = w.panel.line(label, target.lineIndex + 1)
+  const link: FormatLink = element.title ? 'editTitle' : 'addTitle'
   const line = element.lines[target.lineIndex] ?? null
   // The format is the stored one, behind any clause typed in the text (section 3).
   const form = readLine(withFormat(text, target.stored ?? ''))
@@ -75,28 +90,21 @@ export function formatView(sheet: readonly FormatElement[], target: FormatTarget
       return {
         kind: 'math',
         anchorId,
-        caption: `Math line — ${where}`,
+        caption: captions.math(where),
         link,
         text,
         line,
         format: form.format,
-        overrides: overrides(form.rules, line?.ruleTruth ?? []),
+        overrides: overrides(form.rules, line?.ruleTruth ?? [], w),
         rules: form.rules,
         ruleStates: line && line.ruleStates.length === form.rules.length ? line.ruleStates : null,
         ruleName: line?.table ? null : (line?.variables[0]?.name ?? 'result'),
       }
     case 'comment':
-      return { kind: 'comment', anchorId, caption: `Comment line — ${where}`, link, text, line, format: form.format }
+      return { kind: 'comment', anchorId, caption: captions.comment(where), link, text, line, format: form.format }
     case 'blank':
-      return { kind: 'blank', anchorId, caption: `Line — ${where}`, link, text, line }
+      return { kind: 'blank', anchorId, caption: captions.blank(where), link, text, line }
   }
-}
-
-const PROPERTIES: Record<FormatWord['kind'], string> = {
-  bold: 'bold',
-  underline: 'underline',
-  text: 'the text colour',
-  highlight: 'the highlight',
 }
 
 /**
@@ -104,7 +112,7 @@ const PROPERTIES: Record<FormatWord['kind'], string> = {
  * property, the first true rule that sets it wins, as the sheet draws it.
  * Nothing while the evaluation hasn't caught up with the typed rules.
  */
-function overrides(rules: readonly FormatRule[], truth: readonly boolean[]): string[] {
+function overrides(rules: readonly FormatRule[], truth: readonly boolean[], w: Words): RuleNote[] {
   if (truth.length !== rules.length) return []
   const decided = new Set<FormatWord['kind']>()
   return rules.flatMap((rule, index) => {
@@ -112,17 +120,11 @@ function overrides(rules: readonly FormatRule[], truth: readonly boolean[]): str
     // A joined word sets each of its properties.
     const won = [...new Set(rule.words.map(({ kind }) => kind))].filter((kind) => !decided.has(kind))
     won.forEach((kind) => decided.add(kind))
-    return won.map((kind) => `A rule sets ${PROPERTIES[kind]} while ${rule.condition}.`)
+    return won.map((kind) => ({ text: w.panel.format.ruleSets(kind, rule.condition), condition: rule.condition }))
   })
 }
 
-/** The Format tab's hints (section 13, Panel). */
-export const FORMAT_HINTS = {
-  nothingOpen: 'Open a line or a title to format it: double-click it, or select its element and press Enter.',
-  nothingOpenTouch: 'Double-tap a line, or tap Edit',
-  noFormat: 'This line takes no format.',
-  /** Under a plot line's sample, which never draws the chart (M4e). */
-  chartOnSheet: 'Its chart is drawn on the sheet.',
-  /** In the Rules list, on a rule whose condition is empty. */
-  noCondition: 'a rule needs a condition',
-} as const
+/** A link's text with its arrow kept on its last word's line ("Primeira linha ↓", section 8, Sheet panel). */
+export function withArrow(text: string): string {
+  return text.replace(/ ([↑↓])$/, '\u00a0$1')
+}

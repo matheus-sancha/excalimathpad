@@ -28,6 +28,7 @@ export const KINDS = [
   'temperature',
 ] as const
 
+/** A kind; the text tables name each (`kinds.name`, and `kinds.a` with its article, 0.6.0). */
 export type Kind = (typeof KINDS)[number]
 
 /** One SI unit of each kind, which fixes the kind's dimension. */
@@ -156,28 +157,6 @@ export function unitsFor(settings: UnitSettings, kind: Kind): readonly string[] 
 /** The system whose base units a kind off the list composes from. */
 export function baseSystem(settings: UnitSettings): 'si' | 'uscs' {
   return settings.system === 'uscs' ? 'uscs' : 'si'
-}
-
-/** Each kind's name, as the Settings tab and the unit slot show it. */
-export const KIND_LABELS: Record<Kind, string> = {
-  length: 'Length',
-  area: 'Area',
-  volume: 'Volume',
-  volumeFlow: 'Volume flow',
-  massFlow: 'Mass flow',
-  velocity: 'Velocity',
-  acceleration: 'Acceleration',
-  force: 'Force',
-  pressure: 'Pressure',
-  energy: 'Energy, torque',
-  power: 'Power',
-  density: 'Density',
-  dynamicViscosity: 'Dynamic viscosity',
-  kinematicViscosity: 'Kinematic viscosity',
-  frequency: 'Frequency',
-  mass: 'Mass',
-  time: 'Time',
-  temperature: 'Temperature',
 }
 
 /**

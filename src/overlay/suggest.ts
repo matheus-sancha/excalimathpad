@@ -1,15 +1,19 @@
 import type { ConstantRowGroup, SheetLine } from '../math/evaluate.ts'
 import { APP_UNITS } from '../math/appUnits.ts'
 import { FORMAT_COLORS, readFormatWord, TEXT_COLORS } from '../math/lineForm.ts'
-import { SYMBOLS } from '../math/symbols.ts'
-import { KIND_LABELS, KINDS, NAMED_SI_UNITS, SI_PREFIXED, SLOT_UNITS, USCS } from '../math/unitSystems.ts'
+import { symbolHint, SYMBOLS } from '../math/symbols.ts'
+import { KINDS, NAMED_SI_UNITS, SI_PREFIXED, SLOT_UNITS, USCS } from '../math/unitSystems.ts'
+import { words, type Words } from '../text/words.ts'
 
 /**
  * Suggestions while a line is typed (docs/spec-v1.md section 4, While editing
  * a line): the names that start with the word at the caret, drawn from the
  * sheet's names above the line, the built-in constants, the functions and line
  * forms, and the units. Pure: what the sheet and the engine know comes in as
- * `SuggestSources`, so this module knows no React and no math.js.
+ * `SuggestSources`, so this module knows no React and no math.js. A detail is
+ * worded from the text table it is given (`suggest`, the kinds, the symbols'
+ * hints, 0.6.0), the one shown unless another is passed: the overlay builds
+ * the sources again when the language changes.
  */
 
 export type SuggestionKind = 'variable' | 'function' | 'constant' | 'unit' | 'keyword'
@@ -75,8 +79,9 @@ export function suggest(
   caret: number,
   sources: SuggestSources,
   limit = SUGGESTION_LIMIT,
+  w: Words = words(),
 ): Suggested | null {
-  const format = formatSuggest(text, caret, limit)
+  const format = formatSuggest(text, caret, limit, w)
   if (format !== undefined) return format
   const at = wordAt(text, caret)
   if (!at) return null
@@ -122,33 +127,35 @@ export function suggest(
 }
 
 /** The format words a clause offers after `@` (section 3), in the Format tab's order. */
-const FORMAT_WORDS: readonly Suggestion[] = [
-  { name: 'bold', kind: 'keyword', detail: 'bold row', insert: 'bold' },
-  { name: 'underline', kind: 'keyword', detail: 'underlined row', insert: 'underline' },
-  ...TEXT_COLORS.map((color) => ({
-    name: `text-${color}`,
-    kind: 'keyword' as const,
-    detail: 'text colour',
-    insert: `text-${color}`,
-  })),
-  ...FORMAT_COLORS.map((color) => ({ name: color, kind: 'keyword' as const, detail: 'highlight', insert: color })),
-]
+function formatWords(w: Words): Suggestion[] {
+  return [
+    { name: 'bold', kind: 'keyword', detail: w.suggest.boldRow, insert: 'bold' },
+    { name: 'underline', kind: 'keyword', detail: w.suggest.underlinedRow, insert: 'underline' },
+    ...TEXT_COLORS.map((color) => ({
+      name: `text-${color}`,
+      kind: 'keyword' as const,
+      detail: w.suggest.textColor,
+      insert: `text-${color}`,
+    })),
+    ...FORMAT_COLORS.map((color) => ({ name: color, kind: 'keyword' as const, detail: w.suggest.highlight, insert: color })),
+  ]
+}
 
 /**
  * The words a comment line's clause offers (section 4, Suggestions, M4d), in
  * the order the Format tab writes them: no rules, so no `if` after them.
  */
-const COMMENT_WORDS: readonly Suggestion[] = [
-  { name: 'bold', kind: 'keyword', detail: 'bold comment', insert: 'bold' },
-  { name: 'upright', kind: 'keyword', detail: 'not italic', insert: 'upright' },
-  { name: 'underline', kind: 'keyword', detail: 'underlined comment', insert: 'underline' },
-  { name: 'S', kind: 'keyword', detail: 'size S, 13 px', insert: 'S' },
-  { name: 'L', kind: 'keyword', detail: 'size L, 20 px', insert: 'L' },
-  { name: 'XL', kind: 'keyword', detail: 'size XL, 26 px', insert: 'XL' },
-  ...FORMAT_WORDS.filter((word) => word.name !== 'bold' && word.name !== 'underline'),
-]
-
-const IF: Suggestion = { name: 'if', kind: 'keyword', detail: 'a rule: the format applies while true', insert: 'if ' }
+function commentWords(w: Words): Suggestion[] {
+  return [
+    { name: 'bold', kind: 'keyword', detail: w.suggest.boldComment, insert: 'bold' },
+    { name: 'upright', kind: 'keyword', detail: w.suggest.upright, insert: 'upright' },
+    { name: 'underline', kind: 'keyword', detail: w.suggest.underlinedComment, insert: 'underline' },
+    { name: 'S', kind: 'keyword', detail: w.suggest.size('S', 13), insert: 'S' },
+    { name: 'L', kind: 'keyword', detail: w.suggest.size('L', 20), insert: 'L' },
+    { name: 'XL', kind: 'keyword', detail: w.suggest.size('XL', 26), insert: 'XL' },
+    ...formatWords(w).filter((word) => word.name !== 'bold' && word.name !== 'underline'),
+  ]
+}
 
 /**
  * Suggestions in a format clause (section 4, Suggestions, M4c): after `@`, the
@@ -158,7 +165,7 @@ const IF: Suggestion = { name: 'if', kind: 'keyword', detail: 'a rule: the forma
  * a clause, so the ordinary list takes over; null when it is, with nothing to
  * offer.
  */
-function formatSuggest(text: string, caret: number, limit: number): Suggested | null | undefined {
+function formatSuggest(text: string, caret: number, limit: number, w: Words): Suggested | null | undefined {
   if (/[\w-]/.test(text[caret] ?? '')) return undefined
   const before = text.slice(0, caret)
   const lead = (index: number) => before.slice(0, index)
@@ -168,13 +175,16 @@ function formatSuggest(text: string, caret: number, limit: number): Suggested | 
   const word = /@([A-Za-z][\w-]*)?$/.exec(before)
   if (word && outside(word.index)) {
     const typed = word[1] ?? ''
-    const items = (comment ? COMMENT_WORDS : FORMAT_WORDS).filter((item) => item.name.startsWith(typed) && item.name !== typed)
+    const items = (comment ? commentWords(w) : formatWords(w)).filter((item) => item.name.startsWith(typed) && item.name !== typed)
     return items.length === 0 ? null : { from: caret - typed.length, to: caret, items: items.slice(0, limit) }
   }
   const after = /@([A-Za-z][\w-]*)\s+(i?)$/.exec(before)
   if (after && outside(after.index)) {
     if (comment) return null
-    if (readFormatWord(after[1]) !== null) return { from: caret - after[2].length, to: caret, items: [IF] }
+    if (readFormatWord(after[1]) !== null) {
+      const ifWord: Suggestion = { name: 'if', kind: 'keyword', detail: w.suggest.if, insert: 'if ' }
+      return { from: caret - after[2].length, to: caret, items: [ifWord] }
+    }
   }
   return undefined
 }
@@ -193,6 +203,7 @@ export function accept(text: string, suggested: Suggested, item: Suggestion): { 
 export function sheetNames(
   blocks: readonly { id: string; lines: readonly SheetLine[] }[],
   at: { anchorId: string; lineIndex: number },
+  w: Words = words(),
 ): Suggestion[] {
   const names: Suggestion[] = []
   outer: for (const block of blocks) {
@@ -204,14 +215,14 @@ export function sheetNames(
           names.push({
             name: variable.name,
             kind: 'function',
-            detail: variable.solve ? `${signature} · solve function` : signature,
+            detail: variable.solve ? w.suggest.solveFunction(signature) : signature,
             insert: `${variable.name}(`,
           })
         } else {
           names.push({
             name: variable.name,
             kind: 'variable',
-            detail: variable.kind === 'error' ? 'error' : variable.text,
+            detail: variable.kind === 'error' ? w.suggest.error : variable.text,
             insert: variable.name,
           })
         }
@@ -223,12 +234,15 @@ export function sheetNames(
 }
 
 /** The constants as suggestions: the short name where there is one, then math.js's. */
-export function constantSuggestions(groups: readonly ConstantRowGroup[]): Suggestion[] {
+export function constantSuggestions(groups: readonly ConstantRowGroup[], w: Words = words()): Suggestion[] {
+  const description = w.constants.description as Readonly<Record<string, string>>
   return groups
     .flatMap((group) => group.rows)
     .flatMap((row) =>
       [row.short, row.name].flatMap((name) =>
-        name === null ? [] : [{ name, kind: 'constant' as const, detail: `${row.label} · ${row.value}`, insert: name }],
+        name === null
+          ? []
+          : [{ name, kind: 'constant' as const, detail: `${description[row.name] ?? row.name} · ${row.value}`, insert: name }],
       ),
     )
 }
@@ -240,20 +254,22 @@ export function constantSuggestions(groups: readonly ConstantRowGroup[]): Sugges
  * already shortest typed. A call inserts `sqrt(`; a keyword its word and a
  * space (`solve `), or the bare word for `true` and `false`.
  */
-export const FUNCTION_SUGGESTIONS: readonly Suggestion[] = SYMBOLS.filter(
-  (entry) => entry.group !== 'greek' && /^[A-Za-z]\w*$/.test(entry.spelling),
-).map(({ spelling, hint, insert }) =>
-  insert.mode === 'wrap'
-    ? { name: spelling, kind: 'function', detail: hint, insert: `${spelling}(` }
-    : { name: spelling, kind: 'keyword', detail: hint, insert: insert.mode === 'word' ? spelling : `${spelling} ` },
-)
+export function functionSuggestions(w: Words = words()): Suggestion[] {
+  return SYMBOLS.filter((entry) => entry.group !== 'greek' && /^[A-Za-z]\w*$/.test(entry.spelling)).map((entry) => {
+    const { spelling, insert } = entry
+    const detail = symbolHint(entry, w)
+    return insert.mode === 'wrap'
+      ? { name: spelling, kind: 'function', detail, insert: `${spelling}(` }
+      : { name: spelling, kind: 'keyword', detail, insert: insert.mode === 'word' ? spelling : `${spelling} ` }
+  })
+}
 
 /**
  * The units as suggestions: every unit name the app's own lists use (the unit
  * slot's, the systems' and the app units), each with its kind. A name only
  * found inside a compound unit (`minute` in `L/minute`) reads "unit".
  */
-export function unitSuggestions(): Suggestion[] {
+export function unitSuggestions(w: Words = words()): Suggestion[] {
   const kindOf = new Map<string, string>()
   const atoms = new Set<string>()
   const read = (unit: string, label: string | null) => {
@@ -262,12 +278,12 @@ export function unitSuggestions(): Suggestion[] {
     if (label !== null && names.length === 1 && names[0] === unit && !kindOf.has(unit)) kindOf.set(unit, label)
   }
   for (const kind of KINDS) {
-    for (const unit of [...SI_PREFIXED[kind], ...SLOT_UNITS[kind], USCS[kind]]) read(unit, KIND_LABELS[kind])
+    for (const unit of [...SI_PREFIXED[kind], ...SLOT_UNITS[kind], USCS[kind]]) read(unit, w.kinds.name[kind])
   }
-  for (const unit of NAMED_SI_UNITS) read(unit, 'Electrical')
+  for (const unit of NAMED_SI_UNITS) read(unit, w.suggest.electrical)
   for (const { name } of APP_UNITS) read(name, null)
   for (const extra of ['mol', 'rad', 'deg', 'hour', 'second', 'kohm', 'mA', 'mV', 'kV', 'degC', 'degF']) read(extra, null)
-  return [...atoms].map((name) => ({ name, kind: 'unit', detail: kindOf.get(name) ?? 'unit', insert: name }))
+  return [...atoms].map((name) => ({ name, kind: 'unit', detail: kindOf.get(name) ?? w.suggest.unit, insert: name }))
 }
 
 /** Where the open line's field and its list sit on screen, and the strip that is visible. */

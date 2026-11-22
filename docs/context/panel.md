@@ -11,9 +11,21 @@ the badge's `errors`, the tabs' content, `onChange`). `sheetPanel.ts` (pure)
 turns the evaluated sheet (`EvaluatedElement`s, which `MathOverlay` hands
 out through `onEvaluated`) into Variables groups and Problems rows (every
 error and warning), and `errorCount`, the Problems badge (errors only, M4d);
-`SheetPanel.tsx` renders them, and a click asks App to jump. A row's `message` is the
-engine's code (`EngineMessage`, ADR 0007), worded as the tab renders
-(`wordMessage(useWords().engine, …)`, `src/text/engine.ts`), as are the rename form's
+`SheetPanel.tsx` renders them, and a click asks App to jump. **The words**
+(0.6.0, #293): every word the tabs show is the text table's `panel` group
+([text](text.md)), read with `useWords()` while each tab renders, and the
+catalogues' own words are the tables' `constants`, `symbols` and `kinds`
+groups, keyed by the catalogue; so a choice in ☰ → Language words an open tab
+again at once. The pure modules (`sheetPanel.ts`, `formatTab.ts`,
+`renameForm.ts`) take the table as a last argument, the one shown by
+default: `elementLabel` (`panel.element`), a row's or a form's line
+(`panel.line`), a function's or an error's value. **Longer text wraps**
+(spec section 8, 0.6.0): no label is cut or ends in an ellipsis; a link's
+arrow stays on its last word's line (`withArrow`, a no-break space), and a
+condition quoted in a rule's note is one box (`KeepWhole`,
+`.sheet-panel__whole`, an inline-block with its full stop) that moves to
+the next line whole. A Problems row's `message` is the engine's code (`EngineMessage`, ADR 0007), worded as
+the tab renders (`wordMessage(w.engine, …)`, `src/text/engine.ts`), as are the rename form's
 `reason` and a rule's warning state in the Rules list (0.6.0, #291). **The rename
 form** (spec section 4, Renaming a name: The form, on a Variables row; 0.5.0,
 #261): every Variables row ends in a ✎ (`.sheet-panel__rename`, outside the
@@ -25,8 +37,9 @@ typed, settings)` gives the lines to write, each named by its element
 where the name stands in it), the reason under the field (the refusal, or
 the shadow warning), the lines whose result would differ, `canRename`, and
 the `plan` itself; null when the line no longer assigns the name.
-`RENAME_WORDS` is section 13's wording, the toast's included; the lines' marks
-are the engine's `markParts`. The sheet it
+The form's words are the table's `panel.rename` (its heading's words before
+and after the name, which is code and never breaks), and the toast's are
+`offer.renamed` ([overlay](overlay.md)); the lines' marks are the engine's `markParts`. The sheet it
 reads is a `RenameElement`: the panel's element with its `source` and
 `formats`, which `EvaluatedElement` carries. `RenameForm.tsx` draws it: a
 `type="text"` field that takes the keyboard as it mounts, the old name
@@ -44,14 +57,17 @@ line the app itself failed on (`ProblemRow.unexpected`, spec section 4,
 Unexpected failures) shows the failure's raw text under its message, and
 `FailureActions` after its button. **The Symbols
 tab** (#146, `SymbolsTab.tsx`): a filter box (`filterSymbols`), then the
-catalogue's groups, Greek in its three rows, each entry an `InsertButton`
-showing its label, its hover `symbolHover`, a dot on a letter that is also
-a constant. An `InsertButton` is a no-focus button that stays hoverable when
+catalogue's groups (named by the table's `symbols.groups`), Greek in its
+three rows, each entry an `InsertButton` showing its label, its hover
+`symbolHover` (the hint in the language shown), a dot on a letter that is
+also a constant. An `InsertButton` is a no-focus button that stays hoverable when
 dimmed (`aria-disabled`, not `disabled`). The Constants tab's rows are
 `InsertButton`s too, inserting the short name, else math.js's, as a `name`
-insert ("Insert c"). Both take `InsertProps`: `canInsert` (a line or the
+insert ("Insert c"); a row's description and group are the table's
+`constants.description` and `constants.groups`, by math.js's name and the
+group's `id`, and the filter matches the description in the language shown. Both take `InsertProps`: `canInsert` (a line or the
 title open, or one math element selected; otherwise the buttons are dimmed
-under "Open a line to insert") and `onInsert`, which App maps onto the line
+under `panel.openALine`) and `onInsert`, which App maps onto the line
 relay's `insert`, with the selected element when nothing is open. **The Format tab**
 (#144): `formatTab.ts` (pure) turns the evaluated sheet (`FormatElement`:
 the panel's element and its `titleFormat`, which `EvaluatedElement` carries)
@@ -61,8 +77,9 @@ and what is open (`FormatTarget`, the overlay's `EditTarget`) into a
 line's typed text with its stored format behind it (`FormatTarget.stored`,
 M4e, #195: as a condition being typed has it; a rule typed in the text comes
 before the stored ones); with its caption
-("Math line — Pipe flow, line 3", shown in capitals) and its link (Edit or
-Add title ↑, First line ↓). `FormatTab.tsx` renders it: the sample in a
+("Math line — Pipe flow, line 3", shown in capitals) and its link, a key
+of `panel.format.links` (`editTitle`, `addTitle`, `firstLine`); a note is a
+`RuleNote`, its text and the condition it quotes. `FormatTab.tsx` renders it: the sample in a
 light box (the dark theme's filter on it; see The sample, below), the link, Done, ↑ and ↓, then a
 labelled row per property, every control a no-focus button but a rule's
 condition; with nothing
@@ -89,7 +106,7 @@ back to the line or to another condition), and `leave()` ends the edit when
 the keyboard went anywhere else. A field is a new element each time it loses
 the keyboard, which keeps what was typed in it out of the browser's text
 undo (spec section 14). An empty condition's row reads
-`FORMAT_HINTS.noCondition`.
+`panel.rules.noCondition`.
 **The sample** (spec section 4, Format tab, M4e, #199): the tab draws the
 overlay's `TitleSample` or `LineSample` in `.sheet-format__drawing`. A
 title's is as before. A line's box is `is-line`: as tall as its line up to
@@ -98,12 +115,21 @@ is the one part of the sample that takes pointer events; `has-table` raises
 the height to 300 px, and `is-phone` (the `phone` prop, which App passes from
 the vault's) lowers it to 72 px. The line's own layout, 13 px and wrapped, is
 the overlay's ([overlay](overlay.md)). Under the box of a plot line (a line
-with a `plot`), `FORMAT_HINTS.chartOnSheet`, left out on a phone. jsdom lays
+with a `plot`), `panel.format.chartOnSheet`, left out on a phone. jsdom lays
 nothing out: `scripts/panel-run.mjs` holds the sizes, the wrapping, the
 sideways scroll and the scaled table at 320 px and 280 px, and
 `scripts/touch-run.mjs` the bottom sheet's 72 px with no chart or table.
+**The Português passes** (spec section 14, 0.6.0, #293): the panel run's
+280 px loop runs a third time with Português in `data.json`, and the touch
+run once more on the phone at 360 and 320 px (and in English at 320 px):
+nothing cut, the bottom sheet's active name whole or not shown, Custom's
+options whole, the link's arrow with its word and a rule's note on one line.
+They press by class, role and place, never by English text.
+`panelWords.test.ts` holds that every constant, symbol, kind and quick key
+is worded in both tables, and `panelLanguage.excalidraw.test.tsx` draws
+each tab and the rename form in Português against the real Excalidraw.
 **The quick keys** (M4d, #147): `quickKeys.ts` is `QUICK_KEYS`, the pinned
-row's keys in order, each a `SymbolInsert` (`(` with `alone`: it wraps a
+row's keys in order, each named by its key in `panel.keys` and a `SymbolInsert` (`(` with `alone`: it wraps a
 selection, else types only itself); `QuickKeys.tsx` draws them as no-focus
 `InsertButton`s.
 `ConstantsTab` lists `listConstants(settings)`: every built-in constant with
@@ -118,7 +144,9 @@ second key in `localStorage` on the web, given by `src/main.tsx`;
 told; `SheetCanvas` brings a remembered width into range. The frame the tabs
 are drawn in, the icon tabs, each tab's heading and the drag handle are the
 canvas's ([canvas](canvas.md)). `SettingsTab.tsx`
-edits the unit system, Custom's kind → unit table, Digits, the Result
+edits the unit system, Custom's kind → unit table (each kind named by the
+table's `kinds.name`; its default option shows the system's unit or range
+only, from 0.6.0, the system being named in Starts from), Digits, the Result
 colour (`settings.resultColor`, one of the six text colours; App hands it to
 `MathOverlay`, which sets `--math-result` on the overlay) and, from M5 (#80),
 the Page row (`settings.page`, spec section 11: two selects, Paper size over
