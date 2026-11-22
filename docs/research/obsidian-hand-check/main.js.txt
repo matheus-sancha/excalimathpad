@@ -1,0 +1,382 @@
+'use strict';
+/*
+ * Excalimathpad hand check. A throwaway plugin, not part of Excalimathpad.
+ * It answers one ticket: inside Obsidian, does a plugin's fetch reach each
+ * provider, with which Origin, and does secretStorage keep a value on one
+ * device? Results are appended to the note "Excalimathpad hand check.md".
+ * A key typed in step 3 stays in memory: it is never saved and never written
+ * to the note.
+ */
+const obsidian = require('obsidian');
+const { Plugin, Modal, Notice, Platform, requestUrl } = obsidian;
+
+const NOTE = 'Excalimathpad hand check.md';
+const CHECK_ID = 'excalimathpad-check';      // the marker that waits for a restart
+const REAL_ID = 'excalimathpad-assistant';   // the id the plugin will use
+const BAD_KEY = 'sk-invalid-excalimathpad-hand-check';
+const TIMEOUT_MS = 20000;
+
+const PROVIDERS = {
+  anthropic: { label: 'Anthropic', base: 'https://api.anthropic.com/v1', model: 'claude-sonnet-5-5', shape: 'messages' },
+  openai: { label: 'OpenAI', base: 'https://api.openai.com/v1', model: 'gpt-6.2-sol', shape: 'chat' },
+  google: { label: 'Google Gemini', base: 'https://generativelanguage.googleapis.com/v1beta/openai', model: 'gemini-4-hydrogen', shape: 'chat' },
+  openrouter: { label: 'OpenRouter', base: 'https://openrouter.ai/api/v1', model: '', shape: 'chat' },
+  other: { label: 'Other (type an address)', base: '', model: '', shape: 'chat' },
+};
+
+const SESSION = (window.__empHandCheckSession = window.__empHandCheckSession || Math.random().toString(36).slice(2, 10));
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const short = (s, n) => { s = String(s).replace(/\s+/g, ' ').trim(); return s.length > n ? s.slice(0, n) + '…' : s; };
+const code = (s) => '`' + String(s).replace(/`/g, "'") + '`';
+const errText = (e) => (e && e.name ? e.name + ': ' : '') + (e && e.message ? e.message : String(e));
+const rand = () => Math.random().toString(36).slice(2, 10) + Math.random().toString(36).slice(2, 10);
+function tag(s) { let h = 5381; s = String(s); for (let i = 0; i < s.length; i++) h = ((h * 33) ^ s.charCodeAt(i)) >>> 0; return h.toString(16).padStart(8, '0').slice(0, 6); }
+function timeout(promise, ms) {
+  let t; const timer = new Promise((_, rej) => { t = setTimeout(() => rej(new Error('no answer after ' + ms / 1000 + ' s')), ms); });
+  return Promise.race([promise, timer]).finally(() => clearTimeout(t));
+}
+
+function headersFor(shape, key) {
+  const h = { 'content-type': 'application/json' };
+  if (key) h.authorization = 'Bearer ' + key;
+  if (shape === 'messages') { h['anthropic-version'] = '2023-06-01'; h['anthropic-dangerous-direct-browser-access'] = 'true'; }
+  return h;
+}
+function chatUrl(p) { return p.base.replace(/\/+$/, '') + (p.shape === 'messages' ? '/messages' : '/chat/completions'); }
+function chatBody(p, model, text, stream) {
+  const b = { model, messages: [{ role: 'user', content: text }], stream: !!stream };
+  if (p.shape === 'messages') b.max_tokens = 300;
+  return JSON.stringify(b);
+}
+
+module.exports = class EmpHandCheck extends Plugin {
+  onload() {
+    this.addRibbonIcon('flask-conical', 'Excalimathpad hand check', () => new CheckModal(this).open());
+    this.addCommand({ id: 'open', name: 'Open', callback: () => new CheckModal(this).open() });
+  }
+
+  // ---------- the report ----------
+  where() {
+    const on = Object.keys(Platform).filter((k) => Platform[k] === true).join(', ');
+    let vault = '?';
+    try { vault = tag(this.app.appId || this.app.vault.getName()); } catch (e) { /* keep ? */ }
+    return { on, vault };
+  }
+  head(title) {
+    const w = this.where();
+    let has1114 = '?';
+    try { has1114 = String(obsidian.requireApiVersion('1.11.4')); } catch (e) { has1114 = 'threw ' + errText(e); }
+    return [
+      '', '## ' + title, '',
+      '- When: ' + new Date().toISOString(),
+      '- Obsidian `apiVersion`: ' + code(obsidian.apiVersion) + '; `requireApiVersion("1.11.4")`: ' + has1114,
+      '- Platform: ' + w.on,
+      '- User agent: ' + code(navigator.userAgent),
+      '- Page origin (`location.origin`): ' + code(location.origin) + '; `location.protocol`: ' + code(location.protocol),
+      '- This vault\'s tag (a hash, not its name): ' + code(w.vault),
+      '',
+    ];
+  }
+  async write(lines) {
+    const text = lines.join('\n') + '\n';
+    const a = this.app.vault.adapter;
+    try {
+      const before = (await a.exists(NOTE)) ? await a.read(NOTE) : '# Excalimathpad hand check\n\nPaste this whole note back to the session. It holds no key.\n';
+      await a.write(NOTE, before + text);
+      await this.app.workspace.openLinkText(NOTE, '', false);
+      new Notice('Hand check: done. Results are at the end of "' + NOTE + '".');
+    } catch (e) {
+      console.log(text);
+      new Notice('Hand check: could not write the note (' + errText(e) + '). The results are in the console.');
+    }
+    return text;
+  }
+
+  // ---------- 1. the network, with no key ----------
+  async viaFetch(method, url, headers, body) {
+    const t0 = Date.now(); const ctl = new AbortController(); const timer = setTimeout(() => ctl.abort(), TIMEOUT_MS);
+    try {
+      const res = await window.fetch(url, { method, headers, body, signal: ctl.signal });
+      const text = await res.text();
+      return { ok: true, status: res.status, type: res.type, text, ms: Date.now() - t0 };
+    } catch (e) { return { ok: false, err: errText(e), ms: Date.now() - t0 }; } finally { clearTimeout(timer); }
+  }
+  async viaRequestUrl(method, url, headers, body) {
+    const t0 = Date.now();
+    try {
+      const res = await timeout(requestUrl({ url, method, headers, body, throw: false }), TIMEOUT_MS);
+      return { ok: true, status: res.status, text: res.text, ms: Date.now() - t0 };
+    } catch (e) { return { ok: false, err: errText(e), ms: Date.now() - t0 }; }
+  }
+  cell(r, pick) {
+    if (!r.ok) return 'THREW ' + short(r.err, 90) + ' (' + r.ms + ' ms)';
+    return r.status + ' ' + (pick ? pick(r.text) : code(short(r.text, 110))) + ' (' + r.ms + ' ms)';
+  }
+  async runNetwork(progress) {
+    const out = this.head('1. Network, with an invalid key');
+    const echo = (text) => {
+      try {
+        const h = JSON.parse(text).headers || {}; const low = {}; Object.keys(h).forEach((k) => { low[k.toLowerCase()] = h[k]; });
+        return 'Origin=' + code(low.origin === undefined ? '(none sent)' : low.origin) + ' Sec-Fetch-Site=' + code(low['sec-fetch-site'] || '(none)') + ' UA=' + code(short(low['user-agent'] || '(none)', 60));
+      } catch (e) { return code(short(text, 110)); }
+    };
+    const rows = [
+      ['Echo, GET (which Origin leaves)', 'GET', 'https://httpbin.org/headers', {}, undefined, echo],
+      ['Echo, POST with a preflight', 'POST', 'https://httpbin.org/anything', headersFor('chat', BAD_KEY), '{}', echo],
+    ];
+    for (const id of ['anthropic', 'openai', 'google', 'openrouter']) {
+      const p = PROVIDERS[id]; const h = headersFor(p.shape, BAD_KEY); const model = p.model || 'anthropic/claude-sonnet-5.5';
+      rows.push([p.label + ', chat', 'POST', chatUrl(p), h, chatBody(p, model, 'ping', false)]);
+      const hGet = Object.assign({}, h); delete hGet['content-type'];
+      rows.push([p.label + ', models', 'GET', p.base + '/models', hGet, undefined]);
+    }
+    rows.push(['Ollama on this device, models', 'GET', 'http://localhost:11434/v1/models', {}, undefined]);
+    rows.push(['Ollama on this device, chat', 'POST', 'http://localhost:11434/v1/chat/completions', headersFor('chat', ''), chatBody(PROVIDERS.other, 'no-such-model', 'ping', false)]);
+
+    out.push('| Request | `fetch` | `requestUrl` |', '| --- | --- | --- |');
+    for (const [name, method, url, headers, body, pick] of rows) {
+      if (progress) progress(name);
+      const f = await this.viaFetch(method, url, headers, body);
+      const r = await this.viaRequestUrl(method, url, headers, body);
+      out.push('| ' + name + '<br>' + method + ' ' + code(url) + ' | ' + this.cell(f, pick).replace(/\|/g, '\\|') + ' | ' + this.cell(r, pick).replace(/\|/g, '\\|') + ' |');
+    }
+    out.push('', 'How to read it: a status with text means the answer was readable. THREW on `fetch` with a status on `requestUrl` means the host answered but the page was not allowed to read it (or, for Ollama, the origin was refused). THREW on both means nothing answered.');
+    out.push('', 'By hand, if you can: open the developer console (Ctrl+Shift+I), Network tab, run this step again, click the `chat/completions` request to api.openai.com and write here the `Origin` request header it shows: ');
+    return this.write(out);
+  }
+
+  // ---------- 2. storage on this device ----------
+  describe(raw, here) {
+    if (raw === null || raw === undefined) return 'nothing (' + String(raw) + ')';
+    if (raw === '') return 'an empty string';
+    try {
+      const m = typeof raw === 'string' ? JSON.parse(raw) : raw;
+      if (m && m.at) return 'a marker written ' + m.at + ' on ' + code(m.on) + ' in vault ' + code(m.vault) + (m.vault === here ? ' (THIS vault)' : ' (ANOTHER vault)') + (m.session === SESSION ? ', since Obsidian was last started (no restart in between)' : ', **before Obsidian was last started**');
+    } catch (e) { /* fall through */ }
+    return 'a value this check did not write, ' + String(raw).length + ' characters';
+  }
+  async scanFiles(tokens) {
+    const a = this.app.vault.adapter; const hits = []; let files = 0; let skipped = 0;
+    const walk = async (dir) => {
+      const l = await a.list(dir);
+      for (const f of l.files) {
+        try {
+          const st = await a.stat(f);
+          if (st && st.size > 3000000) { skipped++; continue; }
+          const text = await a.read(f); files++;
+          tokens.forEach((t) => { if (text.includes(t.value)) hits.push(t.name + ' in ' + f); });
+        } catch (e) { skipped++; }
+      }
+      for (const d of l.folders) await walk(d);
+    };
+    await walk(this.app.vault.configDir);
+    return { hits, files, skipped };
+  }
+  scanWebStorage(tokens) {
+    const res = [];
+    try {
+      const ls = window.localStorage;
+      for (let i = 0; i < ls.length; i++) {
+        const k = ls.key(i); const v = ls.getItem(k) || '';
+        tokens.forEach((t) => { if (v.includes(t.value)) res.push(t.name + ' readable as plain text under the key ' + code(k)); });
+        if (/excalimathpad/i.test(k)) res.push('a key named ' + code(k) + ' exists (' + v.length + ' characters)');
+      }
+    } catch (e) { res.push('could not read it: ' + errText(e)); }
+    return res;
+  }
+  async runStorage() {
+    const out = this.head('2. Storage on this device'); const app = this.app; const w = this.where();
+    const sToken = 'S' + rand(); const lToken = 'L' + rand();
+    const marker = (token) => JSON.stringify({ at: new Date().toISOString(), on: w.on, vault: w.vault, session: SESSION, token });
+    const ss = app.secretStorage;
+
+    out.push('### `app.secretStorage`', '');
+    if (!ss) out.push('- **Not here:** `app.secretStorage` is ' + String(ss) + ' on this version.');
+    else {
+      try {
+        const names = Object.getOwnPropertyNames(Object.getPrototypeOf(ss)).filter((n) => n !== 'constructor');
+        out.push('- Its methods: ' + code(names.join(', ')) + '. `deleteSecret` is ' + code(typeof ss.deleteSecret) + '.');
+      } catch (e) { out.push('- Listing its methods threw ' + errText(e)); }
+      try {
+        const before = await ss.getSecret(CHECK_ID);
+        out.push('- **Before writing** (this is the restart, second-vault and second-device answer): ' + code(CHECK_ID) + ' held ' + this.describe(before, w.vault) + '.');
+      } catch (e) { out.push('- `getSecret` threw ' + errText(e)); }
+      try {
+        const r = ss.setSecret(CHECK_ID, marker(sToken));
+        out.push('- `setSecret` returned ' + code(r && typeof r.then === 'function' ? 'a Promise' : String(r)) + '.'); await r;
+        const back = await ss.getSecret(CHECK_ID);
+        out.push('- Written and read back: ' + (typeof back === 'string' && back.includes(sToken) ? '**the same value**' : '**NOT the same**, got ' + this.describe(back, w.vault)) + '.');
+      } catch (e) { out.push('- **`setSecret` threw** ' + errText(e)); }
+      // The id the plugin will use, with a value the size of a setup record.
+      try {
+        const was = await ss.getSecret(REAL_ID);
+        if (was && !String(was).includes('"handCheck":true')) out.push('- ' + code(REAL_ID) + ' already holds a value this check did not write (' + String(was).length + ' characters). Left alone.');
+        else {
+          const big = JSON.stringify({ handCheck: true, provider: 'other', address: 'https://example.invalid/v1', model: 'some-model-name', key: 'sk-' + 'x'.repeat(200), confirmedHosts: ['example.invalid', 'api.example.invalid', 'localhost:11434'], pad: 'y'.repeat(150) });
+          await ss.setSecret(REAL_ID, big); const back = await ss.getSecret(REAL_ID);
+          out.push('- The id ' + code(REAL_ID) + ' with ' + big.length + ' characters: ' + (back === big ? '**accepted, read back the same**' : '**NOT the same**, got ' + (back === null ? 'null' : String(back).length + ' characters')) + '.');
+          await ss.setSecret(REAL_ID, ''); const blank = await ss.getSecret(REAL_ID);
+          const listed = (await ss.listSecrets()).includes(REAL_ID);
+          out.push('- After `setSecret(id, "")`: `getSecret` returns ' + code(blank === '' ? '"" (empty string)' : String(blank)) + ', and `listSecrets()` ' + (listed ? '**still lists**' : '**no longer lists**') + ' the id.');
+        }
+      } catch (e) { out.push('- The id ' + code(REAL_ID) + ' **threw** ' + errText(e)); }
+      try {
+        const all = await ss.listSecrets();
+        out.push('- `listSecrets()`: ' + all.length + ' ids, of which ours: ' + code(all.filter((n) => /^excalimathpad/.test(n)).join(', ') || 'none') + ' (other ids are not shown).');
+      } catch (e) { out.push('- `listSecrets` threw ' + errText(e)); }
+    }
+
+    out.push('', '### `app.saveLocalStorage`', '');
+    if (typeof app.saveLocalStorage !== 'function') out.push('- **Not here:** `app.saveLocalStorage` is ' + code(typeof app.saveLocalStorage) + '.');
+    else {
+      try {
+        out.push('- **Before writing:** ' + code(CHECK_ID) + ' held ' + this.describe(app.loadLocalStorage(CHECK_ID), w.vault) + '.');
+        app.saveLocalStorage(CHECK_ID, marker(lToken));
+        const back = app.loadLocalStorage(CHECK_ID);
+        out.push('- Written and read back: ' + (String(typeof back === 'string' ? back : JSON.stringify(back)).includes(lToken) ? '**the same value**' : '**NOT the same**') + ' (comes back as a ' + typeof back + ').');
+      } catch (e) { out.push('- **threw** ' + errText(e)); }
+    }
+
+    out.push('', '### Where the two values went', '');
+    await sleep(2500); // let Obsidian finish any write to disk
+    const tokens = [{ name: 'the secret', value: sToken }, { name: 'the saveLocalStorage value', value: lToken }];
+    try {
+      const s = await this.scanFiles(tokens);
+      out.push('- **Files under ' + code(app.vault.configDir) + '** (what a sync of the vault carries): read ' + s.files + ', skipped ' + s.skipped + '. ' + (s.hits.length ? '**FOUND: ' + s.hits.join('; ') + '**' : '**Neither value is in any of them.**'));
+    } catch (e) { out.push('- Reading the vault\'s configuration files threw ' + errText(e)); }
+    const web = this.scanWebStorage(tokens);
+    out.push('- **The web view\'s own `localStorage`:** ' + (web.length ? web.join('; ') : 'neither value is readable there, and no key names excalimathpad') + '.');
+
+    out.push('', '### By hand', '',
+      '- [ ] Settings › Keychain: is ' + code(CHECK_ID) + ' listed? Is ' + code(REAL_ID) + ' (now empty) listed? Answer: ',
+      '- [ ] Quit Obsidian fully, open this vault again, press step 2 again: the "Before writing" lines above then answer the restart.',
+      '- [ ] Open another vault on this device with this plugin in it, press step 2: "Before writing" answers the second vault.',
+      '- [ ] On a second device that syncs this vault, press step 2: "Before writing" answers the sync.');
+    return this.write(out);
+  }
+
+  // ---------- 3. a streamed answer, with a real key ----------
+  async runStream(o) {
+    const p = Object.assign({}, PROVIDERS[o.provider], { base: o.base });
+    const out = this.head('3. A streamed answer, real key (' + p.label + ', ' + code(o.model) + ' at ' + code(p.base) + ')');
+    const clean = (s) => (o.key ? String(s).split(o.key).join('<the key>') : String(s));
+    const url = chatUrl(p); const body = chatBody(p, o.model, 'Count from 1 to 60, one number per line, and nothing else.', true);
+    let headers = headersFor(p.shape, o.key);
+
+    const once = async () => {
+      const ctl = new AbortController(); const t0 = Date.now(); const chunks = [];
+      const guard = setTimeout(() => ctl.abort(), 60000);
+      try {
+        const res = await window.fetch(url, { method: 'POST', headers, body, signal: ctl.signal });
+        const tHead = Date.now() - t0;
+        if (!res.ok) return { status: res.status, text: clean(short(await res.text(), 300)), tHead };
+        const reader = res.body.getReader(); let first = ''; let ended = false; let afterAbort = 'not tried';
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) { ended = true; break; }
+          if (!chunks.length) first = new TextDecoder().decode(value);
+          chunks.push({ ms: Date.now() - t0, bytes: value.length });
+          if (chunks.length === 12) { // Stop: cancel while the answer is still being written
+            const tA = Date.now(); ctl.abort();
+            try { const n = await reader.read(); afterAbort = 'the next read returned done=' + n.done + ' instead of failing'; }
+            catch (e) { afterAbort = 'the next read failed with ' + errText(e) + ' after ' + (Date.now() - tA) + ' ms'; }
+            break;
+          }
+        }
+        return { status: res.status, type: res.headers.get('content-type'), tHead, chunks, first: clean(short(first, 140)), ended, afterAbort };
+      } catch (e) { return { err: clean(errText(e)), ms: Date.now() - t0 }; } finally { clearTimeout(guard); }
+    };
+
+    out.push('### By `fetch`', '');
+    let r = await once();
+    if (p.shape === 'messages' && r.status === 401) {
+      out.push('- With `Authorization: Bearer`: 401 ' + code(r.text) + '. Trying again with `x-api-key`.');
+      headers = headersFor(p.shape, ''); headers['x-api-key'] = o.key; r = await once();
+    }
+    if (r.err) out.push('- **THREW** ' + r.err + ' after ' + r.ms + ' ms. (For OpenAI this is also what an answer the page may not read looks like.)');
+    else if (!r.chunks) out.push('- **' + r.status + '** after ' + r.tHead + ' ms: ' + code(r.text));
+    else {
+      const last = r.chunks[r.chunks.length - 1];
+      out.push('- Status ' + r.status + ', `content-type` ' + code(r.type) + ', headers after ' + r.tHead + ' ms.',
+        '- **Pieces: ' + r.chunks.length + '**, arriving at (ms from the start) ' + r.chunks.map((c) => c.ms).join(', ') + '; sizes in bytes ' + r.chunks.map((c) => c.bytes).join(', ') + '.',
+        '- So the answer ' + (r.chunks.length > 1 && last.ms - r.chunks[0].ms > 150 ? '**arrived as it was written** (pieces spread over ' + (last.ms - r.chunks[0].ms) + ' ms)' : '**did NOT clearly arrive in pieces**') + '.',
+        '- The first piece starts: ' + code(r.first),
+        '- Stop (abort after 12 pieces): ' + (r.ended ? 'not reached, the answer ended first' : r.afterAbort) + '.');
+    }
+
+    out.push('', '### The same request by `requestUrl`', '');
+    const t0 = Date.now();
+    try {
+      const res = await timeout(requestUrl({ url, method: 'POST', headers, body, throw: false }), 90000);
+      const events = (String(res.text).match(/^data:/gm) || []).length;
+      out.push('- Status ' + res.status + ' after ' + (Date.now() - t0) + ' ms, all at once: ' + String(res.text).length + ' characters holding ' + events + ' `data:` events.' + (res.status >= 400 ? ' ' + code(clean(short(res.text, 200))) : ''));
+    } catch (e) { out.push('- **THREW** ' + clean(errText(e)) + ' after ' + (Date.now() - t0) + ' ms.'); }
+    return this.write(out.map(clean));
+  }
+
+  // ---------- 4. clean up ----------
+  async runCleanup() {
+    const out = this.head('4. Clean up'); const app = this.app; const ss = app.secretStorage;
+    if (ss) {
+      try {
+        await ss.setSecret(CHECK_ID, '');
+        out.push('- `setSecret(' + code(CHECK_ID) + ', "")`: `getSecret` now returns ' + code(JSON.stringify(await ss.getSecret(CHECK_ID))) + '; `listSecrets()` ' + ((await ss.listSecrets()).includes(CHECK_ID) ? 'still lists it' : 'no longer lists it') + '.');
+      } catch (e) { out.push('- Emptying the secret threw ' + errText(e)); }
+      if (typeof ss.deleteSecret === 'function') {
+        try {
+          for (const id of [CHECK_ID, REAL_ID]) {
+            const v = await ss.getSecret(id);
+            if (id === REAL_ID && v && !String(v).includes('"handCheck":true')) { out.push('- ' + code(id) + ' holds a value this check did not write. Left alone.'); continue; }
+            await ss.deleteSecret(id);
+            out.push('- `deleteSecret(' + code(id) + ')` (not in the public typings): `getSecret` now returns ' + code(JSON.stringify(await ss.getSecret(id))) + '; `listSecrets()` ' + ((await ss.listSecrets()).includes(id) ? 'still lists it' : 'no longer lists it') + '.');
+          }
+        } catch (e) { out.push('- `deleteSecret` threw ' + errText(e)); }
+      } else out.push('- There is no `deleteSecret` here, so the two ids stay as empty entries. Remove them in Settings › Keychain.');
+    } else out.push('- No `app.secretStorage` here.');
+    if (typeof app.saveLocalStorage === 'function') {
+      try { app.saveLocalStorage(CHECK_ID, null); out.push('- `saveLocalStorage(' + code(CHECK_ID) + ', null)`: `loadLocalStorage` now returns ' + code(JSON.stringify(app.loadLocalStorage(CHECK_ID))) + '.'); }
+      catch (e) { out.push('- Clearing the local storage value threw ' + errText(e)); }
+    }
+    out.push('', '- [ ] Settings › Keychain after this step: is ' + code(CHECK_ID) + ' or ' + code(REAL_ID) + ' still listed? Answer: ',
+      '', 'Then turn this plugin off, delete its folder, and delete this note once you have pasted it.');
+    return this.write(out);
+  }
+};
+
+// ---------- the dialog ----------
+class CheckModal extends Modal {
+  constructor(plugin) { super(plugin.app); this.plugin = plugin; }
+  onOpen() {
+    const root = this.contentEl; const doc = root.ownerDocument;
+    const el = (tagName, text, parent) => { const e = doc.createElement(tagName); if (text) e.textContent = text; (parent || root).appendChild(e); return e; };
+    this.titleEl.textContent = 'Excalimathpad hand check';
+    const status = el('p', 'Each step adds a section to the note "' + NOTE + '".');
+    const run = (label, fn) => async () => {
+      status.textContent = label + ': running…';
+      try { await fn((s) => { status.textContent = label + ': ' + s + '…'; }); this.close(); }
+      catch (e) { status.textContent = label + ' failed: ' + errText(e); }
+    };
+    const button = (label, fn, parent) => { const b = el('button', label, parent || el('p')); b.addEventListener('click', run(label, fn)); return b; };
+
+    button('1. Network, with an invalid key (no cost)', (p) => this.plugin.runNetwork(p));
+    button('2. Storage on this device', () => this.plugin.runStorage());
+
+    el('hr');
+    el('p', '3. A streamed answer. Needs a real key and makes two small paid requests. The key stays in memory: it is not saved and not written to the note.');
+    const row = (label) => { const p = el('p'); el('label', label + ' ', p); return p; };
+    const provider = el('select', '', row('Provider'));
+    Object.keys(PROVIDERS).forEach((id) => { const o = el('option', PROVIDERS[id].label, provider); o.value = id; });
+    const input = (label, type) => { const i = el('input', '', row(label)); i.type = type; i.style.width = '100%'; return i; };
+    const base = input('Address', 'text'); const model = input('Model', 'text'); const key = input('Key', 'password');
+    const fill = () => { const p = PROVIDERS[provider.value]; base.value = p.base; model.value = p.model; model.placeholder = p.model ? '' : 'type the model\'s name'; };
+    provider.addEventListener('change', fill); fill();
+    button('3. Send it', async () => {
+      if (!base.value.trim() || !model.value.trim()) throw new Error('fill in the address and the model');
+      await this.plugin.runStream({ provider: provider.value, base: base.value.trim(), model: model.value.trim(), key: key.value.trim() });
+    });
+
+    el('hr');
+    button('4. Clean up (after the restart and second-vault checks)', () => this.plugin.runCleanup());
+  }
+  onClose() { this.contentEl.textContent = ''; }
+}

@@ -1,0 +1,9 @@
+{
+  "id": "emp-hand-check",
+  "name": "Excalimathpad hand check",
+  "version": "0.0.1",
+  "minAppVersion": "1.0.0",
+  "description": "Throwaway check for the Math assistant: what fetch, requestUrl and the device storage do here. Delete after use.",
+  "author": "Excalimathpad",
+  "isDesktopOnly": false
+}
