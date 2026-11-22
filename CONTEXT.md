@@ -540,3 +540,6 @@ marked with a milestone aren't built yet.
   view are built, #135, and the tab's chrome, #137).
 - [ADR 0007](docs/adr/0007-engine-returns-message-codes.md) — the engine
   returns message codes (0.6.0).
+- [ADR 0008](docs/adr/0008-math-assistant-calls-the-users-provider-directly.md) — the
+  Math assistant calls the user's provider directly, with the user's key, only on a press
+  (0.7.0, not built yet).

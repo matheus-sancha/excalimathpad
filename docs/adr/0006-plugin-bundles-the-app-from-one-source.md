@@ -25,7 +25,9 @@ behaviour is in [`docs/spec-v1.md`](../spec-v1.md) section 12a, with sections 7 
   Vite. The plugin build is an esbuild script that makes one CommonJS `main.js` (no splitting, fonts
   as `data:` URLs, no worker) and one `styles.css`, trimmed of Mermaid, non-English locales and font
   subsetting, under 5,000,000 bytes per file.
-- **No network and nothing outside the vault, enforced.** The plugin makes no request, stores only
+- **No network and nothing outside the vault, enforced** (amended by
+  [0008](0008-math-assistant-calls-the-users-provider-directly.md), 0.7.0: the Math assistant's
+  requests and its setup are the one exception). The plugin makes no request, stores only
   in vault files and `data.json`, and reads only the open sheet and a picked image. A bundle audit,
   a network-blocked run in headless Chromium and Obsidian's lint at zero warnings block every pull
   request and release.
