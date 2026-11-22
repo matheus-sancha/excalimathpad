@@ -2545,7 +2545,9 @@ one, the key button in the tab's header opens the same card. From top to bottom:
   which asks the same message again and replaces what failed.
 - **A connection that drops in the middle** keeps what arrived, marked "The answer was cut
   short.", with Try again. A stream that ends without the provider's end mark counts as cut
-  short.
+  short, and so does an answer that stops at the provider's cap on its length (Anthropic's
+  `stop_reason: "max_tokens"`, Chat Completions' `finish_reason: "length"`): with no text
+  at all, it is still "The answer was cut short.", never an empty answer.
 - **New chat** empties the conversation. It asks nothing.
 - **A conversation lasts while its sheet is open,** and is never saved:
   on the web until the page closes or reloads or another sheet is opened; in the plugin
@@ -4032,7 +4034,9 @@ touch in [section 4](#touch). Research: [`docs/research/obsidian-plugin.md`](res
   default was last checked more than 180 days ago: someone reads that provider's
   deprecations page and updates the line, the date included. Pull requests aren't held by
   the calendar: the check is the Release button's alone. A model the user typed is outside
-  it.
+  it. As built (#309): `scripts/release-models.mjs`, the step "Check the Math assistant's
+  default models" in `.github/workflows/release.yml`, before the version is bumped; each
+  line it refuses with names the model, its date and the file to change.
 - **Phone and tablet:** `isDesktopOnly: false` ships to strangers only after the CI touch tests
   (Playwright with `hasTouch`, at a phone and a tablet viewport, as Android and as iOS:
   `scripts/touch-run.mjs`, `npm run test:touch`) and Matheus's **device
@@ -4475,7 +4479,15 @@ arrive, in whatever language, after `<provider> said:`.
 - **Each built-in's "no credit" answer** has its own recogniser and fixture: Anthropic's
   "Your credit balance is too low to access the Anthropic API", OpenAI's 429
   `insufficient_quota`, OpenRouter's 402. Google's has not been read; until it is, Google's
-  shows as any other error. A typed address gets the quoted message only.
+  shows as any other error. A typed address gets the quoted message only. As built (#309):
+  OpenAI's is a 429 whose `error.type` or `error.code` is `insufficient_quota`, or whose code
+  is `credit_balance_exhausted`, which OpenAI's error codes page names on 2026-11-22 ("The
+  broader error.type can still be insufficient_quota").
+- **A refused key** is a 401 from any address, Anthropic's 403 (`permission_error`), and
+  Google's 400 whose message names the API key (its compatible endpoint answers a wrong key
+  so). OpenRouter's 403 is a guardrail or a budget, and is quoted as any other error. **An
+  unknown model** is a 404, or the code `model_not_found`. A body that names no message is
+  quoted as it arrived, or as `HTTP <status>` when it is a page or empty.
 - **Where no recogniser matches,** the provider's quoted message is all the user sees.
   Anthropic's refusal for a zero-data-retention organization has no case of its own: it
   shows as a refused key, with Anthropic's words.
@@ -5251,6 +5263,13 @@ working key while this was specified.
 - **The reader carries an event cut between two pieces** (21 events arrived in 5 or 6
   pieces in Obsidian), and a stream that ends without the provider's end mark is a
   cut-short answer.
+- **The Anthropic adapter sets `max_tokens` to 32,000,** high enough for the model's
+  thinking, which counts against it: in the prototype, `claude-haiku-5-5` at 8,000 returned
+  `stop_reason: "max_tokens"` with no text on a long request, and at 32,000 the same request
+  answered in full with 9,001 output tokens
+  ([#247](https://github.com/matheus-sancha/excalimathpad/issues/247)). An answer that stops at
+  the cap is cut short ([section 8](#math-assistant)). Chat Completions sends no cap: the
+  provider's own applies, and its `finish_reason: "length"` is the same cut.
 - **The provider constants** hold, for each built-in: its name, its base URL, its default
   model, that model's retirement date (or `null`, none announced) and the date it was last
   checked. The audit's `reached` list is tied to them, and the Release button reads them
@@ -5287,8 +5306,9 @@ working key while this was specified.
   of the key replaced by "…" and its last four characters.
 - **Fixtures, one set per adapter,** under `src/assistant/fixtures/`. Anthropic Messages: a
   good streamed answer, a refused key (401), no credit left, an unknown model, a stream cut
-  short. Chat Completions: a good streamed answer, a refused key (401), OpenAI's 429
-  `insufficient_quota`, OpenRouter's 402, an unknown model (404), a stream cut short. A
+  short, an answer that stops at `max_tokens` with no text. Chat Completions: a good
+  streamed answer, a refused key (401), OpenAI's 429 `insufficient_quota`, OpenRouter's 402,
+  an unknown model (404), a stream cut short, one that stops at `finish_reason: "length"`. A
   failure with nothing readable needs no file: the fake rejects, as `fetch` does. Each
   fixture's header says where it is from ("from documentation, <date>, <link>", or
   "recorded <date> from <host>"); the first ones are written from documentation.
@@ -5360,9 +5380,8 @@ runs chose the marked text, the drafting rules and the one repair turn.
   the Send's abort signal. A unit test against the fake port holds: one more request when a
   line is refused; none when the proposal is clean; none after the second answer, whatever
   it holds; and Stop during it keeping the first answer.
-- **The Anthropic adapter sets `max_tokens` above the model's thinking:** an answer arrived
-  empty at 8,000 in the prototype. The number is the build's, with a fixture of a long
-  drafted sheet.
+- **The Anthropic adapter's `max_tokens`** (32,000 from the first slice) is checked against
+  a fixture of a long drafted sheet: an answer arrived empty at 8,000 in the prototype.
 - **The cards are held with the conversation,** outside the tab's content, and each is
   drawn from the sheet as it is: "Inserted" and "Applied" are read from the scene (the
   anchors an Insert created still exist; the lines an Apply wrote are still there), never

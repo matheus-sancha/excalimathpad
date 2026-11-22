@@ -1,0 +1,24 @@
+# from documentation, 2026-11-22, https://developers.openai.com/api/reference/resources/models/methods/list
+# The page's example response, its first two models.
+HTTP 200
+content-type: application/json
+
+{
+  "object": "list",
+  "data": [
+    {
+      "id": "model-id-0",
+      "object": "model",
+      "created": 1686935002,
+      "owned_by": "organization-owner",
+      "shutdown_date": null
+    },
+    {
+      "id": "model-id-1",
+      "object": "model",
+      "created": 1686935002,
+      "owned_by": "organization-owner",
+      "shutdown_date": null
+    }
+  ]
+}

@@ -67,7 +67,7 @@ describe('the card, with no setup saved', () => {
     expect(screen.queryByRole('button', { name: w.forget })).toBeNull()
   })
 
-  it('fills in each built-in’s default model and lines, and nothing for OpenRouter’s model until its name is read', () => {
+  it('fills in each built-in’s default model and lines, OpenRouter’s by its own name for Sonnet 5.5', () => {
     render(<AssistantTab ports={ports()} />)
     pick('openai')
     expect(model()).toHaveValue('gpt-6.2-sol')
@@ -77,7 +77,7 @@ describe('the card, with no setup saved', () => {
     expect(lines()[0]).toBe(w.cost.google)
     expect(lines()[1]).toBe(w.keeps('generativelanguage.googleapis.com'))
     pick('openrouter')
-    expect(model()).toHaveValue('')
+    expect(model()).toHaveValue('anthropic/claude-sonnet-5.5')
     expect(lines()).toEqual([w.cost.openrouter, w.keeps('openrouter.ai'), w.keptWeb, w.confidential('openrouter.ai')])
   })
 

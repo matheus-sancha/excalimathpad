@@ -1,0 +1,8 @@
+# from documentation, 2026-11-22, https://developers.openai.com/api/docs/guides/error-codes
+# "429 - Credit balance exhausted, Code: credit_balance_exhausted", and "The broader error.type
+# can still be insufficient_quota". The message is the page's Cause; the body's shape is the
+# 401's above.
+HTTP 429
+content-type: application/json
+
+{"error":{"message":"Your organization has no prepaid credits remaining.","type":"insufficient_quota","code":"credit_balance_exhausted","param":null}}

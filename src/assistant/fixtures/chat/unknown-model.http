@@ -1,0 +1,7 @@
+# from documentation, 2026-11-22, https://developers.openai.com/api/docs/guides/error-codes
+# 404 is the page's NotFoundError, "Requested resource does not exist". The code
+# model_not_found and the message weren't on the page that day: re-record.
+HTTP 404
+content-type: application/json
+
+{"error":{"message":"The model `gpt-0` does not exist or you do not have access to it.","type":"invalid_request_error","param":null,"code":"model_not_found"}}

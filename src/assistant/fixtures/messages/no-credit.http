@@ -1,0 +1,7 @@
+# from documentation, 2026-11-22, https://platform.claude.com/docs/en/api/errors
+# The page's body shape; the message as docs/spec-v1.md section 13 quotes it (its notes under
+# the Math assistant's table). The status and type are inferred, not read: re-record.
+HTTP 400
+content-type: application/json
+
+{"type":"error","error":{"type":"invalid_request_error","message":"Your credit balance is too low to access the Anthropic API."},"request_id":"req_011CSHoEeqs5C35K2UUqR7Fy"}

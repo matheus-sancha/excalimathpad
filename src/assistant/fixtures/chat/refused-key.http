@@ -1,0 +1,7 @@
+# recorded 2026-11-22 from api.openai.com, with a wrong key (docs/research/provider-shapes.md,
+# section 1), its message as the research kept it; the 401 row "Incorrect API key provided" is
+# on https://developers.openai.com/api/docs/guides/error-codes.
+HTTP 401
+content-type: application/json
+
+{"error":{"message":"Incorrect API key provided: …","type":"invalid_request_error","code":"invalid_api_key","param":null},"status":401}

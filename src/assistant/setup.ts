@@ -148,5 +148,10 @@ function makeKeeper(store: SetupStore): SetupKeeper {
 /** A store's error as the card shows it, with any copy of the key replaced by "…" and its last four characters. */
 function errorText(error: unknown, key: string): string {
   const text = error instanceof Error ? error.message || error.name : String(error)
+  return hideKey(text, key)
+}
+
+/** `text` with every verbatim copy of `key` replaced by "…" and its last four characters (section 14, 0.7.0). */
+export function hideKey(text: string, key: string): string {
   return key ? text.split(key).join(`…${keyEnding(key).replace('…', '')}`) : text
 }

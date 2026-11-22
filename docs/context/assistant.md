@@ -10,9 +10,10 @@ touches this module, and keep it true in the pull request that changes the modul
 the Math assistant. It never calls the network or a store itself: both reach it through the
 ports a home hands App. Depends on: text, math (the evaluation's types and the line as the
 engine reads it), overlay (the reading order) and canvas's `sceneTexts` (a type). Built so
-far: the first three issues of the first slice, which are the module, its ports, the switch
-and its tab (#306), the setup: its record, both stores and the card (#307), and the
-listing (#308). It makes no request.
+far: the first four issues of the first slice, which are the module, its ports, the switch
+and its tab (#306), the setup: its record, both stores and the card (#307), the
+listing (#308), and the two adapters, their readers, the fixtures and the default models
+(#309). It makes no request yet: nothing calls the adapters until the Send (#310).
 
 **The ports** (`ports.ts`). `AssistantPorts` is `{ request, store }`, App's `assistant` prop:
 
@@ -112,16 +113,75 @@ index from 0 and the line's text as sent. `chipTarget(map, label, now)` is what 
 after the sheet changed: `jumps`, `changed`, `gone` or `unknown`. Nothing calls them yet: the
 Send (#310) keeps a listing per Send, and the chips and "Sent with this" (#311) read it.
 
-**The provider constants** (`providers.ts`): `PROVIDERS`, the four built-ins in the setup
-card's order, each `{ id, name, address, defaultModel }`. OpenRouter's `defaultModel` is
-`null` until #309 reads OpenRouter's own name for Sonnet 5.5, and adds each model's
-retirement date and the date it was last checked. **The card imports the constants, so
-every build's `main.js` holds the four addresses,** switch on or off, each once:
-`scripts/plugin-allowlist.json` names their hosts in its `reached` list, which the bundle
-audit lets through (#307). Tying that list to the constants, and failing on a host named
-twice, are #312's (section 12a, Data protection). A key page in a cost line is plain text
-with no `https://` for that reason.
+**The provider constants** (`providers.ts`, section 14, 0.7.0): `PROVIDERS`, the four
+built-ins in the setup card's order, each `{ id, name, address, adapter, defaultModel,
+retires, checked, deprecations }`: `adapter` is `messages` (Anthropic) or `chat`; `retires`
+is the default's retirement date or `null`, `checked` the day its provider's deprecations
+page was last read, `deprecations` where, as plain text. OpenRouter's default is its own
+name for Sonnet 5.5, `anthropic/claude-sonnet-5.5`, from its keyless `GET /models`. The
+file imports nothing, so Node runs it as it is, for the Release button. **The card imports
+the constants, so every build's `main.js` holds the four addresses,** switch on or off, each
+once: `scripts/plugin-allowlist.json` names their hosts in its `reached` list, which the
+bundle audit lets through (#307), and `providers.test.ts` fails when that list and the
+constants' hosts differ, in either direction. The audit's check of the built bundle for a
+host named twice is #312's (section 12a, Data protection). A key page in a cost line, and a
+`deprecations` page, are plain text with no `https://` for that reason.
+
+**The Release button's check** (section 12a, A default model's retirement):
+`scripts/release-models.mjs`, a step of `.github/workflows/release.yml` before the version
+is bumped, never of `npm run check`. `refusals(providers, today)` is the rule, a line per
+default within 90 days of its `retires` or checked more than 180 days ago, each naming the
+model and what to do; `scripts/release-models.test.mjs` holds it with fixed dates.
+
+**The adapters** (`adapters.ts`, section 14, 0.7.0; ADR 0008), hand-written, no SDK, both
+through the `request` port only. A `Target` is `{ address, adapter, provider, key }`
+(`provider` null for a typed address); `Carried` is what a Send carries, in its order:
+`{ model, instructions, guide, listing, conversation, message }`, the listing `null` on an
+empty sheet. `sendRequest` and `modelsRequest` build a request; the key goes only into
+`authorization: Bearer`, and nowhere for a typed address with none.
+
+- **Chat Completions:** `POST <base>/chat/completions`, `{ model, stream, messages }`: one
+  system message, the instructions, the guide and the listing joined by blank lines, then
+  the conversation and the message. The model list is `GET <base>/models`.
+- **Messages:** `POST <base>/v1/messages` with `anthropic-version` (`ANTHROPIC_VERSION`,
+  `2026-10-21`) and `anthropic-dangerous-direct-browser-access: true`; `{ model, max_tokens,
+  stream, system, messages }`, `system` the instructions, the guide with its cache mark and
+  the listing as three text blocks; `MAX_TOKENS` is 32,000. The model list is
+  `GET <base>/v1/models`, with the same two headers.
+- Either way the body's start, up to the end of the guide, is the same bytes on every Send.
+
+`ask(request, target, carried, signal, onText)` sends, reads the answer as it arrives
+(`onText` gets the whole text so far) and gives an `Outcome`, never throwing: `answer`, `cut`
+(no end mark, a dropped connection, or `cap` at the token cap, with or without text),
+`stopped` (the signal), or `failed` with a `Failure` and what had arrived. `listModels` is
+Show models' and Check key's request: the names, or a `Failure`.
+
+**The stream reader** (`stream.ts`): `readEvents(body, signal)` gives each whole
+server-sent event, `{ event, data }`, carrying an event or a character cut between two
+pieces, skipping `:` comments, and cancelling the body when it stops early or the signal
+aborts. The end marks are Chat Completions' `data: [DONE]` and Messages' `message_stop`; an
+error inside a 200's stream (Anthropic's `error` event, OpenRouter's top-level `error`) is
+read by the error reader.
+
+**The error reader** (`errors.ts`, section 13, Math assistant, the notes under its table):
+`readFailure(status, text, provider, key)` gives `refusedKey`, `unknownModel`, `noCredit`
+(each built-in's own recogniser, never a typed address's) or `other`, each with `said`, the
+provider's message from any of the six body shapes (`errorOf`), with the key hidden by
+`hideKey` (`setup.ts`, the keeper's too). `nothing`, no answer the page could read, is the
+port's rejection.
+
+**The fixtures** (`fixtures/`, its `README.md`): `messages/` and `chat/`, one `.http` file
+per answer, a header saying where it is from, then the status, the content type and the body
+byte for byte. `fixtures/load.ts` reads them and is the fake `request` port, answering a few
+bytes at a time. `adapters.test.ts` runs each adapter on every fixture at several piece
+sizes, an abort, a cut-short stream, a failure with nothing readable, and the canary key,
+which shows nowhere but a request's header; it fails on a fixture shaped like a key.
+`npm run assistant:record` (`scripts/assistant-record.mjs`) re-records them by hand with
+`ASSISTANT_PROVIDER` and `ASSISTANT_KEY`, takes the key and account ids out, and refuses to
+run in CI.
 
 **Size** (section 14, Size). `main.js` before the slice: **3,493,012 bytes** at `a90b6a9`
 (the same as at `c3b55a7`), against a budget of 3,574,000. The first slice may add at most
-120,000 bytes; #312 measures after and raises `BUDGET` once. After #307: 3,508,154.
+120,000 bytes; #312 measures after and raises `BUDGET` once. After #307: 3,508,154. The
+adapters and the two readers (#309), alone with the plugin's esbuild settings, are 4,698
+bytes minified (2,087 gzipped), against the research's 3,825; the constants grew by 499.
