@@ -1,0 +1,9 @@
+{
+  "id": "emp-attachment-check",
+  "name": "Excalimathpad attachment check",
+  "version": "0.0.1",
+  "minAppVersion": "1.0.0",
+  "description": "Throwaway check for the Math assistant's attachments: a file dialog, a drop and a paste inside a view. Delete after use.",
+  "author": "Excalimathpad",
+  "isDesktopOnly": true
+}
