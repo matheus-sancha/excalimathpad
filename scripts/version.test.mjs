@@ -72,9 +72,13 @@ describe('isEntry: whether Node was started on the script', () => {
   })
 
   it('on Windows, ignores a difference of letter case only, as in a drive letter', () => {
-    const upper = self.toUpperCase()
-    expect(isEntry(upper, url, 'win32')).toBe(true)
-    expect(isEntry(upper, url, 'linux')).toBe(false)
+    // Paths that don't exist, so no file system resolves their case first (Windows' would).
+    const ghost = join(root, 'no-such-folder', 'entry.mjs')
+    const ghostUrl = pathToFileURL(ghost).href
+    const otherCase = join(root, 'NO-SUCH-FOLDER', 'ENTRY.MJS')
+    expect(isEntry(otherCase, ghostUrl, 'win32')).toBe(true)
+    expect(isEntry(otherCase, ghostUrl, 'linux')).toBe(false)
+    expect(isEntry(ghost, ghostUrl, 'linux')).toBe(true)
   })
 })
 
