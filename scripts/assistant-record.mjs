@@ -7,8 +7,10 @@
 // ASSISTANT_PROVIDER is a built-in's id: anthropic, openai, google or openrouter. It sends the
 // same small requests the adapters build (src/assistant/adapters.ts): a good streamed answer,
 // the same with a wrong key, the same with a model nobody has, and the model list, and
-// rewrites those fixtures with the key and account ids taken out. No credit left and a stream
-// cut short can't be asked for: those stay as written from documentation. Read the diff before
+// rewrites those fixtures with the key and account ids taken out, but only when the answer and
+// the model list both came back 200: a refused key writes nothing. No credit left, a stream cut
+// short and messages/answer-pieces.http (an answer in two pieces) can't be asked for: those stay
+// as written from documentation. Read the diff before
 // committing it, and run `npm test`, which fails on any text shaped like a key.
 import { writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
@@ -34,6 +36,19 @@ export function scrub(text, key) {
     .replace(/"(organization|organization_id|user_id|workspace_id|account_id)"\s*:\s*"[^"]*"/g, '"$1":"recorded"')
 }
 
+/**
+ * Why a recording isn't written, or null: the answer and the model list must both be a 200,
+ * or the key (or the address) is wrong and the fixtures would only hold that refusal.
+ */
+export function refusal(answers) {
+  const bad = answers.filter(({ name, status }) => (name === 'answer' || name === 'models') && status !== 200)
+  if (!bad.length) return null
+  return (
+    `Nothing was written: ${bad.map(({ name, status }) => `the ${name} request got ${status}`).join(', ')}. ` +
+    'Check the key (and ASSISTANT_PROVIDER), then record again.'
+  )
+}
+
 async function main() {
   if (process.env.CI) throw new Error('assistant:record is never run in CI.')
   const id = process.env.ASSISTANT_PROVIDER
@@ -57,16 +72,22 @@ async function main() {
     unknown: sendRequest(target, carried('no-such-model-excalimathpad')),
     models: modelsRequest(target),
   }
+  // Every answer is read before any file is written, so a refused key or a fault changes nothing.
+  const answers = []
   for (const [name, { address, ...init }] of Object.entries(requests)) {
-    const file = FILES[provider.id][name]
-    if (!file) continue
     const answer = await fetch(address, init)
     const body = scrub(await answer.text(), key)
-    if (body.includes(key)) throw new Error(`The key is still in ${file}; nothing was written.`)
-    const type = answer.headers.get('content-type') ?? 'application/octet-stream'
-    const text = `# recorded ${today} from ${host}\n# by npm run assistant:record, the key and account ids taken out.\nHTTP ${answer.status}\ncontent-type: ${type}\n\n${body}`
+    if (body.includes(key)) throw new Error(`The key is still in the ${name} answer; nothing was written.`)
+    answers.push({ name, status: answer.status, type: answer.headers.get('content-type'), body })
+  }
+  const failed = refusal(answers)
+  if (failed) throw new Error(failed)
+  for (const { name, status, type, body } of answers) {
+    const file = FILES[provider.id][name]
+    if (!file) continue
+    const text = `# recorded ${today} from ${host}\n# by npm run assistant:record, the key and account ids taken out.\nHTTP ${status}\ncontent-type: ${type ?? 'application/octet-stream'}\n\n${body}`
     writeFileSync(join(fixtures, `${file}.http`), text)
-    console.log(`${file}.http: ${answer.status}`)
+    console.log(`${file}.http: ${status}`)
   }
 }
 

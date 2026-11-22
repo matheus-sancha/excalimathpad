@@ -3,6 +3,7 @@ import { ANTHROPIC_VERSION, ask, listModels, MAX_TOKENS, modelsRequest, sendRequ
 import { readFailure } from './errors.ts'
 import { fakeRequest, FIXTURES, fixture, piecesOf } from './fixtures/load.ts'
 import type { AssistantRequest } from './ports.ts'
+import { PROVIDERS } from './providers.ts'
 import { readEvents } from './stream.ts'
 
 /** The adapters, the stream reader and the error reader (docs/spec-v1.md section 14, 0.7.0; section 13, Math assistant). */
@@ -159,6 +160,7 @@ describe('each adapter on every fixture', () => {
 
   it.each<[string, Target, Outcome]>([
     ['messages/answer.http', anthropic, { kind: 'answer', text: 'Hello!' }],
+    ['messages/answer-pieces.http', anthropic, { kind: 'answer', text: 'Hello!' }],
     ['messages/cut-short.http', anthropic, { kind: 'cut', text: 'Hello', cap: false }],
     ['messages/max-tokens.http', anthropic, { kind: 'cut', text: '', cap: true }],
     [
@@ -169,7 +171,7 @@ describe('each adapter on every fixture', () => {
     [
       'messages/refused-key.http',
       anthropic,
-      { kind: 'failed', failure: { kind: 'refusedKey', said: 'Invalid Anthropic API Key' }, text: '' },
+      { kind: 'failed', failure: { kind: 'refusedKey', said: 'Invalid bearer token' }, text: '' },
     ],
     [
       'messages/no-credit.http',
@@ -183,7 +185,7 @@ describe('each adapter on every fixture', () => {
     [
       'messages/unknown-model.http',
       anthropic,
-      { kind: 'failed', failure: { kind: 'unknownModel', said: 'The requested resource could not be found.' }, text: '' },
+      { kind: 'failed', failure: { kind: 'unknownModel', said: 'model: no-such-model-excalimathpad' }, text: '' },
     ],
     ['chat/answer.http', openai, { kind: 'answer', text: 'Hello!' }],
     ['chat/openrouter-answer.http', openrouter, { kind: 'answer', text: 'Hello!' }],
@@ -253,6 +255,7 @@ describe('each adapter on every fixture', () => {
         'chat/refused-key.http',
         'chat/unknown-model.http',
         'messages/answer.http',
+        'messages/answer-pieces.http',
         'messages/cut-short.http',
         'messages/max-tokens.http',
         'messages/models.http',
@@ -280,7 +283,7 @@ describe('each adapter on every fixture', () => {
   })
 
   it('gives the text as it arrives, each time the whole text so far', async () => {
-    expect((await run(anthropic, 'messages/answer.http', 1)).texts).toEqual(['Hello', 'Hello!'])
+    expect((await run(anthropic, 'messages/answer-pieces.http', 1)).texts).toEqual(['Hello', 'Hello!'])
     expect((await run(openai, 'chat/answer.http', 3)).texts).toEqual(['Hello', 'Hello!'])
   })
 })
@@ -312,7 +315,7 @@ describe('the outcomes no fixture holds', () => {
 
   it('an abort stops the answer and keeps what arrived; one before the request sends nothing readable', async () => {
     const stop = new AbortController()
-    const { request } = fakeRequest('messages/answer.http', 1)
+    const { request } = fakeRequest('messages/answer-pieces.http', 1)
     const outcome = await ask(request, anthropic, carried, stop.signal, () => stop.abort())
     expect(outcome).toEqual({ kind: 'stopped', text: 'Hello' })
 
@@ -406,9 +409,13 @@ describe('the model list', () => {
       kind: 'models',
       names: ['model-id-0', 'model-id-1'],
     })
+    // Every id of the list, in its order; re-recorded, the list changes, so the fixture says which.
+    const recorded = (JSON.parse(fixture('messages/models.http').body) as { data: { id: string }[] }).data.map(({ id }) => id)
+    expect(recorded.length).toBeGreaterThan(1)
+    expect(recorded).toContain(PROVIDERS.find(({ id }) => id === 'anthropic')?.defaultModel)
     expect(await listModels(fakeRequest('messages/models.http').request, anthropic, new AbortController().signal)).toEqual({
       kind: 'models',
-      names: ['claude-opus-5-5'],
+      names: recorded,
     })
     expect(await listModels(fakeRequest('chat/refused-key.http').request, openai, new AbortController().signal)).toEqual({
       kind: 'failed',

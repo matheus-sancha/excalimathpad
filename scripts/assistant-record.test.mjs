@@ -1,7 +1,7 @@
 import { execFileSync } from 'node:child_process'
 import { readdirSync, readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { scrub } from './assistant-record.mjs'
+import { refusal, scrub } from './assistant-record.mjs'
 
 /** `npm run assistant:record` (docs/spec-v1.md section 14, 0.7.0, Fixtures). */
 describe('assistant:record', () => {
@@ -13,6 +13,20 @@ describe('assistant:record', () => {
     expect(out).toBe(
       '{"id":"msg_recorded","request_id":"req_recorded","organization":"recorded","system_fingerprint":"fp_recorded","error":{"message":"bad [the key]"}}',
     )
+  })
+
+  it('writes nothing when the key is refused: the answer and the model list must both be a 200', () => {
+    const run = (answer, models) => [
+      { name: 'answer', status: answer },
+      { name: 'refused', status: 401 },
+      { name: 'unknown', status: 404 },
+      { name: 'models', status: models },
+    ]
+    expect(refusal(run(200, 200))).toBeNull()
+    expect(refusal(run(401, 401))).toBe(
+      'Nothing was written: the answer request got 401, the models request got 401. Check the key (and ASSISTANT_PROVIDER), then record again.',
+    )
+    expect(refusal(run(200, 500))).toMatch(/^Nothing was written: the models request got 500\./)
   })
 
   it('is never run in CI, and no key is in a workflow', () => {
