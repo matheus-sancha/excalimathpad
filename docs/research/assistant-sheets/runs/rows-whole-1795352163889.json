@@ -1,0 +1,511 @@
+[
+  {
+    "model": "claude-sonnet-5-5",
+    "scenario": "pump",
+    "guide": "whole",
+    "trial": 2,
+    "first": {
+      "elements": 5,
+      "lines": 43,
+      "comments": 3,
+      "errors": [],
+      "warnings": [],
+      "failedPoints": [],
+      "forms": {
+        "comment": 3,
+        "note": 12,
+        "display unit": 11,
+        "solve": 2,
+        "rule": 2,
+        "condition": 3,
+        "range": 2,
+        "table": 1,
+        "plot": 1
+      },
+      "bare": [
+        "E1:17  K_tot = n_elbow * K_elbow + K_gate + K_in + K_out  =  3.5",
+        "E2:6  f_d = f_c(Re, r_rel)  =  0.01759"
+      ]
+    },
+    "repaired": null,
+    "cost": 0.10237,
+    "seconds": 46.8948647,
+    "tokensIn": 18490,
+    "tokensOut": 6539
+  },
+  {
+    "model": "claude-sonnet-5-5",
+    "scenario": "pump",
+    "guide": "whole",
+    "trial": 1,
+    "first": {
+      "elements": 5,
+      "lines": 40,
+      "comments": 3,
+      "errors": [],
+      "warnings": [],
+      "failedPoints": [],
+      "forms": {
+        "comment": 3,
+        "note": 18,
+        "display unit": 9,
+        "solve": 2,
+        "rule": 2,
+        "condition": 3,
+        "range": 2,
+        "table": 1,
+        "plot": 1
+      },
+      "bare": [
+        "E1:16  K_t = n_el * K_el + K_gv + K_inlet + K_exit  =  3.5",
+        "E2:6  f_d = f_c(Re_d, r_d)  =  0.01759"
+      ]
+    },
+    "repaired": null,
+    "cost": 0.11534,
+    "seconds": 55.66911279999999,
+    "tokensIn": 18490,
+    "tokensOut": 7836
+  },
+  {
+    "model": "claude-sonnet-5-5",
+    "scenario": "beam",
+    "guide": "whole",
+    "trial": 1,
+    "first": {
+      "elements": 4,
+      "lines": 16,
+      "comments": 1,
+      "errors": [],
+      "warnings": [],
+      "failedPoints": [],
+      "forms": {
+        "comment": 1,
+        "note": 11,
+        "display unit": 7,
+        "rule": 1,
+        "condition": 1
+      },
+      "bare": [
+        "E4:3  ratio = delta_max / delta_lim * 100   # percent of the limit used  =  72.54"
+      ]
+    },
+    "repaired": null,
+    "cost": 0.054932,
+    "seconds": 14.657027599999994,
+    "tokensIn": 18411,
+    "tokensOut": 1811
+  },
+  {
+    "model": "claude-sonnet-5-5",
+    "scenario": "beam",
+    "guide": "whole",
+    "trial": 2,
+    "first": {
+      "elements": 3,
+      "lines": 16,
+      "comments": 1,
+      "errors": [],
+      "warnings": [],
+      "failedPoints": [],
+      "forms": {
+        "comment": 1,
+        "note": 8,
+        "display unit": 7,
+        "rule": 1,
+        "condition": 1
+      },
+      "bare": [
+        "E3:3  used = delta_max / delta_lim * 100 # percent of the limit  =  72.54"
+      ]
+    },
+    "repaired": null,
+    "cost": 0.052572,
+    "seconds": 12.505808900000003,
+    "tokensIn": 18411,
+    "tokensOut": 1575
+  },
+  {
+    "model": "claude-sonnet-5-5",
+    "scenario": "position",
+    "guide": "whole",
+    "trial": 1,
+    "first": {
+      "elements": 1,
+      "lines": 8,
+      "comments": 1,
+      "errors": [],
+      "warnings": [],
+      "failedPoints": [],
+      "forms": {
+        "comment": 1,
+        "note": 3,
+        "display unit": 3,
+        "rule": 1,
+        "condition": 1,
+        "plot": 1
+      },
+      "bare": []
+    },
+    "repaired": null,
+    "cost": 0.045506,
+    "seconds": 7.356826399999991,
+    "tokensIn": 18403,
+    "tokensOut": 870
+  },
+  {
+    "model": "claude-sonnet-5-5",
+    "scenario": "position",
+    "guide": "whole",
+    "trial": 2,
+    "first": {
+      "elements": 1,
+      "lines": 8,
+      "comments": 4,
+      "errors": [],
+      "warnings": [],
+      "failedPoints": [],
+      "forms": {
+        "comment": 4,
+        "display unit": 3,
+        "rule": 1,
+        "condition": 1,
+        "plot": 1
+      },
+      "bare": []
+    },
+    "repaired": null,
+    "cost": 0.044726,
+    "seconds": 6.255935899999996,
+    "tokensIn": 18403,
+    "tokensOut": 792
+  },
+  {
+    "model": "claude-sonnet-5-5",
+    "scenario": "hydro",
+    "guide": "whole",
+    "trial": 2,
+    "first": {
+      "elements": 4,
+      "lines": 28,
+      "comments": 3,
+      "errors": [],
+      "warnings": [],
+      "failedPoints": [],
+      "forms": {
+        "comment": 3,
+        "note": 15,
+        "display unit": 7,
+        "rule": 2,
+        "condition": 2,
+        "range": 1,
+        "table": 1
+      },
+      "bare": [
+        "E2:10  err_thin = (sigma_thin / sigma_L - 1) * 100    # percent, thin-wall vs Lame  =  -32.51",
+        "E3:2  util = sigma_L / S_allow * 100                 # percent of allowable used  =  48.99"
+      ]
+    },
+    "repaired": null,
+    "cost": 0.076376,
+    "seconds": 29.422318799999992,
+    "tokensIn": 18513,
+    "tokensOut": 3935
+  },
+  {
+    "model": "claude-sonnet-5-5",
+    "scenario": "hydro",
+    "guide": "whole",
+    "trial": 1,
+    "first": {
+      "elements": 5,
+      "lines": 29,
+      "comments": 4,
+      "errors": [],
+      "warnings": [
+        "E3:10  diff = (sigma_thin - sigma_L) / sigma_L in %  →  diff shadows the built-in diff"
+      ],
+      "failedPoints": [],
+      "forms": {
+        "comment": 4,
+        "note": 10,
+        "display unit": 12,
+        "rule": 2,
+        "condition": 2,
+        "range": 1,
+        "table": 1
+      },
+      "bare": []
+    },
+    "repaired": {
+      "elements": 5,
+      "lines": 29,
+      "comments": 4,
+      "errors": [],
+      "warnings": [],
+      "failedPoints": [],
+      "forms": {
+        "comment": 4,
+        "note": 10,
+        "display unit": 12,
+        "rule": 2,
+        "condition": 2,
+        "range": 1,
+        "table": 1
+      },
+      "bare": []
+    },
+    "cost": 0.135962,
+    "seconds": 40.40915530000001,
+    "tokensIn": 39376,
+    "tokensOut": 5721
+  },
+  {
+    "model": "claude-haiku-5-5",
+    "scenario": "pump",
+    "guide": "whole",
+    "trial": 1,
+    "first": {
+      "elements": 0,
+      "lines": 0,
+      "comments": 0,
+      "errors": [],
+      "warnings": [],
+      "failedPoints": [],
+      "forms": {},
+      "bare": []
+    },
+    "repaired": {
+      "elements": 0,
+      "lines": 0,
+      "comments": 0,
+      "errors": [],
+      "warnings": [],
+      "failedPoints": [],
+      "forms": {},
+      "bare": []
+    },
+    "cost": 0.0117059,
+    "seconds": 71.73374319999999,
+    "tokensIn": 37059,
+    "tokensOut": 16000
+  },
+  {
+    "model": "claude-haiku-5-5",
+    "scenario": "pump",
+    "guide": "whole",
+    "trial": 2,
+    "first": {
+      "elements": 0,
+      "lines": 0,
+      "comments": 0,
+      "errors": [],
+      "warnings": [],
+      "failedPoints": [],
+      "forms": {},
+      "bare": []
+    },
+    "repaired": {
+      "elements": 7,
+      "lines": 35,
+      "comments": 1,
+      "errors": [],
+      "warnings": [],
+      "failedPoints": [],
+      "forms": {
+        "comment": 1,
+        "note": 15,
+        "rule": 1,
+        "condition": 1,
+        "solve": 2,
+        "display unit": 6,
+        "range": 2,
+        "table": 1,
+        "plot": 1
+      },
+      "bare": [
+        "E1:13  K_t = K_ent + 2 K_elb + K_gate + K_exit   # total minor loss coefficient  =  3.17",
+        "E3:2  f_d = colebrook(Re_d, r_d)  =  0.01759"
+      ]
+    },
+    "cost": 0.0114554,
+    "seconds": 70.3558893,
+    "tokensIn": 37059,
+    "tokensOut": 15499
+  },
+  {
+    "model": "claude-haiku-5-5",
+    "scenario": "beam",
+    "guide": "whole",
+    "trial": 1,
+    "first": {
+      "elements": 4,
+      "lines": 14,
+      "comments": 1,
+      "errors": [],
+      "warnings": [],
+      "failedPoints": [],
+      "forms": {
+        "comment": 1,
+        "note": 13,
+        "display unit": 6,
+        "rule": 1,
+        "condition": 1
+      },
+      "bare": []
+    },
+    "repaired": null,
+    "cost": 0.0032771000000000002,
+    "seconds": 13.649626900000003,
+    "tokensIn": 18411,
+    "tokensOut": 2872
+  },
+  {
+    "model": "claude-haiku-5-5",
+    "scenario": "beam",
+    "guide": "whole",
+    "trial": 2,
+    "first": {
+      "elements": 4,
+      "lines": 14,
+      "comments": 1,
+      "errors": [],
+      "warnings": [],
+      "failedPoints": [],
+      "forms": {
+        "comment": 1,
+        "note": 13,
+        "display unit": 5,
+        "rule": 1,
+        "condition": 1
+      },
+      "bare": [
+        "E4:3  used = delta_mid / delta_lim * 100           # percent of the limit used  =  76.17"
+      ]
+    },
+    "repaired": null,
+    "cost": 0.0031841000000000005,
+    "seconds": 13.540798700000014,
+    "tokensIn": 18411,
+    "tokensOut": 2686
+  },
+  {
+    "model": "claude-haiku-5-5",
+    "scenario": "position",
+    "guide": "whole",
+    "trial": 1,
+    "first": {
+      "elements": 1,
+      "lines": 8,
+      "comments": 1,
+      "errors": [],
+      "warnings": [],
+      "failedPoints": [],
+      "forms": {
+        "comment": 1,
+        "note": 4,
+        "display unit": 3,
+        "rule": 1,
+        "condition": 1,
+        "plot": 1
+      },
+      "bare": []
+    },
+    "repaired": null,
+    "cost": 0.0024963000000000003,
+    "seconds": 5.842973499999993,
+    "tokensIn": 18403,
+    "tokensOut": 1312
+  },
+  {
+    "model": "claude-haiku-5-5",
+    "scenario": "position",
+    "guide": "whole",
+    "trial": 2,
+    "first": {
+      "elements": 1,
+      "lines": 8,
+      "comments": 1,
+      "errors": [],
+      "warnings": [],
+      "failedPoints": [],
+      "forms": {
+        "comment": 1,
+        "note": 4,
+        "display unit": 3,
+        "rule": 1,
+        "condition": 1,
+        "plot": 1
+      },
+      "bare": []
+    },
+    "repaired": null,
+    "cost": 0.0030813000000000004,
+    "seconds": 11.439762100000022,
+    "tokensIn": 18403,
+    "tokensOut": 2482
+  },
+  {
+    "model": "claude-haiku-5-5",
+    "scenario": "hydro",
+    "guide": "whole",
+    "trial": 1,
+    "first": {
+      "elements": 5,
+      "lines": 33,
+      "comments": 6,
+      "errors": [],
+      "warnings": [],
+      "failedPoints": [],
+      "forms": {
+        "comment": 6,
+        "note": 19,
+        "display unit": 8,
+        "rule": 2,
+        "condition": 2,
+        "range": 1,
+        "table": 1
+      },
+      "bare": [
+        "E2:8  wall_ratio = t_w / r_i               # wall to inside radius, for the thin-wall validity check  =  0.7561",
+        "E4:4  util_L = S_L / S_allow               # utilisation, thick-walled  =  0.4355"
+      ]
+    },
+    "repaired": null,
+    "cost": 0.0041583,
+    "seconds": 20.687241999999998,
+    "tokensIn": 18513,
+    "tokensOut": 4614
+  },
+  {
+    "model": "claude-haiku-5-5",
+    "scenario": "hydro",
+    "guide": "whole",
+    "trial": 2,
+    "first": {
+      "elements": 6,
+      "lines": 26,
+      "comments": 1,
+      "errors": [],
+      "warnings": [],
+      "failedPoints": [],
+      "forms": {
+        "comment": 1,
+        "note": 14,
+        "display unit": 7,
+        "rule": 2,
+        "condition": 2,
+        "range": 1,
+        "table": 1
+      },
+      "bare": [
+        "E4:2  margin = 1 - sigma_L / S_all # fraction of allowable not used  =  0.3423"
+      ]
+    },
+    "repaired": null,
+    "cost": 0.0048558,
+    "seconds": 25.950030100000003,
+    "tokensIn": 18513,
+    "tokensOut": 6009
+  }
+]
