@@ -27,10 +27,12 @@ const ROOT = resolve(HERE, '../../..')
 
 // --- what the model is told -------------------------------------------------
 
-const spec = readFileSync(resolve(ROOT, 'docs/spec-v1.md'), 'utf8')
+/** A Windows checkout has CRLF line ends; the texts are read with LF. */
+const read = (path: string) => readFileSync(resolve(ROOT, path), 'utf8').replaceAll('\r\n', '\n')
+const spec = read('docs/spec-v1.md')
 /** The instructions, read from the spec so the prototype can't drift from them. */
 const INSTRUCTIONS = /\*\*The model's job\*\*[\s\S]*?```\n([\s\S]*?)```/.exec(spec)![1].trim()
-const GUIDE = readFileSync(resolve(ROOT, 'docs/math-guide.md'), 'utf8')
+const GUIDE = read('docs/math-guide.md')
 
 /** The prototype's own: what a proposal is, until its ticket decides the form. */
 const DRAFTING = `
