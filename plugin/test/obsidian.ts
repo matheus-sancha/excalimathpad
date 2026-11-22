@@ -525,7 +525,49 @@ export class Workspace extends Events {
   }
 }
 
+/**
+ * Obsidian's secret storage (from 1.11.4): values by id, on the device, with
+ * no delete. It records every call, so a test can hold that an older Obsidian
+ * never reaches it; `failNext` makes the next write throw, as a full one does.
+ */
+export class SecretStorage {
+  readonly secrets = new Map<string, string>()
+  readonly calls: string[] = []
+  failNext: Error | null = null
+  setSecret(id: string, secret: string) {
+    this.calls.push(`setSecret ${id}`)
+    if (!/^[a-z0-9-]+$/.test(id)) throw new Error(`Invalid secret ID: ${id}`)
+    const fail = this.failNext
+    this.failNext = null
+    if (fail) throw fail
+    this.secrets.set(id, secret)
+  }
+  getSecret(id: string): string | null {
+    this.calls.push(`getSecret ${id}`)
+    return this.secrets.get(id) ?? null
+  }
+  listSecrets(): string[] {
+    this.calls.push('listSecrets')
+    return [...this.secrets.keys()]
+  }
+}
+
+/** The Obsidian the fake stands for: a test sets an older one, and puts it back. */
+export const obsidian = { apiVersion: '1.15.1' }
+
+/** Obsidian's own: whether the app is at least `version`. */
+export function requireApiVersion(version: string): boolean {
+  const have = obsidian.apiVersion.split('.').map(Number)
+  const need = version.split('.').map(Number)
+  for (let part = 0; part < Math.max(have.length, need.length); part++) {
+    const difference = (have[part] ?? 0) - (need[part] ?? 0)
+    if (difference !== 0) return difference > 0
+  }
+  return true
+}
+
 export class App {
+  readonly secretStorage = new SecretStorage()
   readonly vault: Vault
   readonly workspace: Workspace
   readonly fileManager = new FileManager()

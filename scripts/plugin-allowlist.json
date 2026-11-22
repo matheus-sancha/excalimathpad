@@ -21,6 +21,13 @@
     "libraries.excalidraw.com": "A link in Excalidraw's Publish library dialog, which the plugin never opens",
     "mermaid.js.org": "Links in Excalidraw's Mermaid dialog, which is trimmed from the plugin"
   },
+  "reached": {
+    "$comment": "From 0.7.0, the one list of hosts the plugin does reach: exactly the four built-in providers of the Math assistant (src/assistant/providers.ts). The hosts above keep their meaning: named, never reached.",
+    "api.anthropic.com": "Math assistant, built-in provider: only on Send, Show models or Check key, after the first-request confirm",
+    "api.openai.com": "Math assistant, built-in provider: only on Send, Show models or Check key, after the first-request confirm",
+    "generativelanguage.googleapis.com": "Math assistant, built-in provider: only on Send, Show models or Check key, after the first-request confirm",
+    "openrouter.ai": "Math assistant, built-in provider: only on Send, Show models or Check key, after the first-request confirm"
+  },
   "elementCreation": {
     "$comment": "Each createElement(\"style\" | \"link\") must sit near one of these words, which mark library code the app never reaches. The network-blocked run also fails on any <style> or <link> added at run time.",
     "precedence": "React DOM's hoisting of <style> and <link> written in JSX; the app renders none",

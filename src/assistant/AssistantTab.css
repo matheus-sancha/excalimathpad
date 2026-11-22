@@ -1,0 +1,145 @@
+/* The Math assistant's tab (section 8, Math assistant), inside the Sheet
+   panel: colours come from Excalidraw's own theme variables, as the other
+   tabs' do. Every row is one column, a label over its control, so the card
+   fits a 280 px panel with nothing cut. */
+.assistant-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  padding: 0 4px;
+  overflow-wrap: anywhere;
+}
+
+.assistant-card p {
+  margin: 0;
+}
+
+.assistant-card__heading {
+  font-weight: 600;
+}
+
+.assistant-card__field {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.assistant-card__field > span:first-child {
+  font-size: 12px;
+  color: var(--color-gray-50, #868e96);
+}
+
+.assistant-card select,
+.assistant-card input {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  min-height: 28px;
+  padding: 4px 6px;
+  border: 1px solid var(--default-border-color, #dee2e6);
+  border-radius: 6px;
+  background: var(--input-bg-color, transparent);
+  color: inherit;
+  font: inherit;
+}
+
+.assistant-card input[aria-invalid='true'] {
+  border-color: #e03131;
+}
+
+/* A field with its button beside it: the eye, Show models. */
+.assistant-card__row {
+  display: flex;
+  gap: 4px;
+  min-width: 0;
+}
+
+.assistant-card__row input {
+  flex: 1 1 8rem;
+  width: auto;
+}
+
+.assistant-card__row.is-wrapping {
+  flex-wrap: wrap;
+}
+
+.assistant-card__saved {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px 8px;
+}
+
+.assistant-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.assistant-card__button {
+  box-sizing: border-box;
+  flex: none;
+  min-height: 28px;
+  padding: 2px 10px;
+  border: 1px solid var(--default-border-color, #dee2e6);
+  border-radius: 6px;
+  background: var(--island-bg-color, #fff);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.assistant-card__button.is-eye {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  padding: 0;
+}
+
+.assistant-card__button.is-primary {
+  border-color: var(--color-primary, #6965db);
+  background: var(--color-primary, #6965db);
+  color: #fff;
+}
+
+.assistant-card__button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.assistant-card__confirm {
+  display: grid;
+  gap: 6px;
+  padding: 8px;
+  border: 1px solid var(--default-border-color, #dee2e6);
+  border-radius: 6px;
+}
+
+.assistant-card__lines {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+  color: var(--color-gray-50, #868e96);
+}
+
+.assistant-card__problem {
+  color: #e03131;
+}
+
+.assistant-card__link {
+  align-self: start;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--color-gray-50, #868e96);
+  font: inherit;
+  font-size: 12px;
+  text-decoration: underline;
+  cursor: pointer;
+}

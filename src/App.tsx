@@ -692,7 +692,7 @@ function Sheet({
             settings: file && tab(<SettingsTab settings={settings} onChange={file.sheet.setSettings} />),
             constants: tab(<ConstantsTab settings={settings} canInsert={canInsert} onInsert={insert} />),
             // Only where the home passed the ports (section 14, 0.7.0).
-            assistant: assistant && tab(<AssistantTab ports={assistant} />),
+            assistant: assistant && tab(<AssistantTab ports={assistant} vault={vault !== undefined} />),
             // Per device, never in the file (section 8, M4e).
             width: memory,
             // Remembered per home; a floating panel closes by itself, so

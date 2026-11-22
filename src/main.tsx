@@ -6,7 +6,7 @@ import { browserFileAccess } from './file/fileAccess.ts'
 import { indexedDbRecovery } from './file/recovery.ts'
 import { storagePanelMemory } from './panel/panelMemory.ts'
 import { storageLanguageMemory } from './canvas/language.ts'
-import { sessionSetupStore, type AssistantPorts } from './assistant/ports.ts'
+import { storageSetupStore, type AssistantPorts } from './assistant/ports.ts'
 
 /**
  * The web app's entry (docs/spec-v1.md section 12a, One source, two builds):
@@ -15,8 +15,10 @@ import { sessionSetupStore, type AssistantPorts } from './assistant/ports.ts'
  *
  * It is the one file of `src/` that names a request API (section 14, 0.7.0):
  * the Math assistant's `request` port is the browser's `fetch`, passed only
- * when the build-time switch is on. The setup's store lasts as long as the
- * page until the setup's own issue gives it its entry.
+ * when the build-time switch is on. The setup's store is one entry of the
+ * browser's storage beside the panel memory (section 8, The setup card): it is
+ * asked for on each call and not caught here, so a blocked or full storage
+ * reaches the card as the store's error.
  */
 const storage = () => {
   try {
@@ -28,7 +30,7 @@ const storage = () => {
 const panelMemory = storagePanelMemory(storage)
 const language = storageLanguageMemory(storage)
 const assistant: AssistantPorts | undefined = __ASSISTANT__
-  ? { request: (address, init) => window.fetch(address, init), store: sessionSetupStore() }
+  ? { request: (address, init) => window.fetch(address, init), store: storageSetupStore(() => window.localStorage) }
   : undefined
 
 createRoot(window.document.getElementById('root')!).render(

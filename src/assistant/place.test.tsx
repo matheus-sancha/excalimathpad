@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import App from '../App.tsx'
 import { createMathAnchorElements } from '../canvas/mathAnchor.ts'
@@ -103,8 +103,10 @@ describe('with the ports', () => {
     fireEvent.mouseDown(tab)
     await waitFor(() => expect(selected()).toBe('Math assistant'))
     expect(screen.getByRole('heading', { name: 'Math assistant' })).toBeInTheDocument()
-    // Empty until the setup card fills it.
-    expect(screen.getByTestId('assistant-tab')).toBeEmptyDOMElement()
+    // With no setup saved, the tab holds the setup card, and has asked for nothing.
+    expect(within(screen.getByTestId('assistant-tab')).getByRole('combobox', { name: 'Provider' })).toHaveValue('anthropic')
+    expect(ports.request).not.toHaveBeenCalled()
+    expect(ports.store.write).not.toHaveBeenCalled()
   })
 
   it('has a third More tools item, under Math settings, that opens the panel on the tab and closes it when the tab shows', async () => {
@@ -204,7 +206,7 @@ describe('with the ports', () => {
     await waitFor(() => expect(selected()).toBe('Constants'))
   })
 
-  it('makes no request and stores nothing, whatever is opened', async () => {
+  it('makes no request and stores nothing, whatever is opened, and reads the setup once', async () => {
     const ports = fakePorts()
     await start(ports)
     fireEvent.click(await item(/^Math assistant/))
@@ -215,7 +217,7 @@ describe('with the ports', () => {
     await waitFor(() => expect(panel()).toBeNull())
 
     expect(ports.request).not.toHaveBeenCalled()
-    expect(ports.store.read).not.toHaveBeenCalled()
+    expect(ports.store.read).toHaveBeenCalledTimes(1)
     expect(ports.store.write).not.toHaveBeenCalled()
     expect(ports.store.remove).not.toHaveBeenCalled()
   })

@@ -99,11 +99,19 @@ and KaTeX's CSS, and the network-blocked run fails on a KaTeX class drawn in a
 family with no font. Each rewrite depends on Excalidraw 0.18.1's text; the
 audit fails an upgrade that moves it.
 
-**The Math assistant's ports** (`assistant.ts`, section 12a, One source, two builds; section
-14, 0.7.0, #306; [assistant](assistant.md)): the one file of `plugin/` that names a request
-API or Obsidian's secret storage (`test/requestApis.test.ts`, which also holds that
-Obsidian's own request function is named nowhere). `assistantPorts(on, mobile)` gives the
-ports only when the build-time switch is on and the device is a computer; `SheetView` calls
-it with `__ASSISTANT__` (or its `assistant` option, for tests) and `Platform.isMobile`, and
-passes the result as App's `assistant` prop. The store lasts as long as the view until the
-setup's issue (#307) names the secret storage.
+**The Math assistant's ports** (`assistant.ts`, section 12a, One source, two builds, and
+Data protection; section 14, 0.7.0, #306 and #307; [assistant](assistant.md)): the one file
+of `plugin/` that names a request API or Obsidian's secret storage
+(`test/requestApis.test.ts`, which also holds that Obsidian's own request function is named
+nowhere). `assistantPorts(on, mobile, app)` gives the ports only when the build-time switch
+is on and the device is a computer; `SheetView` calls it with `__ASSISTANT__` (or its
+`assistant` option, for tests), `Platform.isMobile` and its `app`, and passes the result as
+App's `assistant` prop. **The setup's store** is one entry, `excalimathpad-assistant`
+(`SETUP_ENTRY`), in `App#secretStorage`: the one thing the plugin keeps outside the vault.
+It is made, and the storage named, only inside `if (requireApiVersion('1.11.4'))`, which is
+what lets Obsidian's lint pass at `minAppVersion` 1.7.2 with no exception; on an older
+Obsidian the store is `null` and the storage is never called. There is one store per `App`
+(a `WeakMap`), so every sheet tab shares one keeper of the setup. The storage has no public
+delete: `remove` writes the entry empty, which reads back as no setup. The fake `obsidian`
+has `SecretStorage` (its `calls`, `secrets` and `failNext`), `requireApiVersion` and
+`obsidian.apiVersion`, which a test lowers.

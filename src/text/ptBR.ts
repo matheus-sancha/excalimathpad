@@ -474,6 +474,59 @@ export const ptBR: Words = {
     title: 'Título',
     none: 'Nenhum',
   },
+  assistant: {
+    about:
+      'O Assistente de cálculo lê esta folha e responde, por meio de um provedor de IA que você escolhe, com a sua própria chave. Até você salvar uma configuração, o Excalimathpad não envia nada. Depois disso, sua mensagem e a folha vão para o provedor somente quando você pressiona Enviar.',
+    provider: 'Provedor',
+    address: 'Endereço',
+    key: 'Chave de API',
+    model: 'Modelo',
+    other: 'Outro (digite um endereço)',
+    save: 'Salvar',
+    checkKey: 'Verificar chave',
+    showModels: 'Mostrar modelos',
+    replace: 'Substituir',
+    remove: 'Remover',
+    forget: 'Esquecer esta configuração',
+    showKey: 'Mostrar a chave',
+    hideKey: 'Ocultar a chave',
+    savedKey: (ending: string) => `Chave salva terminada em ${ending}`,
+    sessionKey: (ending: string) => `Chave desta sessão, terminada em ${ending}`,
+    refused: {
+      notUrl: 'Isto não é um endereço.',
+      notHttps:
+        'O endereço deve começar com https://. http:// só é permitido para este computador (localhost, 127.0.0.1 ou [::1]).',
+      credentials: 'O endereço não pode conter nome de usuário nem senha.',
+      keySpaces: 'Uma chave não pode ter espaços nem quebras de linha.',
+      noModel: 'Digite o nome do modelo, ou pressione Mostrar modelos.',
+    },
+    cost: {
+      anthropic:
+        'Requer uma chave de API de console.anthropic.com com créditos pré-pagos. Cerca de 1 a 5 centavos de dólar por mensagem com o Sonnet 5.5. Os planos Claude Max e Ultra incluem créditos mensais de API depois que você vincula o seu plano (claude.ai › Settings › Billing).',
+      openai:
+        'Requer uma chave de API de platform.openai.com/api-keys com créditos pré-pagos. Cerca de 3 a 4 centavos de dólar por mensagem com o gpt-6.2-sol.',
+      google:
+        'Requer uma chave de API de aistudio.google.com/apikey. Cerca de 2 a 3 centavos de dólar por mensagem com o gemini-4-hydrogen em uma chave paga.',
+      openrouter:
+        'Requer uma chave de API de openrouter.ai/settings/keys com créditos comprados, sobre os quais o OpenRouter cobra 5,5%. Cerca de 4 a 5 centavos de dólar por mensagem com o Sonnet 5.5.',
+      other: 'O seu provedor define o preço. Cada mensagem envia o Guia de cálculo e a sua folha inteira.',
+    },
+    keeps: (host: string) => `${host} guarda o que você envia de acordo com os próprios termos.`,
+    keptWeb:
+      'Guardada somente neste navegador. Qualquer pessoa que use este perfil do navegador pode enviar com ela; remova-a ao sair de um computador compartilhado.',
+    keptVault:
+      'Guardada somente neste dispositivo, no chaveiro do Obsidian. Qualquer pessoa que use este Obsidian, e outros plugins nele, pode lê-la; remova-a ao sair de um computador compartilhado.',
+    confidential: (host: string) =>
+      `Cada envio entrega a ${host} a sua folha inteira. Envie somente uma folha que você tem permissão de compartilhar com um serviço de IA externo.`,
+    change: (host: string) => `Trocar o provedor? A chave salva para ${host} será esquecida.`,
+    cancel: 'Cancelar',
+    changeProvider: 'Trocar',
+    keyRemoved: 'Chave removida deste dispositivo.',
+    cantKeepWeb: 'Este dispositivo não conseguiu guardar a chave, então ela será usada até você fechar esta aba e depois esquecida.',
+    cantKeepVault:
+      'Este dispositivo não conseguiu guardar a chave, então ela será usada até você fechar o Obsidian e depois esquecida.',
+    needsObsidian: 'O Assistente de cálculo precisa do Obsidian 1.11.4 ou mais recente.',
+  },
   vault: {
     newSheet: 'Nova folha',
     addMath: 'Adicionar cálculo',

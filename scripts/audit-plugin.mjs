@@ -29,18 +29,24 @@ export const BUDGET = {
   'styles.css': 584_000,
 }
 
-/** Text that must not appear in any delivered file, and why. */
+/**
+ * Text that must not appear in any delivered file, and why. `localStorage` is
+ * matched in any letter case (0.7.0), so Obsidian's `saveLocalStorage` and
+ * `loadLocalStorage` are caught too: the Math assistant's setup is kept in the
+ * secret storage and nowhere else.
+ */
 export const FORBIDDEN = [
   ['./fonts/', 'a font path Excalidraw would fetch: every font is a data: URL or local:'],
   ['esm.sh', "Excalidraw's CDN fallback"],
   ['AIza', "a Google API key (excalidraw.com's Firebase config)"],
   ['indexedDB', 'browser storage outside the vault'],
-  ['localStorage', 'browser storage outside the vault'],
+  [/localstorage/gi, 'browser storage outside the vault'],
   ['new Function', 'code built from text at run time'],
 ]
 
 const CREATE_ELEMENT = /createElement\(\s*["'`](style|link)["'`]\s*\)/g
-const URL = /\bhttps?:\/\/([a-z0-9.-]+)/gi
+// A host starts with a letter or a digit: the setup card's own words, "must start with https://.", name none.
+const URL = /\bhttps?:\/\/([a-z0-9][a-z0-9.-]*)/gi
 /** How far either side of a createElement to look for its library's mark. */
 const MARK_WINDOW = 400
 
@@ -78,8 +84,15 @@ export function auditBundle({ files, sizes, packageVersion, allowlist }) {
   for (const [name, text] of Object.entries(files)) {
     if (name === 'manifest.json') continue
     for (const [needle, why] of FORBIDDEN) {
-      const count = text.split(needle).length - 1
-      if (count > 0) problems.push(`${name}: ${count} × "${needle}" (${why})`)
+      if (typeof needle === 'string') {
+        const count = text.split(needle).length - 1
+        if (count > 0) problems.push(`${name}: ${count} × "${needle}" (${why})`)
+        continue
+      }
+      // Each spelling found, as the file writes it.
+      const found = new Map()
+      for (const [spelling] of text.matchAll(needle)) found.set(spelling, (found.get(spelling) ?? 0) + 1)
+      for (const [spelling, count] of found) problems.push(`${name}: ${count} × "${spelling}" (${why})`)
     }
     for (const match of text.matchAll(CREATE_ELEMENT)) {
       const near = text.slice(Math.max(0, match.index - MARK_WINDOW), match.index + MARK_WINDOW)
@@ -90,7 +103,8 @@ export function auditBundle({ files, sizes, packageVersion, allowlist }) {
     }
     const hosts = new Set([...text.matchAll(URL)].map((match) => match[1].toLowerCase()))
     for (const host of [...hosts].sort()) {
-      if (!Object.hasOwn(allowlist.hosts, host)) problems.push(`${name}: names https://${host}, which isn't in the allowlist`)
+      // `reached` (0.7.0): the built-in providers' hosts, which the Math assistant reaches on a press.
+      if (!Object.hasOwn(allowlist.hosts, host) && !Object.hasOwn(allowlist.reached ?? {}, host)) problems.push(`${name}: names https://${host}, which isn't in the allowlist`)
     }
   }
   return problems

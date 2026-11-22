@@ -63,6 +63,33 @@ describe('the bundle audit (docs/spec-v1.md section 12a, Data protection)', () =
     expect(problems.some((problem) => problem.includes(`"${needle}"`))).toBe(true)
   })
 
+  it.each(['app.saveLocalStorage("key",value)', 'app.loadLocalStorage("key")', 'window["LOCALSTORAGE"]', 'localstorage'])(
+    'fails on localstorage in any letter case: %s (0.7.0)',
+    (text) => {
+      const spelling = /localstorage/i.exec(text)[0]
+      expect(bundle({ files: { 'main.js': `var a=${text}` } })).toEqual([
+        `main.js: 1 × "${spelling}" (browser storage outside the vault)`,
+      ])
+    },
+  )
+
+  it('lets through the four built-in providers’ hosts, the only ones reached, and no other (0.7.0)', () => {
+    expect(Object.keys(allowlist.reached).filter((host) => !host.startsWith('$'))).toEqual([
+      'api.anthropic.com',
+      'api.openai.com',
+      'generativelanguage.googleapis.com',
+      'openrouter.ai',
+    ])
+    expect(bundle({ files: { 'main.js': 'var a="https://api.anthropic.com",b="https://openrouter.ai/api/v1"' } })).toEqual([])
+    expect(bundle({ files: { 'main.js': 'var a="https://api.mistral.ai/v1"' } })).toEqual([
+      "main.js: names https://api.mistral.ai, which isn't in the allowlist",
+    ])
+    // The card's own words about an address name no host.
+    expect(bundle({ files: { 'main.js': 'var a="The address must start with https://. http:// is allowed only for this computer"' } })).toEqual([])
+    // A reached host is never also a host that is only named.
+    for (const host of Object.keys(allowlist.reached)) expect(Object.hasOwn(allowlist.hosts, host), host).toBe(false)
+  })
+
   it('fails on a <style> or <link> created outside the known library sites', () => {
     expect(bundle({ files: { 'main.js': 'document.head.append(document.createElement("style"))' } })).toEqual([
       expect.stringContaining('creates a <style> element'),
