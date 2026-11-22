@@ -52,7 +52,8 @@ const links = (path) =>
     .filter((href) => !/^[a-z]+:/i.test(href))
     .map((href) => {
       const [file, anchor = ''] = href.split('#')
-      const target = file === '' ? path : relative(root, resolve(root, dirname(path), file))
+      // `relative` gives `\` on Windows; the documents' paths use `/`.
+      const target = file === '' ? path : relative(root, resolve(root, dirname(path), file)).replaceAll('\\', '/')
       return [target, anchor]
     })
 
