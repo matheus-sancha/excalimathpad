@@ -1,5 +1,10 @@
 import { engineEn } from './engine.en.ts'
 
+/** A whole number with its thousands marked by `separator`: `412,300`, `412 300`. */
+export function grouped(n: number, separator: string): string {
+  return String(Math.trunc(n)).replace(/\B(?=(\d{3})+(?!\d))/g, separator)
+}
+
 /**
  * The English text table (docs/spec-v1.md section 14, 0.6.0: two text tables,
  * one shape): the app's own words, by key. `ptBR.ts` is typed against this
@@ -620,6 +625,9 @@ export const en = {
     cantKeepWeb: "This device couldn't keep the key, so it is used until you close this tab and then forgotten.",
     cantKeepVault: "This device couldn't keep the key, so it is used until you close Obsidian and then forgotten.",
     needsObsidian: 'The Math assistant needs Obsidian 1.11.4 or later.',
+    /** A listing over the cap (section 8, What a Send carries): both numbers, and nothing goes. */
+    tooLong: (length: number, limit: number) =>
+      `This sheet is too long to send: ${grouped(length, ',')} characters, and the limit is ${grouped(limit, ',')}. Nothing was sent.`,
   },
   /** The plugin's own words in Obsidian (section 8, Language: In Obsidian; section 13, In a vault). */
   vault: {

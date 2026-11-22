@@ -98,7 +98,8 @@ places each element from its anchor's scene position via `viewport.ts`
 (`sceneToStage`, pure). It reads source from the anchors and holds the sheet's
 one **line edit**; `lineEdit.ts` (pure) decides what each way of leaving a
 line writes. It owns the sheet's evaluation: it sorts anchors with
-`readingOrder.ts` (pure) and runs `evaluateSheet` on every keystroke,
+`readingOrder.ts` (pure; it sorts any `Placed` box, and the Math assistant's listing puts
+the scene's texts in among the anchors with it) and runs `evaluateSheet` on every keystroke,
 every source change and every change of order, then hands each
 `MathElementView` its lines. The overlay takes no pointer events except the open field:
 Excalidraw gets every click and drag. There is no bar beside the open line

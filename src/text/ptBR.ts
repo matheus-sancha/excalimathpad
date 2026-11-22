@@ -1,4 +1,4 @@
-import type { Words } from './en.ts'
+import { grouped, type Words } from './en.ts'
 import { enginePtBR } from './engine.ptBR.ts'
 
 /**
@@ -526,6 +526,8 @@ export const ptBR: Words = {
     cantKeepVault:
       'Este dispositivo não conseguiu guardar a chave, então ela será usada até você fechar o Obsidian e depois esquecida.',
     needsObsidian: 'O Assistente de cálculo precisa do Obsidian 1.11.4 ou mais recente.',
+    tooLong: (length: number, limit: number) =>
+      `Esta folha é longa demais para enviar: ${grouped(length, ' ')} caracteres, e o limite é ${grouped(limit, ' ')}. Nada foi enviado.`,
   },
   vault: {
     newSheet: 'Nova folha',

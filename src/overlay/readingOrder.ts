@@ -1,5 +1,8 @@
 import type { MathAnchor } from '../canvas/mathAnchor.ts'
 
+/** What reading order reads of an element: its id and its box. */
+export type Placed = Pick<MathAnchor, 'id' | 'x' | 'y' | 'width' | 'height' | 'angle'>
+
 /**
  * The sheet's reading order (ADR 0003): math elements sorted by the top of
  * their anchor's visual bounding box, then by its left, then by anchor id, so
@@ -7,8 +10,11 @@ import type { MathAnchor } from '../canvas/mathAnchor.ts'
  *
  * A rotated anchor is placed by its rotated bounds, i.e. where it is seen,
  * not by Excalidraw's unrotated `x`/`y`.
+ *
+ * Any placed element sorts by the same rule: the Math assistant's listing (0.7.0) puts the
+ * scene's text elements in among the math elements with it.
  */
-export function readingOrder(anchors: readonly MathAnchor[]): string[] {
+export function readingOrder(anchors: readonly Placed[]): string[] {
   return anchors
     .map((anchor) => ({ id: anchor.id, ...visualTopLeft(anchor) }))
     .sort((a, b) => a.top - b.top || a.left - b.left || compareIds(a.id, b.id))
@@ -25,7 +31,7 @@ export function readingOrder(anchors: readonly MathAnchor[]): string[] {
  * which ordered equal tops by rounding noise instead of by left (PR #6
  * review, B3). Other angles are rounded to a millionth of a scene unit.
  */
-function visualTopLeft({ x, y, width, height, angle }: MathAnchor) {
+function visualTopLeft({ x, y, width, height, angle }: Placed) {
   const sin = Math.abs(Math.sin(angle))
   if (sin < 1e-9) return { top: quantise(y), left: quantise(x) }
   const cos = Math.abs(Math.cos(angle))

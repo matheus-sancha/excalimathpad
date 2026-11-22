@@ -8,9 +8,11 @@ touches this module, and keep it true in the pull request that changes the modul
 **assistant** (`src/assistant/`, spec section 8, Math assistant; section 14, 0.7.0;
 [ADR 0008](../adr/0008-math-assistant-calls-the-users-provider-directly.md)) — everything of
 the Math assistant. It never calls the network or a store itself: both reach it through the
-ports a home hands App. Depends on: text. Built so far: the first two issues of the first
-slice, which are the module, its ports, the switch and its tab (#306), and the setup: its
-record, both stores and the card (#307). It makes no request.
+ports a home hands App. Depends on: text, math (the evaluation's types and the line as the
+engine reads it), overlay (the reading order) and canvas's `sceneTexts` (a type). Built so
+far: the first three issues of the first slice, which are the module, its ports, the switch
+and its tab (#306), the setup: its record, both stores and the card (#307), and the
+listing (#308). It makes no request.
 
 **The ports** (`ports.ts`). `AssistantPorts` is `{ request, store }`, App's `assistant` prop:
 
@@ -83,6 +85,32 @@ when an edit opens ([app](app.md)). It takes the ports and `vault`, and draws th
 in `.assistant-tab`, or the line that it needs Obsidian 1.11.4 where the store is `null`.
 The conversation (#310) takes the card's place where a setup is saved.
 `place.test.tsx` holds its place against the real Excalidraw.
+
+**The listing** (`listing.ts`, section 8, The listing and What a Send carries; section 14,
+0.7.0). `listSheet(input)` is the one pure function: from the last evaluation (`elements`,
+each `{ anchorId, title, source, formats, lines }`, which the overlay's `EvaluatedElement`
+fits), the anchors' boxes, the scene's texts (`sceneTexts`, [canvas](canvas.md)), the
+sheet's unit system and Digits, and the words of the language shown, to one of three:
+`listing` (its `text`, its `counts` of math elements, lines and texts, and **the map**),
+`empty` (no math element and no text) or `tooLong` (over `LISTING_LIMIT`, 200,000 by
+`length`: both numbers and the refusal worded, the text never cut). Math elements and texts
+go together in `readingOrder`. A line goes as `sentLines` gives it, `withFormat` with its
+stored clause; a result, an error and a warning are worded through `wordMessage` in the
+language given, and every mark is English. An empty result is `(function)` when the line
+defines a function and `(input)` otherwise (a table and a plot have their own rows, a
+comment line none): the engine marks neither, so a bare expression whose value is a function
+reads as `(input)`. A table's headers are its arguments as typed (`readTable`) with the
+column's unit, and its first `TABLE_ROWS` (20) rows; a plot, its points and its failed
+points; a solve line, its `solveDetails` on one `solve:` row. A line break in a text or a
+message is written `\n` in a text, and folded to a space in a row. Nothing else of the scene
+reaches it: the input holds no file name, no image, no shape, no title format, no rule state,
+no Result colour and no Page, and the map's ids are never written into the text.
+`listing.test.ts` holds the form mark for mark, what it never holds, the cap, the map, and
+every acceptance sheet and Math guide example in both languages. **The map**
+(`ListingMap`): each label (`E2`, `E2:3`, `T1`) to its anchor or text element, the line's
+index from 0 and the line's text as sent. `chipTarget(map, label, now)` is what a chip does
+after the sheet changed: `jumps`, `changed`, `gone` or `unknown`. Nothing calls them yet: the
+Send (#310) keeps a listing per Send, and the chips and "Sent with this" (#311) read it.
 
 **The provider constants** (`providers.ts`): `PROVIDERS`, the four built-ins in the setup
 card's order, each `{ id, name, address, defaultModel }`. OpenRouter's `defaultModel` is

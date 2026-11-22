@@ -2602,7 +2602,7 @@ Its form is plain text. Math elements and text elements stand together in readin
 inside each element, blank lines included. The marks are English in both languages:
 
 ```
-unit system: SI, Digits: 4
+unit system: SI with prefixes, Digits: 4
 
 T1  text: "Pump sizing, rev B"
 
@@ -2622,7 +2622,7 @@ E1  title: "Pipe flow"
       …
   6 | x = solve f(x) = 0, for x = 0 .. 5
     = 1.414
-    solve: range 0 .. 5, 200 points, 1 root, residual 2e-13
+    solve: range 0 .. 5, scan + Brent, 200 points, 1 root found in the range: 1.414213562373, residual 2.1·10⁻¹³, 0 crossings rejected as poles or jumps
 
 E2  (no title)
   1 | # Checks
@@ -2630,14 +2630,15 @@ E2  (no title)
 
 | Mark | Stands for |
 |---|---|
-| `unit system: <name>, Digits: <n>` | The first line, once |
+| `unit system: <name>, Digits: <n>` | The first line, once. The name is the Settings tab's English one; Custom reads `Custom, from <system> (<kind>: <unit>, …)` |
 | `E<n>  title: "<title>"`, `E<n>  (no title)` | A math element |
 | `T<n>  text: "<text>"` | A text element; a line break in it is written `\n` |
 | `  <n> \| <source>` | A line, as the engine reads it |
 | `    = <result>` | The line's result as shown; `= (input)`, `= (function)` for a line that shows none; a comment line has no `=` row |
 | `    ! error: <message>` | The line's error |
 | `    ~ warning: <message>` | A warning, one row each |
-| `    solve: <details>` | A solve line's details |
+| `    solve: <details>` | A solve line's details, on one row: a guess solve's `guess, Brent, <n> iterations, residual <r>, bracket <a> .. <b>`; a range solve's `range <range>, scan + Brent, <n> points, <k> roots found in the range: <root>, residual <r>; …, <m> crossings rejected as poles or jumps` (a root that only touches zero adds `(touching)`) |
+| `      <header> \| <header>` | Under `= table, <n> rows; first 20:` (or `= table, <n> rows:`), the table's headers, each its argument as typed and its unit, then its rows, a failed cell as `failed: <message>`; a plot is `= plot, <n> points, <m> failed` |
 
 **The model's job** is fixed by the instructions, which are part of the release, in English,
 and which the user can't edit. Off-topic messages aren't blocked: the key and the cost are
