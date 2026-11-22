@@ -1,0 +1,25 @@
+import { createRequire } from 'node:module'
+import { writeFile } from 'node:fs/promises'
+import { join } from 'node:path'
+const out = process.argv[2]
+const { chromium } = createRequire(join(process.cwd(), 'package.json'))('playwright')
+const browser = await chromium.launch()
+const page = await browser.newPage({ viewport: { width: 600, height: 300 } })
+await page.setContent('<body style="font:20px sans-serif;padding:24px"><h1 style="font-size:24px">Pump P-101 datasheet</h1><p>Rated flow: 42.7 m3/h</p><p>Rated head: 61.3 m</p><p>Motor power: 11 kW</p></body>')
+const pdf = await page.pdf({ width: '600px', height: '300px' })
+const png = await page.screenshot()
+await browser.close()
+await writeFile(join(out, 'file-1.pdf'), pdf)
+await writeFile(join(out, 'file-1.png'), png)
+const Q = 'What is the rated head of the pump in the attached file? Answer with the number and its unit only. If no file reached you, answer exactly: NO FILE.'
+const body = (model, parts) => JSON.stringify({ model, messages: [{ role: 'user', content: [{ type: 'text', text: Q }, ...parts] }] })
+const b64 = pdf.toString('base64')
+const cases = {
+  'pdf-file-datauri': [{ type: 'file', file: { filename: 'file-1.pdf', file_data: `data:application/pdf;base64,${b64}` } }],
+  'pdf-file-rawb64': [{ type: 'file', file: { filename: 'file-1.pdf', file_data: b64 } }],
+  'pdf-image_url': [{ type: 'image_url', image_url: { url: `data:application/pdf;base64,${b64}` } }],
+  'png-image_url': [{ type: 'image_url', image_url: { url: `data:image/png;base64,${png.toString('base64')}` } }],
+  'no-file': [],
+}
+for (const model of process.argv.slice(3)) for (const [name, parts] of Object.entries(cases)) await writeFile(join(out, `${model}__${name}.json`), body(model, parts))
+console.log('pdf bytes', pdf.length, 'png bytes', png.length)

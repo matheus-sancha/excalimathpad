@@ -1,0 +1,152 @@
+'use strict';
+/*
+ * Excalimathpad attachment check. A throwaway plugin, not part of Excalimathpad.
+ * It answers one ticket (#324): inside Obsidian, does a hidden file input open
+ * the system's Open dialog and hand over a file from outside the vault, and do
+ * a drop and a paste on a view reach the view's own listeners, in the main
+ * window and in a pop-out window?
+ *
+ * Each thing you do adds lines to the note "Excalimathpad attachment check.md".
+ * No file name, path or content is written: only its extension, type and size.
+ */
+const obsidian = require('obsidian');
+const { Plugin, ItemView, Notice } = obsidian;
+
+const VIEW = 'emp-attachment-check';
+const NOTE = 'Excalimathpad attachment check.md';
+const ACCEPT = 'image/png,image/jpeg,image/webp,image/gif,application/pdf';
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const errText = (e) => (e && e.name ? e.name + ': ' : '') + (e && e.message ? e.message : String(e));
+const ext = (name) => { const i = String(name).lastIndexOf('.'); return i < 0 ? '(none)' : String(name).slice(i).toLowerCase(); };
+
+class CheckView extends ItemView {
+  constructor(leaf, plugin) { super(leaf); this.plugin = plugin; }
+  getViewType() { return VIEW; }
+  getDisplayText() { return 'Attachment check'; }
+  getIcon() { return 'paperclip'; }
+
+  /** Which window this view's DOM is in. The plugin's code always runs in the main one. */
+  place() { return this.contentEl.ownerDocument === document ? 'main window' : 'POP-OUT window'; }
+
+  /** What one file is, with nothing that names it. */
+  async fileFacts(file) {
+    const win = this.contentEl.ownerDocument.defaultView;
+    const facts = [
+      'extension ' + ext(file.name), 'type "' + file.type + '"', file.size + ' bytes',
+      'instanceof the code\'s File: ' + (file instanceof File),
+      'instanceof this window\'s File: ' + (file instanceof win.File),
+    ];
+    try { const bytes = await file.arrayBuffer(); facts.push('arrayBuffer() read ' + bytes.byteLength + ' bytes'); } catch (e) { facts.push('arrayBuffer() THREW ' + errText(e)); }
+    try {
+      const inVault = this.app.vault.getFiles().some((f) => f.name === file.name && f.stat.size === file.size);
+      facts.push('a vault file with this name and size exists: ' + inVault);
+    } catch (e) { facts.push('vault lookup threw ' + errText(e)); }
+    return facts.join('; ');
+  }
+
+  async log(line) {
+    const text = '- ' + new Date().toISOString().slice(11, 19) + ' [' + this.place() + '] ' + line;
+    const row = this.contentEl.ownerDocument.createElement('div');
+    row.textContent = text; this.out.appendChild(row);
+    await this.plugin.write(text);
+  }
+
+  async onOpen() {
+    const doc = this.contentEl.ownerDocument;
+    const el = (tag, text, parent) => { const n = doc.createElement(tag); if (text) n.textContent = text; (parent || this.contentEl).appendChild(n); return n; };
+    this.contentEl.replaceChildren();
+    this.contentEl.style.padding = '16px';
+    el('h3', 'Excalimathpad attachment check');
+    el('p', 'Do steps 1 to 3 here, then move this tab to a new window (right-click the tab, "Move to new window") and do them again. Use a file that is NOT in this vault.');
+
+    // 1. The file input: hidden, clicked from a button, as the chat's paperclip will do.
+    el('h4', '1. Choose a file');
+    const input = el('input');
+    input.type = 'file'; input.accept = ACCEPT; input.multiple = true; input.style.display = 'none';
+    const choose = el('button', 'Choose a picture or a PDF…');
+    choose.addEventListener('click', () => {
+      void this.log('1. button pressed; input.click() called (the input is in the ' + (input.ownerDocument === document ? 'main' : 'pop-out') + ' document)');
+      input.click();
+    });
+    input.addEventListener('cancel', () => void this.log('1. the dialog was closed with nothing chosen (the input\'s cancel event)'));
+    input.addEventListener('change', async () => {
+      const files = Array.from(input.files || []);
+      await this.log('1. the dialog gave ' + files.length + ' file(s)');
+      for (const f of files) await this.log('1.   ' + await this.fileFacts(f));
+      input.value = '';
+    });
+
+    // 2. The drop: listeners on this box that stop the event, as the chat's tab will.
+    el('h4', '2. Drop a file on the box');
+    const zone = el('div', 'Drop a picture or a PDF here (from Explorer, not from Obsidian)');
+    zone.style.cssText = 'border:2px dashed var(--text-muted);padding:32px;text-align:center;border-radius:8px';
+    const over = (e) => { e.preventDefault(); e.stopPropagation(); };
+    zone.addEventListener('dragenter', over);
+    zone.addEventListener('dragover', over);
+    zone.addEventListener('drop', async (e) => {
+      e.preventDefault(); e.stopPropagation();
+      const files = Array.from((e.dataTransfer && e.dataTransfer.files) || []);
+      const before = this.app.vault.getFiles().length;
+      const leaves = this.plugin.leafCount();
+      await this.log('2. the box\'s drop listener got ' + files.length + ' file(s)');
+      for (const f of files) await this.log('2.   ' + await this.fileFacts(f));
+      await sleep(1500);
+      await this.log('2. 1.5 s later: vault files ' + before + ' → ' + this.app.vault.getFiles().length + ', open tabs ' + leaves + ' → ' + this.plugin.leafCount() + ' (a change means Obsidian also acted on the drop)');
+    });
+
+    // 3. The paste: a listener on the field that only reads, as the chat's field will.
+    el('h4', '3. Paste a picture in the field');
+    el('p', 'Copy a picture first (Win+Shift+S takes a screenshot to the clipboard), click in the field, press Ctrl+V. Then copy a file in Explorer (Ctrl+C on a PNG or a PDF) and press Ctrl+V here again.');
+    const field = el('textarea');
+    field.style.cssText = 'display:block;width:100%;height:70px';
+    field.addEventListener('paste', async (e) => {
+      const data = e.clipboardData;
+      const files = Array.from((data && data.files) || []);
+      const kinds = Array.from((data && data.items) || []).map((i) => i.kind + ':' + i.type).join(', ');
+      const before = this.app.vault.getFiles().length;
+      const had = field.value.length;
+      await this.log('3. the field\'s paste listener got ' + files.length + ' file(s); items: ' + (kinds || 'none'));
+      for (const f of files) await this.log('3.   ' + await this.fileFacts(f));
+      await sleep(1500);
+      await this.log('3. 1.5 s later: vault files ' + before + ' → ' + this.app.vault.getFiles().length + ', the field\'s text ' + had + ' → ' + field.value.length + ' characters (a change means something else also took the paste)');
+    });
+
+    el('h4', 'What happened');
+    this.out = el('div');
+    this.out.style.cssText = 'font-family:var(--font-monospace);font-size:12px;white-space:pre-wrap';
+    const done = el('button', 'Open the note with the results');
+    done.addEventListener('click', () => void this.app.workspace.openLinkText(NOTE, '', 'tab'));
+    await this.log('the view opened. Obsidian apiVersion ' + obsidian.apiVersion + '; ' + navigator.userAgent.replace(/^.*(obsidian\/\S+).*(Electron\/\S+).*$/, '$1 $2'));
+  }
+}
+
+module.exports = class EmpAttachmentCheck extends Plugin {
+  onload() {
+    this.registerView(VIEW, (leaf) => new CheckView(leaf, this));
+    const open = async () => {
+      const leaf = this.app.workspace.getLeaf('tab');
+      await leaf.setViewState({ type: VIEW, active: true });
+      await this.app.workspace.revealLeaf(leaf);
+    };
+    this.addRibbonIcon('paperclip', 'Excalimathpad attachment check', open);
+    this.addCommand({ id: 'open', name: 'Open', callback: open });
+  }
+  onunload() { this.app.workspace.detachLeavesOfType(VIEW); }
+
+  leafCount() { let n = 0; this.app.workspace.iterateAllLeaves(() => { n++; }); return n; }
+
+  /** Appends one line to the note, one write at a time. */
+  write(line) {
+    const a = this.app.vault.adapter;
+    this.queue = (this.queue || Promise.resolve()).then(async () => {
+      try {
+        if (!(await a.exists(NOTE))) await a.write(NOTE, '# Excalimathpad attachment check\n\nPaste this whole note back to the session.\n\n');
+        await a.append(NOTE, line + '\n');
+      } catch (e) {
+        console.error('attachment check: could not write the note', e);
+        new Notice('Attachment check: could not write the note (' + errText(e) + ').');
+      }
+    });
+    return this.queue;
+  }
+};

@@ -1,0 +1,96 @@
+// Runs the throwaway plugin (`main.js.txt`) in headless Chromium against a mock `obsidian`, in
+// a main window and in a pop-out (a second window that holds the view's DOM, as Obsidian's
+// does), before it goes to a person: the file dialog (Playwright's file chooser), a drop
+// (Chromium's own drag, through CDP) and a real Ctrl+V of a picture.
+//
+// Run from the repository's root: copy this file to `harness.mjs` beside `main.js.txt`, then `node docs/research/attachment-hand-check/harness.mjs`.
+import { createServer } from 'node:http'
+import { mkdtemp, readFile, writeFile } from 'node:fs/promises'
+import { createRequire } from 'node:module'
+import { tmpdir } from 'node:os'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+const here = dirname(fileURLToPath(import.meta.url))
+const MAIN = await readFile(join(here, 'main.js.txt'), 'utf8')
+const PNG_B64 = 'iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAFElEQVR4nGP8z8Dwn4GBgYGJAQoAHxcCAk+Uzr4AAAAASUVORK5CYII='
+
+const PAGE = `<!doctype html><meta charset="utf-8"><title>main</title><body><script>
+const fsmem = {}
+class Plugin { constructor(app) { this.app = app } registerView(type, make) { this.make = make } addRibbonIcon(i, t, run) { this.run = run } addCommand() {} }
+class ItemView { constructor(leaf) { this.leaf = leaf; this.app = app; this.contentEl = document.createElement('div') } }
+class Notice { constructor(m) { console.error(m) } }
+let view
+const leaf = { setViewState: async () => { view = plugin.make(leaf); document.body.appendChild(view.contentEl); await view.onOpen() } }
+const app = {
+  workspace: { getLeaf: () => leaf, revealLeaf: async () => {}, detachLeavesOfType() {}, iterateAllLeaves: (f) => f(leaf), openLinkText: async () => {} },
+  vault: { getFiles: () => [], adapter: { exists: async (p) => p in fsmem, write: async (p, d) => { fsmem[p] = d }, append: async (p, d) => { fsmem[p] += d } } },
+}
+const obsidian = { Plugin, ItemView, Notice, apiVersion: 'mock' }
+const module = { exports: {} };
+(function (require, module) { __MAIN__
+})((m) => { if (m === 'obsidian') return obsidian; throw new Error('no module ' + m) }, module)
+const plugin = new module.exports(app); plugin.onload()
+window.note = async () => { await plugin.queue; return fsmem['Excalimathpad attachment check.md'] }
+window.openView = () => plugin.run()
+window.moveOut = async () => {
+  const popout = window.open('/popout', 'popout', 'width=900,height=700')
+  await new Promise((done) => popout.addEventListener('load', done, { once: true }))
+  popout.document.body.appendChild(view.contentEl)
+}
+</script>`.replace('__MAIN__', () => MAIN.replace(/<\/script>/g, '<\\/script>'))
+
+const server = createServer((request, response) => {
+  response.writeHead(200, { 'content-type': 'text/html' })
+  response.end(request.url === '/popout' ? '<!doctype html><meta charset="utf-8"><title>popout</title><body>' : PAGE)
+})
+await new Promise((done) => server.listen(0, '127.0.0.1', done))
+const origin = `http://127.0.0.1:${server.address().port}`
+
+const files = await mkdtemp(join(tmpdir(), 'emp-324-check-'))
+const PNG = join(files, 'photo.png')
+const PDF = join(files, 'notes.pdf')
+await writeFile(PNG, Buffer.from(PNG_B64, 'base64'))
+await writeFile(PDF, '%PDF-1.4\n%%EOF\n')
+
+const { chromium } = createRequire(join(process.cwd(), 'package.json'))('playwright')
+const browser = await chromium.launch()
+const context = await browser.newContext()
+await context.grantPermissions(['clipboard-read', 'clipboard-write'], { origin })
+const main = await context.newPage()
+const errors = []
+main.on('pageerror', (error) => errors.push(error.message))
+await main.goto(origin)
+await main.evaluate(() => window.openView())
+
+async function steps(tab) {
+  await tab.bringToFront()
+  const chooser = tab.waitForEvent('filechooser')
+  await tab.click('button:has-text("Choose a picture")')
+  await (await chooser).setFiles([PNG, PDF])
+  await tab.waitForTimeout(300)
+  const zone = await tab.locator('text=Drop a picture or a PDF here').boundingBox()
+  const at = { x: Math.round(zone.x + zone.width / 2), y: Math.round(zone.y + zone.height / 2) }
+  const cdp = await context.newCDPSession(tab)
+  const data = { items: [], files: [PDF], dragOperationsMask: 1 }
+  for (const type of ['dragEnter', 'dragOver', 'drop']) await cdp.send('Input.dispatchDragEvent', { type, ...at, data })
+  await tab.waitForTimeout(1800)
+  await tab.evaluate(async (b64) => {
+    const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0))
+    await navigator.clipboard.write([new ClipboardItem({ 'image/png': new Blob([bytes], { type: 'image/png' }) })])
+  }, PNG_B64)
+  await tab.click('textarea')
+  await tab.keyboard.press('Control+V')
+  await tab.waitForTimeout(1800)
+}
+
+await steps(main)
+const opened = context.waitForEvent('page')
+await main.evaluate(() => window.moveOut())
+const popout = await opened
+popout.on('pageerror', (error) => errors.push(`popout: ${error.message}`))
+await steps(popout)
+console.log(await main.evaluate(() => window.note()))
+if (errors.length) console.log('Errors:', errors)
+await browser.close()
+server.close()

@@ -1,0 +1,413 @@
+// Probe for wayfinder ticket #324, part 3: a drop and a paste on the Sheet panel.
+//
+// The built web app (`dist/`) and the built plugin (`dist-plugin/main.js`, against the fake
+// `obsidian`, in the main window and in a pop-out window as `scripts/popout-run.mjs` makes
+// them), in headless Chromium. It asks, in each of the three places:
+//
+// - A file dropped on a Sheet panel tab: what does Excalidraw do with it when nothing stops
+//   it, and does a listener on the tab that stops the event keep it off the canvas?
+// - A picture pasted with a field of the panel focused: does the field's own listener get the
+//   file, and does Excalidraw put anything on the canvas?
+//
+// A drop is Chromium's own drag (CDP `Input.dispatchDragEvent` with a file's path), so the
+// browser's rules hold: no `drop` without a prevented `dragover`. A paste is a `paste` event
+// made in the page with the file in its `clipboardData`: a headless Ctrl+V fires none.
+//
+// Run after `npm run build`: copy this file to `probe.mjs` anywhere and run `node probe.mjs <repository root>`.
+
+import { createServer } from 'node:http'
+import { mkdtemp, readFile, writeFile } from 'node:fs/promises'
+import { createRequire } from 'node:module'
+import { tmpdir } from 'node:os'
+import { extname, join, normalize, resolve } from 'node:path'
+
+const root = resolve(process.argv[2] ?? '.')
+const { build } = createRequire(join(root, 'package.json'))('esbuild')
+const dist = join(root, 'dist-plugin')
+const web = join(root, 'dist')
+const MAIN = 'Calcs/main.excalimathpad'
+const POPOUT = 'Calcs/popout.excalimathpad'
+
+const fake = await build({
+  absWorkingDir: root,
+  entryPoints: ['plugin/test/obsidian.ts'],
+  bundle: true,
+  format: 'iife',
+  globalName: 'FakeObsidian',
+  write: false,
+  target: ['es2022'],
+})
+
+const frame = `<style>html,body{margin:0;height:100%}.workspace,.workspace-leaf,.workspace-leaf-content{height:100%}
+.view-content{height:100%}</style>`
+
+const page = `<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Main - Obsidian</title>
+<link rel="stylesheet" href="/styles.css">${frame}
+</head><body>
+<script src="/fake-obsidian.js"></script>
+<script>
+  var module = { exports: {} }, exports = module.exports
+  window.require = (name) => {
+    if (name === 'obsidian') return FakeObsidian
+    throw new Error('main.js required ' + name)
+  }
+</script>
+<script src="/main.js"></script>
+<script>
+  window.__start = async (sheet, manifest) => {
+    const app = new FakeObsidian.App()
+    app.vault.add(${JSON.stringify(MAIN)}, sheet)
+    app.vault.add(${JSON.stringify(POPOUT)}, sheet)
+    const plugin = new module.exports.default(app, manifest)
+    await plugin.onload()
+    const main = app.workspace.getLeaf()
+    await main.openFile(new FakeObsidian.TFile(${JSON.stringify(MAIN)}))
+    const popout = window.open('/popout.html', 'popout', 'width=1400,height=900')
+    await new Promise((resolve) => popout.addEventListener('load', resolve, { once: true }))
+    const leaf = app.workspace.getLeaf()
+    popout.document.body.appendChild(leaf.containerEl)
+    await leaf.openFile(new FakeObsidian.TFile(${JSON.stringify(POPOUT)}))
+    window.__leaves = { main, popout: leaf }
+    return leaf.containerEl.ownerDocument === popout.document
+  }
+  window.__scene = (which) => {
+    const scene = JSON.parse(window.__leaves[which].view.getViewData())
+    const live = scene.elements.filter((e) => !e.isDeleted)
+    return { count: live.length, types: live.map((e) => e.type).join(',') }
+  }
+</script>
+</body></html>`
+
+const popoutPage = `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Pop-out - Obsidian</title>
+<link rel="stylesheet" href="/styles.css">${frame}</head><body></body></html>`
+
+const sheet = JSON.stringify({
+  type: 'excalidraw',
+  version: 2,
+  elements: [
+    {
+      id: 'calc', type: 'rectangle', x: 200, y: 200, width: 160, height: 60,
+      customData: { kind: 'math', source: 'a = 2 m\nb = a * 3' },
+    },
+  ],
+  appState: {},
+  files: {},
+  excalimathpad: { format: 1 },
+})
+
+const types = { '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.html': 'text/html', '.svg': 'image/svg+xml', '.woff2': 'font/woff2' }
+const server = createServer(async (request, response) => {
+  const path = new URL(request.url, 'http://127.0.0.1').pathname
+  try {
+    let body
+    if (path === '/') body = page
+    else if (path === '/popout.html') body = popoutPage
+    else if (path === '/fake-obsidian.js') body = fake.outputFiles[0].text
+    else if (['/main.js', '/styles.css', '/manifest.json'].includes(path)) body = await readFile(join(dist, path))
+    else if (path.startsWith('/web/')) {
+      const file = normalize(path.slice('/web/'.length) || 'index.html')
+      if (file.startsWith('..')) throw new Error('not found')
+      body = await readFile(join(web, file))
+    } else throw new Error('not found')
+    response.writeHead(200, { 'content-type': types[extname(path) || '.html'] ?? 'application/octet-stream' })
+    response.end(body)
+  } catch {
+    response.writeHead(404)
+    response.end()
+  }
+})
+await new Promise((done) => server.listen(0, '127.0.0.1', done))
+const origin = `http://127.0.0.1:${server.address().port}`
+
+// The files: a 2 x 2 PNG, and a one-page PDF with no text.
+const files = await mkdtemp(join(tmpdir(), 'emp-324-'))
+const PNG = join(files, 'photo.png')
+const PDF = join(files, 'notes.pdf')
+const SHEET = join(files, 'other.excalimathpad')
+const PNG_B64 = 'iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAFElEQVR4nGP8z8Dwn4GBgYGJAQoAHxcCAk+Uzr4AAAAASUVORK5CYII='
+await writeFile(PNG, Buffer.from(PNG_B64, 'base64'))
+const PDF_TEXT = `%PDF-1.4
+1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj
+2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj
+3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 200 200]>>endobj
+trailer<</Root 1 0 R>>
+%%EOF
+`
+await writeFile(PDF, PDF_TEXT)
+await writeFile(SHEET, sheet)
+
+const { chromium } = createRequire(join(root, 'package.json'))('playwright')
+const browser = await chromium.launch()
+const rows = []
+const errors = []
+const say = (where, check, result) => {
+  rows.push({ where, check, result })
+  console.log(`${where.padEnd(7)} ${check}: ${result}`)
+}
+
+/** Functions put in each page: the listeners a chat tab would add, and what they heard. */
+const IN_PAGE = () => {
+  window.__heard = []
+  const note = async (kind, how, transfer) => {
+    const file = transfer?.files?.[0]
+    const entry = { kind, how, files: transfer?.files?.length ?? 0, name: file?.name ?? null, type: file?.type ?? null, size: file?.size ?? null, read: null }
+    window.__heard.push(entry)
+    if (file) entry.read = (await file.arrayBuffer()).byteLength
+  }
+  window.__stops = []
+  /** The tab's listeners: `over` prevents dragover, `drop` takes the drop and stops it. */
+  window.__listen = ({ over, drop }) => {
+    const tab = document.querySelector('.sheet-sidebar .sheet-panel')
+    const onOver = (event) => {
+      event.preventDefault()
+      event.stopPropagation()
+    }
+    const onDrop = (event) => {
+      event.preventDefault()
+      event.stopPropagation()
+      void note('drop', 'tab listener', event.dataTransfer)
+    }
+    if (over) {
+      tab.addEventListener('dragenter', onOver)
+      tab.addEventListener('dragover', onOver)
+    }
+    if (drop) tab.addEventListener('drop', onDrop)
+    window.__stops.push(() => {
+      tab.removeEventListener('dragenter', onOver)
+      tab.removeEventListener('dragover', onOver)
+      tab.removeEventListener('drop', onDrop)
+    })
+  }
+  /** A listener on the field itself: `stop` also prevents and stops the paste. */
+  window.__listenPaste = (selector, stop) => {
+    const field = document.querySelector(selector)
+    const onPaste = (event) => {
+      if (stop) {
+        event.preventDefault()
+        event.stopPropagation()
+      }
+      void note('paste', stop ? 'field listener, stopped' : 'field listener, not stopped', event.clipboardData)
+    }
+    field.addEventListener('paste', onPaste)
+    window.__stops.push(() => field.removeEventListener('paste', onPaste))
+  }
+  window.__unlisten = () => {
+    for (const stop of window.__stops.splice(0)) stop()
+    window.__heard = []
+  }
+  /** A textarea in the tab, as the chat's field would be. */
+  window.__addField = () => {
+    const field = document.createElement('textarea')
+    field.className = 'probe-field'
+    field.style.cssText = 'display:block;width:90%;height:60px'
+    document.querySelector('.sheet-sidebar .sheet-panel').appendChild(field)
+  }
+  /** A paste of one file, as the browser fires it on the focused element. */
+  window.__paste = (b64, name, type) => {
+    const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0))
+    const data = new DataTransfer()
+    data.items.add(new File([bytes], name, { type }))
+    const target = document.activeElement ?? document.body
+    const event = new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true })
+    target.dispatchEvent(event)
+    return { target: `${target.tagName.toLowerCase()}.${target.className}`, files: data.files.length, prevented: event.defaultPrevented }
+  }
+  /** The web app's scene, from Excalidraw's own instance (the plugin's page reads its view's file). */
+  window.__webScene = () => {
+    const node = document.querySelector('.excalidraw')
+    const key = Object.keys(node).find((k) => k.startsWith('__reactFiber$'))
+    for (let fiber = node[key]; fiber; fiber = fiber.return) {
+      const scene = fiber.stateNode?.scene
+      if (scene?.getNonDeletedElements) {
+        const live = scene.getNonDeletedElements()
+        return { count: live.length, types: live.map((e) => e.type).join(',') }
+      }
+    }
+    return null
+  }
+  /** What Excalidraw shows after a file it can't load. */
+  window.__dialogs = () => [...document.querySelectorAll('.excalidraw-modal-container, .Toast, .excalidraw .ErrorSplash')].map((box) => box.textContent.trim().slice(0, 120))
+}
+
+/** One place: `tab` is the page whose DOM holds the sheet, `scene` reads its scene. */
+async function probe(where, tab, scene) {
+  await tab.bringToFront()
+  await tab.evaluate(`(${IN_PAGE.toString()})()`)
+  if ((await tab.locator('.excalidraw .sidebar.sheet-sidebar').count()) === 0) {
+    await tab.click('.App-toolbar__extra-tools-trigger')
+    await tab.click('.dropdown-menu-item:has-text("Math settings")')
+    await tab.waitForSelector('.excalidraw .sidebar.sheet-sidebar')
+  }
+  await tab.click('.sheet-sidebar .sheet-tab[title="Variables"]')
+  await tab.waitForSelector('.sheet-sidebar .sheet-panel__filter')
+  await tab.evaluate(() => window.__addField())
+  const cdp = await tab.context().newCDPSession(tab)
+  const canvas = await tab.locator('canvas.interactive').boundingBox()
+  const panel = await tab.locator('.sheet-sidebar .sheet-panel').boundingBox()
+  const onCanvas = { x: Math.round(canvas.x + 120), y: Math.round(canvas.y + canvas.height - 200) }
+  const onPanel = { x: Math.round(panel.x + panel.width / 2), y: Math.round(panel.y + panel.height / 2) }
+  say(where, 'the panel is docked beside the canvas', `canvas ${Math.round(canvas.width)} px wide, panel at x ${Math.round(panel.x)}`)
+
+  const drop = async (at, path) => {
+    const data = { items: [], files: [path], dragOperationsMask: 1 }
+    await cdp.send('Input.dispatchDragEvent', { type: 'dragEnter', ...at, data })
+    await cdp.send('Input.dispatchDragEvent', { type: 'dragOver', ...at, data })
+    await cdp.send('Input.dispatchDragEvent', { type: 'drop', ...at, data })
+    await tab.waitForTimeout(900)
+  }
+  const after = async (before) => {
+    const now = await scene()
+    const heard = await tab.evaluate(() => window.__heard.splice(0))
+    const dialogs = await tab.evaluate(() => window.__dialogs())
+    // Close whatever Excalidraw opened, so the next case starts clean.
+    if (dialogs.length) {
+      // Excalidraw's error dialog has no button: Esc with the dialog focused, or a click beside it.
+      await tab.locator('.excalidraw-modal-container .Modal__content').first().focus()
+      await tab.keyboard.press('Escape')
+      await tab.waitForTimeout(300)
+      if ((await tab.evaluate(() => window.__dialogs())).length) {
+        await tab.mouse.click(20, 20)
+        await tab.waitForTimeout(300)
+      }
+      const left = await tab.evaluate(() => window.__dialogs())
+      if (left.length) throw new Error(`a dialog stayed open: ${JSON.stringify(left)}`)
+    }
+    const heardText = heard.length ? heard.map((h) => `${h.how} got ${h.files} file${h.files === 1 ? '' : 's'}${h.name ? ` (${h.name}, ${h.type}, ${h.read} of ${h.size} bytes read)` : ''}`).join('; ') : 'no listener of the tab heard it'
+    return `canvas ${before.count} → ${now.count} elements${now.count !== before.count ? ` (${now.types})` : ''}; ${heardText}${dialogs.length ? `; Excalidraw shows: ${JSON.stringify(dialogs)}` : ''}`
+  }
+
+  // Drops.
+  let before = await scene()
+  await drop(onCanvas, PNG)
+  say(where, 'control, a PNG dropped on the canvas', await after(before))
+
+  before = await scene()
+  await drop(onPanel, PNG)
+  say(where, 'a PNG dropped on the tab, nothing listening', await after(before))
+
+  before = await scene()
+  await drop(onPanel, PDF)
+  say(where, 'a PDF dropped on the tab, nothing listening', await after(before))
+
+  await tab.evaluate(() => window.__listen({ over: false, drop: true }))
+  before = await scene()
+  await drop(onPanel, PNG)
+  say(where, 'a PNG dropped on the tab, a listener on drop only', await after(before))
+  await tab.evaluate(() => window.__unlisten())
+
+  await tab.evaluate(() => window.__listen({ over: true, drop: true }))
+  before = await scene()
+  await drop(onPanel, PNG)
+  say(where, 'a PNG dropped on the tab, listeners on dragover and drop', await after(before))
+  before = await scene()
+  await drop(onPanel, PDF)
+  say(where, 'a PDF dropped on the tab, listeners on dragover and drop', await after(before))
+  await tab.evaluate(() => window.__unlisten())
+
+  // Pastes. The pointer rests on the canvas throughout: Excalidraw pastes where the pointer last was.
+  // A real Ctrl+V of a picture the page put on the clipboard; the made event is the fallback.
+  const wrote = await tab.evaluate(async ([b64]) => {
+    const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0))
+    try {
+      await navigator.clipboard.write([new ClipboardItem({ 'image/png': new Blob([bytes], { type: 'image/png' }) })])
+      return 'written'
+    } catch (error) {
+      return String(error)
+    }
+  }, [PNG_B64])
+  say(where, 'a PNG put on the clipboard by the page', wrote)
+  const REAL = wrote === 'written'
+  const paste = async () => {
+    if (!REAL) return tab.evaluate(([b64]) => window.__paste(b64, 'image.png', 'image/png'), [PNG_B64])
+    const target = await tab.evaluate(() => `${document.activeElement.tagName.toLowerCase()}.${document.activeElement.className}`)
+    await tab.keyboard.press('Control+V')
+    return { target: `${target}, a real Ctrl+V` }
+  }
+  await tab.mouse.click(onCanvas.x + 200, onCanvas.y)
+  await tab.mouse.move(onCanvas.x + 220, onCanvas.y + 10)
+  before = await scene()
+  let fired = await paste()
+  await tab.waitForTimeout(900)
+  say(where, `control, a picture pasted with the canvas focused (on ${fired.target})`, await after(before))
+
+  for (const [name, selector] of [['the Variables filter', '.sheet-sidebar .sheet-panel__filter'], ['a textarea in the tab', '.sheet-sidebar .probe-field']]) {
+    for (const mode of ['none', 'hears', 'stops']) {
+      if (mode !== 'none') await tab.evaluate(([s, stop]) => window.__listenPaste(s, stop), [selector, mode === 'stops'])
+      await tab.click(selector)
+      await tab.mouse.move(onCanvas.x + 220, onCanvas.y + 10)
+      const focused = await tab.evaluate((s) => document.activeElement === document.querySelector(s), selector)
+      before = await scene()
+      fired = await paste()
+      await tab.waitForTimeout(900)
+      const label = mode === 'none' ? 'nothing listening' : mode === 'hears' ? 'a listener that only reads' : 'a listener that stops it'
+      say(where, `a picture pasted in ${name}${focused ? '' : ' (NOT focused)'}, pointer over the canvas, ${label}`, await after(before))
+      await tab.evaluate(() => window.__unlisten())
+    }
+  }
+  // Whether a real Ctrl+V fires a paste here at all.
+  await tab.click('.sheet-sidebar .probe-field')
+  await tab.evaluate(() => window.__listenPaste('.sheet-sidebar .probe-field', false))
+  await tab.evaluate(() => navigator.clipboard.writeText('typed').catch((error) => String(error)))
+  await tab.keyboard.press('Control+V')
+  await tab.waitForTimeout(400)
+  const real = await tab.evaluate(() => ({ heard: window.__heard.length, value: document.querySelector('.probe-field').value }))
+  say(where, 'a real Ctrl+V of text in the textarea', `paste events heard: ${real.heard}, the field holds ${JSON.stringify(real.value)}`)
+  await tab.evaluate(() => window.__unlisten())
+
+  // Last, since the web app answers it with a question: a sheet file dropped on the tab.
+  await tab.evaluate(() => window.__listen({ over: true, drop: true }))
+  before = await scene()
+  await drop(onPanel, SHEET)
+  await tab.waitForTimeout(500)
+  const now = await scene()
+  const heard = await tab.evaluate(() => window.__heard.length)
+  const asks = await tab.evaluate(() => [...document.querySelectorAll('[role="dialog"], [role="alertdialog"], dialog[open]')].map((box) => box.textContent.trim().slice(0, 160)))
+  say(where, 'a sheet file dropped on the tab, listeners on dragover and drop', `canvas ${before.count} → ${now.count} elements (${now.types}); the tab's listener heard ${heard}; the app shows: ${JSON.stringify(asks)}`)
+}
+
+try {
+  // The web app.
+  {
+    const context = await browser.newContext({ viewport: { width: 1400, height: 900 } })
+    await context.grantPermissions(['clipboard-read', 'clipboard-write'], { origin })
+    await context.route((to) => !to.href.startsWith(origin), (route) => route.abort())
+    const tab = await context.newPage()
+    tab.on('pageerror', (error) => errors.push(`web: ${error.message}`))
+    await tab.goto(`${origin}/web/`)
+    await tab.waitForSelector('.excalidraw .sidebar.sheet-sidebar', { timeout: 30_000 })
+    await tab.waitForTimeout(800)
+    await probe('web', tab, () => tab.evaluate(() => window.__webScene()))
+    await context.close()
+  }
+  // The plugin: its main window and a pop-out.
+  {
+    const context = await browser.newContext({ viewport: { width: 1400, height: 900 } })
+    await context.grantPermissions(['clipboard-read', 'clipboard-write'], { origin })
+    const mainPage = await context.newPage()
+    mainPage.on('pageerror', (error) => errors.push(`main: ${error.message}`))
+    await mainPage.goto(`${origin}/`)
+    const manifest = JSON.parse(await readFile(join(dist, 'manifest.json'), 'utf8'))
+    const opened = context.waitForEvent('page')
+    await mainPage.evaluate(([text, m]) => window.__start(text, m), [sheet, manifest])
+    const popout = await opened
+    popout.on('pageerror', (error) => errors.push(`popout: ${error.message}`))
+    await popout.setViewportSize({ width: 1400, height: 900 })
+    for (const [which, tab] of [['main', mainPage], ['popout', popout]]) {
+      await tab.waitForSelector('.math-element .katex', { timeout: 30_000 })
+      await tab.waitForTimeout(500)
+      await probe(which, tab, () => mainPage.evaluate((w) => window.__scene(w), which))
+      if (which === 'popout') say(which, 'the main window’s sheet after the pop-out’s cases', JSON.stringify(await mainPage.evaluate(() => window.__scene('main'))))
+    }
+    await context.close()
+  }
+} catch (error) {
+  errors.push(`the run didn't finish: ${error.message.split('\n').slice(0, 3).join(' | ')}`)
+} finally {
+  await browser.close()
+  server.close()
+}
+if (errors.length) {
+  console.log('\nErrors:')
+  for (const error of errors) console.log(`  - ${error}`)
+}
