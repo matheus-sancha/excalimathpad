@@ -55,7 +55,7 @@ Both homes read and write the same file.
 | Editing | Cancelling a line edit; placing the caret at the clicked character; Greek or operator characters in the source (`ρ`, `≤`) and new operators (integral, derivative): the Symbols tab types the text the engine already reads; renaming a function's parameter, and a rename started from the open line with F2 ([Renaming a name](#renaming-a-name)) |
 | Help | A Help tab in the panel, an example sheet, or a PDF guide: the Math guide is one Markdown file shown in a dialog |
 | Language | Languages other than English and Brazilian Portuguese; following the browser's or Obsidian's language; translating the math (keywords, function names, units and the decimal `.` read and show the same in both, [Language](#language)); a Portuguese README, listing or issue forms; Excalidraw's own text where its Portuguese has none (until `0.6.0` this row also left out a translation of the app's own text) |
-| Assistant | A server, proxy, account or key of ours; Excalidraw's own AI items; the assistant writing to the sheet without an accepted proposal (in the first slice it writes nothing); the chat on a phone or a tablet (a later slice); a second provider setup on one device; a provider SDK; a switch that leaves the sheet out of a Send; typeset formulas, images and clickable links in an answer ([Math assistant](#math-assistant)) |
+| Assistant | A server, proxy, account or key of ours; Excalidraw's own AI items; the assistant writing to the sheet without an accepted proposal (in the first slice it writes nothing); a proposal that removes a line, changes a title or a text, or removes an element; one button that applies line changes and inserts new elements together; the chat on a phone or a tablet (a later slice); a second provider setup on one device; a provider SDK; a switch that leaves the sheet out of a Send; typeset formulas, images and clickable links in an answer ([Math assistant](#math-assistant)) |
 | Files | Excalidraw's image export; a supported round trip through plain Excalidraw; several sheets in one window; embedding a sheet in an Obsidian note (`![[…]]`, as a picture or a live sheet); resolving links between sheets, or to notes, from inside a sheet |
 | Platforms | The installed offline app (M6, after 1.0.0); touch and mobile layouts in the web app; browsers other than Chrome and Edge on desktop (a save and open fallback exists, untested); the plugin on iOS below 16.4; Excalidraw's embeds and library browsing in the plugin (an embed loads a third-party page when a sheet opens, unasked: refused through 1.0.0, and it stays in the web app); live collaboration (it needs a relay server, storage and an account; a sheet is shared as a file or through a shared vault); the Sheet panel as a view in Obsidian's sidebar; a plugin settings tab |
 
@@ -163,7 +163,13 @@ a term that never reaches the screen. The words were agreed in
 | **Listing** | The sheet written as text for the model, as the sheet is at one Send. A request holds exactly one, its own Send's | — |
 | **Label** | The name of an element or a line inside one listing: `E2`, `E2:3`, `T1`. It means something only with the listing it was made for, is never stored, and stands in for every Excalidraw id | — |
 | **Reference** | A label the model writes in its answer, drawn by the chat as a chip that jumps to the line | — |
-| **Suggested lines** | Source the model writes in a code block. In the first slice the app doesn't run or check it | linhas sugeridas |
+| **Suggested lines** | Source the model writes in a code block with no mark. The app doesn't run or check it | linhas sugeridas |
+| **Proposal** | What one answer offers to write to the sheet: new math elements, line changes, or both. One per answer, one card, written only on Insert or Apply (the second slice, [section 8](#math-assistant)) | proposta |
+| **Line change** | A part of a proposal: one line that exists, named by its label, and the one or more lines that take its place. Never a removal | alteração de linha |
+| **Fits** | A line change fits while the app finds its line unchanged in its element. Only a change that fits can be applied | — |
+| **Insert**, **Apply** | Insert writes a proposal's new math elements; Apply writes a line change | Inserir, Aplicar |
+| **Repair turn** | The one request the app makes by itself inside a Send, when the engine refuses or warns about a proposed line | — |
+| **Assumed input** | An input line of a proposal whose value the user didn't give. It carries `@yellow` and a note. The tickets called it a placeholder input; *placeholder* is a retired name here | entrada presumida |
 | **Slice** | A part of the Math assistant written into this spec, built and released on its own: first the base and the chat that reads the sheet and answers; then proposals; then attachments | — |
 | **Pump sheet** | The [acceptance sheet](acceptance/pump-sizing.md) | — |
 
@@ -290,7 +296,8 @@ acceptance sheet* (pump sheet). From M4d: *format bar* and *title's bar* (Format
 **Math assistant** (0.7.0, both homes)
 
 - With no Math assistant setup on the device, the app makes no request. With one, it makes
-  a request only on Send, Show models or Check key, to that setup's host only. (The web
+  a request only on Send, Show models or Check key, to that setup's host only. A Send may
+  hold one repair turn, to the same host, and never a second (the second slice). (The web
   app's own files and, until M6, Excalidraw's fonts are not the assistant's:
   [section 12a](#data-protection).)
 - A request holds exactly one listing, its own Send's.
@@ -299,6 +306,13 @@ acceptance sheet* (pump sheet). From M4d: *format bar* and *title's bar* (Format
 - Nothing in an answer makes a request: no image is loaded and no link can be clicked.
 - In the first slice the assistant writes nothing to the sheet, and a conversation is never
   saved.
+- From the second slice the assistant still writes nothing by itself: the sheet changes only
+  on Insert or Apply, each a press on a card that showed every line first, and each one undo
+  step. A proposal never removes a line or an element, and never changes a title, a text
+  element, a drawing or a setting.
+- A line change is applied only while it fits, and never to a line the app had to choose
+  among equals.
+- A proposal's check never changes the sheet: it runs on a copy of the sheet's lines.
 - The setup, its key included, is never in the sheet file, `data.json`, Copy details, Report
   this error, the console or a message.
 
@@ -1782,6 +1796,14 @@ Excalidraw's own selection steps, and a nudge or Link edit that a line commit fo
   changed by the rename are two steps before it, and an anchor nudged with them that the
   rename doesn't change stays moved, as below. Typing in the form's field is no step, and
   Ctrl+Z there is the field's own text undo.
+- **A proposal's Insert** (the Math assistant's second slice, [section 8](#math-assistant))
+  is one step, however many elements it creates, with their selection in the same write, as
+  Add math's is: one Ctrl+Z removes them all. **Apply** is one step for its one change, and
+  **Apply all** one step for every change it writes, in however many elements, as a rename
+  is. An open line that Insert or Apply left is its own step before it. A nudge or a Link
+  edit pending on an anchor that Apply changes is recorded first as its own step, as a
+  rename records it. Undoing either shows nothing extra on the sheet; the card follows it
+  and offers Insert or Apply again.
 - **Redo** (Ctrl+Y, Ctrl+Shift+Z) is Excalidraw's own and mirrors undo.
 - **Undoing a line shows nothing extra:** no selection, scroll or highlight. An undo off
   screen shows only as changed results. Undoing a rename is the same: no toast and no flash.
@@ -1811,7 +1833,8 @@ Decided in: [undo steps](https://github.com/matheus-sancha/excalimathpad/issues/
 [title format](https://github.com/matheus-sancha/excalimathpad/issues/95),
 [Format tab](https://github.com/matheus-sancha/excalimathpad/issues/121),
 [Symbols tab](https://github.com/matheus-sancha/excalimathpad/issues/122),
-[how a rename starts](https://github.com/matheus-sancha/excalimathpad/issues/232).
+[how a rename starts](https://github.com/matheus-sancha/excalimathpad/issues/232),
+[the assistant's second slice](https://github.com/matheus-sancha/excalimathpad/issues/253).
 
 ## 7. File and save
 
@@ -2384,7 +2407,9 @@ typed is committed.
 
 From 0.7.0, in both homes, on a computer. One chat beside the sheet. This is its **first
 slice**: the base (the provider, the key, the rule on what is sent) and the first ability, a
-chat that **reads the sheet and answers**. It writes nothing to the sheet. It is optional:
+chat that **reads the sheet and answers**. It writes nothing to the sheet. Its **second
+slice**, [Proposals](#math-assistant) below, lets it offer new math elements and line
+changes that the user inserts or applies. It is optional:
 until a setup is saved on the device, it is a card in a tab and the app sends nothing. The
 rule it lives under is in [section 12a](#data-protection), its words in
 [section 13](#13-messages), and how it is built in [section 14](#14-engineering-constraints).
@@ -2667,10 +2692,212 @@ How to write:
   lines, 3 texts". A press opens the listing exactly as it was sent, read-only. The guide
   and the instructions are named there, not shown (the guide is in ☰).
 
+**Proposals** (the second slice, a `0.7.x`)
+
+The second ability: the assistant offers to write to the sheet, and writes only when the
+user presses. A **proposal** is everything one answer offers: **new math elements**, **line
+changes**, or both. It is one card in the conversation. The two parts are built and released
+each on its own ([section 16](#the-test-period)): while a part isn't in a release, its
+blocks stay suggested lines, and the instructions don't teach it.
+
+*What the model writes*
+
+- **Marked text, on every provider.** The answer stays one streamed text, with no JSON
+  Schema and no tool call, so a typed address needs no second path.
+- **`Title: <title>` on the line before a code block** makes the block one proposed math
+  element, one line of source per line. `Title:` with nothing after it is an element with no
+  title. A titled block with no line of text is dropped.
+- **`Change [E1:4]:` on the line before a code block** makes the block a line change: its
+  lines take the place of the named line. Several lines all go in that line's place, in
+  order, and the lines below move down. The label is one from that Send's listing; the model
+  never writes the old line again.
+- **A code block with neither mark** stays suggested lines: source with Copy, "not run by
+  the app".
+- **Not a change, so its block stays suggested lines:** a label that isn't in that Send's
+  map; a label naming a text (`[T1]`) or a whole element (`[E2]`); an empty block; a second
+  change naming a line that an earlier change of the same answer names (the first counts).
+- **A proposal never:** removes a line; changes a title, a title format or a text element;
+  removes an element; draws; changes the unit system, Digits or any setting.
+- **No cap of its own** on elements or lines: the adapter's limit on an answer and the
+  engine's limits apply.
+
+*When the model writes one* (the instructions, below)
+
+- **Asked to review:** as in the first slice. It asks for missing context first, gives its
+  findings with their labels, and writes no `Change`. It ends by offering to write the fixes.
+- **Asked to fix, or agreeing to that offer:** `Change` blocks.
+- **Asked for a sheet or a template:** it drafts at once, with no question first. Every
+  input the user didn't give is an **assumed input**: the line carries the format `@yellow`
+  and a note saying what to check.
+
+*The check*
+
+- **New elements are run after the sheet as it is now,** in the sheet's one scope, as the
+  last elements in reading order. That is where Insert puts them, so the card shows what the
+  sheet will show.
+- **Each change is run as if it alone were applied** to the sheet as it is now.
+- **The check is live** until Insert or Apply: it runs again whenever the sheet changes.
+- **The repair turn.** When the engine refuses a proposed line or warns about it, or a list
+  or a plot in it has a failed point, the app asks once more, to the same host: what the
+  Send carried, the first answer, and the proposal as the engine read it. It is part of that
+  Send ([section 12a](#data-protection)). Never twice. Not for a name assigned again, and
+  not for a line below a change that turns from a result into an error. The list says
+  "Fixing 3 lines the engine refused…"; Stop cancels it and keeps the first answer. The
+  second answer replaces the first in the list, so only it goes with later Sends. Its labels
+  are read against the same Send's map.
+- **Errors left are said, and can be written:** the card lists each refused line with the
+  engine's message and each warning.
+
+*While it arrives.* Prose and marked blocks show as they are written, the blocks as plain
+source under their mark. When the answer ends and is checked, the blocks fold into one card
+where the first of them stood; the prose before and after stays. A stopped or cut-short
+answer never becomes a card: its blocks stay source with Copy.
+
+*The card*
+
+```
+Proposal: 2 line changes, 1 math element
+
+Line changes                      [Apply all 2]
+  Pipe flow, line 1                     [Apply]
+    - Q = 30 L/s
+    + Q = 25 L/s
+    Changes 6 results below  v
+  Pipe flow, line 4                     [Apply]
+    - check = v < 3 m/s      = true
+    + check = v < 2 m/s      = false
+
+New math elements                  [Insert all]
+  Head loss   6 lines
+  Assigns again names the sheet has: Q (sheet: 30 L/s, here: 25 L/s)
+  2 assumed inputs, highlighted. Check each value you didn't give at its source.
+```
+
+- **A heading with the counts,** then line changes, then new math elements. A part with
+  nothing in it isn't shown. Each part has its own button and its own undo step, and **no
+  button does both**.
+- **Nothing is typeset.** A line shows as source with the engine's result, written as the
+  listing writes it (a table as its headers and row count, a plot as its line).
+- **A change's row:** the line in the panel's words ("Pipe flow, line 4"), its Apply, then
+  before (`-`) and after (`+`). "Changes 2 results below" opens to those lines, each with
+  its result before and after: it is [the rename form's check](#renaming-a-name), run with
+  the change applied. Where a line below turns into an error it reads "Breaks 2 lines
+  below", in amber.
+- **A new element's row:** its title, its line count and an error mark. A press opens it to
+  its lines.
+- **Names.** "Assigns again names the sheet has: Q (sheet: 30 L/s, here: 25 L/s), D". It
+  blocks nothing.
+- **Assumed inputs.** "5 assumed inputs, highlighted", counted from the proposed input lines
+  that carry `@yellow` (the app never reads the model's words to find them), and always the
+  sentence that values the user didn't give must be checked at their source. The highlight
+  is an ordinary line format: it shows on the sheet and in print, and the Format tab takes
+  it off once the value is confirmed.
+- **The buttons count what is wrong:** "Insert with 2 errors", "Apply with error", "Apply
+  all 3, 1 with an error".
+
+*A change fits* while the app can find its line unchanged:
+
+- The element must still exist, wherever it was moved.
+- The line at the sent number still has the sent text: it fits there.
+- If not, and exactly one line of that element has the sent text: it fits there. The line
+  only moved, because the user or another change added a line above it.
+- No line, or several lines, with that text: it doesn't fit. The app never chooses between
+  two equal lines, and never looks in another element.
+- The sent text is the line as the listing gave it, its stored format clause joined.
+- **A change that doesn't fit** says "This line changed since the answer.", has no Apply,
+  and keeps its new lines as source with Copy. It is judged again whenever the sheet
+  changes, so an undo can make it fit again.
+
+*Insert*
+
+- **Where:** the elements go one under another in the order written, their left edge on the
+  sheet's leftmost element, below the lowest thing on the canvas (drawings included), with
+  a gap of 24 scene units above the first and between each two. On an empty sheet they
+  start at the middle-top of the view.
+- The view scrolls to them and all are selected, so one drag moves the lot.
+- **One write, one undo step** ([section 6](#6-undo)). Insert leaves the open line first.
+  The sheet is dirty.
+- A format clause in a proposed line moves into the stored format at Insert, as at a line
+  commit.
+
+*Apply*
+
+- **Apply** writes one change. **Apply all** writes every change that still fits, in one
+  write. Each is one undo step ([section 6](#6-undo)).
+- Apply leaves the open line first, so a change to the line being edited is judged against
+  what was committed.
+- **The old line's stored format and rules are replaced** by whatever the new line carries:
+  the model was shown them joined. A format clause in a new line moves into the stored
+  format, as at a line commit.
+- Each row's "Changes N results below" is for its change alone. The card says nothing about
+  several changes taken together; the sheet shows it after Apply all, and one Ctrl+Z takes
+  it back.
+
+*The card later*
+
+- After Insert the elements' part reads "Inserted", with **Show on sheet**, which scrolls to
+  them and selects them. If an undo or a delete removes all of them, Insert is offered
+  again; if some remain it stays "Inserted".
+- After Apply a row reads "Applied", with **Show on sheet**, the chip's jump to the first of
+  its lines. If an undo brings the old line back, the change fits again and Apply is offered
+  again.
+- Every card in the conversation behaves so, not only the last.
+- **Later Sends** carry the answer as its text, marked blocks as written. What was inserted
+  or applied is read from the sheet's listing.
+
+*What a sheet can make the model do.* A text on the sheet written as an instruction can at
+most put a proposal on a card. Nothing is written but on Insert or Apply, and the card shows
+every line first.
+
+*The instructions, from the second slice.* The first slice's text, with these changes. In
+"Do not", "say you changed the sheet. You write nothing to it; the user does." becomes:
+
+```
+- say you changed the sheet. You only propose; the user inserts or applies.
+```
+
+The last line of "How to write" loses "The app does not run them." Two sections are added
+at the end. Each goes in only when its part is in the release:
+
+```
+Proposing changes to lines. Only when the user asks you to fix or change the sheet, or
+accepts your offer to:
+- for each line, write "Change [E1:4]:" on a line by itself, then a code block with the
+  line or lines that take its place. Use only line labels from this listing;
+- write the whole line again, with its format and its note, as the listing shows it;
+- to add a line, change the line it must stand before and write both. You cannot remove a
+  line, change a title or change a text: say what the user should do instead;
+- the app runs each change and shows the user the line before and after. Nothing is written
+  until the user applies it.
+When you review, give your findings first and offer to write the fixes. Do not write a
+change the user did not ask for.
+
+Drafting a sheet. When the user asks for a sheet or a template, write it:
+- as one or more code blocks; each code block is one math element, one line of source per
+  line, only in the Math guide's forms;
+- on the line before each code block, its title, written "Title: <title>";
+- the app runs these lines after the sheet's own, in the order given, in one scope: a line
+  sees only names assigned above it. Use the names the sheet already assigns, and do not
+  assign one again unless asked;
+- do not ask a question first. Write every assumption as an input line. Give every input
+  the user did not give the format @yellow and a note saying what to check;
+- give every input its unit, show results in the unit an engineer expects (in <unit>), and
+  do not name a variable like a unit;
+- never write a result after a line: the app computes it;
+- outside the code blocks write a few sentences at most.
+```
+
+The repair turn's message is fixed too: "The app ran your lines. This is how the engine
+reads them, with each line's result, error and warnings. Fix every line with an error or a
+warning, and write every block again in the same form."
+
+**The empty conversation, from the second slice,** has a fourth suggested question, "Draft
+a sheet for…", which puts those words in the field and sends nothing.
+
 **Not in this slice,** each with where it goes:
 
-- **Proposals,** the assistant offering new math elements and line changes the user accepts:
-  the second slice.
+- **Proposals** are the second slice, above: a `0.7.x`, each of its two parts when it is
+  built.
 - **An image or a PDF attached to a message:** the third slice.
 - **A conversation saved with the sheet:** it waits for
   [what format 3 keeps](https://github.com/matheus-sancha/excalimathpad/issues/248).
@@ -2768,7 +2995,11 @@ Decided in: [chrome](https://github.com/matheus-sancha/excalimathpad/issues/17),
 [its providers](https://github.com/matheus-sancha/excalimathpad/issues/243),
 [its key](https://github.com/matheus-sancha/excalimathpad/issues/244),
 [its route](https://github.com/matheus-sancha/excalimathpad/issues/259),
-[the first slice](https://github.com/matheus-sancha/excalimathpad/issues/252).
+[the first slice](https://github.com/matheus-sancha/excalimathpad/issues/252),
+[whether a model writes sheets the engine runs](https://github.com/matheus-sancha/excalimathpad/issues/247),
+[a proposal of new elements](https://github.com/matheus-sancha/excalimathpad/issues/250),
+[a line change](https://github.com/matheus-sancha/excalimathpad/issues/251),
+[the second slice](https://github.com/matheus-sancha/excalimathpad/issues/253).
 
 ## 9. Solve
 
@@ -3390,6 +3621,12 @@ touch in [section 4](#touch). Research: [`docs/research/obsidian-plugin.md`](res
     one: not opening a sheet or the tab, not typing, not saving the setup, not an answer (no
     image loads, no link is fetched), and no retry the user didn't press (Try again is a
     press). **Stop** cancels the request in flight.
+  - **A Send may hold one repair turn** (the second slice): when the answer proposes lines
+    and the engine refuses one or warns about it, the app asks once more, to the same host,
+    with what the Send carried, the first answer and the proposal as the engine read it
+    ([section 8](#math-assistant)). It is part of the Send the user pressed, the list says
+    it is happening, Stop cancels it, and there is never a second. It is the one request
+    the app makes without a press of its own.
   - **To the one host** of this device's setup, and nowhere else. The first request to a host
     this device hasn't confirmed asks once, naming the host, whichever of the three buttons
     made it. This holds for every host, the four built-ins included. Cancel sends nothing,
@@ -3457,7 +3694,9 @@ touch in [section 4](#touch). Research: [`docs/research/obsidian-plugin.md`](res
   - **The Math assistant, if you set it up,** sends to one place: the AI provider you choose
     in its tab, at the address shown there, with your own key.
     - **When:** only when you press Send, Show models or Check key. The first time it sends
-      to an address on this device, it asks you.
+      to an address on this device, it asks you. From the release that brings proposals:
+      "When the assistant proposes lines for your sheet and Excalimathpad's own check finds
+      an error in them, that Send asks the provider once more to fix them. Never twice."
     - **What Send gives the provider:** your message, the conversation so far, your whole
       sheet as text (lines, results and the sheet's texts; never images, drawings, the
       file's name or any other note) and the Math guide. Show models and Check key send only
@@ -3541,6 +3780,12 @@ touch in [section 4](#touch). Research: [`docs/research/obsidian-plugin.md`](res
     | 5. Stop during an answer | The request is aborted |
     | 6. An answer holding an image, a link and a bare address | 0 more requests |
     | 7. A second Send | No confirm. A request to any other host fails the run |
+    | 8. A Send whose answer proposes an element with a refused line (the second slice) | Exactly 1 more request, to the same host, holding the first answer and the proposal as the engine read it. The second answer still has an error: 0 more requests |
+    | 9. Insert, then Ctrl+Z; Apply, then Ctrl+Z | 0 requests. The elements are on the sheet, then gone; the line is changed, then back; the card offers each again |
+    | 10. A sheet's text written as an instruction, and an answer that proposes a change | Nothing is written to the sheet before a press |
+
+    Steps 8 to 10 run for each part that is switched on
+    ([section 14](#14-engineering-constraints)).
 
     It also carries a **canary key** and fails if it shows anywhere but the request's
     header (`data.json`, the sheet file, Copy details, Report this error, the console, a
@@ -3580,6 +3825,10 @@ touch in [section 4](#touch). Research: [`docs/research/obsidian-plugin.md`](res
     "refused this key"; Remove." That is one provider per adapter in each home, four
     passes; Google's free tier needs no payment, so the second can cost nothing. Stop is in
     it because it was never seen to end a request inside Obsidian.
+  - From the release that brings proposals, for a release that changes them: "Proposals, in
+    the test vault and in the web app, with Anthropic: ask for a pump sizing sheet; see the
+    card; Insert; Ctrl+Z; Insert again. Ask it to fix a line; Apply; Ctrl+Z. Edit that line
+    by hand and see the row say it changed."
   - "Write in the release notes which providers were tried, and which were not."
 - **A default model's retirement** (0.7.0): each built-in's default sits in one constant
   with its retirement date (or none announced) and the date it was last checked. The
@@ -3988,6 +4237,18 @@ arrive, in whatever language, after `<provider> said:`.
 | Any other error from the provider, with `Try again` | `<provider> said: "…"` | `<provider> respondeu: "…"` |
 | A chip whose line changed since it was sent | `Pipe flow, line 3 · changed` | `Pipe flow, linha 3 · alterada` |
 | A block of suggested lines, its mark | `not run by the app` | `não executado pelo app` |
+| **Proposals** (the second slice). The card's heading | `Proposal: 2 line changes, 1 math element` (`1 line change`, `5 math elements, 29 lines` when it has no changes) | `Proposta: 2 alterações de linha, 1 bloco` (`1 alteração de linha`, `5 blocos, 29 linhas`) |
+| The card's two parts | `Line changes`; `New math elements` | `Alterações de linha`; `Novos blocos` |
+| The repair turn, in the list | `Fixing 3 lines the engine refused…` (`1 line`) | `Corrigindo 3 linhas que o motor recusou…` (`1 linha`) |
+| The buttons | `Insert all`, `Insert with 2 errors` (`1 error`); `Apply`, `Apply with error`; `Apply all 3`, `Apply all 3, 1 with an error` | `Inserir tudo`, `Inserir com 2 erros` (`1 erro`); `Aplicar`, `Aplicar com erro`; `Aplicar as 3`, `Aplicar as 3, 1 com erro` |
+| A new element's row | `Head loss · 6 lines` (`1 line`); with no title, its position, as the panel names it | `Head loss · 6 linhas` (`1 linha`) |
+| Names assigned again | `Assigns again names the sheet has: Q (sheet: 30 L/s, here: 25 L/s), D` | `Atribui de novo nomes que a folha já tem: Q (folha: 30 L/s, aqui: 25 L/s), D` |
+| Assumed inputs, then the fixed sentence | `5 assumed inputs, highlighted.` (`1 assumed input, highlighted.`) `Check each value you didn't give at its source.` | `5 entradas presumidas, destacadas.` (`1 entrada presumida, destacada.`) `Confira na fonte cada valor que você não informou.` |
+| Under a change, results that change; lines that break | `Changes 2 results below` (`1 result`); `Breaks 2 lines below` (`1 line`) | `Altera 2 resultados abaixo` (`1 resultado`); `Quebra 2 linhas abaixo` (`1 linha`) |
+| A change that no longer fits | `This line changed since the answer.` | `Esta linha mudou desde a resposta.` |
+| After Insert; after Apply; the button beside each | `Inserted`; `Applied`; `Show on sheet` | `Inserido`; `Aplicada`; `Mostrar na folha` |
+| The fourth suggested question, which fills the field | `Draft a sheet for…` | `Monte uma folha para…` |
+| Cost, a line added under each built-in's | `A drafted sheet costs more: about 3 to 14 US cents, and more when the app asks for one repair.` | `Uma folha montada custa mais: cerca de 3 a 14 centavos de dólar, e mais quando o app pede um reparo.` |
 
 - **A chip's words are the panel's** ("Pipe flow, line 3", `Bloco 2, linha 3`).
 - **The key pages** in three cost lines (`<OpenAI's key page>` and the others) are filled in
@@ -4040,7 +4301,9 @@ he reviews it on that pull request. The Math assistant's English (0.7.0) is from
 [its rule](https://github.com/matheus-sancha/excalimathpad/issues/245) and
 [its route](https://github.com/matheus-sancha/excalimathpad/issues/259); the wordings no ticket
 quoted, and the whole Português column, were written for this spec and are for Matheus to review
-on its pull request.
+on its pull request. The Proposals rows are from
+[a proposal of new elements](https://github.com/matheus-sancha/excalimathpad/issues/250) and
+[a line change](https://github.com/matheus-sancha/excalimathpad/issues/251), on the same terms.
 
 ## 14. Engineering constraints
 
@@ -4828,6 +5091,70 @@ working key while this was specified.
   [`CLAUDE.md`](../CLAUDE.md)'s reading route lists it, and its "six Playwright runs" become
   seven with the assistant run.
 
+**0.7.x: the Math assistant, second slice (proposals)**
+
+The behaviour is in [section 8](#math-assistant), Proposals. Research:
+[`assistant-sheets/NOTES.md`](research/assistant-sheets/NOTES.md), the prototype whose 28
+runs chose the marked text, the drafting rules and the one repair turn.
+
+- **Two build-time switches, one per part:** new elements, and line changes. Each is a
+  constant of the build, as the first slice's switch is. While a part's switch is off, its
+  mark is not read (the block stays suggested lines), its section of the instructions is not
+  sent, and the assistant run skips its steps. The issue that proves a part turns its switch
+  on, in the same pull request. With both off, a build is the first slice exactly.
+- **Reading an answer is one pure function** in `src/assistant/`: from the answer's text and
+  that Send's map to its prose, its suggested lines, its proposed elements and its changes,
+  with every block that isn't a proposal's said why. It reads a mark only on the line
+  before a code block. Unit tests hold every "not a change" case of section 8.
+- **The check is one pure function** from the sheet's blocks and a proposal to each proposed
+  line's result, error and warnings, the names assigned again, the assumed inputs, and for
+  each change its fit, its results below and its lines broken. It calls `evaluateSheet` on
+  a copy of the blocks and writes nothing. A change's results below are the rename form's
+  comparison (`src/panel/renameForm.ts`), moved to where both can call it, not written
+  twice.
+- **Fits is one pure function** from an element's lines today, the sent line number and the
+  sent text to a line index or a refusal. Its unit test holds each row of section 8's list.
+- **The check follows the sheet** as the rename form's follows typing: a key or a drag is
+  drawn first and the card after it. On a sheet where one evaluation is slow the card may
+  lag; it never blocks the sheet.
+- **New elements are created by one function in `src/canvas/`,** beside Add math's creator:
+  several anchors, with their sources, titles and stored formats, selected in the same
+  write, one undo step. Nothing outside `src/canvas/` builds an anchor.
+- **The column.** An anchor's size is its content size, measured only after layout, so the
+  elements' heights aren't known when Insert writes them. The build chooses how they end one
+  under another with no overlap and no second undo step, and proves it in Chromium: the
+  size writes that follow are no undo step already (`writeAnchorSizes`), so moving each
+  element below the one above it in that same kind of write is the expected way. If that
+  can't be done without a second step or a visible jump, the issue stops and comes back to
+  Matheus ([section 17](#17-verify-first)).
+- **Apply and Apply all go through `writeAnchorSources`,** each anchor's whole source and
+  stored formats in the one write (ADR 0002). Two changes in one element are placed from one
+  reading of the element, each by its own fit, and written as that element's one new source.
+- **A format clause typed in a proposed line** is moved into the stored format by the same
+  code a line commit uses.
+- **The repair turn is made by the Send's own code path,** through the `request` port, with
+  the Send's abort signal. A unit test against the fake port holds: one more request when a
+  line is refused; none when the proposal is clean; none after the second answer, whatever
+  it holds; and Stop during it keeping the first answer.
+- **The Anthropic adapter sets `max_tokens` above the model's thinking:** an answer arrived
+  empty at 8,000 in the prototype. The number is the build's, with a fixture of a long
+  drafted sheet.
+- **The cards are held with the conversation,** outside the tab's content, and each is
+  drawn from the sheet as it is: "Inserted" and "Applied" are read from the scene (the
+  anchors an Insert created still exist; the lines an Apply wrote are still there), never
+  from a flag that an undo would leave wrong.
+- **The card's buttons never take focus,** as every panel control; Insert and Apply leave
+  the open line through the same path a Send from a button does.
+- **Fixtures:** for each adapter, an answer with two titled blocks, one with a `Change`, one
+  with both, one whose proposal has a refused line, and its repair answer. Written from the
+  prototype's recorded runs, with their header saying so.
+- **Size.** The second slice may add at most **40,000 bytes** to `main.js` (an estimate, not
+  measured). The issue that turns a part on measures and raises `BUDGET` as the first
+  slice's does; going over stops that issue and comes back to Matheus.
+- **Documents.** `docs/context/assistant.md` gains the reader, the check, the card and the
+  two switches; `docs/context/canvas.md` the creator of several anchors; `CONTEXT.md`'s
+  "Source writes go through `writeAnchorSource`" names the new creator.
+
 ## 15. Acceptance
 
 v1 is judged on the [pump sheet](acceptance/pump-sizing.md), with
@@ -4982,7 +5309,7 @@ with the next. The releases, by version:
 | `0.6.0` | The app's own text in Português (Brasil), in both homes, on the map [Spec for 0.6.0: Excalimathpad's own text in Português (Brasil)](https://github.com/matheus-sancha/excalimathpad/issues/284): [Language](#language) for the app's text, the messages in both languages and the Portuguese Math guide ([its issue order](#the-test-period) below), #290 to #296 | Due by Sunday 2026-11-29 | Week 3, 2026-11-30 to 2026-12-06: the testers judge the Portuguese |
 | `0.6.x` | What slid from `0.5.0` or `0.6.0`, and fixes. From `0.5.0`: the Excalidraw upgrade, its eight issues together (#266 to #273). A release is made from `main`, which holds 0.6.0's issues as they merge, so the upgrade is in `0.6.0` if it merges before 2026-11-29, and a `0.6.x` after | During week 3 | Counted in the week it ships |
 | `0.7.0` | The [Math assistant](#math-assistant)'s first slice, in both homes on a computer: the base (provider, key, the network rule and its checks) and the chat that reads the sheet and answers, on the map [Spec for 0.7.0: the Math assistant](https://github.com/matheus-sancha/excalimathpad/issues/238) ([its issue order](#the-test-period) below, #306 to #314), built on the text tables from its first issue, so its text is in both languages. The last beta | Due by Sunday 2026-12-06 | Week 4, 2026-12-07 to 2026-12-13 |
-| `0.7.x` | What slid from `0.7.0`, fixes, and the assistant's later slices as their tickets close: proposals the user accepts, then an image or a PDF, each written into this spec and built on its own | From week 4 | Counted in the week it ships; the quiet week is counted from the release that completes `0.7.0`'s list, its later slices included |
+| `0.7.x` | What slid from `0.7.0`, fixes, and the assistant's later slices: **proposals** the user accepts ([Proposals](#math-assistant), [their issue order](#the-test-period) below, #317 to #322), due as a `0.7.x` by Sunday 2026-12-13, each of the two parts when it is green; then an image or a PDF, when its ticket closes | From week 4 | Counted in the week it ships; the quiet week is counted from the release that completes `0.7.0`'s list, its later slices included |
 | `1.0.0` | The last beta's code, the documents and the version (#203) | After a quiet week on the last beta | None |
 
 - **A test week** is Monday to Sunday. It counts when the beta was used on real sheets, by the
@@ -5150,7 +5477,39 @@ and until it ships a block of suggested lines has a Copy on each line. The nine 
 about nine build sessions, four of them at once after the first, and 0.6.0's last two issues
 and the Excalidraw upgrade's last four are open on the same days, so the likeliest Sunday is
 the chat without the paste, and the honest risk is the assistant a few days into week 4.
-The second and third slices are not in this count: their tickets are still open.
+The second and third slices are not in this count.
+
+**The second slice's issue order, proposals** (added on 2026-11-22, on the same map, from
+[whether a model writes sheets the engine runs](https://github.com/matheus-sancha/excalimathpad/issues/247),
+[a proposal of new elements](https://github.com/matheus-sancha/excalimathpad/issues/250) and
+[a line change](https://github.com/matheus-sancha/excalimathpad/issues/251)):
+
+1. Reading an answer's marks, the check and the card's frame (#317)
+2. The one repair turn inside a Send (#318)
+3. New math elements, their rows and Insert (#319)
+4. Line changes, whether one fits, before and after, and Apply (#320)
+5. The instructions, the assistant run's new steps, the written promise, and switching a part on (#321)
+6. The Math guide, the hand checks, and the release (#322)
+
+The first is alone and needs the first slice's Send and answer's form in `main` (#310,
+#311): it reads an answer into its parts, checks a proposal and draws the card that the next
+three fill, with both switches off. Issues 2, 3 and 4 then touch different files (the Send's
+path; `src/canvas/` and the elements' rows; the fit, the changes' rows and
+`writeAnchorSources`) and run in parallel sessions. The third starts with its Verify first
+item, the column. The fifth is the proof and the switch, as the first slice's seventh is: it
+teaches the model each part that is merged, walks it in the assistant run and turns its
+switch on, with the texts that must be true from that moment. The sixth describes what was
+built in the Math guide and releases.
+
+**What slides.** Proposals are due as a `0.7.x` by Sunday 2026-12-13, the end of week 4.
+**Each part ships alone:** if new elements or line changes isn't merged when the fifth is
+done, the release holds the other, and the late part follows in the next `0.7.x` through a
+second pass of issues 5 and 6. The repair turn slides alone: without it a card shows the
+errors of the model's first answer. Nothing here can start before the first slice's fifth
+and sixth issues merge, and those are due on 2026-12-06, so six sessions in week 4 is the
+plan with no slack: the likeliest 2026-12-13 is one part, line changes (its write path
+exists since the rename), with new elements behind the column's Verify first item. The quiet
+week before 1.0.0 is counted from the release that completes the third slice.
 
 ### The finish line
 
@@ -5343,6 +5702,19 @@ M1 to M5, is in [`docs/spec-history.md`](spec-history.md#17-verify-first), with 
 - The chat in the plugin, in a pop-out window and in the dark theme: the prototype tried
   none of them.
 - Which domains Obsidian's scorecard lists under Disclosures.
+- **The second slice.** The column: several elements written in one step ending one under
+  another with no overlap, no second undo step and no visible jump, when heights are known
+  only after layout (#319 checks it first).
+- Whether a model keeps to `Change [E1:4]:` with a label from the listing and the whole
+  line written again. The prototype's 28 runs tried `Title:` blocks only; no run tried a
+  change.
+- Whether a model, told both "ask for missing context first" (a review) and "do not ask a
+  question first" (a draft), tells the two requests apart.
+- `gpt-6.2-sol` writing a sheet: not run. `3 min` in a drafted sheet needs its own message
+  ([the prototype's notes](research/assistant-sheets/NOTES.md)).
+- The card following a slow sheet: the check re-runs on every change, and no sheet near the
+  engine's limits was tried.
+- The second slice's 40,000 bytes: an estimate.
 
 **M6**
 
@@ -5355,6 +5727,34 @@ The table of the tickets this spec came from, and the sections each fed, is in [
 Each section above ends with its own tickets.
 
 ## Changes since agreed
+
+- 2026-11-22, [sections 2](#invariants), [8](#math-assistant) and [12a](#data-protection)
+  (the map
+  [Spec for 0.7.0: the Math assistant](https://github.com/matheus-sancha/excalimathpad/issues/238),
+  its second slice, [proposals](https://github.com/matheus-sancha/excalimathpad/issues/253),
+  each chosen by Matheus on 2026-11-22):
+  - **"Only on a press" gains the repair turn.** The rule agreed the same day said nothing
+    makes a request but Send, Show models or Check key. A Send may now hold one more
+    request, to the same host, when the engine refuses a line the answer proposed. It is the
+    one request with no press of its own; it is said in the list, Stop cancels it, and
+    there is never a second.
+  - **The assistant writes to the sheet, on Insert and on Apply.** The first slice's
+    instructions said "You write nothing to it; the user does" and "The app does not run
+    them"; both change, and the invariant "the assistant writes nothing to the sheet" now
+    holds for the first slice only. Every write is still a press on a card that showed
+    every line first.
+  - **"Ask for missing context first" holds for a review only.** Asked for a sheet or a
+    template, the model drafts at once and marks what it assumed.
+  - **"Placeholder inputs" are written "assumed inputs".** The tickets' word is a retired
+    name in section 2 (the unit slot's).
+  - Not asked, for Matheus to confirm on the pull request: a gap of 24 scene units in the
+    column; "Show on sheet" selects the inserted elements, and for a change is the chip's
+    jump; the card says nothing about several changes taken together; a fourth suggested
+    question, "Draft a sheet for…", which fills the field and sends nothing; the cost line
+    for a drafted sheet; no ADR, since Insert and Apply use ADR 0002's write path; the pump
+    sheet doesn't join section 15's acceptance, and a drafted one is a hand check of the
+    release; 40,000 bytes for the slice; the instructions' two new sections and the whole
+    Português column of the Proposals rows.
 
 - 2026-11-22, [sections 1](#1-what-v1-is-and-what-it-isnt), [2](#invariants),
   [4](#while-editing-a-line), [8](#math-assistant), [12a](#data-protection),
