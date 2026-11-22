@@ -192,3 +192,12 @@ its scene top-left. It writes nothing. The only module that imports
 Excalidraw at runtime; tests may too, and other modules may import its
 types. This is ADR 0001's engineering rule as amended in ADR 0002. Depends
 on: `@excalidraw/excalidraw`, guide (the Math guide's dialog), text (its words).
+
+**The Math assistant's tab and item** (spec section 8, 0.7.0, #306;
+[assistant](assistant.md)): `SHEET_PANEL_TABS` ends in `assistant`, and a tab is drawn only
+when its slot of `SheetPanelSlot` is filled, so the seventh tab is there only where App
+fills `assistant` (never on a phone's bottom sheet). With it, More tools gets a third item
+under Math settings, in the same `sidebar-trigger` wrapper: it opens the panel on that tab
+(`toggleSidebar` with `force: true`), or closes the panel when that tab is the one showing,
+and reads as pressed while it shows. Its icon is `TabIcon`'s speech bubble. Math settings
+still opens the tab last shown, the assistant's included.

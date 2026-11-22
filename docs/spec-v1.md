@@ -2073,7 +2073,8 @@ command and first ☰ item. There is no app bar: the chrome lives inside Excalid
   items under a **Math** heading, below Excalidraw's. The app has no buttons of its own on
   the canvas. Choosing an item closes the dropdown. From 0.7.0 a third item, **Math
   assistant**, sits under Math settings, wherever the assistant is on
-  ([Math assistant](#math-assistant)).
+  ([Math assistant](#math-assistant)). It reads as pressed while the panel shows that tab,
+  and Math settings then reads as pressed too, since the panel is open.
 - **∑ Add math** is the first, labelled with its shortcut **M**. It reads as pressed while
   placing, and so does the More tools button, as it does for Excalidraw's Frame tool.
 - **Math settings** opens and closes the Sheet panel, and reads as pressed while it is open.
@@ -5214,7 +5215,10 @@ working key while this was specified.
   when a build-time switch is on, and the switch is off until the issue that adds the
   assistant run turns it on, in the same pull request. Until then a build from `main` has
   no tab, makes no request, and its README and description stay true. The switch is a
-  constant of the build, never an address, a setting or a file a user could change.
+  constant of the build, never an address, a setting or a file a user could change. As
+  built (#306): both builds define it from `EXCALIMATHPAD_ASSISTANT` in the build's own
+  environment, on only when that reads `on`, so a developer's build can have the assistant
+  before it is proved and nothing in a built home can change it.
 - **A source test** (beside `plugin/test/boundary.test.ts`, which already reads every file
   in `src/`) fails when `fetch`, `XMLHttpRequest`, `WebSocket`, `EventSource` or
   `sendBeacon` is named in `src/` anywhere but `src/main.tsx`, or when `fetch` or

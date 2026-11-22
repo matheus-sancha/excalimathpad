@@ -85,3 +85,7 @@ typing suggestions' details (`suggest.ts`, which `MathOverlay` builds again on a
 language). Issue 2
 (#291) adds `engine`, every engine message: the result cell and the gutter's tip, a table's
 and a chart's failed points, the Problems tab, a rule's state and the rename form's reason.
+
+**The Math assistant's words** (section 13, Math assistant, 0.7.0): the tab's name is
+`panel.tabs.assistant` and the More tools item `tools.assistant`, in both tables from its
+first issue (#306).

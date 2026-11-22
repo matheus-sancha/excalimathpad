@@ -22,6 +22,7 @@ import { build } from 'esbuild'
 import { copyFile, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { ASSISTANT_SWITCH, assistantSwitch } from './assistantSwitch.ts'
 import { GUIDE_QUERY, guideModule } from './src/guide/markdown.ts'
 import { trimKatexCss } from './src/overlay/katexFonts.ts'
 
@@ -195,6 +196,8 @@ export async function buildPlugin({ outDir = out, log = console.log } = {}) {
       __BUILD_STAMP__: JSON.stringify(pkg.version),
       // Section 4, Unexpected failures: Copy details names the version.
       __APP_VERSION__: JSON.stringify(pkg.version),
+      // Section 14, 0.7.0: the Math assistant is off unless the build says on.
+      __ASSISTANT__: JSON.stringify(assistantSwitch(process.env[ASSISTANT_SWITCH])),
     },
     plugins: [mathGuide, trims],
     metafile: true,

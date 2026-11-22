@@ -98,3 +98,12 @@ drop); the font test (`src/overlay/katexFonts.test.tsx`) reads the same list
 and KaTeX's CSS, and the network-blocked run fails on a KaTeX class drawn in a
 family with no font. Each rewrite depends on Excalidraw 0.18.1's text; the
 audit fails an upgrade that moves it.
+
+**The Math assistant's ports** (`assistant.ts`, section 12a, One source, two builds; section
+14, 0.7.0, #306; [assistant](assistant.md)): the one file of `plugin/` that names a request
+API or Obsidian's secret storage (`test/requestApis.test.ts`, which also holds that
+Obsidian's own request function is named nowhere). `assistantPorts(on, mobile)` gives the
+ports only when the build-time switch is on and the device is a computer; `SheetView` calls
+it with `__ASSISTANT__` (or its `assistant` option, for tests) and `Platform.isMobile`, and
+passes the result as App's `assistant` prop. The store lasts as long as the view until the
+setup's issue (#307) names the secret storage.

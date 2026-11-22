@@ -9,6 +9,7 @@ import { MESSAGES } from '../src/file/sheetSession.ts'
 import type { VaultSheet } from '../src/file/vaultSheet.ts'
 import type { PanelMemory } from '../src/panel/panelMemory.ts'
 import { wordsFor, type Words } from '../src/text/words.ts'
+import { assistantPorts } from './assistant.ts'
 import { pickVaultImage } from './ImagePicker.ts'
 import { conflictBase, freeSheetPath } from './names.ts'
 import { printInFrame } from './print.ts'
@@ -55,6 +56,8 @@ export interface SheetViewOptions {
   lookbehind?: () => boolean
   /** The clock a conflict copy is named by. */
   now?: () => Date
+  /** Tests turn the Math assistant's build-time switch on (section 14, 0.7.0). */
+  assistant?: boolean
 }
 
 /**
@@ -86,6 +89,7 @@ export class SheetView extends TextFileView {
   commands: SheetCommands | null = null
   private readonly lookbehind: () => boolean
   private readonly now: () => Date
+  private readonly assistant: boolean
   /** The sheet the app hands back once its canvas is up. */
   private sheet: VaultSheet | null = null
   /**
@@ -106,6 +110,7 @@ export class SheetView extends TextFileView {
     this.memory = memory
     this.lookbehind = options.lookbehind ?? hasLookbehind
     this.now = options.now ?? (() => new Date())
+    this.assistant = options.assistant ?? __ASSISTANT__
   }
 
   /** The plugin's words now: read at each notice, never kept. */
@@ -317,6 +322,9 @@ export class SheetView extends TextFileView {
         },
         panelMemory: this.memory.panel,
         language: this.memory.language,
+        // The Math assistant, on a computer only, and only in a build with its
+        // switch on (section 14, 0.7.0): unset, App shows no tab and no item.
+        assistant: assistantPorts(this.assistant, Platform.isMobile),
       }),
     )
   }

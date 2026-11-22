@@ -56,6 +56,8 @@ import { anchorPlaces, drawingBoxes, drawingsSvg } from './canvas/printScene.ts'
 import { printRowNodes, printViews } from './overlay/printRows.ts'
 import type { PageSetting } from './print/pages.ts'
 import { printSheet, type SheetToPrint } from './print/printSheet.ts'
+import { AssistantTab } from './assistant/AssistantTab.tsx'
+import type { AssistantPorts } from './assistant/ports.ts'
 
 /**
  * What Obsidian's commands do in a sheet tab (docs/spec-v1.md section 8,
@@ -138,6 +140,13 @@ export interface AppProps {
    * long as the page.
    */
   language?: LanguageMemory
+  /**
+   * The Math assistant's two ports (section 14, 0.7.0): how a request is made
+   * and where the setup is kept. Each home passes them only where the
+   * assistant is on; unset, there is no Math assistant tab and no More tools
+   * item. Never imported here, so `src/` names no request API but in `main.tsx`.
+   */
+  assistant?: AssistantPorts
   /** Set inside an Obsidian view: the sheet is the vault's file. */
   vault?: VaultHome
   /**
@@ -220,6 +229,7 @@ function Sheet({
   recovery,
   panelMemory,
   language,
+  assistant,
   vault,
   initialElements,
   box,
@@ -360,7 +370,8 @@ function Sheet({
   // was (section 8, M4d): closed if it was, else on its tab. From M4e it opens
   // the panel only where it docks (or on a phone, whose bottom sheet it stays):
   // on an editor too narrow to dock, an edit switches an open panel to Format
-  // and opens nothing. A tab picked
+  // and opens nothing. From 0.7.0 an edit keeps the chat: opened while the
+  // panel shows Math assistant, it leaves the panel as it is. A tab picked
   // during the edit stays while it lasts; closed during the edit, the panel
   // stays closed. What the app opens or restores itself is never remembered as
   // the user's choice: `automatic` is the state it asked for, until the panel
@@ -417,6 +428,8 @@ function Sheet({
       if (target && !beforeEdit.current) {
         const before = canvas.sheetPanel()
         beforeEdit.current = before
+        // An edit keeps the chat (section 8, Sheet panel, 0.7.0).
+        if (before.open && before.tab === 'assistant') return
         showAutomatically({ open: before.open || phone || canvas.panelDocks(), tab: 'format' })
       } else if (!target && beforeEdit.current) {
         const before = beforeEdit.current
@@ -678,6 +691,8 @@ function Sheet({
             problemsTab: tab(<ProblemsTab sheet={sheet ?? []} onJump={jump} />),
             settings: file && tab(<SettingsTab settings={settings} onChange={file.sheet.setSettings} />),
             constants: tab(<ConstantsTab settings={settings} canInsert={canInsert} onInsert={insert} />),
+            // Only where the home passed the ports (section 14, 0.7.0).
+            assistant: assistant && tab(<AssistantTab ports={assistant} />),
             // Per device, never in the file (section 8, M4e).
             width: memory,
             // Remembered per home; a floating panel closes by itself, so
