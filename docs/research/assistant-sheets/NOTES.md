@@ -2,8 +2,8 @@
 
 Throwaway prototype for the wayfinder ticket
 [Given the Math guide, does the chosen model write sheets the engine runs?](https://github.com/matheus-sancha/excalimathpad/issues/247).
-Run on 2026-11-22 at commit `9093609`. **Not finished:** only Google's models were run, and
-Matheus hasn't read the sheets yet.
+Run on 2026-11-22 at commit `9093609`: Google's models from a cloud session, Anthropic's on
+Matheus's PC (Windows, Node 24.16). OpenAI's default was not run: no key.
 
 ## What was run
 
@@ -28,6 +28,12 @@ Lines the engine refused, in the first answer and after one repair turn.
 
 | Model | Guide | Scenario | First answer | After repair | Cost | Time |
 |---|---|---|---|---|---|---|
+| `claude-sonnet-5-5` (default) | whole | pump, 2 trials | 40 and 43 lines, 0 errors | not needed | $0.10 to $0.12 | 47 to 56 s |
+| | whole | beam, 2 trials | 16 lines, 0 errors, both | not needed | $0.05 | 13 to 15 s |
+| | whole | position, 2 trials | 8 lines, 0 errors, both | not needed | $0.045 | 6 to 7 s |
+| | whole | hydro, 2 trials | 28 lines, 0 errors; 29 lines, 1 warning | not needed; 0 | $0.08; $0.14 | 29; 40 s |
+| `claude-haiku-5-5` | whole | pump, 1 trial | 38 lines, 0 errors | not needed | $0.006 | 39 s |
+| | whole | beam, position, hydro, 2 trials each | 8 to 33 lines, 0 errors, all six | not needed | $0.003 to $0.005 | 6 to 26 s |
 | `gemini-4-hydrogen` (default) | whole | pump | 42 lines, 0 errors | not needed | $0.112 | 253 s |
 | | whole | beam | 16 lines, 0 errors | not needed | $0.052 | 288 s |
 | | whole | position | 8 lines, 0 errors | not needed | $0.034 | 213 s |
@@ -41,6 +47,14 @@ Lines the engine refused, in the first answer and after one repair turn.
 | | none | position, 2 trials | 7 of 7; 1 | 0; 1 | $0.002 | 10 s |
 | | none | hydro, 2 trials | 13; 5 | 11; 3 | $0.004 | 17 s |
 
+- **Anthropic's two models wrote 15 sheets with no line refused.** The one warning in them
+  was a variable named `diff`, which shadows a built-in; the repair turn renamed it and
+  changed nothing else.
+- **An answer can arrive empty.** Haiku's first two pump runs ended at the prototype's cap of
+  8,000 output tokens with no text: thinking counts against `max_tokens`, which Anthropic's
+  Messages API requires. At 32,000 the same scenario gave 38 clean lines for 9,001 tokens.
+  (A second trial at 32,000 failed on Matheus's PC; its message wasn't kept.) The app's
+  adapter has to set this number, and say so when an answer is cut there.
 - **With the guide, every sheet ran after at most one repair turn** (the floor model: 9 runs,
   6 with errors in the first answer, 6 of 6 clean after the repair). The default model needed
   none in three runs.
@@ -50,8 +64,9 @@ Lines the engine refused, in the first answer and after one repair turn.
 - **The default model's fourth scenario with the guide (hydro) was not run:** the key is on
   Google's free tier, which allows 20 requests a day for that model and answered "ok" in 98 s.
   Its times above are the free tier's, not a paid key's.
-- **Cost:** the default model thinks before it writes, and thinking is billed as output: a
-  drafted sheet cost $0.03 to $0.11, against the $0.02 to $0.03 an answer was estimated at.
+- **Cost:** both default models think before they write, and thinking is billed as output: a
+  drafted sheet cost $0.03 to $0.11 on Gemini and $0.045 to $0.14 on Sonnet, against the
+  $0.02 to $0.05 an answer was estimated at. Haiku's cost a tenth of Sonnet's or less.
 
 ## What the models got wrong
 
@@ -67,9 +82,9 @@ Lines the engine refused (all in the floor model, unless said):
 - **A stray line** (`[E1:9] =`), a reference label copied from the instructions.
 - **Units that don't match in a function body,** where a list of flows met a design flow.
 - **Names like units** (`L`, `A`, `g`, `E`): warnings, in 4 of 9 floor-model runs with the
-  guide; none in the default model's. The repair turn renamed them.
+  guide; none in either default model's or in Haiku's. The repair turn renamed them.
 
-Forms used with no error in the default model's sheets: display units, notes, comment
+Forms used with no error in the two default models' sheets: display units, notes, comment
 lines, rules (`@text-green if …`), `if()`, a solve function with `guess`, a solved value
 with `for`, ranges, a table, a plot with `mark` and with `circle`.
 
@@ -93,7 +108,7 @@ The engine's check says nothing about these; they are what Matheus reads the run
 
 ## Not done
 
-- Anthropic's Sonnet 5.5 (the first default) and Haiku 5.5: this session's environment
-  can't hold a key for Anthropic's host. OpenAI: no key.
+- OpenAI's default (`gpt-6.2-sol`): no key. OpenRouter's serves the same Sonnet 5.5.
+- No run without the guide on Anthropic's models.
 - The default Gemini model on the hydro scenario with the guide, and second trials.
 - Matheus's reading of the sheets for engineering sense.
