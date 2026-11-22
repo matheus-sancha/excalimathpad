@@ -118,11 +118,19 @@ export interface SessionPorts {
   resume?: KeptSheet | null
 }
 
+/**
+ * The four file messages (section 13, App), each worded in the language shown
+ * when it is read. A `reason` passes through as it arrives.
+ */
 export const MESSAGES = {
-  newer: 'This sheet was saved by a newer Excalimathpad. Update the app.',
-  notASheet: "This file isn't a sheet, so it wasn't opened.",
-  saveFailed: (name: string, reason: string) => `Couldn't save ${name}: ${reason}`,
-  openFailed: (reason: string) => `Couldn't open the file: ${reason}`,
+  get newer() {
+    return words().dialogs.newer
+  },
+  get notASheet() {
+    return words().dialogs.notASheet
+  },
+  saveFailed: (name: string, reason: string) => words().dialogs.saveFailed(name, reason),
+  openFailed: (reason: string) => words().dialogs.openFailed(reason),
 }
 
 export function createSheetSession({
@@ -458,7 +466,7 @@ export function createLineRelay<C extends LineControl & { isOpen(): boolean } = 
 
 /** What Save as offers: the sheet's name, `pump.excalidraw` as `pump.excalimathpad`. */
 export function suggestedName(name: string | null): string {
-  if (!name) return `Untitled${SHEET_EXTENSION}`
+  if (!name) return `${words().file.untitled}${SHEET_EXTENSION}`
   if (isSheetName(name)) return name
   return `${name.replace(/\.[^.]*$/, '')}${SHEET_EXTENSION}`
 }

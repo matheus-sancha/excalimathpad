@@ -1,18 +1,14 @@
 import { useContext, useState } from 'react'
 import { FailureContext } from './context.ts'
-import {
-  failureDetails,
-  FAILURE_MESSAGES,
-  REPORT_URL,
-  type FailedThing,
-  type Failure,
-} from './details.ts'
+import { failureDetails, REPORT_URL, type FailedThing, type Failure } from './details.ts'
+import { shownLanguage, useWords } from '../text/words.ts'
 
 /**
  * A button that copies `text()` and says so. Where the clipboard refuses (no
  * permission, an old WebView), the text shows in a box to copy by hand.
  */
 export function CopyButton({ label, text }: { label: string; text: () => string }) {
+  const words = useWords()
   const [state, setState] = useState<'idle' | 'copied' | { shown: string }>('idle')
   return (
     <>
@@ -31,7 +27,7 @@ export function CopyButton({ label, text }: { label: string; text: () => string 
           clipboard.writeText(copied).then(() => setState('copied'), refused)
         }}
       >
-        {state === 'copied' ? FAILURE_MESSAGES.copied : label}
+        {state === 'copied' ? words.failure.copied : label}
       </button>
       {typeof state === 'object' && (
         <textarea className="failure-actions__text" readOnly aria-label={label} value={state.shown} rows={6} />
@@ -47,15 +43,26 @@ export function CopyButton({ label, text }: { label: string; text: () => string 
  */
 export function FailureActions({ what, failure }: { what: FailedThing; failure: Failure }) {
   const report = useContext(FailureContext)
+  const words = useWords()
   return (
     <span className="failure-actions">
       <CopyButton
-        label={FAILURE_MESSAGES.copyDetails}
-        text={() => failureDetails(what, failure, report.home, report.words())}
+        label={words.failure.copyDetails}
+        // English in both languages, naming the language shown (section 4, Copy details).
+        text={() => failureDetails(what, failure, report.home, report.words(), shownLanguage())}
       />
       <a className="failure-actions__report" href={REPORT_URL} target="_blank" rel="noreferrer" tabIndex={-1}>
-        {FAILURE_MESSAGES.report}
+        {words.failure.report}
       </a>
     </span>
   )
+}
+
+/**
+ * The notice in place of a failed element, chart or tab, in the language
+ * shown. A boundary's fallback is called by its render, so it reads its words
+ * through this component.
+ */
+export function FailedNotice({ thing }: { thing: 'element' | 'chart' | 'tab' }) {
+  return useWords().failure[thing]
 }

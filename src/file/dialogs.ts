@@ -1,5 +1,6 @@
 import type { SessionDialogs } from './sheetSession.ts'
 import { SHEET_EXTENSION } from './sheetFormat.ts'
+import type { Words } from '../text/words.ts'
 
 /**
  * The questions the sheet session asks, held as plain state for the UI to show
@@ -8,7 +9,8 @@ import { SHEET_EXTENSION } from './sheetFormat.ts'
  */
 export interface PendingDialog {
   kind: 'restore' | 'save-changes'
-  title: string
+  /** The file the question names; null for an untitled sheet. Worded when drawn (`dialogTitle`). */
+  name: string | null
   /** The first is the default button. */
   choices: readonly Choice[]
   answer: (choice: Choice) => void
@@ -23,12 +25,14 @@ export interface DialogHost extends SessionDialogs {
   subscribe: (listener: () => void) => () => void
 }
 
-/** Section 13's wording. */
-export const restoreTitle = (name: string | null) =>
-  name ? `Restore unsaved changes to ${name}?` : 'Restore unsaved changes to an untitled sheet?'
-
-export const saveChangesTitle = (name: string | null) =>
-  `Save changes to ${name ?? `Untitled${SHEET_EXTENSION}`}?`
+/**
+ * The question, in section 13's wording, in the language of `words`: it is
+ * worded as it is drawn, so a choice in ☰ → Language reaches an open one.
+ */
+export function dialogTitle({ kind, name }: Pick<PendingDialog, 'kind' | 'name'>, words: Words): string {
+  if (kind === 'restore') return words.dialogs.restore(name)
+  return words.dialogs.saveChanges(name ?? `${words.file.untitled}${SHEET_EXTENSION}`)
+}
 
 export function createDialogHost(message: (text: string) => void): DialogHost {
   let pending: PendingDialog | null = null
@@ -40,14 +44,14 @@ export function createDialogHost(message: (text: string) => void): DialogHost {
 
   function ask<C extends Choice>(
     kind: PendingDialog['kind'],
-    title: string,
+    name: string | null,
     choices: readonly C[],
     escape: C | null,
   ): Promise<C> {
     return new Promise((resolve) =>
       show({
         kind,
-        title,
+        name,
         choices,
         escape,
         answer: (choice) => {
@@ -65,9 +69,9 @@ export function createDialogHost(message: (text: string) => void): DialogHost {
       return () => listeners.delete(listener)
     },
     // No Esc on the restore offer: discarding the copy by accident loses work.
-    askRestore: (name) => ask('restore', restoreTitle(name), ['restore', 'discard'], null),
+    askRestore: (name) => ask('restore', name, ['restore', 'discard'], null),
     askSaveChanges: (name) =>
-      ask('save-changes', saveChangesTitle(name), ['save', 'dont-save', 'cancel'], 'cancel'),
+      ask('save-changes', name, ['save', 'dont-save', 'cancel'], 'cancel'),
     message,
   }
 }

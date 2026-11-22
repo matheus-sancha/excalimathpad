@@ -1,5 +1,6 @@
 import { splitLines, type SheetBlock } from '../math/evaluate.ts'
 import { lineFormats } from '../math/lineForm.ts'
+import { words } from '../text/words.ts'
 import {
   assignedName,
   markParts,
@@ -101,19 +102,6 @@ function lineOf(block: SheetBlock, offer: RenameOffer): number | null {
   return assigning.length === 1 ? assigning[0] : null
 }
 
-/** Section 13, Rename and Language: the offer's words. */
-export const OFFER_WORDS = {
-  /** The card's question, as plain text (its name): the names show as code in the card. */
-  ask: (from: string, to: string, count: number) => `Rename ${from} to ${to} in ${count === 1 ? '1 line' : `${count} lines`}?`,
-  /** The count, after the names: it opens the list of lines. */
-  count: (count: number) => (count === 1 ? 'in 1 line' : `in ${count} lines`),
-  rename: 'Rename',
-  keep: (from: string) => `Keep ${from}`,
-  /** On a phone, with more than one offer waiting. */
-  of: (index: number, total: number) => `${index} of ${total}`,
-  results: (count: number) => (count === 1 ? 'This changes 1 result:' : `This changes ${count} results:`),
-} as const
-
 /** A line the card's list shows: "Fluid and pipe, line 2" and its source, the old name marked. */
 export interface OfferLine extends RenameLineRef {
   key: string
@@ -124,7 +112,7 @@ export interface OfferLine extends RenameLineRef {
 
 /**
  * Lines as the card lists them, as the form lists them: each element named by
- * its title, else "Element 3" by its place in reading order, as the Sheet
+ * its title, else "Element 3" ("Bloco 3") by its place in reading order, as the Sheet
  * panel names it (`elementLabel`).
  */
 export function offerLines(
@@ -145,7 +133,7 @@ export function offerLines(
         id: ref.id,
         line: ref.line,
         key: `${ref.id}:${ref.line}`,
-        where: `${title ? title : `Element ${index + 1}`}, line ${ref.line + 1}`,
+        where: words().offer.where(title ? title : null, index + 1, ref.line + 1),
         text: markParts(sources[ref.line] ?? '', ref.uses ?? []),
         stored: storedUses.length > 0 ? markParts(stored, storedUses) : [],
       },

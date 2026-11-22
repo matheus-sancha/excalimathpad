@@ -1,5 +1,6 @@
 import { CopyButton, FailureActions } from './FailureActions.tsx'
-import { FAILURE_MESSAGES, type Failure } from './details.ts'
+import type { Failure } from './details.ts'
+import { useWords } from '../text/words.ts'
 import './Failure.css'
 
 /**
@@ -17,22 +18,23 @@ export function FailureScreen({
   typing: string | null
   onReload: () => void
 }) {
+  const { failure: words } = useWords()
   return (
     <div className="failure-screen" role="alert">
-      <p className="failure-screen__what">{FAILURE_MESSAGES.view}</p>
+      <p className="failure-screen__what">{words.view}</p>
       <p>
-        {FAILURE_MESSAGES.kept}
-        {typing !== null && ` ${FAILURE_MESSAGES.typing}`}
+        {words.kept}
+        {typing !== null && ` ${words.typing}`}
       </p>
       {typing !== null && (
         <p className="failure-screen__typing">
           <code>{typing}</code>
-          <CopyButton label={FAILURE_MESSAGES.copy} text={() => typing} />
+          <CopyButton label={words.copy} text={() => typing} />
         </p>
       )}
       <p className="failure-screen__actions">
         <button type="button" className="failure-actions__button" onClick={onReload}>
-          {FAILURE_MESSAGES.reload}
+          {words.reload}
         </button>
         <FailureActions what="view" failure={failure} />
       </p>

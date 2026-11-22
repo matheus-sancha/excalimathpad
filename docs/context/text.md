@@ -65,7 +65,15 @@ welcome hint, with its touch wording after a touch press; the canvas hint
 `displayName`), the save picker's file type (`fileAccess.ts`) and the browser's own Print
 line (`--math-print-line` on `<html>`, read by `src/index.css`); in `vault` (issue 6),
 the plugin's commands, ribbon, folder item, notices, image picker and file names
-(`plugin/`); and, in `engine` (issue 2, #291), every engine message: the result cell and the
-gutter's tip, a table's and a chart's failed points, the Problems tab, a rule's state and the
-rename form's reason. The image-too-big toast is
+(`plugin/`). Issue 5 (#294) adds the
+groups `dialogs` (the file's two questions, their buttons, the four messages and the reasons
+the app words itself, `FileChrome.tsx`, `sheetSession.ts`, `fileAccess.ts`, `recovery.ts`; the
+suggested name `Sem título.excalimathpad`), `printView` (the footer's `2 de 3` and Print…'s
+notice, `printView.ts`, `printSheet.ts`), `failure` (`src/failure/`), `offer` (the offer's
+card, its lines and row, and the toast after a rename, `OfferCard.tsx`, `renameOffer.ts`,
+App), `unitSlot` (`UnitField.tsx`) and `plotSettings` (`PlotSettings.tsx`). A word with
+parts that aren't text, as the offer's question with its code and button, is a function that
+hands back the words and the parts in the language's order (`offer.question`). Issue 2 (#291)
+adds `engine`, every engine message: the result cell and the gutter's tip, a table's and a
+chart's failed points, the Problems tab, a rule's state and the rename form's reason. The image-too-big toast is
 Excalidraw's own `errors.fileTooBig`, from its `t`, not a word of these tables.

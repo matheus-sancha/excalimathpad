@@ -31,8 +31,8 @@ import { DEFAULT_SETTINGS, readSheet, type SheetSettings } from './file/sheetFor
 import { errorCount, type PanelTarget } from './panel/sheetPanel.ts'
 import type { RenameRequest } from './panel/RenameForm.tsx'
 import { OfferCard } from './overlay/OfferCard.tsx'
-import { RENAME_WORDS } from './panel/renameForm.ts'
 import { applyRename } from './math/rename.ts'
+import { words } from './text/words.ts'
 import { createDialogHost } from './file/dialogs.ts'
 import type { FileAccess } from './file/fileAccess.ts'
 import { FileChrome } from './file/FileChrome.tsx'
@@ -47,7 +47,8 @@ import { confineKeys } from './canvas/vaultKeys.ts'
 import { bridgeWindow } from './canvas/popoutBridge.ts'
 import { isInSheetPanel, keepPanelPresses } from './canvas/panelPresses.ts'
 import { Boundary } from './failure/Boundary.tsx'
-import { FAILURE_MESSAGES, sheetWords } from './failure/details.ts'
+import { sheetWords } from './failure/details.ts'
+import { FailedNotice } from './failure/FailureActions.tsx'
 import { FailureContext, type FailureReport } from './failure/context.ts'
 import { createFailureBox, type FailureBox } from './failure/failureBox.ts'
 import { FailureScreen } from './failure/FailureScreen.tsx'
@@ -520,7 +521,8 @@ function Sheet({
       canvas.focusCanvas()
       if (written.length === 0) return
       canvas.api.setToast({
-        message: RENAME_WORDS.renamed(target.name, newName, plan.lines.length, touch),
+        // Worded as it shows, in the language shown (section 13, Rename and Language).
+        message: words().offer.renamed(target.name, newName, plan.lines.length, touch),
         closable: true,
         duration: 6000,
       })
@@ -578,7 +580,7 @@ function Sheet({
       resetKeys={[sheet, editTarget, selectedMath, settings]}
       fallback={(failure) => (
         <p className="sheet-panel__failed" role="alert" title={failure.text}>
-          {FAILURE_MESSAGES.tab}
+          <FailedNotice thing="tab" />
         </p>
       )}
     >
@@ -787,7 +789,8 @@ async function printOnTheWeb(
   await printSheet({
     doc,
     sheet: () => sheetToPrint(canvas, page),
-    name: name ?? 'Untitled',
+    // The footer's name, "Untitled" in the language shown (section 11, Furniture).
+    name: name ?? words().file.untitled,
     title: {
       get: () => doc.title,
       set: (title) => {

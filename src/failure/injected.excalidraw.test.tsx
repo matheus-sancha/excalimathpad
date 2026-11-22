@@ -9,7 +9,9 @@ import { fakeFileAccess, fakeRecovery } from '../test/files.ts'
 import { doubleClickLine } from '../test/gestures.ts'
 import { undoControls } from '../test/excalidraw.ts'
 import { linesOf, resultsOf } from '../test/sheetView.ts'
-import { FAILURE_MESSAGES, REPORT_URL } from './details.ts'
+import { NO_CONTENT, REPORT_URL } from './details.ts'
+import { en } from '../text/en.ts'
+import { ptBR } from '../text/ptBR.ts'
 
 /** The unexpected line's words, in English. */
 const UNEXPECTED_LINE = english(UNEXPECTED_CODE)
@@ -123,12 +125,14 @@ afterEach(() => {
   errors.mockRestore()
 })
 
-async function renderApp(elements: ReturnType<typeof sheet>) {
+/** The app on `elements`; with `portuguese`, in the language a device remembered (section 8, Language). */
+async function renderApp(elements: ReturnType<typeof sheet>, { portuguese = false } = {}) {
   const files = fakeFileAccess()
   const recovery = fakeRecovery()
-  render(<App files={files} recovery={recovery} initialElements={elements} />)
+  const language = portuguese ? { rememberedLanguage: () => 'pt-BR' as const, rememberLanguage: () => {} } : undefined
+  render(<App files={files} recovery={recovery} initialElements={elements} language={language} />)
   await screen.findByTestId('file-name')
-  await waitFor(() => expect(document.title).toBe('Untitled'))
+  await waitFor(() => expect(document.title).toBe(portuguese ? 'Sem título' : 'Untitled'))
   await screen.findAllByRole('list', { name: 'Lines' })
   return { files, recovery }
 }
@@ -147,7 +151,7 @@ function typeLine(id: string, n: number, text: string) {
 
 /** Presses Copy details inside `scope` and returns what reached the clipboard. */
 async function copyDetails(scope: HTMLElement) {
-  fireEvent.click(within(scope).getByRole('button', { name: FAILURE_MESSAGES.copyDetails }))
+  fireEvent.click(within(scope).getByRole('button', { name: en.failure.copyDetails }))
   await waitFor(() => expect(copied).toHaveLength(1))
   return copied[0]
 }
@@ -157,14 +161,15 @@ function expectDetails(details: string, what: string, error: string) {
   const lines = details.split('\n')
   expect(lines[0]).toBe(`Excalimathpad ${__APP_VERSION__} (${__BUILD_STAMP__})`)
   expect(lines[1]).toBe('web')
-  expect(lines[2]).toBe(`What failed: ${what}`)
-  expect(lines[3]).toBe(error)
+  expect(lines[2]).toBe('Language: English')
+  expect(lines[3]).toBe(`What failed: ${what}`)
+  expect(lines[4]).toBe(error)
   // Its stack.
-  expect(lines.length).toBeGreaterThan(5)
-  expect(lines.at(-1)).toBe(FAILURE_MESSAGES.noContent)
+  expect(lines.length).toBeGreaterThan(6)
+  expect(lines.at(-1)).toBe(NO_CONTENT)
 }
 
-const reportLink = (scope: HTMLElement) => within(scope).getByRole('link', { name: FAILURE_MESSAGES.report })
+const reportLink = (scope: HTMLElement) => within(scope).getByRole('link', { name: en.failure.report })
 
 describe('a line that fails unexpectedly', () => {
   it('is that line’s error, shown as its source, and the lines below and the other elements go on', async () => {
@@ -216,7 +221,7 @@ describe('a math element that fails unexpectedly', () => {
     const failed = element('result')
     expect(failed).toHaveClass('is-failed')
     const notice = within(failed).getByRole('alert')
-    expect(notice).toHaveTextContent(`●${FAILURE_MESSAGES.element}`)
+    expect(notice).toHaveTextContent(`●${en.failure.element}`)
     expect(notice).toHaveAttribute('data-tip', 'RangeError: injected: an element')
     expect(linesOf(failed)).toEqual(['q = 2', 'q * elementboom'])
     expect(reportLink(failed)).toHaveAttribute('href', REPORT_URL)
@@ -290,7 +295,7 @@ describe('a chart that fails to draw', () => {
       expect(failed).not.toBeNull()
       return failed!
     })
-    expect(box).toHaveTextContent(FAILURE_MESSAGES.chart)
+    expect(box).toHaveTextContent(en.failure.chart)
     expect(box).toHaveAttribute('data-tip', 'Error: injected: a chart')
     // Its box keeps the chart's size.
     expect(box.style.width).not.toBe('')
@@ -328,7 +333,7 @@ describe('a panel tab that fails unexpectedly', () => {
     await renderApp(sheet('pipe_len = 2 m\npipe_len * 3', 'q = 2'))
 
     await showTab('Symbols')
-    const notice = await screen.findByText(FAILURE_MESSAGES.tab)
+    const notice = await screen.findByText(en.failure.tab)
     expect(panel()).toContainElement(notice)
     expect(notice).toHaveAttribute('title', 'Error: injected: a tab')
 
@@ -336,7 +341,7 @@ describe('a panel tab that fails unexpectedly', () => {
     expect(resultsOf(element('inputs'))).toBe('6 m')
     await showTab('Variables')
     expect(await screen.findByRole('button', { name: 'pipe_len: 2 m' })).toBeInTheDocument()
-    expect(screen.queryByText(FAILURE_MESSAGES.tab)).toBeNull()
+    expect(screen.queryByText(en.failure.tab)).toBeNull()
   })
 })
 
@@ -358,16 +363,16 @@ describe('the view failing as a whole', () => {
     await failWhileTyping()
 
     const screenBox = screen.getByRole('alert')
-    expect(screenBox).toHaveTextContent(FAILURE_MESSAGES.view)
-    expect(screenBox).toHaveTextContent(`${FAILURE_MESSAGES.kept} ${FAILURE_MESSAGES.typing}`)
+    expect(screenBox).toHaveTextContent(en.failure.view)
+    expect(screenBox).toHaveTextContent(`${en.failure.kept} ${en.failure.typing}`)
     // The key that failed is in it.
     expect(screenBox.querySelector('code')).toHaveTextContent('U = I * R * secret_flow')
-    expect(within(screenBox).getByRole('button', { name: FAILURE_MESSAGES.reload })).toBeInTheDocument()
+    expect(within(screenBox).getByRole('button', { name: en.failure.reload })).toBeInTheDocument()
     expect(reportLink(screenBox)).toHaveAttribute('href', REPORT_URL)
     expect(document.querySelector('.excalidraw')).toBeNull()
 
     // Copy, beside the line, copies the line.
-    fireEvent.click(within(screenBox).getByRole('button', { name: FAILURE_MESSAGES.copy }))
+    fireEvent.click(within(screenBox).getByRole('button', { name: en.failure.copy }))
     await waitFor(() => expect(copied).toEqual(['U = I * R * secret_flow']))
   })
 
@@ -378,9 +383,9 @@ describe('the view failing as a whole', () => {
     fireEvent.keyDown(field, { key: 'Escape' })
 
     const screenBox = screen.getByRole('alert')
-    expect(screenBox).toHaveTextContent(FAILURE_MESSAGES.kept)
-    expect(screenBox).not.toHaveTextContent(FAILURE_MESSAGES.typing)
-    expect(within(screenBox).queryByRole('button', { name: FAILURE_MESSAGES.copy })).toBeNull()
+    expect(screenBox).toHaveTextContent(en.failure.kept)
+    expect(screenBox).not.toHaveTextContent(en.failure.typing)
+    expect(within(screenBox).queryByRole('button', { name: en.failure.copy })).toBeNull()
   })
 
   it('writes no file, and keeps the sheet up to the last finished line as the recovery copy', async () => {
@@ -420,7 +425,7 @@ describe('the view failing as a whole', () => {
     const { files } = await failWhileTyping()
     bomb.view = false
 
-    fireEvent.click(screen.getByRole('button', { name: FAILURE_MESSAGES.reload }))
+    fireEvent.click(screen.getByRole('button', { name: en.failure.reload }))
 
     await waitFor(() => expect(screen.getAllByRole('list', { name: 'Lines' })).toHaveLength(2))
     expect(screen.queryByRole('alert')).toBeNull()
@@ -443,12 +448,52 @@ describe('the view failing as a whole', () => {
     await failWhileTyping()
 
     // Still failing: the reload fails before the sheet has loaded.
-    fireEvent.click(screen.getByRole('button', { name: FAILURE_MESSAGES.reload }))
-    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent(FAILURE_MESSAGES.view))
+    fireEvent.click(screen.getByRole('button', { name: en.failure.reload }))
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent(en.failure.view))
 
     bomb.view = false
-    fireEvent.click(screen.getByRole('button', { name: FAILURE_MESSAGES.reload }))
+    fireEvent.click(screen.getByRole('button', { name: en.failure.reload }))
     await waitFor(() => expect(screen.getAllByRole('list', { name: 'Lines' })).toHaveLength(2))
     await waitFor(() => expect(linesOf(element('inputs'))).toEqual(['R = 10 kohm', 'I = 4 mA']))
+  })
+})
+
+describe('in Português (section 8, Language, 0.6.0)', () => {
+  it('words the failed element and chart in Português, and Copy details stays English, naming the language', async () => {
+    await renderApp(sheet('w = 0 .. 4\nplot(w, w^2), title "chartboom"', 'q = 2\nq * elementboom'), { portuguese: true })
+
+    const failed = element('result')
+    expect(within(failed).getByRole('alert')).toHaveTextContent(`●${ptBR.failure.element}`)
+    expect(within(failed).getByRole('link', { name: ptBR.failure.report })).toHaveAttribute('href', REPORT_URL)
+    const box = await waitFor(() => {
+      const chart = element('inputs').querySelector<HTMLElement>('.math-element__plot.is-failed')
+      expect(chart).not.toBeNull()
+      return chart!
+    })
+    expect(box).toHaveTextContent(ptBR.failure.chart)
+
+    fireEvent.click(within(failed).getByRole('button', { name: ptBR.failure.copyDetails }))
+    await waitFor(() => expect(copied).toHaveLength(1))
+    const lines = copied[0].split('\n')
+    expect(lines.slice(1, 5)).toEqual(['web', 'Language: Português (Brasil)', 'What failed: an element', 'RangeError: injected: an element'])
+    expect(lines.at(-1)).toBe(NO_CONTENT)
+    expect(within(failed).getByRole('button', { name: ptBR.failure.copied })).toBeInTheDocument()
+  })
+
+  it('shows the failure screen in Português', async () => {
+    await renderApp(sheet('R = 10 kohm', 'U = 2 * R'), { portuguese: true })
+    const field = typeLine('result', 1, 'U = 3 * R')
+    bomb.view = true
+    act(() => {
+      fireEvent.input(field, { target: { value: 'U = 4 * R' } })
+    })
+
+    const screenBox = screen.getByRole('alert')
+    expect(screenBox).toHaveTextContent(ptBR.failure.view)
+    expect(screenBox).toHaveTextContent(`${ptBR.failure.kept} ${ptBR.failure.typing}`)
+    for (const name of [ptBR.failure.reload, ptBR.failure.copy, ptBR.failure.copyDetails]) {
+      expect(within(screenBox).getByRole('button', { name })).toBeInTheDocument()
+    }
+    expect(within(screenBox).getByRole('link', { name: ptBR.failure.report })).toBeInTheDocument()
   })
 })

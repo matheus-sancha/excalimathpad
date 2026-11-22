@@ -1,26 +1,21 @@
+import type { SheetLanguage } from '../text/words.ts'
+
 /**
  * What an unexpected failure says and what it offers to report
  * (docs/spec-v1.md section 4, Unexpected failures; the words are section
- * 13's). Pure: no React, no DOM.
+ * 13's). Pure: no React, no DOM. The words that show are in the text tables'
+ * `failure` group; what Copy details copies stays English.
  */
 
 /** The thing that failed: the failure stays as small as it. */
 export type FailedThing = 'line' | 'element' | 'chart' | 'tab' | 'view'
 
-export const FAILURE_MESSAGES = {
-  element: 'this element hit an unexpected error in Excalimathpad',
-  chart: 'this chart hit an unexpected error in Excalimathpad',
-  tab: 'this tab hit an unexpected error in Excalimathpad',
-  view: 'This sheet hit an unexpected error in Excalimathpad.',
-  kept: 'Your sheet is kept up to the last finished line.',
-  typing: 'You were typing:',
-  reload: 'Reload the sheet',
-  copyDetails: 'Copy details',
-  copy: 'Copy',
-  copied: 'Copied',
-  report: 'Report this error',
-  noContent: '(no sheet content is included)',
-} as const
+/**
+ * The last line of Copy details. The copied text stays English in both
+ * languages, since the maintainer reads it (section 8, Language); the words
+ * that show are the text tables' `failure` group.
+ */
+export const NO_CONTENT = '(no sheet content is included)'
 
 /** The repository's new-issue page, with nothing filled in: the app sends nothing by itself. */
 export const REPORT_URL = 'https://github.com/matheus-sancha/excalimathpad/issues/new'
@@ -46,6 +41,12 @@ export interface FailureHome {
   device: 'desktop' | 'phone' | 'tablet' | null
 }
 
+/** The language shown, as Copy details names it: in its own words, as ☰ → Language writes it (0.6.0). */
+const LANGUAGE: Record<SheetLanguage, string> = {
+  en: 'English',
+  'pt-BR': 'Português (Brasil)',
+}
+
 const WHAT: Record<FailedThing, string> = {
   line: 'a line',
   element: 'an element',
@@ -55,25 +56,28 @@ const WHAT: Record<FailedThing, string> = {
 }
 
 /**
- * The text Copy details puts on the clipboard: the version and build stamp,
- * the home, what failed, and the error with its stack. `words` is the sheet's
- * own text (`sheetWords`): none of it is in the result.
+ * The text Copy details puts on the clipboard, English in both languages: the
+ * version and build stamp, the home, the language shown, what failed, and the
+ * error with its stack. `words` is the sheet's own text (`sheetWords`): none
+ * of it is in the result.
  */
 export function failureDetails(
   what: FailedThing,
   failure: Failure,
   home: FailureHome,
   words: readonly string[],
+  language: SheetLanguage,
 ): string {
   const build = home.stamp && home.stamp !== home.version ? ` (${home.stamp})` : ''
   return [
     `Excalimathpad ${home.version}${build}`,
     home.device ? `${home.home}, ${home.device}` : home.home,
+    `Language: ${LANGUAGE[language]}`,
     `What failed: ${WHAT[what]}`,
     scrub(failure.text, words),
     // Frames are places in the app's code: they hold nothing of the sheet.
     ...frames(failure),
-    FAILURE_MESSAGES.noContent,
+    NO_CONTENT,
   ].join('\n')
 }
 

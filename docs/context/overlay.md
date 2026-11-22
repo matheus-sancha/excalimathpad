@@ -40,7 +40,10 @@ keyboard (`visualViewport`) or a phone's bottom sheet would cover it; after
 comment's, the comment words and never `if` (M4d);
 `UnitField` (the field and list, one of the overlay's
 controls that take pointer events) hands back a unit, and `MathOverlay`
-writes it with `writeDisplayUnit` as one line commit. The engine gives each
+writes it with `writeDisplayUnit` as one line commit. Its names and **Sheet units** are the
+text tables' `unitSlot` group, and `PlotSettings`' labels and choices their `plotSettings`
+group, read with `useWords()` ([text](text.md), 0.6.0); unit symbols and a plot's clause words
+stay as typed. The engine gives each
 line its `unitSlot` (kind, chosen unit, value in the system and in each
 unit of the kind).
 A **comment line's row** (spec section 4, Typeset grid, M4d) carries its
@@ -189,7 +192,8 @@ line's field mounted while such a field has the keyboard doesn't take it.
 **Unexpected failures** (spec section 4, #193): `MathOverlay` wraps each
 `MathElementView` in a `Boundary` (reset by its source, its lines, the open
 line's index and its title), whose fallback is `FailedElement.tsx`: the
-notice with Copy details and Report this error (they take pointer events),
+notice with Copy details and Report this error (they take pointer events; the notice is
+`FailedNotice`, in the language shown),
 the title and the lines as plain text, each row with its `data-line` box so
 the gestures still open it, and the open line as `PlainField`, a bare input
 with the line's moves. It imports nothing from `MathElementView`. `PlotChart`
@@ -229,10 +233,14 @@ row, then under the open field if it would cover it, then under an earlier
 card. `answerOffer` (also on the control, for a phone's row) drops the offer;
 for Rename it leaves the open line (`moveEdit` leave, its own step), plans
 again on the scene and hands `onRenameOffer` the plan. With `phone` no card is
-drawn and `onOffers` reports `OffersShown`. `OFFER_WORDS` is section 13's
-wording.
+drawn and `onOffers` reports `OffersShown`. The card's words are the text tables' `offer`
+group (section 13, Rename and Language; [text](text.md), 0.6.0): `question` hands back the
+words with the two names and the count button where the language puts them, and `offerLines`
+names each line's place (`Bloco 2, linha 1`) through `words()`. The toast after a rename, from
+the form or the offer, is `offer.renamed`, worded by App when it shows: Ctrl+Z, or
+Excalidraw's own Undo (Desfazer) after a touch press.
 `caretRow.ts` gives the follow rule its row (0.2.1, #191): the open
 field's box and, in a wrapped field, the row the caret is on; narrowed to
 the caret, measured on the field's hidden copy, when the row is wider than
 the room. Depends on: canvas (anchor, size, selection and layer contracts, API types),
-math, print (`PrintRow`), `katex` (lazily).
+math, print (`PrintRow`), failure, text, `katex` (lazily).

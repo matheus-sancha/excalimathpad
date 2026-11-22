@@ -12,7 +12,9 @@
 //   row and each plot's chart on paper, no math missing (KaTeX's fonts in the
 //   PDF), no text twice in the PDF's text, the footer on each page (the file's
 //   name, the date and `2 of 3`), the paper the Page setting's, A4 portrait and
-//   Letter landscape.
+//   Letter landscape. Under ☰ → Language → Português (0.6.0) the pump sheet's
+//   footer reads `2 de 3` and the same ISO date, and an untitled sheet's name
+//   is Sem título.
 // - The window's title is the plain name while the dialog is open and comes
 //   back with its `●` after; the scene (its recovery copy), the `●` and the undo history are as
 //   they were, and the print view is gone.
@@ -312,6 +314,13 @@ const fromMenu = (tab) => async () => {
   await tab.click('[data-testid="print-item"]')
 }
 const fromKeys = (tab) => () => tab.keyboard.press('Control+P')
+/** ☰ → Language → Português (section 8, Language), waiting for Excalidraw to show it, ☰ closed again. */
+async function choosePortuguese(tab) {
+  await tab.click('[data-testid="main-menu-trigger"]')
+  await tab.selectOption('[data-testid="language-select"]', 'pt-BR')
+  await tab.waitForFunction(() => document.querySelector('[data-testid="toolbar-rectangle"]')?.closest('label')?.title.startsWith('Retângulo'), null, { timeout: 10_000 }).catch(() => null)
+  await tab.keyboard.press('Escape')
+}
 const keep = async (name, pdf) => PDFS && writeFile(join(PDFS, `${name}.pdf`), pdf)
 const PAPER = { A4: [210, 297], Letter: [215.9, 279.4] }
 const paperOk = (read, size, orientation) => {
@@ -325,7 +334,7 @@ const today = () => {
 }
 
 /** The checks every printed sheet answers (section 11; #81's acceptance). */
-function checkSheet(where, name, rows, { read, pages, during }, { size = 'A4', orientation = 'portrait' } = {}) {
+function checkSheet(where, name, rows, { read, pages, during }, { size = 'A4', orientation = 'portrait', of = 'of' } = {}) {
   const all = norm(read.pages.map((p) => p.text).join(''))
   row(where, `${read.pages.length} pages, ${size} ${orientation}, as many as the print view drew`, read.pages.length === during.pages && read.pages.length === pages.length && paperOk(read, size, orientation), read.pages.map((p) => `${Math.round(p.width)}×${Math.round(p.height)} pt`).join(', '))
   const differ = read.pages.map((p, i) => lettersDiffer(p.text, pages[i]?.text ?? ''))
@@ -347,9 +356,9 @@ function checkSheet(where, name, rows, { read, pages, during }, { size = 'A4', o
   const footers = pages.map((p) => p.footer)
   row(
     where,
-    `the footer on each page: ${name}, ${today()}, "k of ${pages.length}"`,
-    footers.every((f, i) => f[0] === name && f[1] === today() && f[2] === `${i + 1} of ${pages.length}`) &&
-      read.pages.every((p, i) => norm(p.text).replace(/[−-]/g, '').includes(norm(`${name}${today().replaceAll('-', '')}${i + 1}of${pages.length}`).replace(/[−-]/g, ''))),
+    `the footer on each page: ${name}, ${today()}, "k ${of} ${pages.length}"`,
+    footers.every((f, i) => f[0] === name && f[1] === today() && f[2] === `${i + 1} ${of} ${pages.length}`) &&
+      read.pages.every((p, i) => norm(p.text).replace(/[−-]/g, '').includes(norm(`${name}${today().replaceAll('-', '')}${i + 1}${of}${pages.length}`).replace(/[−-]/g, ''))),
     footers.map((f) => f.join(' · ')).join(' / '),
   )
 }
@@ -520,6 +529,53 @@ try {
     const after = await state(tab)
     row(where, 'the title is the plain name while the dialog is open', printed.during.title === 'pump-sizing', printed.during.title)
     row(where, 'afterwards the pages and their styles are gone, and the sheet is as it was', !after.view && after.styles === before.styles && after.title === before.title && after.name === before.name && after.undo === before.undo && after.redo === before.redo, JSON.stringify(after))
+    await context.close()
+  }
+
+  // In Português (section 11, Furniture; section 8, Language, 0.6.0): the pump sheet's
+  // footer counts its pages with `de`, the date stays ISO, and an untitled sheet is Sem título.
+  {
+    const where = 'português'
+    const { context, tab } = await open(where, {
+      name: 'pump-sizing.excalimathpad',
+      text: sheetFile([heading('heading', 40, 40, 'Pump sizing'), math('calc', 40, 100, PUMP.join('\n'))]),
+    })
+    await choosePortuguese(tab)
+    const rows = await shown(tab)
+    const printed = await printWith(tab, fromMenu(tab))
+    await keep('pump-pt-BR', printed.pdf)
+    checkSheet(where, 'pump-sizing.excalimathpad', rows, printed, { of: 'de' })
+    row(where, 'the PDF reads "1 de N" and no "of"', norm(printed.read.pages[0].text).includes(`1de${printed.read.pages.length}`) && !printed.pages.some((p) => p.footer[2].includes('of')), printed.pages.map((p) => p.footer[2]).join(', '))
+    await context.close()
+  }
+  {
+    const where = 'sem título'
+    const { context, tab } = await open(where, {})
+    await choosePortuguese(tab)
+    // A math element placed by hand: the sheet stays untitled.
+    await tab.mouse.click(300, 750)
+    await tab.waitForTimeout(300)
+    await tab.keyboard.press('m')
+    await tab.waitForTimeout(300)
+    await tab.mouse.move(400, 300)
+    await tab.waitForTimeout(100)
+    await tab.mouse.click(400, 300)
+    await tab.waitForSelector('.math-element__field')
+    await tab.keyboard.type('a = 2 m\nb = a * 3')
+    await tab.keyboard.press('Escape')
+    await tab.waitForSelector('.math-element .katex', { timeout: 30_000 })
+    await tab.waitForTimeout(400)
+    const printed = await printWith(tab, fromMenu(tab))
+    const text = norm(printed.read.pages.map((p) => p.text).join(''))
+    const footer = printed.pages[0]?.footer ?? []
+    row(
+      where,
+      `an untitled sheet's footer: Sem título, ${today()}, "1 de 1", on paper`,
+      printed.read.pages.length === 1 && footer[0] === 'Sem título' && footer[1] === today() && footer[2] === '1 de 1' && text.replace(/[−-]/g, '').includes(norm(`Sem título${today().replaceAll('-', '')}1de1`).replace(/[−-]/g, '')),
+      `${printed.read.pages.length} pages, ${footer.join(' · ')}`,
+    )
+    row(where, 'the window title is the plain Sem título while the dialog is open', printed.during.title === 'Sem título', printed.during.title)
+    row(where, 'its math on paper', text.includes('2m') && text.includes('a⋅3') && text.includes('6m'), text.slice(0, 40))
     await context.close()
   }
 

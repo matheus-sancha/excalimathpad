@@ -1,4 +1,5 @@
 import type { SheetFileHandle } from './fileAccess.ts'
+import { words } from '../text/words.ts'
 
 /**
  * The recovery copy (docs/spec-v1.md section 7): the whole sheet as it would be
@@ -37,7 +38,7 @@ export function indexedDbRecovery(
       const request = factory.open(name, 1)
       request.onupgradeneeded = () => request.result.createObjectStore(STORE)
       request.onsuccess = () => resolve(request.result)
-      request.onerror = () => reject(request.error ?? new Error('IndexedDB would not open'))
+      request.onerror = () => reject(request.error ?? new Error(words().dialogs.reasons.storeWontOpen))
     })
     return opening
   }
@@ -48,8 +49,8 @@ export function indexedDbRecovery(
         const transaction = db.transaction(STORE, mode)
         const request = act(transaction.objectStore(STORE))
         transaction.oncomplete = () => resolve(request.result as T)
-        transaction.onerror = () => reject(transaction.error ?? new Error('IndexedDB transaction failed'))
-        transaction.onabort = () => reject(transaction.error ?? new Error('IndexedDB transaction aborted'))
+        transaction.onerror = () => reject(transaction.error ?? new Error(words().dialogs.reasons.storeFailed))
+        transaction.onabort = () => reject(transaction.error ?? new Error(words().dialogs.reasons.storeAborted))
       }, reject)
     })
 

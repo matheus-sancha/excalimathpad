@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { PlotView } from '../math/evaluate.ts'
 import { texToHtml } from './katex.ts'
 import { Boundary } from '../failure/Boundary.tsx'
-import { FAILURE_MESSAGES } from '../failure/details.ts'
+import { FailedNotice } from '../failure/FailureActions.tsx'
 import { colorOf, drawChart, loadPlot, tipFailures, type PlotModule } from './plotDrawing.ts'
 import { wordMessage } from '../text/engine.ts'
 import { useWords } from '../text/words.ts'
@@ -33,7 +33,7 @@ export function PlotChart({ plot }: { plot: PlotView }) {
           style={{ width: plot.width, height: plot.height }}
           data-tip={failure.text}
         >
-          {FAILURE_MESSAGES.chart}
+          <FailedNotice thing="chart" />
         </div>
       )}
     >
