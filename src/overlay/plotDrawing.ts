@@ -1,4 +1,5 @@
 import type { PlotAxis, PlotView } from '../math/evaluate.ts'
+import type { EngineMessage } from '../math/messages.ts'
 import { centredShift, layoutChart, placeLabel, scaleOf, textWidth } from './plotLayout.ts'
 
 /**
@@ -148,12 +149,19 @@ export function drawChart(Plot: PlotModule, plot: PlotView): SVGSVGElement | HTM
     y: { ...axis(plot.y, layout.y), grid: !equal },
     marks,
   })
-  // Each × carries its point's message, for the hover (section 10).
+  return chart
+}
+
+/**
+ * Each × carries its point's message, for the hover (section 10), worded by
+ * `word` in the language shown. Set apart from the drawing, so a language
+ * change re-words the tips without drawing the chart again.
+ */
+export function tipFailures(chart: ParentNode, plot: PlotView, word: (message: EngineMessage) => string): void {
   chart.querySelectorAll<SVGElement>('.plot-failed text').forEach((text, i) => {
     const failure = plot.failed[i]
     if (!failure) return
-    text.dataset.tip = failure.message
+    text.dataset.tip = word(failure.message)
     text.dataset.tipWhen = 'details'
   })
-  return chart
 }

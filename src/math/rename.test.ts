@@ -2,9 +2,13 @@ import { describe, expect, it } from 'vitest'
 import pumpDoc from '../../docs/acceptance/pump-sizing.md?raw'
 import truePositionDoc from '../../docs/acceptance/true-position.md?raw'
 import { examples, sections } from '../test/guideExamples.ts'
-import { evaluateSheet, type SheetBlock } from './evaluate.ts'
+import type { SheetBlock } from './evaluate.ts'
+import { evaluateSheet, planRename, type English } from '../test/english.ts'
 import { lineFormats, storeFormats } from './lineForm.ts'
-import { applyRename, assignedName, planOffer, planRename, type RenamePlan } from './rename.ts'
+import { applyRename, assignedName, planOffer, type RenamePlan as EnginePlan } from './rename.ts'
+
+/** A plan, its refusal and warning in English (section 14, 0.6.0: tests keep their English). */
+type RenamePlan = English<EnginePlan>
 import renameSource from './rename.ts?raw'
 
 /**

@@ -74,15 +74,15 @@ export function createIndex(math: MathJsInstance) {
   const index = (args: MathNode[], _math: unknown, scope: unknown): unknown => {
     const [object, at, labelNode] = args
     const label = isConstantNode(labelNode) ? String(labelNode.value) : 'x_r[2]'
-    if (!isSymbolNode(object)) throw new SheetError('an index goes on a name: x_r[2]')
+    if (!isSymbolNode(object)) throw new SheetError({ code: 'indexOnName' })
     const name = object.name
     const value = run(object, scope)
     const i = run(at, scope)
     if (typeof i !== 'number' || !Number.isInteger(i) || i < 1) {
-      throw new SheetError(`${label}: an index is a whole number from 1`)
+      throw new SheetError({ code: 'indexWhole', label })
     }
     if (isSheetList(value)) {
-      if (i > value.length) throw new SheetError(`${name} has ${count(value.length)}`)
+      if (i > value.length) throw new SheetError({ code: 'indexPastEnd', name, length: value.length })
       const point = value.points[i - 1]
       if (!point.ok) throw new SheetError(point.message)
       return point.value
@@ -90,16 +90,12 @@ export function createIndex(math: MathJsInstance) {
     if (math.isMatrix(value) || Array.isArray(value)) {
       const size = math.size(value as never) as unknown as number[] | { valueOf(): number[] }
       const length = (Array.isArray(size) ? size : size.valueOf())[0]
-      if (i > length) throw new SheetError(`${name} has ${count(length)}`)
+      if (i > length) throw new SheetError({ code: 'indexPastEnd', name, length })
       return math.subset(value as never, math.index(i - 1))
     }
     // A single value is a list of one: `x[1]` is the value itself.
-    if (i > 1) throw new SheetError(`${name} has ${count(1)}`)
+    if (i > 1) throw new SheetError({ code: 'indexPastEnd', name, length: 1 })
     return value
   }
   return Object.assign(index, { rawArgs: true as const })
-}
-
-function count(n: number): string {
-  return n === 1 ? '1 value' : `${n} values`
 }

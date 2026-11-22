@@ -15,6 +15,7 @@ import type { Suggested } from '../overlay/suggest.ts'
 import { ConditionField } from './ConditionField.tsx'
 import { HighlightRow, PanelButton, Row, TextRow, Toggle } from './formatControls.tsx'
 import { useWords, type Words } from '../text/words.ts'
+import { wordMessage } from '../text/engine.ts'
 
 /** What the Rules list does: each acts on the open line (`LineEditControl`). */
 export interface RulesActions {
@@ -140,8 +141,8 @@ export function RulesList({ rules, states, name, actions }: RulesListProps) {
             const n = index + 1
             const condition = typing?.index === index ? typing.text : rule.condition
             // An empty condition removes nothing: its row says what it needs (section 13, Panel).
-            const state: RuleState | undefined =
-              condition.trim() === '' ? { kind: 'warning', message: words.noCondition } : states?.[index]
+            const state: ShownState | undefined =
+              condition.trim() === '' ? { kind: 'hint', text: words.noCondition } : states?.[index]
             return (
               <li key={index} className="sheet-rules__item" aria-label={words.rule(n, rule.text)}>
                 <div className="sheet-rules__row">
@@ -233,8 +234,11 @@ function RuleFormat({ format, onChange, n }: { format: LineFormat; onChange: (fo
   )
 }
 
+/** A rule's live state, or the panel's own hint for an empty condition. */
+type ShownState = RuleState | { kind: 'hint'; text: string }
+
 /** A rule's live state, beside its condition. */
-function RuleStateText({ state, w }: { state: RuleState; w: Words }) {
+function RuleStateText({ state, w }: { state: ShownState; w: Words }) {
   const words = w.panel.rules
   switch (state.kind) {
     case 'true':
@@ -245,7 +249,9 @@ function RuleStateText({ state, w }: { state: RuleState; w: Words }) {
     case 'count':
       return <span className="sheet-rules__state is-count">{words.count(state.count, state.of, state.unit)}</span>
     case 'warning':
-      return <span className="sheet-rules__state is-warning">⚠ {state.message}</span>
+      return <span className="sheet-rules__state is-warning">⚠ {wordMessage(w.engine, state.message)}</span>
+    case 'hint':
+      return <span className="sheet-rules__state is-warning">⚠ {state.text}</span>
   }
 }
 

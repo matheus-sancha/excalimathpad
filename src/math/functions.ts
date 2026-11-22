@@ -1,4 +1,5 @@
 import type { MathNode } from 'mathjs'
+import { mathjsMessage, type EngineMessage } from './messages.ts'
 import { usedNames } from './warnings.ts'
 
 /**
@@ -17,8 +18,13 @@ import { usedNames } from './warnings.ts'
  * functions as values (`r = q`) work as math.js's own.
  */
 
-/** A message already in the sheet's words, so outer calls don't reword it. */
+/**
+ * A message already the sheet's own, so outer calls don't reword it: its
+ * code and arguments (`messages.ts`). Its `Error.message` is the code, for a
+ * stack trace only; the words are the text table's.
+ */
 export class SheetError extends Error {
+  readonly sheetMessage: EngineMessage
   /** Final: the message goes to the line as it is, with no `in f(…):` around it. */
   readonly final: boolean
   /**
@@ -28,8 +34,9 @@ export class SheetError extends Error {
    */
   readonly outsideDomain: boolean
 
-  constructor(message: string, final = false, outsideDomain = false) {
-    super(message)
+  constructor(message: EngineMessage, final = false, outsideDomain = false) {
+    super(message.code)
+    this.sheetMessage = message
     this.final = final
     this.outsideDomain = outsideDomain
   }
@@ -64,25 +71,24 @@ export function createCalls(show: (value: unknown) => string, lookup: (name: str
       const { name, params } = info
       const wrapped = (...args: unknown[]): unknown => {
         if (args.length !== params.length) {
-          const noun = params.length === 1 ? 'argument' : 'arguments'
-          throw new SheetError(`${name} needs ${params.length} ${noun}, got ${args.length}`)
+          throw new SheetError({ code: 'argumentCount', name, expected: params.length, got: args.length })
         }
-        if (depth >= MAX_DEPTH) throw new SheetError(`${name} calls itself without end`, true)
+        if (depth >= MAX_DEPTH) throw new SheetError({ code: 'endlessRecursion', name }, true)
         depth++
         try {
           return fn(...args)
         } catch (error) {
           if (error instanceof SheetError && error.final) throw error
           if (error instanceof RangeError && /call stack/i.test(error.message)) {
-            throw new SheetError(`${name} calls itself without end`, true)
+            throw new SheetError({ code: 'endlessRecursion', name }, true)
           }
           const local = (n: string) => {
             const at = params.indexOf(n)
             return at === -1 ? lookup(n) : args[at]
           }
-          const message = messageOf(error, body, local)
+          const inner = messageOf(error, body, local)
           const outside = error instanceof SheetError && error.outsideDomain
-          throw new SheetError(`in ${name}(${args.map(argText).join(', ')}): ${message}`, false, outside)
+          throw new SheetError({ code: 'inCall', name, args: args.map(argText), inner }, false, outside)
         } finally {
           depth--
         }
@@ -91,9 +97,10 @@ export function createCalls(show: (value: unknown) => string, lookup: (name: str
     },
   }
 
-  function argText(value: unknown): string {
+  /** An argument as the sheet shows it; null for a function that isn't the sheet's. */
+  function argText(value: unknown): string | null {
     if (isSheetFunction(value)) return value.sheetFunction.name
-    if (typeof value === 'function') return 'function'
+    if (typeof value === 'function') return null
     try {
       return show(value)
     } catch {
@@ -102,24 +109,31 @@ export function createCalls(show: (value: unknown) => string, lookup: (name: str
   }
 }
 
+/** A thrown value as a message: the sheet's own, or math.js's raw text. */
+export function thrownMessage(error: unknown): EngineMessage {
+  if (error instanceof SheetError) return error.sheetMessage
+  return mathjsMessage(error instanceof Error ? error.message : String(error))
+}
+
 /**
- * A thrown value in the sheet's words. `node` is the code that ran, and
+ * A thrown value as the sheet's message. `node` is the code that ran, and
  * `lookup` gives the value a name has there, to name a function used as a
- * number. Anything else keeps math.js's own message.
+ * number. Anything else keeps math.js's own text.
  */
 export function messageOf(
   error: unknown,
   node: MathNode,
   lookup: (name: string) => unknown,
-): string {
-  if (error instanceof SheetError) return error.message
+): EngineMessage {
+  if (error instanceof SheetError) return error.sheetMessage
   const message = error instanceof Error ? error.message : String(error)
+  // math.js's own wording (pinned by a test, so an upgrade that rewords it fails CI).
   const called = /^'(.+?)' is not a function/.exec(message)
-  if (called) return `${called[1]} is a value, not a function: write ${called[1]} * (...) to multiply`
+  if (called) return { code: 'valueNotFunction', name: called[1] }
   const data = (error as { data?: { category?: string; actual?: unknown } }).data
   if (data?.category === 'wrongType' && Array.isArray(data.actual) && data.actual.includes('function')) {
     const name = usedNames(node).find((n) => typeof lookup(n) === 'function')
-    if (name !== undefined) return `${name} is a function: call it with ${name}(...)`
+    if (name !== undefined) return { code: 'isFunction', name }
   }
-  return message
+  return mathjsMessage(message)
 }

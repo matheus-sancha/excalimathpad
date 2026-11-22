@@ -12,6 +12,7 @@ import {
 } from '../math/rename.ts'
 import { words, type Words } from '../text/words.ts'
 import { elementLabel, type PanelElement } from './sheetPanel.ts'
+import type { EngineMessage } from '../math/messages.ts'
 
 /**
  * The rename form on a Variables row (docs/spec-v1.md section 4, Renaming a
@@ -42,7 +43,8 @@ export interface RenameFormView {
   /** The lines that will be written, in reading order, the old name marked. */
   lines: RenameFormLine[]
   /** Under the field: why the name is refused, or the new name's shadow warning (amber, allowed). */
-  reason: { kind: 'refused' | 'warning'; text: string } | null
+  /** The refusal, or the shadow warning: worded where it shows (`wordMessage`). */
+  reason: { kind: 'refused' | 'warning'; message: EngineMessage } | null
   /** The lines whose result would differ (amber, allowed). */
   changes: RenameFormLine[]
   /** False while the name is refused: Rename is dimmed. */
@@ -87,9 +89,9 @@ export function renameFormView(
     lines: plan.lines.map((planned) => line(planned, planned.uses, planned.storedUses)),
     reason:
       plan.refusal?.message != null
-        ? { kind: 'refused', text: plan.refusal.message }
+        ? { kind: 'refused', message: plan.refusal.message }
         : plan.warning !== null
-          ? { kind: 'warning', text: plan.warning }
+          ? { kind: 'warning', message: plan.warning }
           : null,
     changes: plan.changes.map((ref) => line(ref, [], [])),
     canRename: plan.refusal === null,

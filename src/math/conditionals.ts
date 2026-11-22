@@ -26,9 +26,9 @@ export const IF_FN = 'if'
 export function testCondition(value: unknown, math: MathJsInstance): boolean {
   if (typeof value === 'boolean') return value
   if (isSheetList(value) || math.isMatrix(value) || Array.isArray(value)) {
-    throw new SheetError('if: the condition must be one value; use a list line instead')
+    throw new SheetError({ code: 'conditionOneValue' })
   }
-  throw new SheetError('if: the condition must be true or false')
+  throw new SheetError({ code: 'conditionBoolean' })
 }
 
 /** `if(cond, a, b)`, raw-args, for the namespace. */
@@ -43,7 +43,7 @@ export function createIf(math: MathJsInstance) {
     return code.evaluate(scope as Map<string, unknown>)
   }
   const choose = (args: MathNode[], _math: unknown, scope: unknown): unknown => {
-    if (args.length !== 3) throw new SheetError('if needs 3 arguments: if(cond, a, b)')
+    if (args.length !== 3) throw new SheetError({ code: 'ifArguments' })
     const [condition, then, otherwise] = args
     return run(testCondition(run(condition, scope), math) ? then : otherwise, scope)
   }
@@ -98,11 +98,10 @@ const COMPARISONS = {
  */
 export function comparisonSignatures(math: MathJsInstance, show: (value: unknown) => string) {
   const textWithNumber = () => {
-    throw new SheetError("can't compare text with a number")
+    throw new SheetError({ code: 'textWithNumber' })
   }
   const unitWithNumber = (unit: unknown, number: unknown) => {
-    const bare = show(number)
-    throw new SheetError(`can't compare ${show(unit)} with ${bare}: give the ${bare} a unit`)
+    throw new SheetError({ code: 'unitWithNumber', unit: show(unit), number: show(number) })
   }
   return Object.fromEntries(
     Object.entries(COMPARISONS).map(([name, texts]) => [
@@ -111,7 +110,7 @@ export function comparisonSignatures(math: MathJsInstance, show: (value: unknown
         'string, string':
           texts ??
           (() => {
-            throw new SheetError('text can only be compared with == or !=')
+            throw new SheetError({ code: 'textCompare' })
           }),
         'string, number': textWithNumber,
         'number, string': textWithNumber,

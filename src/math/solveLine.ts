@@ -1,3 +1,5 @@
+import type { EngineMessage } from './messages.ts'
+
 /**
  * How a solve line reads (docs/spec-v1.md sections 3 and 9; ADR 0005, step 4),
  * after the comment, the format clause and the display unit are off:
@@ -29,7 +31,7 @@ export type SolveForm =
       range: { from: string; to: string } | null
     }
   /** A solve line that can't be read: its message, and the name it would define. */
-  | { kind: 'malformed'; name: string; message: string }
+  | { kind: 'malformed'; name: string; message: EngineMessage }
 
 const HEAD = /^\s*([A-Za-z_]\w*)\s*(?:\(([^()]*)\))?\s*=(?!=)\s*solve\s+(.*)$/s
 const NAME = /^[A-Za-z_]\w*$/
@@ -43,7 +45,7 @@ export function readSolve(code: string): SolveForm | null {
   const [, name, paramText, rest] = head
   const params = paramText === undefined ? null : paramText.split(',').map((p) => p.trim())
   if (params?.some((p) => !NAME.test(p))) {
-    return { kind: 'malformed', name, message: `${name}: a parameter isn't a name` }
+    return { kind: 'malformed', name, message: { code: 'solveParameter', name } }
   }
   const cut = clauseComma(rest)
   const equation = cut === -1 ? rest : rest.slice(0, cut)
@@ -53,21 +55,21 @@ export function readSolve(code: string): SolveForm | null {
   const range = FOR.exec(clause)
   const unknown = (guess ?? range)?.[1] ?? (sides ? firstFreeName(`${sides[0]} ${sides[1]}`, [name, ...(params ?? [])]) : null) ?? 'x'
   if (params === null && !range) {
-    return { kind: 'malformed', name, message: `solve needs a range: ", for ${unknown} = <from> .. <to>"` }
+    return { kind: 'malformed', name, message: { code: 'solveNeedsRange', unknown } }
   }
   if (params !== null && range) {
-    return { kind: 'malformed', name, message: `a solve function takes a guess: ", guess ${unknown} = <value>"` }
+    return { kind: 'malformed', name, message: { code: 'solveFunctionGuess', unknown } }
   }
   if (params !== null && (!guess || guess[2].trim() === '')) {
-    return { kind: 'malformed', name, message: `solve needs a guess: ", guess ${unknown} = <value>"` }
+    return { kind: 'malformed', name, message: { code: 'solveNeedsGuess', unknown } }
   }
   if (!sides) {
-    return { kind: 'malformed', name, message: 'solve needs one equation: "<left side> = <right side>"' }
+    return { kind: 'malformed', name, message: { code: 'solveNeedsEquation' } }
   }
   if (range) {
     const ends = splitRange(range[2])
     if (ends === null) {
-      return { kind: 'malformed', name, message: `for ${unknown} needs two ends and no step: "for ${unknown} = <from> .. <to>"` }
+      return { kind: 'malformed', name, message: { code: 'forNeedsEnds', unknown } }
     }
     return { kind: 'solve', name, params, lhs: sides[0], rhs: sides[1], unknown, guess: null, range: ends }
   }

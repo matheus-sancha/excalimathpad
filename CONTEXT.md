@@ -127,7 +127,7 @@ an issue touches that module ([`CLAUDE.md`](CLAUDE.md) has the reading route).
   their breaks; the print view, drawn in any document; and Print… (`printSheet`). Depends on: text. [`docs/context/print.md`](docs/context/print.md)
 - **text** (`src/text/`) — the app's own words: two text tables of one shape (`en.ts`,
   `ptBR.ts`) and the reader (`words.ts`), which answers the language Excalidraw shows, for
-  React and for code outside it (0.6.0). Depends on: nothing. [`docs/context/text.md`](docs/context/text.md)
+  React and for code outside it (0.6.0). Depends on: math's message types. [`docs/context/text.md`](docs/context/text.md)
 - **failure** (`src/failure/`) — unexpected failures (spec section 4): the boundary, the
   failure screen, Copy details and Report this error. `App` wraps the sheet in the view's
   boundary. Depends on: text. [`docs/context/failure.md`](docs/context/failure.md)

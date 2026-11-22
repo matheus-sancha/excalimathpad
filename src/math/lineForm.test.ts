@@ -27,6 +27,7 @@ import {
   type LineFormat,
 } from './lineForm.ts'
 import { SLOT_UNITS } from './unitSystems.ts'
+import type { EngineMessage } from './messages.ts'
 
 describe('readLine (docs/spec-v1.md section 3, step 1: the comment)', () => {
   it.each([
@@ -120,16 +121,16 @@ describe('the format clause (docs/spec-v1.md section 3: after everything, before
     expect(formatOf('x = 1 @bolt @bold @pink')).toMatchObject({
       code: 'x = 1',
       format: format({ bold: true }),
-      formatError: 'Unknown format @bolt',
+      formatError: { code: 'unknownFormat', word: '@bolt' },
     })
-    expect(formatOf('x = 1 @')).toMatchObject({ code: 'x = 1', formatError: 'Unknown format @' })
+    expect(formatOf('x = 1 @')).toMatchObject({ code: 'x = 1', formatError: { code: 'unknownFormat', word: '@' } })
   })
 
   it('leaves an @ alone inside a string, inside a note, and in the middle of the code', () => {
     expect(formatOf('s = "a @bold"')).toMatchObject({ code: 's = "a @bold"', format: NO_FORMAT })
     expect(formatOf('x = 1 # see @bold')).toMatchObject({ code: 'x = 1', note: 'see @bold', format: NO_FORMAT })
     // In the middle of the code, the clause starts there: it is the line's format error (M4c).
-    expect(formatOf('x = 1 @bold + 2')).toMatchObject({ code: 'x = 1', format: NO_FORMAT, formatError: 'Unknown format @bold' })
+    expect(formatOf('x = 1 @bold + 2')).toMatchObject({ code: 'x = 1', format: NO_FORMAT, formatError: { code: 'unknownFormat', word: '@bold' } })
   })
 
   it('gives a comment line and a blank line no format', () => {
@@ -160,8 +161,8 @@ describe('text colours and rules (docs/spec-v1.md section 3, M4c)', () => {
   })
 
   it('makes a word that isn’t a format the line’s error', () => {
-    expect(formatOf('x = 1 @text-purple')).toMatchObject({ formatError: 'Unknown format @text-purple' })
-    expect(formatOf('x = 1 @purple')).toMatchObject({ formatError: 'Unknown format @purple' })
+    expect(formatOf('x = 1 @text-purple')).toMatchObject({ formatError: { code: 'unknownFormat', word: '@text-purple' } })
+    expect(formatOf('x = 1 @purple')).toMatchObject({ formatError: { code: 'unknownFormat', word: '@purple' } })
   })
 
   it('reads each word’s own rule, to the next @, beside the plain formats', () => {
@@ -171,7 +172,7 @@ describe('text colours and rules (docs/spec-v1.md section 3, M4c)', () => {
       { words: [{ kind: 'text', color: 'red' }], condition: 'v > 3 m/s', text: '@text-red if v > 3 m/s', start: 16, end: 38 },
       { words: [{ kind: 'text', color: 'orange' }], condition: 'v > 2 m/s', text: '@text-orange if v > 2 m/s', start: 39, end: 64 },
     ])
-    expect(formatOf('x = 1 @blod if x > 0')).toMatchObject({ formatError: 'Unknown format @blod' })
+    expect(formatOf('x = 1 @blod if x > 0')).toMatchObject({ formatError: { code: 'unknownFormat', word: '@blod' } })
     expect(formatOf('s = "a@b" @red if s == "a@b"')).toMatchObject({ code: 's = "a@b"' })
   })
 })
@@ -195,17 +196,17 @@ describe('joined words (docs/spec-v1.md section 3, Joined words, M4d)', () => {
   })
 
   it('names a part that isn’t a format, in the word it is in', () => {
-    expect(readLine('x = 1 @text-red+blod')).toMatchObject({ formatError: 'Unknown format @blod in @text-red+blod' })
-    expect(readLine('x = 1 @text-red+blod if x > 0')).toMatchObject({ formatError: 'Unknown format @blod in @text-red+blod', rules: [] })
-    expect(readLine('x = 1 @bold+L')).toMatchObject({ formatError: '@L is for comment lines' })
-    expect(readLine('x = 1 @bold+')).toMatchObject({ formatError: 'Unknown format @bold+' })
+    expect(readLine('x = 1 @text-red+blod')).toMatchObject({ formatError: { code: 'unknownFormatIn', part: '@blod', word: '@text-red+blod' } })
+    expect(readLine('x = 1 @text-red+blod if x > 0')).toMatchObject({ formatError: { code: 'unknownFormatIn', part: '@blod', word: '@text-red+blod' }, rules: [] })
+    expect(readLine('x = 1 @bold+L')).toMatchObject({ formatError: { code: 'commentOnly', word: '@L' } })
+    expect(readLine('x = 1 @bold+')).toMatchObject({ formatError: { code: 'unknownFormat', word: '@bold+' } })
     // Spaces end a word: `@bold + red` isn't joined.
-    expect(readLine('x = 1 @bold + red')).toMatchObject({ formatError: 'Unknown format @bold' })
+    expect(readLine('x = 1 @bold + red')).toMatchObject({ formatError: { code: 'unknownFormat', word: '@bold' } })
   })
 
   it('reads joined words on a comment line too', () => {
     expect(readLine('@bold+L+text-blue # Pumps')).toMatchObject({ kind: 'comment', format: { bold: true, size: 'L', textColor: 'blue' } })
-    expect(readLine('@bold+lg # Pumps')).toMatchObject({ formatError: 'Unknown format @lg in @bold+lg' })
+    expect(readLine('@bold+lg # Pumps')).toMatchObject({ formatError: { code: 'unknownFormatIn', part: '@lg', word: '@bold+lg' } })
   })
 })
 
@@ -257,7 +258,7 @@ describe('the Rules list’s writers (docs/spec-v1.md section 4, Rules list, M4d
 })
 
 describe('a comment line’s format (docs/spec-v1.md section 3, A comment line’s format, M4d)', () => {
-  const comment = (format: Partial<CommentFormat>, text: string, formatError: string | null = null) => ({
+  const comment = (format: Partial<CommentFormat>, text: string, formatError: EngineMessage | null = null) => ({
     kind: 'comment',
     text,
     format: { ...NO_COMMENT_FORMAT, ...format },
@@ -294,16 +295,16 @@ describe('a comment line’s format (docs/spec-v1.md section 3, A comment line�
   )
 
   it('makes a rule the line’s error, and keeps the clause’s other words', () => {
-    expect(readLine('@bold @text-red if x > 3 # Pumps')).toEqual(comment({ bold: true }, 'Pumps', 'rules need a math line'))
-    expect(readLine('@L if ok # Pumps')).toEqual(comment({}, 'Pumps', 'rules need a math line'))
+    expect(readLine('@bold @text-red if x > 3 # Pumps')).toEqual(comment({ bold: true }, 'Pumps', { code: 'rulesNeedMathLine' }))
+    expect(readLine('@L if ok # Pumps')).toEqual(comment({}, 'Pumps', { code: 'rulesNeedMathLine' }))
   })
 
   it('makes a word a comment line doesn’t take the line’s error, the first one named', () => {
-    expect(readLine('@blod @L # x')).toEqual(comment({ size: 'L' }, 'x', 'Unknown format @blod'))
-    expect(readLine('@M # x')).toEqual(comment({}, 'x', 'Unknown format @M'))
-    expect(readLine('@l # x')).toEqual(comment({}, 'x', 'Unknown format @l'))
-    expect(readLine('@bold 2 # x')).toEqual(comment({}, 'x', 'Unknown format @bold'))
-    expect(readLine('@ # x')).toEqual(comment({}, 'x', 'Unknown format @'))
+    expect(readLine('@blod @L # x')).toEqual(comment({ size: 'L' }, 'x', { code: 'unknownFormat', word: '@blod' }))
+    expect(readLine('@M # x')).toEqual(comment({}, 'x', { code: 'unknownFormat', word: '@M' }))
+    expect(readLine('@l # x')).toEqual(comment({}, 'x', { code: 'unknownFormat', word: '@l' }))
+    expect(readLine('@bold 2 # x')).toEqual(comment({}, 'x', { code: 'unknownFormat', word: '@bold' }))
+    expect(readLine('@ # x')).toEqual(comment({}, 'x', { code: 'unknownFormat', word: '@' }))
   })
 
   it('makes a comment word on a math line its error, by name', () => {
@@ -311,10 +312,10 @@ describe('a comment line’s format (docs/spec-v1.md section 3, A comment line�
       const form = readLine(line)
       return form.kind === 'code' ? form.formatError : form
     }
-    expect(errorOf('x = 1 @L')).toBe('@L is for comment lines')
-    expect(errorOf('x = 1 @bold @upright # n')).toBe('@upright is for comment lines')
-    expect(errorOf('x = 1 @S')).toBe('@S is for comment lines')
-    expect(errorOf('x = 1 @XL if x > 0')).toBe('@XL is for comment lines')
+    expect(errorOf('x = 1 @L')).toEqual({ code: 'commentOnly', word: '@L' })
+    expect(errorOf('x = 1 @bold @upright # n')).toEqual({ code: 'commentOnly', word: '@upright' })
+    expect(errorOf('x = 1 @S')).toEqual({ code: 'commentOnly', word: '@S' })
+    expect(errorOf('x = 1 @XL if x > 0')).toEqual({ code: 'commentOnly', word: '@XL' })
     expect(readLine('x = 1 @bold @L')).toMatchObject({ code: 'x = 1', format: { bold: true } })
   })
 

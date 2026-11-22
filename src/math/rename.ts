@@ -13,6 +13,7 @@ import {
   type SheetLine,
 } from './evaluate.ts'
 import { lineFormats, storeFormats } from './lineForm.ts'
+import type { EngineMessage } from './messages.ts'
 
 /**
  * A rename (docs/spec-v1.md section 4, Renaming a name; section 14, 0.5.0):
@@ -77,12 +78,12 @@ export interface RenamedLine extends RenameLineRef {
 
 /**
  * Why a new name is refused (section 4, The form), with the reason to show
- * under the field in section 13's words. The old name itself and an empty
- * field are refused and say nothing.
+ * under the field, as a code worded by section 13. The old name itself and
+ * an empty field are refused and say nothing.
  */
 export type RenameRefusal =
   | { kind: 'same' | 'empty'; message: null }
-  | { kind: 'taken' | 'reserved' | 'not-a-name'; message: string }
+  | { kind: 'taken' | 'reserved' | 'not-a-name'; message: EngineMessage }
 
 export interface RenamePlan {
   /**
@@ -92,8 +93,8 @@ export interface RenamePlan {
   lines: readonly RenamedLine[]
   /** Set when the new name is refused: nothing may be written. */
   refusal: RenameRefusal | null
-  /** The new name's shadow warning (section 5), in the warning's own words. Allowed. */
-  warning: string | null
+  /** The new name's shadow warning (section 5), the warning itself. Allowed. */
+  warning: EngineMessage | null
   /** The lines whose result would differ after the rename, in reading order. Said, not refused. */
   changes: readonly RenameLineRef[]
 }
@@ -131,8 +132,8 @@ export function planRename(
     const b = after.get(id)?.[line]
     return a !== undefined && b !== undefined && same(a, b) ? [] : [{ id, line }]
   })
-  const shadows = `${newName} shadows `
-  const warning = after.get(target.id)?.[target.line]?.warnings.find((text) => text.startsWith(shadows)) ?? null
+  const warning =
+    after.get(target.id)?.[target.line]?.warnings.find((shown) => shown.code === 'shadows' && shown.name === newName) ?? null
   return { lines, refusal, warning, changes }
 }
 
@@ -486,10 +487,10 @@ function symbolReads(node: MathNode, marker: string, name: string, own: readonly
 function refusalOf(sheet: readonly Row[], name: string, newName: string): RenameRefusal | null {
   if (newName === name) return { kind: 'same', message: null }
   if (newName.trim() === '') return { kind: 'empty', message: null }
-  if (!isAssignableName(newName)) return { kind: 'not-a-name', message: `${newName} isn't a name.` }
-  if (isReservedName(newName)) return { kind: 'reserved', message: `${newName} is reserved.` }
+  if (!isAssignableName(newName)) return { kind: 'not-a-name', message: { code: 'renameNotAName', name: newName } }
+  if (isReservedName(newName)) return { kind: 'reserved', message: { code: 'renameReserved', name: newName } }
   if (sheet.some((row) => assigns(row.parsed, newName))) {
-    return { kind: 'taken', message: `${newName} is already a name on this sheet.` }
+    return { kind: 'taken', message: { code: 'renameTaken', name: newName } }
   }
   return null
 }
@@ -503,8 +504,10 @@ function refusalOf(sheet: readonly Row[], name: string, newName: string): Rename
 function resultComparer(name: string, newName: string): (a: SheetLine, b: SheetLine) => boolean {
   // Written with no lookbehind, which Obsidian's lint keeps out of the plugin's code (section 12a).
   const either = new RegExp(`(^|[^\\w$])(?:${escapeRegExp(name)}|${escapeRegExp(newName)})(?![\\w$])`, 'g')
-  // A syntax error counts its characters, which a longer name moves: `(char 12)`.
-  const worded = (message: string | null) => message?.replace(either, '$1\u0000').replace(/ \(char \d+\)/g, '') ?? null
+  // A message compares by its code and arguments, the names in them made one.
+  // A syntax error counts its characters, which a longer name moves: math.js's `(char 12)`.
+  const worded = (message: EngineMessage | null) =>
+    message === null ? null : JSON.stringify(message).replace(either, '$1\u0000').replace(/ \(char \d+\)/g, '')
   const shown = ({ result, table, plot }: SheetLine) =>
     JSON.stringify({
       result:

@@ -54,16 +54,16 @@ describe('readSolve (docs/spec-v1.md sections 3 and 9)', () => {
     expect(readSolve('Q_op = solve Hp(Q) = Hs(Q)')).toEqual({
       kind: 'malformed',
       name: 'Q_op',
-      message: 'solve needs a range: ", for Q = <from> .. <to>"',
+      message: { code: 'solveNeedsRange', unknown: 'Q' },
     })
     expect(readSolve('Q_op = solve Hp(Q) = Hs(Q), guess Q = 15 L/s')).toMatchObject({
-      message: 'solve needs a range: ", for Q = <from> .. <to>"',
+      message: { code: 'solveNeedsRange', unknown: 'Q' },
     })
     expect(readSolve('h(a) = solve 5 m = y, guess')).toMatchObject({
-      message: 'solve needs a guess: ", guess y = <value>"',
+      message: { code: 'solveNeedsGuess', unknown: 'y' },
     })
     expect(readSolve('h(a) = solve y = a, for y = 0 .. 1')).toMatchObject({
-      message: 'a solve function takes a guess: ", guess y = <value>"',
+      message: { code: 'solveFunctionGuess', unknown: 'y' },
     })
   })
 
@@ -71,7 +71,7 @@ describe('readSolve (docs/spec-v1.md sections 3 and 9)', () => {
     for (const clause of ['for x = 0', 'for x = 0 ..', 'for x = 0 .. 2 step 1', 'for x = 0 .. 1 .. 2']) {
       expect(readSolve(`x = solve x = 1, ${clause}`)).toMatchObject({
         kind: 'malformed',
-        message: 'for x needs two ends and no step: "for x = <from> .. <to>"',
+        message: { code: 'forNeedsEnds', unknown: 'x' },
       })
     }
   })
@@ -79,7 +79,7 @@ describe('readSolve (docs/spec-v1.md sections 3 and 9)', () => {
   it('needs exactly one equation', () => {
     expect(readSolve('x = solve x^2, for x = 0 .. 1')).toMatchObject({
       kind: 'malformed',
-      message: 'solve needs one equation: "<left side> = <right side>"',
+      message: { code: 'solveNeedsEquation' },
     })
     expect(readSolve('x = solve a = b = c, for x = 0 .. 1')).toMatchObject({ kind: 'malformed' })
   })

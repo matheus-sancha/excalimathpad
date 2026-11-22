@@ -1,7 +1,7 @@
 import { all, create } from 'mathjs'
 import { describe, expect, it } from 'vitest'
 import doc from '../../docs/acceptance/pump-sizing.md?raw'
-import { evaluateSheet, type SheetLine } from './evaluate.ts'
+import { evaluateSheet, type EnglishLine as SheetLine } from '../test/english.ts'
 
 /**
  * The pump sheet in CI (docs/spec-v1.md sections 15 and 16): the acceptance

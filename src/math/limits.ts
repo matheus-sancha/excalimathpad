@@ -1,6 +1,7 @@
 import type { MathJsInstance, MathNode } from 'mathjs'
 import { SheetError } from './functions.ts'
 import { MAX_POINTS } from './lists.ts'
+import type { EngineMessage } from './messages.ts'
 
 /**
  * The limit on math.js's own range and builders (docs/spec-v1.md section 10,
@@ -15,38 +16,42 @@ import { MAX_POINTS } from './lists.ts'
  * math.js's own code keeps calling the functions it was built with.
  */
 
-/** `10,000`, as the messages write it. */
-const LIMIT_TEXT = MAX_POINTS.toLocaleString('en-US')
+/** What the limit refuses: too many points (`a:b`), too many values (a builder), or a call too slow. */
+export type Refused = 'points' | 'values' | 'tooLarge'
 
 /**
- * A call refused by the limit. `message` words it from the argument values
- * (`zeros(1e8) has more than 10,000 values`); the line that knows the code
- * that ran words it as typed (`wordLimit`).
+ * A call refused by the limit. Its message names the call from the argument
+ * values (`zeros(1e8)` with more than the limit's values); the line that knows
+ * the code that ran names it as typed (`wordLimit`).
  */
 export class LimitError extends SheetError {
   /** The function refused, as a line calls it: `zeros`, `range` for `a:b`, `multiply` for `*`. */
   readonly fn: string
-  /** What follows the call's text: ` has more than 10,000 values`, ` is too large to compute`. */
-  readonly rest: string
-  /** A range's end that isn't finite: which argument (0 start, 1 end, 2 step), how it reads, its value. */
-  readonly end: { index: number; text: string; value: number } | null
+  /** Why it was refused. */
+  readonly refused: Refused
+  /** A range's end that isn't finite: which argument (0 start, 1 end, 2 step) and its value. */
+  readonly end: { index: number; value: number } | null
 
-  constructor(fn: string, call: string, rest: string, end: LimitError['end'] = null) {
-    super(end ? `${NOT_FINITE}: ${end.text}` : `${call}${rest}`)
+  constructor(fn: string, call: string, refused: Refused, end: LimitError['end'] = null) {
+    super(end ? { code: 'notFinite', end: { part: PARTS[end.index] }, value: end.value } : refusal(refused, call))
     this.fn = fn
-    this.rest = rest
+    this.refused = refused
     this.end = end
   }
 }
 
-const NOT_FINITE = "a range's ends must be finite numbers"
-const POINTS = ` has more than ${LIMIT_TEXT} points`
-const VALUES = ` has more than ${LIMIT_TEXT} values`
-const TOO_LARGE = ' is too large to compute'
+const PARTS = ['start', 'end', 'step'] as const
+
+/** The message for a call refused, named by `call`. */
+function refusal(refused: Refused, call: string): EngineMessage {
+  if (refused === 'points') return { code: 'tooManyPoints', what: call, limit: MAX_POINTS }
+  if (refused === 'values') return { code: 'tooManyValues', what: call, limit: MAX_POINTS }
+  return { code: 'tooLarge', call }
+}
 
 /** A list line whose points would hold more than the limit between them (a list times a matrix). */
 export function tooManyValues(text: string): SheetError {
-  return new SheetError(`${text}${VALUES}`)
+  return new SheetError(refusal('values', text))
 }
 
 /**
@@ -149,7 +154,7 @@ export function guardEngine(math: MathJsInstance): void {
     }
   }
   const callText = (name: string, args: readonly unknown[]) => `${name}(${args.map(write).join(', ')})`
-  const refuse = (name: string, args: readonly unknown[], rest: string) => new LimitError(name, callText(name, args), rest)
+  const refuse = (name: string, args: readonly unknown[], refused: Refused) => new LimitError(name, callText(name, args), refused)
 
   /** What each builder would build, read from its arguments. A size that isn't a number is math.js's own error. */
   const builds: Record<string, (args: readonly unknown[]) => number> = {
@@ -208,14 +213,13 @@ export function guardEngine(math: MathJsInstance): void {
     numbers.forEach((value, index) => {
       const given = index < parts.length ? parts[index] : 1
       if (value === Infinity || value === -Infinity || (Number.isNaN(value) && typeof given === 'number')) {
-        const which = index === 2 ? 'the step' : index === 1 ? 'the end' : 'the start'
-        throw new LimitError('range', text, '', { index, text: `${which} is ${infinite(value)}`, value })
+        throw new LimitError('range', text, 'points', { index, value })
       }
     })
     const [start, end, step] = numbers
     // Anything else that isn't a number (a text, a matrix) is math.js's own error.
     if (Number.isNaN(start) || Number.isNaN(end) || Number.isNaN(step) || step === 0) return
-    if (Math.floor((end - start) / step + 1e-9) + 1 > MAX_POINTS) throw new LimitError('range', text, POINTS)
+    if (Math.floor((end - start) / step + 1e-9) + 1 > MAX_POINTS) throw new LimitError('range', text, 'points')
   }
 
   for (const name of Object.keys(visible)) {
@@ -230,14 +234,14 @@ export function guardEngine(math: MathJsInstance): void {
     if (name !== 'range' && !build && most === null && mostBig === null && mostValues === null && mostPairs === null && !counted) continue
     const guarded = function (this: unknown, ...args: unknown[]) {
       if (name === 'range') range(args)
-      if (build && build(args) > MAX_POINTS) throw refuse(name, args, VALUES)
+      if (build && build(args) > MAX_POINTS) throw refuse(name, args, 'values')
       const slow =
         (most !== null && args.some((arg) => !isMatrix(arg) && tooBig(numberOf(arg), most))) ||
         (mostBig !== null && args.some((arg) => math.isBigNumber(arg) && tooBig(numberOf(arg), mostBig))) ||
         (mostValues !== null && args.some((arg) => count(arg) > mostValues)) ||
         (mostPairs !== null && count(args[0]) * count(args[1]) > mostPairs) ||
         (counted !== null && tooLong(args[counted.argument], counted.most))
-      if (slow) throw refuse(name, args, TOO_LARGE)
+      if (slow) throw refuse(name, args, 'tooLarge')
       return (real as Fn).apply(this, args)
     }
     // math.js reads its markers (raw arguments, the signatures) off the function.
@@ -268,15 +272,15 @@ export function matrixSize(math: MathJsInstance, value: unknown): number[] | nul
 }
 
 /**
- * A refused call in the words of the line that ran it (section 13): the call
- * as typed, `kron(m, m) has more than 10,000 values`, and a range's end that
- * isn't finite by its own code, `log(0) is -∞`. It finds the call by running
+ * A refused call named as the line typed it (section 13): the call as typed,
+ * `kron(m, m)` with more than the limit's values, and a range's end that
+ * isn't finite by its own code, `log(0)`. It finds the call by running
  * each candidate again, innermost first: a refused call stops at its check,
  * so this costs little, and only on the error's path. Where the code can't
  * be run again here (inside a function, at one point of a list), the error's
  * own message stands, worded from the values.
  */
-export function wordLimit(error: LimitError, node: MathNode, scope: object): string {
+export function wordLimit(error: LimitError, node: MathNode, scope: object): EngineMessage {
   const candidates: MathNode[] = []
   const visit = (inner: MathNode) => {
     inner.forEach((child) => visit(child))
@@ -290,13 +294,13 @@ export function wordLimit(error: LimitError, node: MathNode, scope: object): str
       candidate.evaluate(scope)
     } catch (again) {
       if (!(again instanceof LimitError) || again.fn !== error.fn) continue
-      if (again.end === null) return `${codeText(candidate)}${again.rest}`
+      if (again.end === null) return refusal(again.refused, codeText(candidate))
       const range = candidate as unknown as { type: string; start?: MathNode; end?: MathNode; step?: MathNode | null }
       const end = range.type === 'RangeNode' ? [range.start, range.end, range.step][again.end.index] : undefined
-      return end ? `${NOT_FINITE}: ${codeText(end)} is ${infinite(again.end.value)}` : again.message
+      return end ? { code: 'notFinite', end: { text: codeText(end) }, value: again.end.value } : again.sheetMessage
     }
   }
-  return error.message
+  return error.sheetMessage
 }
 
 /** `1e+7` as a line writes it, `1e7`; and `Infinity` as the sheet shows it. */
@@ -312,8 +316,9 @@ function numberText(value: number): string {
   return Math.abs(value) >= 1e6 && short.length < plain.length ? short : plain
 }
 
+/** A number that isn't finite, in code as the sheet shows it: `∞`, `-∞`, and `NaN` as typed. */
 function infinite(value: number): string {
-  return Number.isNaN(value) ? 'not a number' : value < 0 ? '-∞' : '∞'
+  return Number.isNaN(value) ? 'NaN' : value < 0 ? '-∞' : '∞'
 }
 
 /** Code as a line writes it, close up: `1:1e7`, `1/0`, `zeros(1e8)`. */

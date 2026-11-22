@@ -1,3 +1,5 @@
+import type { EngineMessage } from './messages.ts'
+
 /**
  * How a sheet line reads before math.js sees it (ADR 0005, docs/spec-v1.md
  * section 3): the comment, then the format clause. Pure, with no math.js.
@@ -33,7 +35,7 @@ export type LineForm =
       /** The clause before the `#` (section 3, A comment line's format, M4d). */
       format: CommentFormat
       /** The clause's first problem, in section 13's words: an error on the line. */
-      formatError: string | null
+      formatError: EngineMessage | null
     }
   | {
       kind: 'code'
@@ -45,7 +47,7 @@ export type LineForm =
        * format (`Unknown format @bolt`) or a comment word (`@L is for comment
        * lines`). An error on the line, reported after it ran.
        */
-      formatError: string | null
+      formatError: EngineMessage | null
       /** The clause's rules, in the order typed (section 3, A rule). */
       rules: readonly FormatRule[]
       /** The target of a trailing top-level `in` or `to`, as typed, or null. */
@@ -184,7 +186,7 @@ export function readLine(line: string): LineForm {
   // when no comment text follows (section 3, A comment line's format).
   if (rest === '') return after ? { kind: 'comment', text: after, ...readCommentClause(segments) } : { kind: 'blank' }
   let format = NO_FORMAT
-  let formatError: string | null = null
+  let formatError: EngineMessage | null = null
   const rules: FormatRule[] = []
   segments.forEach((segment, i) => {
     const read = readSegment(segment)
@@ -208,15 +210,15 @@ export function readLine(line: string): LineForm {
  * A word followed by `if` is a rule, which needs a math line; the comment
  * still takes the clause's other words.
  */
-function readCommentClause(segments: readonly string[]): { format: CommentFormat; formatError: string | null } {
+function readCommentClause(segments: readonly string[]): { format: CommentFormat; formatError: EngineMessage | null } {
   let format = NO_COMMENT_FORMAT
-  let formatError: string | null = null
+  let formatError: EngineMessage | null = null
   for (const segment of segments) {
     const parts = segmentParts(segment)
     const words = parts && readWords(parts.names, readCommentWord)
     if (!parts || !words) formatError ??= clauseError(segment, readCommentWord)
     else if (parts.rest === '') format = words.reduce(applyCommentWord, format)
-    else formatError ??= isRule(parts.rest) ? 'rules need a math line' : clauseError(segment, readCommentWord)
+    else formatError ??= isRule(parts.rest) ? { code: 'rulesNeedMathLine' } : clauseError(segment, readCommentWord)
   }
   return { format, formatError }
 }
@@ -226,14 +228,14 @@ function readCommentClause(segments: readonly string[]): { format: CommentFormat
  * word, the first part that isn't one is named with the word it's in:
  * `Unknown format @blod in @text-red+blod` (M4d).
  */
-function clauseError(segment: string, read: (word: string) => unknown = readFormatWord): string {
+function clauseError(segment: string, read: (word: string) => unknown = readFormatWord): EngineMessage {
   const parts = segmentParts(segment)
   const bad = parts?.names.find((name) => read(name) === null)
   if (parts && bad !== undefined) {
-    if (COMMENT_ONLY_WORDS.includes(bad)) return `@${bad} is for comment lines`
-    if (parts.names.length > 1) return `Unknown format @${bad} in @${parts.name}`
+    if (COMMENT_ONLY_WORDS.includes(bad)) return { code: 'commentOnly', word: `@${bad}` }
+    if (parts.names.length > 1) return { code: 'unknownFormatIn', part: `@${bad}`, word: `@${parts.name}` }
   }
-  return `Unknown format ${segment.split(/\s+/)[0]}`
+  return { code: 'unknownFormat', word: segment.split(/\s+/)[0] }
 }
 
 /**

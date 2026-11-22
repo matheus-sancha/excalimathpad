@@ -24,7 +24,9 @@ default: `elementLabel` (`panel.element`), a row's or a form's line
 arrow stays on its last word's line (`withArrow`, a no-break space), and a
 condition quoted in a rule's note is one box (`KeepWhole`,
 `.sheet-panel__whole`, an inline-block with its full stop) that moves to
-the next line whole. **The rename
+the next line whole. A Problems row's `message` is the engine's code (`EngineMessage`, ADR 0007), worded as
+the tab renders (`wordMessage(w.engine, …)`, `src/text/engine.ts`), as are the rename form's
+`reason` and a rule's warning state in the Rules list (0.6.0, #291). **The rename
 form** (spec section 4, Renaming a name: The form, on a Variables row; 0.5.0,
 #261): every Variables row ends in a ✎ (`.sheet-panel__rename`, outside the
 row's jump button), and `VariablesTab` holds which row's form is open, one at

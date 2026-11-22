@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import doc from '../../docs/acceptance/true-position.md?raw'
-import { evaluateSheet, type SheetLine } from './evaluate.ts'
+import { evaluateSheet, type EnglishLine as SheetLine } from '../test/english.ts'
 import { storeFormats } from './lineForm.ts'
 
 /**

@@ -3,7 +3,9 @@ import type { PlotView } from '../math/evaluate.ts'
 import { texToHtml } from './katex.ts'
 import { Boundary } from '../failure/Boundary.tsx'
 import { FailedNotice } from '../failure/FailureActions.tsx'
-import { colorOf, drawChart, loadPlot, type PlotModule } from './plotDrawing.ts'
+import { colorOf, drawChart, loadPlot, tipFailures, type PlotModule } from './plotDrawing.ts'
+import { wordMessage } from '../text/engine.ts'
+import { useWords } from '../text/words.ts'
 
 /**
  * A plot line's chart (docs/spec-v1.md section 10, Plots), under its line and
@@ -56,11 +58,18 @@ function Chart({ plot }: { plot: PlotView }) {
 
   // Rebuilt only when the plot's data or settings change (section 14).
   const key = JSON.stringify(plot)
+  const { engine } = useWords()
   useEffect(() => {
     if (!module || !host.current) return
     host.current.replaceChildren(drawChart(module, plot))
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- `key` stands for `plot`, so an equal plot draws nothing.
+    tipFailures(host.current, plot, (message) => wordMessage(engine, message))
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- `key` stands for `plot`, so an equal plot draws nothing; the tips follow `engine` below.
   }, [module, key])
+  // A language change re-words the failed points' tips; the chart stays as drawn.
+  useEffect(() => {
+    if (host.current) tipFailures(host.current, plot, (message) => wordMessage(engine, message))
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- `key` stands for `plot`.
+  }, [engine, key])
 
   // The legend's rows in the colours' order: curves (named at their ends instead with
   // `labels direct`), then points with a dot, then circles with a line (section 10).

@@ -1,5 +1,6 @@
 import type { MathJsInstance, Unit } from 'mathjs'
 import { SheetError } from './functions.ts'
+import type { EngineMessage, RangePart } from './messages.ts'
 import { leadingNumber } from './numbers.ts'
 
 /**
@@ -15,7 +16,7 @@ import { leadingNumber } from './numbers.ts'
  *   point before it.
  */
 
-export type Point = { ok: true; value: unknown } | { ok: false; message: string }
+export type Point = { ok: true; value: unknown } | { ok: false; message: EngineMessage }
 
 export class SheetList {
   readonly points: readonly Point[]
@@ -56,13 +57,13 @@ export function createRanges(math: MathJsInstance) {
   const isUnit = (value: unknown): value is Unit => math.isUnit(value)
 
   /** A value as an SI number and its dimensions (null for a plain number). */
-  function reduce(value: unknown, what: string): { number: number; dimensions: readonly number[] | null } {
+  function reduce(value: unknown, part: RangePart): { number: number; dimensions: readonly number[] | null } {
     if (typeof value === 'number') return { number: value, dimensions: null }
     if (isUnit(value) && value.value !== null) {
       const dimensionless = value.dimensions.every((d) => d === 0)
       return { number: value.value, dimensions: dimensionless ? null : value.dimensions }
     }
-    throw new SheetError(`the range's ${what} must be a number or a quantity`)
+    throw new SheetError({ code: 'rangePartNotNumber', part })
   }
 
   return {
@@ -75,21 +76,21 @@ export function createRanges(math: MathJsInstance) {
       const b = reduce(end, 'end')
       if (step === null && (a.dimensions !== null || b.dimensions !== null || isUnit(start) || isUnit(end))) {
         const unit = isUnit(start) ? start.formatUnits().replace(/ \/ /g, '/') : ''
-        throw new SheetError(`a range with units needs a step, such as "step 1${unit ? ` ${unit}` : ''}"`)
+        throw new SheetError({ code: 'rangeNeedsStep', unit })
       }
       const s = step === null ? { number: 1, dimensions: null } : reduce(step, 'step')
       if (!same(a.dimensions, b.dimensions) || !same(a.dimensions, s.dimensions)) {
-        throw new SheetError('start, end and step must be the same kind')
+        throw new SheetError({ code: 'rangeSameKind' })
       }
       const span = b.number - a.number
       const steps = span / s.number
       if (s.number === 0 || !Number.isFinite(steps) || steps < 0) {
-        throw new SheetError(`step ${showStep(step)} never reaches the end`)
+        throw new SheetError({ code: 'stepNeverReaches', step: showStep(step) })
       }
       // The end counts when the steps land on it, to rounding.
       const count = Math.floor(steps + 1e-9) + 1
       if (count > MAX_POINTS) {
-        throw new SheetError(`${name ?? 'the range'} has more than 10,000 points`)
+        throw new SheetError({ code: 'tooManyPoints', what: name, limit: MAX_POINTS })
       }
       const template = isUnit(start) ? start.toSI() : null
       const points: Point[] = []
@@ -123,15 +124,17 @@ function same(a: readonly number[] | null, b: readonly number[] | null): boolean
  * count, the first and last values, then the unit once. A list with failed
  * points counts what it has: `29 of 30 values, …`. `show` writes one value in
  * the sheet's form; `showIn` writes one in the unit of another value's text.
+ * A solved value's roots count as roots (section 9, Roots): `13 roots, …`.
  */
 export function listSummary(
   list: SheetList,
   show: (value: unknown) => string,
   showLike: (value: unknown, like: string) => string,
+  noun: 'values' | 'roots' = 'values',
 ): string {
   const ok = list.points.filter((point) => point.ok)
   if (ok.length > 0 && ok.every((point) => typeof point.value === 'string')) return textSummary(list, ok.length)
-  const count = ok.length === list.length ? `${list.length} values` : `${ok.length} of ${list.length} values`
+  const count = ok.length === list.length ? `${list.length} ${noun}` : `${ok.length} of ${list.length} ${noun}`
   if (ok.length === 0) return count
   const last = show(ok[ok.length - 1].value)
   if (ok.length === 1) return `${count}, ${last}`
