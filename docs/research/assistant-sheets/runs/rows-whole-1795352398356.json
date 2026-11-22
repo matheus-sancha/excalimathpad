@@ -1,0 +1,37 @@
+[
+  null,
+  {
+    "model": "claude-haiku-5-5",
+    "scenario": "pump",
+    "guide": "whole",
+    "trial": 1,
+    "first": {
+      "elements": 7,
+      "lines": 38,
+      "comments": 5,
+      "errors": [],
+      "warnings": [],
+      "failedPoints": [],
+      "forms": {
+        "comment": 5,
+        "note": 14,
+        "solve": 2,
+        "condition": 2,
+        "display unit": 7,
+        "rule": 1,
+        "range": 2,
+        "table": 1,
+        "plot": 1
+      },
+      "bare": [
+        "E2:4  K_tot = K_in + K_out + N_elb * K_elb + K_gv  =  3.5",
+        "E3:3  f_d = fcol(Re_d, rr)  =  0.01765"
+      ]
+    },
+    "repaired": null,
+    "cost": 0.0063495,
+    "seconds": 39.056746100000005,
+    "tokensIn": 18490,
+    "tokensOut": 9001
+  }
+]
