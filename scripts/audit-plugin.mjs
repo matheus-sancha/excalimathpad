@@ -22,10 +22,12 @@ export const MAX_BYTES = 5_000_000
  * Each file's budget, from 1.0.0 (#203): the size of the build that becomes
  * 1.0.0 plus 5%, rounded up to the next 1,000 bytes (main.js 3,403,718,
  * styles.css 555,370). Raise one only on purpose, in a commit that says what
- * was added.
+ * was added. main.js was raised on 2026-11-22 by the Math assistant's Send
+ * (#310): 3,580,181 bytes plus 5% of the first slice's growth so far (87,169),
+ * rounded up; the issue that turns the assistant on (#312) raises it again.
  */
 export const BUDGET = {
-  'main.js': 3_574_000,
+  'main.js': 3_585_000,
   'styles.css': 584_000,
 }
 

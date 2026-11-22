@@ -22,5 +22,5 @@
     "erasableSyntaxOnly": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["plugin", "src/buildStamp.d.ts", "src/guide/mathGuide.d.ts", "src/test/setup.ts"]
+  "include": ["plugin", "src/buildStamp.d.ts", "src/guide/mathGuide.d.ts", "src/assistant/guideText.d.ts", "src/test/setup.ts"]
 }

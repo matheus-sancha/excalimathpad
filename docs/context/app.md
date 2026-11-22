@@ -107,4 +107,10 @@ draws no seventh tab and no More tools item. **An edit keeps the chat** (section
 panel): `onEdit` still notes the panel's state in `beforeEdit` when a line or the title
 opens, but asks for nothing when the panel is open on `assistant`, so the panel stays there;
 the edit's end restores that same state, as for any tab. App never reads the build-time
-switch.
+switch. **The conversation** (#310) is held by Sheet, not the tab: `createConversation()`
+once per Sheet, ended by the web session's `onOpened` (another sheet opened) and by Sheet's
+unmount (a reload, a closed vault tab). **What the assistant reads** is `AssistantSheet`
+(`assistantSheet`): `now()` is `sheetNow` over the last evaluation, the anchors' boxes,
+`sceneTexts` and the settings, the same object until a cheap key changes (the evaluations
+counted in an effect, the language, each text's and anchor's version); `subscribe` is
+Excalidraw's `onChange` and those evaluations; `leaveLine` is the line relay's.

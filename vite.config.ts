@@ -6,7 +6,7 @@ import type { Plugin } from 'vite'
 import { defineConfig } from 'vitest/config'
 import { ASSISTANT_SWITCH, assistantSwitch } from './assistantSwitch.ts'
 import { buildStamp } from './buildStamp.ts'
-import { GUIDE_QUERY, guideModule } from './src/guide/markdown.ts'
+import { GUIDE_QUERY, GUIDE_TEXT_QUERY, guideModule, guideTextModule } from './src/guide/markdown.ts'
 
 /**
  * `docs/math-guide.md?guide`: the Math guide, turned into elements at build
@@ -17,10 +17,13 @@ const mathGuide: Plugin = {
   name: 'excalimathpad-math-guide',
   enforce: 'pre',
   async load(id) {
-    if (!id.endsWith(GUIDE_QUERY)) return null
-    const file = id.slice(0, -GUIDE_QUERY.length)
+    // `?text` is the guide's own text, for the Math assistant's model (section 14, 0.7.0).
+    const query = id.endsWith(GUIDE_QUERY) ? GUIDE_QUERY : id.endsWith(GUIDE_TEXT_QUERY) ? GUIDE_TEXT_QUERY : null
+    if (!query || !id.slice(0, -query.length).endsWith('.md')) return null
+    const file = id.slice(0, -query.length)
     this.addWatchFile(file)
-    return guideModule(await readFile(file, 'utf8'))
+    const text = await readFile(file, 'utf8')
+    return query === GUIDE_QUERY ? guideModule(text) : guideTextModule(text)
   },
 }
 

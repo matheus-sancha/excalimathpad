@@ -162,6 +162,8 @@ describe('the Math assistant in a sheet tab', () => {
     fireEvent.change(within(tab).getByLabelText('API key', { selector: 'input' }), { target: { value: CANARY } })
     fireEvent.click(within(tab).getByRole('button', { name: 'Show the key' }))
     fireEvent.click(within(tab).getByRole('button', { name: 'Save' }))
+    // Saved, the tab holds the conversation; the key button opens the card again.
+    fireEvent.click(await within(tab).findByRole('button', { name: 'Provider and key' }))
     await within(tab).findByText('Saved key ending a1B2')
 
     // The one entry, and the one place the key is.
@@ -193,6 +195,7 @@ describe('the Math assistant in a sheet tab', () => {
     fireEvent.click(await screen.findByTitle('More tools'))
     await waitFor(() => expect(document.querySelector('.math-tools button')).not.toBeNull())
     const again = await openTab()
+    fireEvent.click(within(again).getByRole('button', { name: 'Provider and key' }))
     expect(within(again).getByText('Saved key ending a1B2')).toBeInTheDocument()
     fireEvent.click(within(again).getByRole('button', { name: 'Remove' }))
     expect(secrets.get('excalimathpad-assistant')).not.toContain(CANARY)

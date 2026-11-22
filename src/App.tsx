@@ -57,7 +57,10 @@ import { printRowNodes, printViews } from './overlay/printRows.ts'
 import type { PageSetting } from './print/pages.ts'
 import { printSheet, type SheetToPrint } from './print/printSheet.ts'
 import { AssistantTab } from './assistant/AssistantTab.tsx'
+import { createConversation } from './assistant/conversation.ts'
 import type { AssistantPorts } from './assistant/ports.ts'
+import { sheetNow, type AssistantSheet, type SheetNow } from './assistant/sheet.ts'
+import { sceneTexts } from './canvas/sceneTexts.ts'
 
 /**
  * What Obsidian's commands do in a sheet tab (docs/spec-v1.md section 8,
@@ -238,6 +241,10 @@ function Sheet({
   const [canvas, setCanvas] = useState<SheetCanvasHandle | null>(null)
   const [line] = useState(() => createLineRelay<LineEditControl>())
   const [memory] = useState(() => panelMemory ?? sessionPanelMemory())
+  // The Math assistant's conversation, held above its tab, one per open sheet (section 14,
+  // 0.7.0): it ends when another sheet is opened here, or the sheet's view goes.
+  const [conversation] = useState(() => createConversation())
+  useEffect(() => () => conversation.end(), [conversation])
 
   const file = useMemo((): SheetFile | null => {
     if (!canvas) return null
@@ -264,9 +271,10 @@ function Sheet({
       dialogs,
       line,
       resume,
+      onOpened: conversation.end,
     })
     return { sheet: session, web: { session, dialogs }, vault: null }
-  }, [canvas, files, recovery, vault, line, resume])
+  }, [canvas, files, recovery, vault, line, resume, conversation])
 
   // The view's boundary tells the sheet file of a failure (section 4, Unexpected failures).
   useLayoutEffect(() => {
@@ -339,6 +347,54 @@ function Sheet({
   )
   const [flash, setFlash] = useState<FlashLines | null>(null)
   const errors = sheet ? errorCount(sheet) : 0
+
+  // What the Math assistant reads of the sheet (section 8, What a Send carries): the last
+  // evaluation, the anchors' boxes, the scene's texts and the settings, read when asked.
+  const latest = useRef({ sheet, settings, count: 0, listeners: new Set<() => void>() })
+  useEffect(() => {
+    const now = latest.current
+    Object.assign(now, { sheet, settings, count: now.count + 1 })
+    for (const listener of [...now.listeners]) listener()
+  }, [sheet, settings])
+  const assistantSheet = useMemo((): AssistantSheet | null => {
+    if (!canvas) return null
+    const { api } = canvas
+    // Cheap: the evaluation's count, the language, and each text's and anchor's version.
+    const key = () =>
+      `${latest.current.count}|${words().assistant.send}|` +
+      api
+        .getSceneElements()
+        .filter((element) => !element.isDeleted && (element.type === 'text' || isMathAnchor(element)))
+        .map((element) => `${element.id}.${element.version}`)
+        .join(',')
+    let cached: { key: string; now: SheetNow } | null = null
+    return {
+      // The same object until the sheet may have changed, as `useSyncExternalStore` needs.
+      now: () => {
+        const at = key()
+        if (cached?.key === at) return cached.now
+        const elements = api.getSceneElements()
+        const now = sheetNow({
+          elements: latest.current.sheet ?? [],
+          anchors: elements.filter(isMathAnchor).map(toMathAnchor),
+          texts: sceneTexts(elements),
+          settings: latest.current.settings,
+          words: words(),
+        })
+        cached = { key: at, now }
+        return now
+      },
+      subscribe: (listener) => {
+        const off = api.onChange(listener)
+        latest.current.listeners.add(listener)
+        return () => {
+          off()
+          latest.current.listeners.delete(listener)
+        }
+      },
+      leaveLine: () => line.current?.leaveLine(),
+    }
+  }, [canvas, line])
 
   // The opened sheet: its start has loaded it (the vault's file, or on the web
   // the recovery copy once answered). `start` is the sheet's own, run once.
@@ -692,7 +748,16 @@ function Sheet({
             settings: file && tab(<SettingsTab settings={settings} onChange={file.sheet.setSettings} />),
             constants: tab(<ConstantsTab settings={settings} canInsert={canInsert} onInsert={insert} />),
             // Only where the home passed the ports (section 14, 0.7.0).
-            assistant: assistant && tab(<AssistantTab ports={assistant} vault={vault !== undefined} />),
+            assistant:
+              assistant &&
+              tab(
+                <AssistantTab
+                  ports={assistant}
+                  vault={vault !== undefined}
+                  conversation={conversation}
+                  sheet={assistantSheet ?? undefined}
+                />,
+              ),
             // Per device, never in the file (section 8, M4e).
             width: memory,
             // Remembered per home; a floating panel closes by itself, so
