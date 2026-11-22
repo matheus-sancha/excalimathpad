@@ -43,6 +43,10 @@ You need **Node.js** `^22.22.2 || ^24.15.0 || >=26` and **npm 10+**. CI runs on 
    ```
 5. Open [http://localhost:5173](http://localhost:5173) in **Chrome or Edge on desktop**, the browsers v1 supports.
 
+On Windows, `.gitattributes` checks every text file out with LF line endings, which the tests
+need. A clone made before it was added keeps CRLF files until you run `git rm -r --cached -q .`
+and then `git reset --hard` (this discards uncommitted changes).
+
 ## Development Workflow
 
 ### Common commands
