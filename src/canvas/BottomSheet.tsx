@@ -1,4 +1,5 @@
-import { useLayoutEffect, useState, type CSSProperties, type ReactNode } from 'react'
+import { useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import { useWords } from '../text/words.ts'
 import { BOTTOM_SHEET_CLASS, SHEET_SIDEBAR_CLASS, type SheetPanelTab } from './panelPresses.ts'
 
 /** One tab of the bottom sheet: its trigger's face and name, and what fills it. */
@@ -22,6 +23,11 @@ export interface BottomSheetTab {
  * never takes focus (`panelPresses.ts`), and its keys never reach
  * Excalidraw's shortcuts. It is drawn inside Excalidraw's box (`.excalidraw`),
  * so it takes Excalidraw's theme, above the overlay.
+ *
+ * The active tab shows its name only if it fits (0.6.0, section 8): the room
+ * the other icons and Close leave in the row, measured as it is laid out
+ * (`nameFits`); otherwise it shows its icon alone, like the others, and every
+ * tab stays a 40 px target. Its words are the text table's (`panel`).
  */
 export function BottomSheet({
   tabs,
@@ -44,19 +50,38 @@ export function BottomSheet({
   const [box, setBox] = useState<HTMLElement | null>(null)
   const { bottom, visible } = useKeyboardInset(box)
   const shown = tabs.find(({ tab }) => tab === active) ?? tabs[0]
+  const { panel } = useWords()
+  const row = useRef<HTMLDivElement>(null)
+  const [named, setNamed] = useState(true)
+  useLayoutEffect(() => {
+    const tabRow = row.current
+    if (!tabRow) return
+    const measure = () => setNamed(nameFits(tabRow))
+    measure()
+    const Observer = tabRow.ownerDocument.defaultView?.ResizeObserver
+    if (!Observer) return
+    const observer = new Observer(measure)
+    observer.observe(tabRow)
+    return () => observer.disconnect()
+  }, [shown?.tab, shown?.name, tabs.length])
   return (
     <div
       ref={setBox}
       className={`${SHEET_SIDEBAR_CLASS} ${BOTTOM_SHEET_CLASS}${compact ? ' is-compact' : ''}`}
       role="region"
-      aria-label="Math settings"
+      aria-label={panel.region}
       style={{ bottom, '--sheet-visible': `${visible}px` } as CSSProperties}
     >
       <div className="sheet-sidebar__keys" onKeyDown={(event) => event.stopPropagation()}>
         {offer}
         {quickKeys}
         <div className="sheet-bottom__bar">
-          <div className="sheet-bottom__tabs" role="tablist" aria-label="Math settings tabs">
+          <div
+            ref={row}
+            className={`sheet-bottom__tabs${named ? '' : ' is-icons'}`}
+            role="tablist"
+            aria-label={panel.tabList}
+          >
             {tabs.map(({ tab, name, face }) => (
               <button
                 key={tab}
@@ -76,8 +101,8 @@ export function BottomSheet({
           <button
             type="button"
             className="sheet-bottom__close"
-            aria-label="Close"
-            title="Close"
+            aria-label={panel.close}
+            title={panel.close}
             tabIndex={-1}
             onClick={onClose}
           >
@@ -92,6 +117,33 @@ export function BottomSheet({
       </div>
     </div>
   )
+}
+
+/** A tab's least width in the row, a finger's target (40 px), and the room kept each side of the active tab's face. */
+const TAB_LEAST = 40
+const PILL_PADDING = 4
+
+/**
+ * Whether the active tab's name fits its row (section 8, On a phone, 0.6.0):
+ * its icon, the gap and the name, with a little room each side, beside the
+ * other tabs at their least. A row that isn't laid out (jsdom) keeps the name.
+ */
+function nameFits(row: HTMLElement): boolean {
+  const view = row.ownerDocument.defaultView
+  if (!view || row.clientWidth === 0) return true
+  const style = view.getComputedStyle(row)
+  const room = row.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight)
+  const tabs = [...row.querySelectorAll<HTMLElement>('.sheet-tab')]
+  const activeTab = tabs.find((tab) => tab.dataset.state === 'active')
+  const label = activeTab?.querySelector('.sheet-tab__label')
+  if (!activeTab || !label) return true
+  // The name's own width, laid out on one line, whether it shows or not.
+  const range = row.ownerDocument.createRange()
+  range.selectNodeContents(label)
+  const name = range.getBoundingClientRect().width
+  const icon = activeTab.querySelector('svg')?.getBoundingClientRect().width ?? 0
+  const gap = parseFloat(view.getComputedStyle(activeTab).columnGap) || 0
+  return (tabs.length - 1) * TAB_LEAST + icon + gap + name + 2 * PILL_PADDING <= room
 }
 
 /**

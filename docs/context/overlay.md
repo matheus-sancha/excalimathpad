@@ -31,8 +31,11 @@ field on the canvas's click when the element hasn't moved, and follow hover
 from `pointerMove`; `suggest.ts` (pure) is the suggestions while a line is
 typed (spec section 4): `wordAt`, `suggest` and `accept` over the sheet's
 names above the line (`sheetNames`), the constants, the functions and line
-forms (`FUNCTION_SUGGESTIONS`, built from the Symbols catalogue's entries
-spelled as names, Greek left out) and the units; `MathOverlay` builds the sources for the open line and
+forms (`functionSuggestions`, built from the Symbols catalogue's entries
+spelled as names, Greek left out) and the units, each detail worded from the
+text table given (0.6.0, #293: `suggest`, the kinds, the symbols' hints and
+the constants' descriptions), which `MathOverlay` builds again from
+`useWords()` when the language changes; `MathOverlay` builds the sources for the open line and
 `LineField` draws the list and takes its keys (Tab, ↓ ↑, Enter, Esc), and
 opens it above the field (`listGoesAbove`, M4d) when below it the on-screen
 keyboard (`visualViewport`) or a phone's bottom sheet would cover it; after

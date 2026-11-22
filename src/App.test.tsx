@@ -1085,6 +1085,9 @@ describe('App', () => {
       fireEvent.click(await sheetButton())
       fireEvent.mouseDown(await screen.findByRole('tab', { name: 'Settings' }))
       fireEvent.change(await screen.findByLabelText('Unit system'), { target: { value: 'custom' } })
+      // From 0.6.0 a kind's default option shows its units only: the system is named in Starts from.
+      expect(within(await screen.findByLabelText<HTMLSelectElement>('Pressure')).getAllByRole('option')[0]).toHaveTextContent(/^Pa … GPa$/)
+      expect(within(screen.getByLabelText<HTMLSelectElement>('Density')).getAllByRole('option')[0]).toHaveTextContent(/^kg\/m\^3$/)
       fireEvent.change(await screen.findByLabelText('Pressure'), { target: { value: 'bar' } })
 
       await waitFor(() => expect(resultsOf(element)).toBe('0.4543 bar 5.412 kW'))

@@ -10,8 +10,12 @@ own words in English and Português (Brasil), and the one way to read them. Depe
 React (`useSyncExternalStore`), nothing else; it never imports Excalidraw.
 
 **The two text tables.** `en.ts` is the English table, `export const en = { … }`, grouped by
-where the words show (`menu`, `tools`, `welcome`, `hint`, `file`, `print`); `Words` is its
-type. `ptBR.ts` is `export const ptBR: Words = { … }`, so a key missing there, or added
+where the words show (`menu`, `tools`, `welcome`, `hint`, `file`, `print`, `vault`; from issue 4,
+#293, `panel`, and the catalogues' `kinds`, `constants`, `symbols` and `suggest`); `Words`
+is its type. A catalogue's words are keyed by the catalogue, never held in it: a constant's
+description by math.js's name, a symbol's hint by its group and spelling, a kind by its id
+(`kinds.name`, and `kinds.a` with its article); `panelWords.test.ts` checks every entry has
+its words in both tables. `ptBR.ts` is `export const ptBR: Words = { … }`, so a key missing there, or added
 there alone, fails `tsc -b`, and `words.test.ts` holds that with `@ts-expect-error` lines
 and checks the two shapes match key by key. A word with arguments is a function of them
 in both tables (`tools.errors(count)`), so a plural, an article or the order of words
@@ -61,4 +65,8 @@ card, its lines and row, and the toast after a rename, `OfferCard.tsx`, `renameO
 App), `unitSlot` (`UnitField.tsx`) and `plotSettings` (`PlotSettings.tsx`). A word with
 parts that aren't text, as the offer's question with its code and button, is a function that
 hands back the words and the parts in the language's order (`offer.question`). The image-too-big toast is
-Excalidraw's own `errors.fileTooBig`, from its `t`, not a word of these tables.
+Excalidraw's own `errors.fileTooBig`, from its `t`, not a word of these tables. Issue 4
+(#293): the whole Sheet panel, its tab names and the bottom sheet ([panel](panel.md),
+[canvas](canvas.md)), with the Symbols and Constants catalogues and the kinds; and the
+typing suggestions' details (`suggest.ts`, which `MathOverlay` builds again on a change of
+language).

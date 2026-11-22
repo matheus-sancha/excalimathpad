@@ -14,7 +14,7 @@ import {
 import type { Suggested } from '../overlay/suggest.ts'
 import { ConditionField } from './ConditionField.tsx'
 import { HighlightRow, PanelButton, Row, TextRow, Toggle } from './formatControls.tsx'
-import { FORMAT_HINTS } from './formatTab.ts'
+import { useWords, type Words } from '../text/words.ts'
 
 /** What the Rules list does: each acts on the open line (`LineEditControl`). */
 export interface RulesActions {
@@ -49,9 +49,12 @@ export interface RulesListProps {
  * condition's field is the one control here that takes the keyboard, and the
  * open line stays open while it has it. Every write goes to the line's stored
  * format: a row the list changes is written as one joined word and one
- * condition; the others keep their exact text.
+ * condition; the others keep their exact text. Its words are the text table's
+ * (`panel.rules`), in the language shown (0.6.0).
  */
 export function RulesList({ rules, states, name, actions }: RulesListProps) {
+  const w = useWords()
+  const words = w.panel.rules
   // The rule whose format controls are open.
   const [open, setOpen] = useState<number | null>(null)
   // The condition being typed, as typed: a rule's own is trimmed, which would eat a space as it is typed.
@@ -125,10 +128,10 @@ export function RulesList({ rules, states, name, actions }: RulesListProps) {
   }
 
   return (
-    <section className="sheet-rules" aria-label="Rules">
+    <section className="sheet-rules" aria-label={words.title}>
       <p className="sheet-rules__header">
-        <span className="sheet-rules__title">Rules</span>
-        <span className="sheet-rules__hint">first true wins, top to bottom</span>
+        <span className="sheet-rules__title">{words.title}</span>
+        <span className="sheet-rules__hint">{words.hint}</span>
       </p>
       {rules.length > 0 && (
         <ol className="sheet-rules__list">
@@ -138,13 +141,13 @@ export function RulesList({ rules, states, name, actions }: RulesListProps) {
             const condition = typing?.index === index ? typing.text : rule.condition
             // An empty condition removes nothing: its row says what it needs (section 13, Panel).
             const state: RuleState | undefined =
-              condition.trim() === '' ? { kind: 'warning', message: FORMAT_HINTS.noCondition } : states?.[index]
+              condition.trim() === '' ? { kind: 'warning', message: words.noCondition } : states?.[index]
             return (
-              <li key={index} className="sheet-rules__item" aria-label={`Rule ${n}: ${rule.text}`}>
+              <li key={index} className="sheet-rules__item" aria-label={words.rule(n, rule.text)}>
                 <div className="sheet-rules__row">
                   <PanelButton
                     className={`sheet-rules__chip${chipClasses(format)}`}
-                    label={`Format of rule ${n}`}
+                    label={words.chip(n)}
                     pressed={open === index}
                     onPress={() => setOpen(open === index ? null : index)}
                   >
@@ -153,7 +156,7 @@ export function RulesList({ rules, states, name, actions }: RulesListProps) {
                   <div className="sheet-rules__condition">
                     <span className="sheet-rules__if">if</span>
                     <ConditionField
-                      label={`Condition of rule ${n}`}
+                      label={words.condition(n)}
                       value={condition}
                       fieldRef={(field) => {
                         if (field) fields.current.set(index, field)
@@ -165,11 +168,11 @@ export function RulesList({ rules, states, name, actions }: RulesListProps) {
                       suggest={actions.suggest}
                     />
                   </div>
-                  {state && <RuleStateText state={state} />}
+                  {state && <RuleStateText state={state} w={w} />}
                   <span className="sheet-rules__keys">
                     <PanelButton
                       className="sheet-rules__key"
-                      label={`Move rule ${n} up`}
+                      label={words.up(n)}
                       disabled={index === 0}
                       onPress={() => move(index, -1)}
                     >
@@ -177,13 +180,13 @@ export function RulesList({ rules, states, name, actions }: RulesListProps) {
                     </PanelButton>
                     <PanelButton
                       className="sheet-rules__key"
-                      label={`Move rule ${n} down`}
+                      label={words.down(n)}
                       disabled={index === rules.length - 1}
                       onPress={() => move(index, 1)}
                     >
                       ↓
                     </PanelButton>
-                    <PanelButton className="sheet-rules__key" label={`Remove rule ${n}`} onPress={() => remove(index)}>
+                    <PanelButton className="sheet-rules__key" label={words.remove(n)} onPress={() => remove(index)}>
                       ✕
                     </PanelButton>
                   </span>
@@ -194,8 +197,8 @@ export function RulesList({ rules, states, name, actions }: RulesListProps) {
           })}
         </ol>
       )}
-      <PanelButton className="sheet-rules__add" label="+ Add rule" onPress={add}>
-        + Add rule
+      <PanelButton className="sheet-rules__add" label={words.add} onPress={add}>
+        {words.add}
       </PanelButton>
     </section>
   )
@@ -204,8 +207,9 @@ export function RulesList({ rules, states, name, actions }: RulesListProps) {
 /** A rule's Text, Highlight and Style rows. Its last property can't be taken off: ✕ removes the rule. */
 function RuleFormat({ format, onChange, n }: { format: LineFormat; onChange: (format: LineFormat) => void; n: number }) {
   const last = [format.textColor, format.color, format.bold || null, format.underline || null].filter(Boolean).length === 1
+  const words = useWords().panel
   return (
-    <div className="sheet-rules__format" role="group" aria-label={`Rule ${n} format`}>
+    <div className="sheet-rules__format" role="group" aria-label={words.rules.formatGroup(n)}>
       <TextRow
         color={format.textColor}
         locked={last && format.textColor !== null}
@@ -216,7 +220,7 @@ function RuleFormat({ format, onChange, n }: { format: LineFormat; onChange: (fo
         locked={last && format.color !== null}
         onChange={(color) => onChange({ ...format, color })}
       />
-      <Row label="Style">
+      <Row label={words.format.rows.style}>
         <Toggle kind="bold" pressed={format.bold} locked={last} onPress={() => onChange({ ...format, bold: !format.bold })} />
         <Toggle
           kind="underline"
@@ -230,19 +234,16 @@ function RuleFormat({ format, onChange, n }: { format: LineFormat; onChange: (fo
 }
 
 /** A rule's live state, beside its condition. */
-function RuleStateText({ state }: { state: RuleState }) {
+function RuleStateText({ state, w }: { state: RuleState; w: Words }) {
+  const words = w.panel.rules
   switch (state.kind) {
     case 'true':
     case 'false':
-      return <span className={`sheet-rules__state is-${state.kind}`}>{state.kind}</span>
+      return <span className={`sheet-rules__state is-${state.kind}`}>{words[state.kind]}</span>
     case 'overridden':
-      return <span className="sheet-rules__state is-overridden">true, overridden</span>
+      return <span className="sheet-rules__state is-overridden">{words.overridden}</span>
     case 'count':
-      return (
-        <span className="sheet-rules__state is-count">
-          {state.count} of {state.of} {state.unit}
-        </span>
-      )
+      return <span className="sheet-rules__state is-count">{words.count(state.count, state.of, state.unit)}</span>
     case 'warning':
       return <span className="sheet-rules__state is-warning">⚠ {state.message}</span>
   }

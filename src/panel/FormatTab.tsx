@@ -3,9 +3,10 @@ import type { TitleFormat } from '../canvas/mathAnchor.ts'
 import type { CommentFormat, LineFormat, TextColor } from '../math/lineForm.ts'
 import { LineSample, TitleSample } from '../overlay/MathElementView.tsx'
 import { TEXT_COLOR_VALUES } from '../overlay/textColors.ts'
-import { FORMAT_HINTS, formatView, type FormatElement, type FormatTarget } from './formatTab.ts'
-import { HighlightRow, PanelButton, Row, SizeRow, TextRow, Toggle } from './formatControls.tsx'
+import { formatView, withArrow, type FormatElement, type FormatTarget } from './formatTab.ts'
+import { HighlightRow, KeepWhole, PanelButton, Row, SizeRow, TextRow, Toggle } from './formatControls.tsx'
 import { RulesList, type RulesActions } from './RulesList.tsx'
+import { useWords } from '../text/words.ts'
 
 /** What the Format tab's presses do: each acts on the open line or title (`LineEditControl`). */
 export interface FormatActions extends RulesActions {
@@ -46,19 +47,22 @@ export interface FormatTabProps {
  * link that moves the edit, and Done, ↑ and ↓. Then one labelled row of large
  * buttons per property the open thing takes. Every control is a no-focus
  * button (section 14): a blur would leave the line. The one field is a rule's
- * condition, in the Rules list, which keeps the line open (M4e).
+ * condition, in the Rules list, which keeps the line open (M4e). Its words are
+ * the text table's, in the language shown (0.6.0).
  */
 export function FormatTab({ sheet, target, selected, resultColor = 'blue', touch = false, phone = false, actions }: FormatTabProps) {
-  const view = formatView(sheet, target)
+  const w = useWords()
+  const words = w.panel.format
+  const view = formatView(sheet, target, w)
 
   if (view.kind === 'none') {
     return (
       <div className="sheet-panel sheet-format">
         <div className="sheet-format__hint">
-          <p className="sheet-panel__empty">{touch ? FORMAT_HINTS.nothingOpenTouch : FORMAT_HINTS.nothingOpen}</p>
+          <p className="sheet-panel__empty">{touch ? words.nothingOpenTouch : words.nothingOpen}</p>
           {selected !== null && (
-            <PanelButton className="sheet-format__nav-button" label="Edit (Enter)" onPress={() => actions.edit(selected)}>
-              Edit
+            <PanelButton className="sheet-format__nav-button" label={words.editKey} onPress={() => actions.edit(selected)}>
+              {words.edit}
             </PanelButton>
           )}
         </div>
@@ -76,7 +80,7 @@ export function FormatTab({ sheet, target, selected, resultColor = 'blue', touch
 
   return (
     <div className="sheet-panel sheet-format">
-      <section className="sheet-format__sample" aria-label="Sample">
+      <section className="sheet-format__sample" aria-label={words.sample}>
         <p className="sheet-format__caption">{view.caption}</p>
         <div
           // A line's box scrolls inside, and may be taller for a table (section 4, Format tab, M4e).
@@ -87,35 +91,35 @@ export function FormatTab({ sheet, target, selected, resultColor = 'blue', touch
         >
           {sample}
         </div>
-        {line?.plot && !phone && <p className="sheet-format__chart-note">{FORMAT_HINTS.chartOnSheet}</p>}
+        {line?.plot && !phone && <p className="sheet-format__chart-note">{words.chartOnSheet}</p>}
       </section>
-      <div className="sheet-format__nav" role="toolbar" aria-label="Move the edit">
+      <div className="sheet-format__nav" role="toolbar" aria-label={words.moveEdit}>
         <PanelButton
           className="sheet-format__link"
-          label={view.link}
+          label={words.links[view.link]}
           onPress={() => actions.moveTo(view.kind === 'title' ? 'first' : 'title')}
         >
-          {view.link}
+          {withArrow(words.links[view.link])}
         </PanelButton>
         <span className="sheet-format__nav-keys">
-          <PanelButton className="sheet-format__nav-button" label="Done (Esc)" onPress={actions.done}>
-            Done
+          <PanelButton className="sheet-format__nav-button" label={words.doneKey} onPress={actions.done}>
+            {words.done}
           </PanelButton>
-          <PanelButton className="sheet-format__nav-button" label="Up (↑)" onPress={() => actions.move('up')}>
+          <PanelButton className="sheet-format__nav-button" label={words.up} onPress={() => actions.move('up')}>
             ↑
           </PanelButton>
-          <PanelButton className="sheet-format__nav-button" label="Down (↓)" onPress={() => actions.move('down')}>
+          <PanelButton className="sheet-format__nav-button" label={words.down} onPress={() => actions.move('down')}>
             ↓
           </PanelButton>
         </span>
       </div>
       {view.kind === 'math' &&
         view.overrides.map((note) => (
-          <p key={note} className="sheet-format__override">
-            {note}
+          <p key={note.text} className="sheet-format__override">
+            <KeepWhole text={note.text} whole={note.condition} />
           </p>
         ))}
-      {view.kind === 'blank' && <p className="sheet-panel__empty">{FORMAT_HINTS.noFormat}</p>}
+      {view.kind === 'blank' && <p className="sheet-panel__empty">{words.noFormat}</p>}
       {view.kind === 'math' && <MathRows format={view.format} onChange={actions.setFormat} />}
       {view.kind === 'math' && (
         <RulesList
@@ -135,9 +139,10 @@ export function FormatTab({ sheet, target, selected, resultColor = 'blue', touch
 
 /** A math line: Style (B, U), Text and Highlight. */
 function MathRows({ format, onChange }: { format: LineFormat; onChange: (format: LineFormat) => void }) {
+  const words = useWords().panel.format
   return (
     <>
-      <Row label="Style">
+      <Row label={words.rows.style}>
         <Toggle kind="bold" pressed={format.bold} onPress={() => onChange({ ...format, bold: !format.bold })} />
         <Toggle
           kind="underline"
@@ -153,9 +158,10 @@ function MathRows({ format, onChange }: { format: LineFormat; onChange: (format:
 
 /** A comment line: Style (B, I pressed unless `@upright`, U), Size, Text and Highlight. */
 function CommentRows({ format, onChange }: { format: CommentFormat; onChange: (format: CommentFormat) => void }) {
+  const words = useWords().panel.format
   return (
     <>
-      <Row label="Style">
+      <Row label={words.rows.style}>
         <Toggle kind="bold" pressed={format.bold} onPress={() => onChange({ ...format, bold: !format.bold })} />
         <Toggle kind="italic" pressed={!format.upright} onPress={() => onChange({ ...format, upright: !format.upright })} />
         <Toggle
@@ -172,16 +178,17 @@ function CommentRows({ format, onChange }: { format: CommentFormat; onChange: (f
 }
 
 const ALIGNS = [
-  ['left', 'Align left', '⇤'],
-  ['centre', 'Centre', '↔'],
-  ['right', 'Align right', '⇥'],
+  ['left', 'alignLeft', '⇤'],
+  ['centre', 'alignCentre', '↔'],
+  ['right', 'alignRight', '⇥'],
 ] as const
 
 /** The title: Style (B pressed by default, I, U), Size, Align, Text and Highlight. Its "no text colour" is black. */
 function TitleRows({ format, onChange }: { format: TitleFormat; onChange: (format: TitleFormat) => void }) {
+  const words = useWords().panel.format
   return (
     <>
-      <Row label="Style">
+      <Row label={words.rows.style}>
         <Toggle kind="bold" pressed={format.bold} onPress={() => onChange({ ...format, bold: !format.bold })} />
         <Toggle kind="italic" pressed={format.italic} onPress={() => onChange({ ...format, italic: !format.italic })} />
         <Toggle
@@ -191,12 +198,12 @@ function TitleRows({ format, onChange }: { format: TitleFormat; onChange: (forma
         />
       </Row>
       <SizeRow size={format.size} onChange={(size) => onChange({ ...format, size })} />
-      <Row label="Align">
-        {ALIGNS.map(([align, label, glyph]) => (
+      <Row label={words.rows.align}>
+        {ALIGNS.map(([align, name, glyph]) => (
           <PanelButton
             key={align}
             className="sheet-format__button"
-            label={label}
+            label={words[name]}
             pressed={format.align === align}
             // Pressing the pressed alignment takes it off: left, the default.
             onPress={() => onChange({ ...format, align: format.align === align ? 'left' : align })}

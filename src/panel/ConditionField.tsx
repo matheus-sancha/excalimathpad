@@ -1,4 +1,5 @@
 import { useLayoutEffect, useRef, useState, type FocusEvent, type KeyboardEvent } from 'react'
+import { useWords } from '../text/words.ts'
 import type { Suggested, Suggestion } from '../overlay/suggest.ts'
 
 export interface ConditionFieldProps {
@@ -29,6 +30,7 @@ const LIST_ID = 'sheet-rules-suggestions'
  * the list.
  */
 export function ConditionField({ label, value, fieldRef, onType, onEnter, onBlur, suggest }: ConditionFieldProps) {
+  const w = useWords()
   const field = useRef<HTMLInputElement | null>(null)
   const [list, setList] = useState<{ suggested: Suggested; highlight: number | null } | null>(null)
   // The input a suggestion writes doesn't ask for another list.
@@ -146,7 +148,7 @@ export function ConditionField({ label, value, fieldRef, onType, onEnter, onBlur
         }}
       />
       {list && (
-        <ul ref={listRef} className="sheet-rules__suggest" id={LIST_ID} role="listbox" aria-label="Suggestions">
+        <ul ref={listRef} className="sheet-rules__suggest" id={LIST_ID} role="listbox" aria-label={w.panel.rules.suggestions}>
           {list.suggested.items.map((item, i) => (
             <li
               key={`${item.kind}:${item.name}`}

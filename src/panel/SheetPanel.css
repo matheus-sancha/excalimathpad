@@ -210,7 +210,13 @@
   padding: 2px 4px;
   font-weight: normal;
   text-align: left;
-  white-space: nowrap;
+  /*
+   * A longer kind wraps between its words (section 8, 0.6.0): "Viscosidade /
+   * cinemática". The column takes its longest word, so each select has the
+   * room for its units, whole (section 5, Unit systems).
+   */
+  width: 1%;
+  overflow-wrap: normal;
   color: var(--color-gray-50, #868e96);
 }
 
@@ -460,6 +466,22 @@ li + li > .sheet-panel__constant {
   margin: 0 4px;
   color: var(--color-gray-50, #868e96);
   font-style: italic;
+}
+
+/*
+ * Longer text wraps between words (section 8, Sheet panel, 0.6.0), but a
+ * condition or a name quoted in running text never breaks inside: the line
+ * wraps before it ("… enquanto u > 3 m/s.", "Renomear `rho` para"). A
+ * condition is one box that moves to the next line whole, and wraps inside
+ * only if it is wider than the panel itself, so nothing is cut.
+ */
+.sheet-panel__whole {
+  display: inline-block;
+  max-width: 100%;
+}
+
+.sheet-rename__heading code {
+  white-space: nowrap;
 }
 
 /* One labelled row per property, of large buttons. */

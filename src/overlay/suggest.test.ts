@@ -4,7 +4,7 @@ import {
   accept,
   listGoesAbove,
   constantSuggestions,
-  FUNCTION_SUGGESTIONS,
+  functionSuggestions,
   sheetNames,
   suggest,
   unitSuggestions,
@@ -18,7 +18,7 @@ const variable = (name: string, detail = '1'): Suggestion => ({ name, kind: 'var
 const sources = (sheet: Suggestion[] = []): SuggestSources => ({
   sheet,
   constants: constantSuggestions(listConstants()),
-  functions: FUNCTION_SUGGESTIONS,
+  functions: functionSuggestions(),
   units: unitSuggestions(),
 })
 
@@ -127,7 +127,7 @@ describe('sheetNames', () => {
 
 describe('the fixed lists', () => {
   it('offers if among the functions, with its hint (section 4, M4d)', () => {
-    expect(FUNCTION_SUGGESTIONS.find((item) => item.name === 'if')).toEqual({
+    expect(functionSuggestions().find((item) => item.name === 'if')).toEqual({
       name: 'if',
       kind: 'function',
       detail: 'if(cond, a, b)',
@@ -136,7 +136,7 @@ describe('the fixed lists', () => {
   })
 
   it('every function, constant and unit is a name the engine reads', () => {
-    const all = [...FUNCTION_SUGGESTIONS.filter((item) => item.kind === 'function'), ...constantSuggestions(listConstants()), ...unitSuggestions()]
+    const all = [...functionSuggestions().filter((item) => item.kind === 'function'), ...constantSuggestions(listConstants()), ...unitSuggestions()]
     for (const item of all) {
       if (item.name === 'plot' || item.name === 'table') continue
       const source = item.kind === 'unit' ? `1 ${item.name}` : `u = ${item.name}`

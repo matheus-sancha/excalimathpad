@@ -60,7 +60,7 @@ tab's form hands App a `RenameRequest`, and `rename` leaves an open line
 (its own step), applies the plan's lines to the scene's anchors
 (`applyRename`) and writes them in one `writeAnchorSources`, one undo step;
 then the keyboard goes to the canvas, Excalidraw's toast says it
-(`RENAME_WORDS.renamed`, "Undo" on touch), and every changed line flashes
+(the text table's `offer.renamed`, "Undo" on touch), and every changed line flashes
 through the overlay's `flash`, with no scroll and no selection. **The offer's
 Rename** (#262) comes the same way: `MathOverlay`'s `onRenameOffer` hands
 `rename` an `OfferRename` (the same shape as a `RenameRequest`) once the open

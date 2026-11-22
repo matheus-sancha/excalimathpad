@@ -11,7 +11,7 @@ import { linesOf, resultsOf as sheetResults } from '../test/sheetView.ts'
 import { mathSelection } from '../canvas/mathSelection.ts'
 import { NO_COMMENT_FORMAT, NO_FORMAT } from '../math/lineForm.ts'
 import { FormatTab, type FormatActions } from '../panel/FormatTab.tsx'
-import { FORMAT_HINTS } from '../panel/formatTab.ts'
+import { en } from '../text/en.ts'
 import {
   MathOverlay,
   type EditTarget,
@@ -1602,7 +1602,7 @@ describe('the Format tab (docs/spec-v1.md section 4, Format tab, M4d)', () => {
   it('with nothing open, shows the hint, and Edit only while one math element is selected', () => {
     const { scene } = withTab('x = 2\ny = 3')
 
-    expect(tab()).toHaveTextContent(FORMAT_HINTS.nothingOpen)
+    expect(tab()).toHaveTextContent(en.panel.format.nothingOpen)
     expect(within(tab()).queryByRole('button', { name: /^Edit/ })).toBeNull()
 
     scene.select('m1')
@@ -1651,7 +1651,7 @@ describe('the Format tab (docs/spec-v1.md section 4, Format tab, M4d)', () => {
   // (`scripts/panel-run.mjs`, `scripts/touch-run.mjs`); here, what it holds.
   describe('from M4e, a line’s sample is its own smaller drawing', () => {
     const drawing = () => sample()!.querySelector('.sheet-format__drawing')!
-    const chartNote = () => within(tab()).queryByText(FORMAT_HINTS.chartOnSheet)
+    const chartNote = () => within(tab()).queryByText(en.panel.format.chartOnSheet)
 
     it('draws a line in the wrapping layout, and the title as before', () => {
       titledWithTab('Pipe flow', 'v = 4 m/s')
@@ -1681,7 +1681,7 @@ describe('the Format tab (docs/spec-v1.md section 4, Format tab, M4d)', () => {
       expect(sample()!.querySelector('.math-element__note')).toHaveTextContent('curve')
       expect(sample()!.querySelector('.math-element__plot-cell, .math-element__plot, .math-element__plot-chart')).toBeNull()
       expect(chartNote()).not.toBeNull()
-      expect(FORMAT_HINTS.chartOnSheet).toBe('Its chart is drawn on the sheet.')
+      expect(en.panel.format.chartOnSheet).toBe('Its chart is drawn on the sheet.')
 
       // Another line has no chart to speak of.
       fireEvent.keyDown(openField()!, { key: 'ArrowUp' })
@@ -1909,7 +1909,7 @@ describe('the Format tab (docs/spec-v1.md section 4, Format tab, M4d)', () => {
     for (const n of [2, 3]) {
       openLine(n)
       expect(sample()).not.toBeNull()
-      expect(tab()).toHaveTextContent(FORMAT_HINTS.noFormat)
+      expect(tab()).toHaveTextContent(en.panel.format.noFormat)
       expect(rowNames()).toEqual([])
     }
   })
@@ -1948,7 +1948,7 @@ describe('the Format tab (docs/spec-v1.md section 4, Format tab, M4d)', () => {
     expect(openField()).toBeNull()
     expect(scene.sourceOf('m1')).toBe('x = 2\ny = 4')
     expect(focusCanvas).toHaveBeenCalled()
-    expect(tab()).toHaveTextContent(FORMAT_HINTS.nothingOpen)
+    expect(tab()).toHaveTextContent(en.panel.format.nothingOpen)
   })
 
   it('the title has Style (B pressed by default), Size, Align, Text and Highlight; each press is one write beside it', () => {

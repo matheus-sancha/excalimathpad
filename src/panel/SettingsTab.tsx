@@ -3,7 +3,6 @@ import { TEXT_COLORS, type TextColor } from '../math/lineForm.ts'
 import type { PageSetting } from '../print/pages.ts'
 import {
   isCustom,
-  KIND_LABELS,
   KINDS,
   SLOT_UNITS,
   unitsFor,
@@ -11,12 +10,16 @@ import {
   type UnitSettings,
   type UnitSystemName,
 } from '../math/unitSystems.ts'
+import { useWords } from '../text/words.ts'
 
 /**
  * The Settings tab (docs/spec-v1.md section 8): the unit system, Custom's
  * kind → unit table, Digits, the Result colour and, from M5, the Page (section
  * 11). A change goes straight to the sheet: it is saved with the sheet and
- * isn't part of undo.
+ * isn't part of undo. Its words, the systems' and the kinds' names included,
+ * are the text table's, in the language shown (0.6.0). From 0.6.0 a kind's
+ * default option in Custom's table shows its unit or range only: the system
+ * is named once, in Starts from (section 5, Unit systems).
  */
 
 /** What the tab edits. */
@@ -28,16 +31,8 @@ export interface SettingsValue {
 }
 
 const SIZES: PageSetting['size'][] = ['A4', 'Letter']
-const ORIENTATIONS: { value: PageSetting['orientation']; label: string }[] = [
-  { value: 'portrait', label: 'Portrait' },
-  { value: 'landscape', label: 'Landscape' },
-]
-
-const SYSTEMS: { value: UnitSystemName; label: string }[] = [
-  { value: 'si-prefixed', label: 'SI with prefixes' },
-  { value: 'si-base', label: 'SI base units' },
-  { value: 'uscs', label: 'USCS' },
-]
+const ORIENTATIONS: PageSetting['orientation'][] = ['portrait', 'landscape']
+const SYSTEMS: UnitSystemName[] = ['si-prefixed', 'si-base', 'uscs']
 
 export function SettingsTab<T extends SettingsValue>({
   settings,
@@ -49,15 +44,17 @@ export function SettingsTab<T extends SettingsValue>({
   // Custom with nothing chosen yet still shows its table.
   const [customOpen, setCustomOpen] = useState(false)
   const pageLabel = useId()
+  const w = useWords()
+  const words = w.panel.settings
+  const colors = w.panel.format.colors
   const custom = customOpen || isCustom(settings.units)
   const setUnits = (units: UnitSettings) => onChange({ ...settings, units })
   const base = { ...settings.units, custom: {} }
-  const systemLabel = (system: UnitSystemName) => SYSTEMS.find((s) => s.value === system)?.label
 
   return (
     <div className="sheet-panel sheet-settings">
       <label className="sheet-settings__field">
-        <span>Unit system</span>
+        <span>{words.unitSystem}</span>
         <select
           value={custom ? 'custom' : settings.units.system}
           onChange={(event) => {
@@ -71,18 +68,18 @@ export function SettingsTab<T extends SettingsValue>({
           }}
         >
           {SYSTEMS.map((system) => (
-            <option key={system.value} value={system.value}>
-              {system.label}
+            <option key={system} value={system}>
+              {words.systems[system]}
             </option>
           ))}
-          <option value="custom">Custom</option>
+          <option value="custom">{words.custom}</option>
         </select>
       </label>
 
       {custom && (
         <>
           <label className="sheet-settings__field">
-            <span>Starts from</span>
+            <span>{words.startsFrom}</span>
             <select
               value={settings.units.system}
               onChange={(event) =>
@@ -90,26 +87,25 @@ export function SettingsTab<T extends SettingsValue>({
               }
             >
               {SYSTEMS.map((system) => (
-                <option key={system.value} value={system.value}>
-                  {system.label}
+                <option key={system} value={system}>
+                  {words.systems[system]}
                 </option>
               ))}
             </select>
           </label>
-          <table className="sheet-settings__kinds" aria-label="Custom units">
+          <table className="sheet-settings__kinds" aria-label={words.customUnits}>
             <tbody>
               {KINDS.map((kind) => (
                 <tr key={kind}>
-                  <th scope="row">{KIND_LABELS[kind]}</th>
+                  <th scope="row">{w.kinds.name[kind]}</th>
                   <td>
                     <select
-                      aria-label={KIND_LABELS[kind]}
+                      aria-label={w.kinds.name[kind]}
                       value={settings.units.custom[kind] ?? ''}
                       onChange={(event) => setUnits(withKind(settings.units, kind, event.target.value))}
                     >
-                      <option value="">
-                        {`${systemLabel(settings.units.system)}: ${fromSystem(base, kind)}`}
-                      </option>
+                      {/* Its unit or range only: the system is named in Starts from (0.6.0). */}
+                      <option value="">{fromSystem(base, kind)}</option>
                       {SLOT_UNITS[kind].map((unit) => (
                         <option key={unit} value={unit}>
                           {unit}
@@ -127,14 +123,14 @@ export function SettingsTab<T extends SettingsValue>({
       <DigitsField digits={settings.digits} onChange={(digits) => onChange({ ...settings, digits })} />
 
       <label className="sheet-settings__field">
-        <span>Result colour</span>
+        <span>{words.resultColor}</span>
         <select
           value={settings.resultColor}
           onChange={(event) => onChange({ ...settings, resultColor: event.target.value as TextColor })}
         >
           {TEXT_COLORS.map((color) => (
             <option key={color} value={color}>
-              {color[0].toUpperCase() + color.slice(1)}
+              {capital(colors[color])}
             </option>
           ))}
         </select>
@@ -142,10 +138,10 @@ export function SettingsTab<T extends SettingsValue>({
 
       {/* The Page row (section 11): its two choices one under the other, so both fit at 280 px. */}
       <div className="sheet-settings__field" role="group" aria-labelledby={pageLabel}>
-        <span id={pageLabel}>Page</span>
+        <span id={pageLabel}>{words.page}</span>
         <span className="sheet-settings__page">
           <select
-            aria-label="Paper size"
+            aria-label={words.paperSize}
             value={settings.page.size}
             onChange={(event) =>
               onChange({ ...settings, page: { ...settings.page, size: event.target.value as PageSetting['size'] } })
@@ -153,12 +149,12 @@ export function SettingsTab<T extends SettingsValue>({
           >
             {SIZES.map((size) => (
               <option key={size} value={size}>
-                {size}
+                {words.sizes[size]}
               </option>
             ))}
           </select>
           <select
-            aria-label="Orientation"
+            aria-label={words.orientation}
             value={settings.page.orientation}
             onChange={(event) =>
               onChange({
@@ -168,8 +164,8 @@ export function SettingsTab<T extends SettingsValue>({
             }
           >
             {ORIENTATIONS.map((orientation) => (
-              <option key={orientation.value} value={orientation.value}>
-                {orientation.label}
+              <option key={orientation} value={orientation}>
+                {words[orientation]}
               </option>
             ))}
           </select>
@@ -177,6 +173,11 @@ export function SettingsTab<T extends SettingsValue>({
       </div>
     </div>
   )
+}
+
+/** A colour's name as a choice: its first letter in capitals, in either language. */
+function capital(text: string): string {
+  return text.charAt(0).toUpperCase() + text.slice(1)
 }
 
 /** What the system shows a kind in, before Custom: one unit, or its prefixed range. */
@@ -197,9 +198,10 @@ function DigitsField({ digits, onChange }: { digits: number; onChange: (digits: 
   const [typed, setTyped] = useState<string | null>(null)
   const valid = (text: string) => /^\d+$/.test(text) && Number(text) >= 2 && Number(text) <= 15
   const text = typed ?? String(digits)
+  const label = useWords().panel.settings.digits
   return (
     <label className="sheet-settings__field">
-      <span>Digits</span>
+      <span>{label}</span>
       <input
         type="number"
         min={2}

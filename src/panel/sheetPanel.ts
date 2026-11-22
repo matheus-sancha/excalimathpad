@@ -1,11 +1,14 @@
 import type { SheetLine } from '../math/evaluate.ts'
 import { leadingNumber } from '../math/numbers.ts'
 import { nameTex } from '../math/typeset.ts'
+import { words, type Words } from '../text/words.ts'
 
 /**
  * The Sheet panel's rows (docs/spec-v1.md section 8, Sheet panel), from the
  * sheet as evaluated. Pure: the tabs render these, and a click on a row jumps
- * to its `anchorId` and `line`.
+ * to its `anchorId` and `line`. Their words are the text table's (`panel`,
+ * 0.6.0), the one shown unless another is passed: a tab reads `useWords()`
+ * and hands it in, so a choice of language draws its rows again.
  */
 
 /** One math element as the panel sees it, in reading order. */
@@ -27,7 +30,7 @@ export interface VariableRow extends PanelTarget {
   name: string
   /** The typeset name: a function's signature, `H_s(Q)`, for a function. */
   tex: string
-  /** The number, `function`, `solve function`, or `error`. */
+  /** The number, or the table's `function`, `solve function` or `error`. */
   value: string
   /** The unit, as the result shows it; blank for a function, an error or a plain number. */
   unit: string
@@ -51,9 +54,9 @@ export interface ProblemRow extends PanelTarget {
 }
 
 /** An element's label: its title, else its position in reading order. */
-export function elementLabel(element: PanelElement, index: number): string {
+export function elementLabel(element: PanelElement, index: number, w: Words = words()): string {
   const title = element.title?.trim()
-  return title ? title : `Element ${index + 1}`
+  return title ? title : w.panel.element(index + 1)
 }
 
 /**
@@ -61,12 +64,12 @@ export function elementLabel(element: PanelElement, index: number): string {
  * appears twice. `filter` keeps the names that contain it, ignoring case.
  * Comments and notes define nothing, so they never appear.
  */
-export function variableGroups(sheet: readonly PanelElement[], filter = ''): VariableGroup[] {
+export function variableGroups(sheet: readonly PanelElement[], filter = '', w: Words = words()): VariableGroup[] {
   const wanted = filter.trim().toLowerCase()
   return sheet
     .map((element, index) => ({
       anchorId: element.anchorId,
-      label: elementLabel(element, index),
+      label: elementLabel(element, index, w),
       rows: element.lines.flatMap((line, lineIndex) =>
         line.variables
           .filter(({ name }) => name.toLowerCase().includes(wanted))
@@ -82,12 +85,12 @@ export function variableGroups(sheet: readonly PanelElement[], filter = ''): Var
                 return {
                   ...base,
                   tex: `${nameTex(variable.name)}\\left(${variable.params.map(nameTex).join(',')}\\right)`,
-                  value: variable.solve ? 'solve function' : 'function',
+                  value: variable.solve ? w.panel.variables.solveFunction : w.panel.variables.function,
                   unit: '',
                   kind: 'function',
                 }
               case 'error':
-                return { ...base, tex: nameTex(variable.name), value: 'error', unit: '', kind: 'error' }
+                return { ...base, tex: nameTex(variable.name), value: w.panel.variables.error, unit: '', kind: 'error' }
               case 'list':
                 return { ...base, tex: nameTex(variable.name), value: variable.text, unit: '', kind: 'value' }
               case 'value': {
@@ -109,12 +112,12 @@ export function variableGroups(sheet: readonly PanelElement[], filter = ''): Var
 }
 
 /** Errors and warnings in one list, in reading order; a line's error comes before its warnings. */
-export function problemRows(sheet: readonly PanelElement[]): ProblemRow[] {
+export function problemRows(sheet: readonly PanelElement[], w: Words = words()): ProblemRow[] {
   return sheet.flatMap((element, index) => {
-    const label = elementLabel(element, index)
+    const label = elementLabel(element, index, w)
     return element.lines.flatMap((line, lineIndex) => {
       const name = line.variables[0]?.name
-      const where = `${label}, line ${lineIndex + 1}${name ? ` · ${name}` : ''}`
+      const where = `${w.panel.line(label, lineIndex + 1)}${name ? ` · ${name}` : ''}`
       const target = { anchorId: element.anchorId, line: lineIndex, where }
       const rows: ProblemRow[] = []
       const error = problemOf(line.result)

@@ -29,8 +29,20 @@
 // those are the device checklist's (CONTRIBUTING.md). It fails on any check
 // that doesn't hold, and on any page error.
 //
+// Then the Português pass (0.6.0, #293; section 8, Sheet panel, and section
+// 14, 0.6.0): the phone as Android, its language Português in data.json, at
+// 360 and 320 px, and in English at 320 px, where every name once ran out of
+// its pill. With a line open, each of the bottom sheet's six tabs is shown in
+// turn: every tab stays a 40 px target inside the row, clear of Close, and the
+// active one's name shows only whole, else its icon alone (the name shows at
+// 360 px where it fits). The Format tab's link keeps its arrow on its last
+// word's line, a rule's note keeps its condition on one line, and Settings →
+// Custom's options are whole in their selects. It presses by class, role and
+// position, never by English text, and prints the time it adds.
+//
 // Run: `node scripts/touch-run.mjs` (`npm run test:touch`), after
-// `npm run build:plugin`.
+// `npm run build:plugin`. TOUCH_RUN_ONLY=<name> runs only the passes whose
+// name starts with it (`phone/android`, `phone pt-BR`).
 
 import { build } from 'esbuild'
 import { createServer } from 'node:http'
@@ -69,13 +81,14 @@ const page = `<!doctype html>
 </script>
 <script src="/main.js"></script>
 <script>
-  window.__start = async (sheet, manifest, phone) => {
+  window.__start = async (sheet, manifest, phone, data = null) => {
     FakeObsidian.Platform.isPhone = phone
     FakeObsidian.Platform.isTablet = !phone
     FakeObsidian.Platform.isMobile = true
     const app = new FakeObsidian.App()
     app.vault.add(${JSON.stringify(FILE)}, sheet)
     const plugin = new module.exports.default(app, manifest)
+    plugin.dataJson = data
     await plugin.onload()
     const leaf = app.workspace.getLeaf()
     await leaf.openFile(new FakeObsidian.TFile(${JSON.stringify(FILE)}))
@@ -148,9 +161,12 @@ const browser = await chromium.launch()
 const manifest = JSON.parse(await readFile(join(dist, 'manifest.json'), 'utf8'))
 const results = []
 const errors = []
+const timings = []
+const ONLY = process.env.TOUCH_RUN_ONLY
 try {
   for (const device of DEVICES) {
     const where = `${device.name}/${device.os}`
+    if (ONLY && !where.startsWith(ONLY)) continue
     const row = (check, ok, detail = '') => results.push({ where, check, ok, detail })
     const context = await browser.newContext({ viewport: device.viewport, hasTouch: true, isMobile: true })
     if (device.platform) {
@@ -735,6 +751,127 @@ try {
       await context.close()
     }
   }
+
+  // The Português pass (0.6.0, #293): the bottom sheet's fit rules where they are at risk.
+  for (const [language, width] of [['pt-BR', 360], ['pt-BR', 320], ['en', 320]]) {
+    const where = `phone ${language} ${width}`
+    if (ONLY && !where.startsWith(ONLY)) continue
+    const began = Date.now()
+    const row = (check, ok, detail = '') => results.push({ where, check, ok, detail })
+    const context = await browser.newContext({ viewport: { width, height: 780 }, hasTouch: true, isMobile: true })
+    const tab = await context.newPage()
+    tab.on('pageerror', (error) => errors.push(`${where}: ${error.message}`))
+    try {
+      await tab.goto(`${origin}/`)
+      await tab.evaluate(([text, m, data]) => window.__start(text, m, true, data), [sheet, manifest, { language }])
+      await tab.waitForSelector('[data-anchor-id="calc"] .katex', { timeout: 30_000 })
+      const pause = (ms = 400) => tab.waitForTimeout(ms)
+      const pointOf = async (selector, left = 18) => {
+        const box = await tab.locator(selector).first().boundingBox()
+        if (!box) throw new Error(`nothing drawn at ${selector}`)
+        return { x: box.x + Math.min(left, box.width / 2), y: box.y + box.height / 2 }
+      }
+      const tap = async (point) => {
+        await tab.touchscreen.tap(point.x, point.y)
+        await pause(350)
+      }
+      await tap({ x: Math.round(width / 2), y: 240 })
+      await pause()
+      // A double tap opens the element's second line, `a = 2 m`, and the bottom sheet on Format.
+      const line = await pointOf('[data-anchor-id="calc"] [data-line="1"]')
+      await tab.touchscreen.tap(line.x, line.y)
+      await pause(60)
+      await tab.touchscreen.tap(line.x, line.y)
+      await pause(700)
+      row('a double tap opens the line, and the bottom sheet', (await tab.locator('textarea.math-element__field').count()) === 1 && (await tab.locator('.sheet-bottom').count()) === 1)
+
+      // The link row: the arrow stays on its last word's line, the link inside the sheet.
+      const link = await tab.evaluate(() => {
+        const button = document.querySelector('.sheet-bottom .sheet-format__link')
+        const sheet = document.querySelector('.sheet-bottom').getBoundingClientRect()
+        const text = button.firstChild
+        const rectOf = (from, to) => {
+          const range = document.createRange()
+          range.setStart(text, from)
+          range.setEnd(text, to)
+          return range.getBoundingClientRect()
+        }
+        const value = text.textContent
+        const arrow = rectOf(value.length - 1, value.length)
+        const word = rectOf(value.length - 3, value.length - 2)
+        const box = button.getBoundingClientRect()
+        return { text: value, together: Math.abs(arrow.top - word.top) < 2, inside: box.left >= sheet.left - 0.5 && box.right <= sheet.right + 0.5 }
+      })
+      row('the Format tab’s link keeps its arrow with its last word, inside the sheet', link.together && link.inside, link.text)
+
+      // A rule's note: + Add rule (its class), its condition typed to `a > 1 m`, which is true.
+      await tab.locator('.sheet-bottom .sheet-rules__add').scrollIntoViewIfNeeded()
+      await tap(await pointOf('.sheet-bottom .sheet-rules__add', 1000))
+      await tab.keyboard.type('> 1 m')
+      await pause(600)
+      const note = await tab.evaluate(() => {
+        const p = document.querySelector('.sheet-bottom .sheet-format__override')
+        const whole = p?.querySelector('.sheet-panel__whole')
+        if (!p || !whole) return null
+        const sheet = document.querySelector('.sheet-bottom').getBoundingClientRect()
+        const box = whole.getBoundingClientRect()
+        const lineHeight = parseFloat(getComputedStyle(p).lineHeight) || parseFloat(getComputedStyle(p).fontSize) * 1.3
+        return { text: p.textContent, condition: whole.textContent, lines: Math.round(box.height / lineHeight), inside: box.left >= sheet.left - 0.5 && box.right <= sheet.right + 0.5 }
+      })
+      const ruleSets = language === 'pt-BR' ? /^Uma regra define .+ enquanto a > 1 m\.$/ : /^A rule sets .+ while a > 1 m\.$/
+      row('a rule’s note keeps its condition on one line, inside the sheet', !!note && ruleSets.test(note.text) && note.lines === 1 && note.inside, note ? `${note.text} (${note.lines} line)` : 'no note')
+
+      // Each tab in turn, by its place: 40 px targets inside the row, clear of Close, the active name whole or not shown.
+      const named = []
+      for (let index = 0; index < 6; index += 1) {
+        await tap(await pointOf(`.sheet-bottom .sheet-tab >> nth=${index}`, 1000))
+        const bar = await tab.evaluate(() => {
+          const box = (e) => e.getBoundingClientRect()
+          const list = document.querySelector('.sheet-bottom__tabs')
+          const tabs = [...list.querySelectorAll('.sheet-tab')]
+          const active = tabs.find((t) => t.dataset.state === 'active')
+          const label = active.querySelector('.sheet-tab__label')
+          const shown = getComputedStyle(label).position !== 'absolute'
+          const range = document.createRange()
+          range.selectNodeContents(label)
+          const text = range.getBoundingClientRect()
+          const row = box(list)
+          return {
+            name: active.getAttribute('title'),
+            shown,
+            whole: !shown || (text.left >= box(active).left - 0.5 && text.right <= box(active).right + 0.5),
+            fits: tabs.every((t) => box(t).width >= 39.5 && box(t).left >= row.left - 0.5 && box(t).right <= row.right + 0.5),
+            clear: row.right <= box(document.querySelector('.sheet-bottom__close')).left + 0.5,
+            widths: tabs.map((t) => Math.round(box(t).width)),
+          }
+        })
+        if (bar.shown) named.push(bar.name)
+        row(`tab ${index + 1}, ${bar.name}: the row fits, and its name shows whole or not at all`, bar.fits && bar.clear && bar.whole, `${bar.shown ? 'named' : 'icon only'}; ${bar.widths.join(', ')} px`)
+      }
+      if (width === 360) row('at 360 px a name that fits shows', named.length > 0, `named: ${named.join(', ')}`)
+
+      // Settings → Custom: each kind's default option whole in its select (its units only, 0.6.0).
+      await tab.locator('.sheet-bottom .sheet-settings select').first().selectOption('custom')
+      await pause()
+      const custom = await tab.evaluate(() => {
+        const measure = document.createElement('canvas').getContext('2d')
+        const sheet = document.querySelector('.sheet-bottom').getBoundingClientRect()
+        return [...document.querySelectorAll('.sheet-bottom .sheet-settings__kinds select')].map((select) => {
+          measure.font = getComputedStyle(select).font
+          const box = select.getBoundingClientRect()
+          return { option: select.options[0].textContent, text: measure.measureText(select.options[0].textContent).width, width: select.clientWidth, inside: box.left >= sheet.left - 0.5 && box.right <= sheet.right + 0.5 }
+        })
+      })
+      const cut = custom.filter((c) => !c.inside || c.width < c.text + 36)
+      row('Settings → Custom: every kind’s default option is whole in its select', custom.length === 18 && cut.length === 0, cut.length ? cut.map((c) => `${c.option} ${Math.round(c.text)} px in ${c.width} px`).join(', ') : `${custom.length} selects`)
+    } catch (error) {
+      errors.push(`${where}: the run didn't finish: ${error.message.split('\n')[0]}`)
+      if (process.env.TOUCH_RUN_SHOTS) await tab.screenshot({ path: join(process.env.TOUCH_RUN_SHOTS, `${where.replaceAll(' ', '-')}.png`) }).catch(() => {})
+    } finally {
+      await context.close()
+      timings.push({ where, ms: Date.now() - began })
+    }
+  }
 } finally {
   await browser.close()
   server.close()
@@ -750,4 +887,5 @@ if (failed.length || errors.length || results.length === 0) {
   for (const error of errors) console.error(`  - ${error}`)
   process.exit(1)
 }
-console.log('Touch run passed: a phone and a tablet, as Android and as iOS, edit by touch.')
+for (const { where, ms } of timings) console.log(`${where}: the Português pass took ${(ms / 1000).toFixed(1)} s`)
+console.log('Touch run passed: a phone and a tablet, as Android and as iOS, edit by touch; the bottom sheet in Português.')

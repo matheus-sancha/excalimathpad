@@ -1,17 +1,17 @@
 import type { MouseEvent, ReactNode } from 'react'
 import { COMMENT_SIZES, FORMAT_COLORS, TEXT_COLORS, type CommentSize, type FormatColor, type TextColor } from '../math/lineForm.ts'
+import { useWords } from '../text/words.ts'
 
 /**
  * The Format tab's controls (docs/spec-v1.md section 4, Format tab, M4d): the
  * labelled rows of large buttons, shared by the open line's rows and a rule's
- * in the Rules list. Every one is a no-focus button.
+ * in the Rules list. Every one is a no-focus button. Their names are the text
+ * table's (`panel.format`), in the language shown; a key stays the same in
+ * both, only its name translates (section 13: `Negrito (Ctrl+B)`).
  */
 
-const TOGGLES = {
-  bold: ['Bold (Ctrl+B)', 'B'],
-  italic: ['Italic (Ctrl+I)', 'I'],
-  underline: ['Underline (Ctrl+U)', 'U'],
-} as const
+/** Each toggle's glyph; its name is the table's `panel.format[kind]`. */
+const TOGGLES = { bold: 'B', italic: 'I', underline: 'U' } as const
 
 export function Toggle({
   kind,
@@ -25,7 +25,8 @@ export function Toggle({
   /** A rule's last property: pressed, it can't be taken off. */
   locked?: boolean
 }) {
-  const [label, glyph] = TOGGLES[kind]
+  const label = useWords().panel.format[kind]
+  const glyph = TOGGLES[kind]
   return (
     <PanelButton
       className={`sheet-format__button is-${kind}`}
@@ -41,13 +42,14 @@ export function Toggle({
 
 /** S M L XL; pressing the pressed size takes it off, back to M. */
 export function SizeRow({ size, onChange }: { size: CommentSize; onChange: (size: CommentSize) => void }) {
+  const format = useWords().panel.format
   return (
-    <Row label="Size">
+    <Row label={format.rows.size}>
       {COMMENT_SIZES.map((each) => (
         <PanelButton
           key={each}
           className="sheet-format__button is-size"
-          label={`Size ${each}`}
+          label={format.size(each)}
           pressed={size === each}
           onPress={() => onChange(size === each ? 'M' : each)}
         >
@@ -72,13 +74,14 @@ export function TextRow({
   onChange: (color: TextColor | null) => void
   locked?: boolean
 }) {
+  const format = useWords().panel.format
   return (
     <SwatchRow
-      label="Text"
+      label={format.rows.text}
       names={TEXT_COLORS}
-      prefix="Text "
+      nameOf={(each) => format.textColor(format.colors[each])}
       classOf={(each) => `is-text-${each}`}
-      none="No text colour"
+      none={format.noTextColor}
       color={color}
       onChange={onChange}
       locked={locked}
@@ -96,13 +99,14 @@ export function HighlightRow({
   onChange: (color: FormatColor | null) => void
   locked?: boolean
 }) {
+  const format = useWords().panel.format
   return (
     <SwatchRow
-      label="Highlight"
+      label={format.rows.highlight}
       names={FORMAT_COLORS}
-      prefix="Highlight "
+      nameOf={(each) => format.highlightColor(format.colors[each])}
       classOf={(each) => `is-${each}`}
-      none="No highlight"
+      none={format.noHighlight}
       color={color}
       onChange={onChange}
       locked={locked}
@@ -113,7 +117,7 @@ export function HighlightRow({
 function SwatchRow<C extends string>({
   label,
   names,
-  prefix,
+  nameOf,
   classOf,
   none,
   color,
@@ -122,7 +126,8 @@ function SwatchRow<C extends string>({
 }: {
   label: string
   names: readonly C[]
-  prefix: string
+  /** A swatch's name: "Text red", in the language shown. */
+  nameOf: (color: C) => string
   classOf: (color: C) => string
   none: string
   color: C | null
@@ -135,7 +140,7 @@ function SwatchRow<C extends string>({
         <PanelButton
           key={each}
           className={`sheet-format__swatch ${classOf(each)}`}
-          label={`${prefix}${each}`}
+          label={nameOf(each)}
           pressed={color === each}
           onPress={() => {
             if (color !== each) onChange(each)
@@ -200,5 +205,24 @@ export function PanelButton({
     >
       {children}
     </button>
+  )
+}
+
+/**
+ * A note that quotes a condition or a name (section 8, Sheet panel: longer
+ * text wraps): the quoted text never breaks inside, so the line wraps before
+ * it (`… enquanto u > 3 m/s.`).
+ */
+export function KeepWhole({ text, whole }: { text: string; whole: string }) {
+  const at = whole === '' ? -1 : text.indexOf(whole)
+  if (at === -1) return text
+  // The punctuation that closes it goes with it, so a full stop never starts a line.
+  const end = at + whole.length + (/^[.,;:]/.exec(text.slice(at + whole.length))?.[0].length ?? 0)
+  return (
+    <>
+      {text.slice(0, at)}
+      <span className="sheet-panel__whole">{text.slice(at, end)}</span>
+      {text.slice(end)}
+    </>
   )
 }
