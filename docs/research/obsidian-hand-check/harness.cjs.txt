@@ -1,0 +1,73 @@
+const http = require('http'); const fs = require('fs'); const path = require('path');
+const { chromium } = require('playwright');
+const MAIN = fs.readFileSync(path.join(__dirname, 'main.js.txt'), 'utf8');
+
+const PAGE = `<!doctype html><meta charset="utf-8"><title>harness</title><body><script>
+const notices = []; const fsmem = { '.obsidian/app.json': '{}', '.obsidian/plugins/x/data.json': '{"a":1}' };
+class Plugin { constructor(app, manifest) { this.app = app; this.manifest = manifest; } addRibbonIcon() {} addCommand(c) { this.cmd = c; } }
+class Modal { constructor(app) { this.app = app; this.containerEl = document.createElement('div'); this.titleEl = document.createElement('h2'); this.contentEl = document.createElement('div'); this.containerEl.append(this.titleEl, this.contentEl); }
+  open() { document.body.appendChild(this.containerEl); this.onOpen(); } close() { this.onClose(); this.containerEl.remove(); window.nClosed = (window.nClosed || 0) + 1; } }
+class Notice { constructor(m) { notices.push(m); } }
+class SecretStorage { constructor() { this.m = new Map(); }
+  setSecret(id, s) { if (!/^[a-z0-9-]+$/.test(id)) throw new Error('Invalid ID'); this.m.set(id, s); }
+  getSecret(id) { return this.m.has(id) ? this.m.get(id) : null; } listSecrets() { return [...this.m.keys()]; } }
+if (location.hash.includes('del')) SecretStorage.prototype.deleteSecret = function (id) { this.m.delete(id); };
+const ss = new SecretStorage(); ss.setSecret('someone-elses-openai-key', 'sk-private');
+const app = { appId: 'abcdef0123456789', secretStorage: location.hash.includes('noss') ? undefined : ss,
+  saveLocalStorage(k, v) { if (v === null) localStorage.removeItem('abcdef0123456789-' + k); else localStorage.setItem('abcdef0123456789-' + k, JSON.stringify(v)); },
+  loadLocalStorage(k) { const v = localStorage.getItem('abcdef0123456789-' + k); return v === null ? null : JSON.parse(v); },
+  workspace: { openLinkText: async () => {} },
+  vault: { configDir: '.obsidian', getName: () => 'Private Vault Name', adapter: {
+    exists: async (p) => p in fsmem, read: async (p) => fsmem[p], write: async (p, d) => { fsmem[p] = d; },
+    stat: async (p) => ({ size: fsmem[p].length }),
+    list: async (dir) => { const files = [], folders = new Set(); for (const p of Object.keys(fsmem)) { if (!p.startsWith(dir + '/')) continue; const rest = p.slice(dir.length + 1); if (rest.includes('/')) folders.add(dir + '/' + rest.split('/')[0]); else files.push(p); } return { files, folders: [...folders] }; } } } };
+const obsidian = { Plugin, Modal, Notice, apiVersion: '1.15.1', requireApiVersion: (v) => true,
+  Platform: { isDesktop: true, isDesktopApp: true, isWin: true, isMobile: false, isMobileApp: false },
+  requestUrl: async (o) => { const r = await fetch(o.url, { method: o.method, headers: o.headers, body: o.body }); return { status: r.status, text: await r.text() }; } };
+const module = { exports: {} };
+(function (require, module) { __MAIN__
+})((m) => { if (m === 'obsidian') return obsidian; throw new Error('no module ' + m); }, module);
+window.plugin = new module.exports(app, {}); window.plugin.onload();
+window.note = () => fsmem['Excalimathpad hand check.md']; window.notices = notices; window.fsmem = fsmem;
+</script>`.replace('__MAIN__', () => MAIN.replace(/<\/script>/g, '<\\/script>'));
+
+const sse = (res, lines, gap) => { res.writeHead(200, { 'content-type': 'text/event-stream', 'access-control-allow-origin': '*' }); let i = 0; const t = setInterval(() => { if (i >= lines) { res.end('data: [DONE]\n\n'); clearInterval(t); return; } res.write('data: {"choices":[{"delta":{"content":"' + (++i) + '\\n"}}]}\n\n'); }, gap); res.on('close', () => { clearInterval(t); server.aborted = (server.aborted || 0) + (i < lines ? 1 : 0); }); };
+const server = http.createServer((req, res) => {
+  if (req.method === 'OPTIONS') { res.writeHead(204, { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': '*' }); return res.end(); }
+  if (req.url === '/') { res.writeHead(200, { 'content-type': 'text/html' }); return res.end(PAGE); }
+  let body = ''; req.on('data', (d) => { body += d; }); req.on('end', () => {
+    server.seen = server.seen || []; server.seen.push({ url: req.url, auth: req.headers.authorization, xkey: req.headers['x-api-key'], body });
+    if (req.url === '/v1/chat/completions') return sse(res, 40, 40);
+    if (req.url === '/short/chat/completions') return sse(res, 3, 30);
+    if (req.url === '/bad/chat/completions') { res.writeHead(401, { 'content-type': 'application/json', 'access-control-allow-origin': '*' }); return res.end('{"error":{"message":"Incorrect API key provided: ' + (req.headers.authorization || '').slice(7) + '"}}'); }
+    if (req.url === '/v1/messages') { if (!req.headers['x-api-key']) { res.writeHead(401, { 'access-control-allow-origin': '*' }); return res.end('{"error":"bearer refused"}'); } return sse(res, 40, 40); }
+    res.writeHead(404, { 'access-control-allow-origin': '*' }); res.end('nope');
+  });
+});
+(async () => {
+  await new Promise((r) => server.listen(0, r)); const port = server.address().port; const origin = 'http://localhost:' + port;
+  const browser = await chromium.launch({ proxy: { server: process.env.HTTPS_PROXY, bypass: 'localhost,127.0.0.1' } });
+  const page = await browser.newPage(); const logs = [];
+  page.on('console', (m) => logs.push(m.type() + ': ' + m.text())); page.on('pageerror', (e) => logs.push('PAGEERROR ' + e.message));
+  await page.goto(origin + '/' + (process.argv[2] || ''));
+  const which = process.argv[3] || 'all';
+  if (which === 'all' || which === 'net') await page.evaluate(() => window.plugin.runNetwork());
+  if (which === 'all' || which === 'rest') {
+    await page.evaluate(() => window.plugin.runStorage());
+    await page.evaluate(() => window.plugin.runStorage());
+    const KEY = 'sk-REAL-SECRET-KEY-123';
+    for (const [base, provider] of [['/v1', 'other'], ['/short', 'other'], ['/bad', 'other'], ['/v1', 'anthropic'], ['http://localhost:1/v1', 'other']])
+      await page.evaluate(([o, b, p, k]) => window.plugin.runStream({ provider: p, base: b.startsWith('http') ? b : o + b, model: 'test-model', key: k }), [origin, base, provider, KEY]);
+    await page.evaluate(() => window.plugin.runCleanup());
+    // the dialog: press step 2 through the UI
+    await page.evaluate(() => window.plugin.cmd.callback());
+    console.log('BUTTONS:', await page.$$eval('button', (b) => b.map((x) => x.textContent)));
+    await page.click('button:has-text("2. Storage")'); await page.waitForFunction(() => window.nClosed === 1, null, { timeout: 15000 });
+    const note = await page.evaluate(() => window.note());
+    console.log('KEY LEAKED INTO NOTE:', note.includes(KEY), '| VAULT NAME LEAKED:', note.includes('Private Vault'), '| OTHER SECRET ID LEAKED:', note.includes('someone-elses'));
+    console.log('SERVER saw aborted streams:', server.aborted, '| requests:', server.seen.length);
+  }
+  console.log(await page.evaluate(() => window.note()));
+  console.log('--- notices', await page.evaluate(() => window.notices.length), '--- logs', logs.filter((l) => !/Failed to load resource|CORS policy/.test(l)).slice(0, 15));
+  await browser.close(); server.close();
+})().catch((e) => { console.error('HARNESS FAILED', e); process.exit(1); });
