@@ -88,4 +88,5 @@ and a chart's failed points, the Problems tab, a rule's state and the rename for
 
 **The Math assistant's words** (section 13, Math assistant, 0.7.0): the tab's name is
 `panel.tabs.assistant` and the More tools item `tools.assistant`, in both tables from its
-first issue (#306).
+first issue (#306). The setup card's words are the `assistant` group (#307): its fields,
+buttons, refusals, each provider's cost line and the lines that name a host.

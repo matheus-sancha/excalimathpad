@@ -324,7 +324,7 @@ export class SheetView extends TextFileView {
         language: this.memory.language,
         // The Math assistant, on a computer only, and only in a build with its
         // switch on (section 14, 0.7.0): unset, App shows no tab and no item.
-        assistant: assistantPorts(this.assistant, Platform.isMobile),
+        assistant: assistantPorts(this.assistant, Platform.isMobile, this.app),
       }),
     )
   }

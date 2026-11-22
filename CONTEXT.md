@@ -19,7 +19,7 @@ what to read for an issue and where to write.
 - `index.html` → `src/main.tsx` — the web app's entry; mounts `App` with the
   browser's ports: the file pickers, the IndexedDB recovery copy and the
   per-browser memory (`localStorage`: the panel open or closed, its width,
-  and from 0.5.0 the language).
+  from 0.5.0 the language, and the Math assistant's setup, 0.7.0).
 - `plugin/main.ts` — the plugin's entry (section 12a), built by
   `esbuild.plugin.mjs` into `dist-plugin/` (`main.js`, `styles.css`, a copy of
   the root `manifest.json`). `tsconfig.plugin.json` type-checks `plugin/`.
@@ -130,7 +130,7 @@ an issue touches that module ([`CLAUDE.md`](CLAUDE.md) has the reading route).
   React and for code outside it (0.6.0). Depends on: math's message types. [`docs/context/text.md`](docs/context/text.md)
 - **assistant** (`src/assistant/`) — the Math assistant (0.7.0, ADR 0008), reached only through
   the two ports a home hands App. Off in every build until its switch is turned on; so far the
-  ports, the provider constants and an empty tab. Depends on: nothing.
+  ports, the provider constants, the setup (one record per device) and its card. Depends on: text.
   [`docs/context/assistant.md`](docs/context/assistant.md)
 - **failure** (`src/failure/`) — unexpected failures (spec section 4): the boundary, the
   failure screen, Copy details and Report this error. `App` wraps the sheet in the view's
@@ -432,7 +432,9 @@ and everything downstream recalculates. Engine: math.js, client-side.
   ([`docs/context/plugin.md`](docs/context/plugin.md)) each depend on the
   text of Excalidraw 0.18.1, math.js or KaTeX; the build or the audit fails an
   upgrade that moves one. The audit's allowlist (`scripts/plugin-allowlist.json`)
-  says why each host and each library `<style>`/`<link>` site is harmless.
+  says why each host and each library `<style>`/`<link>` site is harmless; its
+  `reached` list (0.7.0, #307) is the four built-in providers' hosts, which
+  `main.js` names once each and nothing reaches until the assistant is on (#312).
 - **Excalidraw's typings give some of its API as `any`** (its `.d.ts` imports
   types the package doesn't ship; `setCursor` indexes a private member).
   `setCanvasCursor` (`addMath.ts`), `clearHistory` (`sceneFile.ts`) and

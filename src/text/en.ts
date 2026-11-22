@@ -557,6 +557,70 @@ export const en = {
     title: 'Title',
     none: 'None',
   },
+  /**
+   * The Math assistant's setup card (section 8, Math assistant, The setup card;
+   * section 13, Math assistant; 0.7.0). `host` is the host of the setup's
+   * address. A provider's name is the same in both languages. The three key
+   * pages in the cost lines are plain text, never a link: the bundle names a
+   * provider's host after `https://` only in its constant (section 12a).
+   */
+  assistant: {
+    about:
+      'The Math assistant reads this sheet and answers, through an AI provider you choose, with your own key. Until you save a setup, Excalimathpad sends nothing. After that, your message and the sheet go to the provider only when you press Send.',
+    provider: 'Provider',
+    address: 'Address',
+    key: 'API key',
+    model: 'Model',
+    other: 'Other (type an address)',
+    save: 'Save',
+    checkKey: 'Check key',
+    showModels: 'Show models',
+    replace: 'Replace',
+    remove: 'Remove',
+    forget: 'Forget this setup',
+    showKey: 'Show the key',
+    hideKey: 'Hide the key',
+    savedKey: (ending: string) => `Saved key ending ${ending}`,
+    sessionKey: (ending: string) => `Key for this session, ending ${ending}`,
+    /** Why Save refuses. */
+    refused: {
+      notUrl: "This isn't an address.",
+      notHttps:
+        'The address must start with https://. http:// is allowed only for this computer (localhost, 127.0.0.1 or [::1]).',
+      credentials: "The address can't hold a user name or a password.",
+      keySpaces: "A key can't have spaces or line breaks inside.",
+      noModel: "Type the model's name, or press Show models.",
+    },
+    /** What a key needs and about what a message costs, by provider; `other` is a typed address. */
+    cost: {
+      anthropic:
+        'Needs an API key from console.anthropic.com with prepaid credits. About 1 to 5 US cents a message with Sonnet 5.5. Claude Max and Ultra include monthly API credits once you link your plan (claude.ai › Settings › Billing).',
+      openai:
+        'Needs an API key from platform.openai.com/api-keys with prepaid credits. About 3 to 4 US cents a message with gpt-6.2-sol.',
+      google:
+        'Needs an API key from aistudio.google.com/apikey. About 2 to 3 US cents a message with gemini-4-hydrogen on a paid key.',
+      openrouter:
+        'Needs an API key from openrouter.ai/settings/keys with bought credits, on which OpenRouter charges 5.5%. About 4 to 5 US cents a message with Sonnet 5.5.',
+      other: 'Your provider sets the price. Each message sends the Math guide and your whole sheet.',
+    },
+    keeps: (host: string) => `${host} keeps what you send under its own terms.`,
+    /** Where the key is kept, on the web and in the plugin. */
+    keptWeb:
+      'Kept in this browser only. Anyone using this browser profile can send with it; remove it when you leave a shared computer.',
+    keptVault:
+      "Kept on this device only, in Obsidian's keychain. Anyone using this Obsidian, and other plugins in it, can read it; remove it when you leave a shared computer.",
+    confidential: (host: string) =>
+      `Each Send gives ${host} your whole sheet. Send only a sheet you're allowed to share with an outside AI service.`,
+    /** Another provider chosen while a key is saved. */
+    change: (host: string) => `Change the provider? The key saved for ${host} is forgotten.`,
+    cancel: 'Cancel',
+    changeProvider: 'Change',
+    keyRemoved: 'Key removed from this device.',
+    /** The store threw: the setup is held for the session, and the store's error follows. */
+    cantKeepWeb: "This device couldn't keep the key, so it is used until you close this tab and then forgotten.",
+    cantKeepVault: "This device couldn't keep the key, so it is used until you close Obsidian and then forgotten.",
+    needsObsidian: 'The Math assistant needs Obsidian 1.11.4 or later.',
+  },
   /** The plugin's own words in Obsidian (section 8, Language: In Obsidian; section 13, In a vault). */
   vault: {
     /** The command, the ribbon's tooltip and the folder menu's item (section 7, A sheet in a vault). */

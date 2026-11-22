@@ -7,7 +7,11 @@
  */
 export interface AssistantPorts {
   request: AssistantRequest
-  store: SetupStore
+  /**
+   * Null where this home has nowhere to keep a setup: an Obsidian older than
+   * 1.11.4, where the tab says so and holds nothing else (section 8, Its place).
+   */
+  store: SetupStore | null
 }
 
 /**
@@ -45,7 +49,24 @@ export interface SetupStore {
   remove: () => void
 }
 
-/** A store that lasts as long as the page: what a home passes until it has its own, and what tests pass. */
+/** Where the web keeps the setup: one entry beside the panel memory's (`src/panel/panelMemory.ts`). */
+export const SETUP_ENTRY = 'excalimathpad.assistant'
+
+/**
+ * The setup in a `Storage` (the web, given the browser's by `src/main.tsx`,
+ * so this file names none). `storage` is asked on every call and may throw,
+ * as a blocked or full one does: the error reaches the assistant, which then
+ * holds the setup for the session and says so (section 8, The setup card).
+ */
+export function storageSetupStore(storage: () => Storage): SetupStore {
+  return {
+    read: () => storage().getItem(SETUP_ENTRY),
+    write: (record) => storage().setItem(SETUP_ENTRY, record),
+    remove: () => storage().removeItem(SETUP_ENTRY),
+  }
+}
+
+/** A store that lasts as long as the page: what tests pass. */
 export function sessionSetupStore(): SetupStore {
   let kept: string | null = null
   return {

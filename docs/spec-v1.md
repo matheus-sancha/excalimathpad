@@ -2492,11 +2492,18 @@ one, the key button in the tab's header opens the same card. From top to bottom:
 7. **Save** and **Check key,** and a smaller **Forget this setup** link.
 
 - **Save makes no request.** A wrong key still saves; the first Send or Check key says so.
+  For a built-in, Save is dimmed until a key is typed or one is saved: only a typed address
+  may have none.
+- **The two lines that name `<host>`** show once there is one: always for a built-in, and
+  for Other once the typed address passes Save's check.
 - **Check key** asks the provider for its model list with the key (`GET <address>/models`)
   and says "<host> accepted this key." or "<host> refused this key." It is the same
   request as Show models, pressed for another reason.
 - **One setup at a time on a device.** Choosing another provider replaces the setup, after
-  a confirm that the saved key is forgotten.
+  a confirm that the saved key is forgotten. The confirm is in the card, under the list.
+  Change forgets the saved setup at once, key and confirmed hosts, and the card holds the
+  new provider until Save; Cancel leaves everything as it was. With no key saved, nothing
+  is asked.
 - **Remove** forgets the key only. The provider, address, model and confirmed hosts stay,
   so a new key is one paste. The conversation stays readable, and the field gives way to
   the card, headed "Key removed from this device." **Forget this setup** forgets all of it.
@@ -4386,9 +4393,9 @@ arrive, in whatever language, after `<provider> said:`.
 | Save, a key with a space or a line break inside | `A key can't have spaces or line breaks inside.` | `Uma chave não pode ter espaços nem quebras de linha.` |
 | Save, no model | `Type the model's name, or press Show models.` | `Digite o nome do modelo, ou pressione Mostrar modelos.` |
 | Cost, Anthropic | `Needs an API key from console.anthropic.com with prepaid credits. About 1 to 5 US cents a message with Sonnet 5.5. Claude Max and Ultra include monthly API credits once you link your plan (claude.ai › Settings › Billing).` | `Requer uma chave de API de console.anthropic.com com créditos pré-pagos. Cerca de 1 a 5 centavos de dólar por mensagem com o Sonnet 5.5. Os planos Claude Max e Ultra incluem créditos mensais de API depois que você vincula o seu plano (claude.ai › Settings › Billing).` |
-| Cost, OpenAI | `Needs an API key from <OpenAI's key page> with prepaid credits. About 3 to 4 US cents a message with gpt-6.2-sol.` | `Requer uma chave de API de <OpenAI's key page> com créditos pré-pagos. Cerca de 3 a 4 centavos de dólar por mensagem com o gpt-6.2-sol.` |
-| Cost, Google Gemini | `Needs an API key from <Google's key page>. About 2 to 3 US cents a message with gemini-4-hydrogen on a paid key.` | `Requer uma chave de API de <Google's key page>. Cerca de 2 a 3 centavos de dólar por mensagem com o gemini-4-hydrogen em uma chave paga.` |
-| Cost, OpenRouter | `Needs an API key from <OpenRouter's key page> with bought credits, on which OpenRouter charges 5.5%. About 4 to 5 US cents a message with Sonnet 5.5.` | `Requer uma chave de API de <OpenRouter's key page> com créditos comprados, sobre os quais o OpenRouter cobra 5,5%. Cerca de 4 a 5 centavos de dólar por mensagem com o Sonnet 5.5.` |
+| Cost, OpenAI | `Needs an API key from platform.openai.com/api-keys with prepaid credits. About 3 to 4 US cents a message with gpt-6.2-sol.` | `Requer uma chave de API de platform.openai.com/api-keys com créditos pré-pagos. Cerca de 3 a 4 centavos de dólar por mensagem com o gpt-6.2-sol.` |
+| Cost, Google Gemini | `Needs an API key from aistudio.google.com/apikey. About 2 to 3 US cents a message with gemini-4-hydrogen on a paid key.` | `Requer uma chave de API de aistudio.google.com/apikey. Cerca de 2 a 3 centavos de dólar por mensagem com o gemini-4-hydrogen em uma chave paga.` |
+| Cost, OpenRouter | `Needs an API key from openrouter.ai/settings/keys with bought credits, on which OpenRouter charges 5.5%. About 4 to 5 US cents a message with Sonnet 5.5.` | `Requer uma chave de API de openrouter.ai/settings/keys com créditos comprados, sobre os quais o OpenRouter cobra 5,5%. Cerca de 4 a 5 centavos de dólar por mensagem com o Sonnet 5.5.` |
 | Cost, a typed address | `Your provider sets the price. Each message sends the Math guide and your whole sheet.` | `O seu provedor define o preço. Cada mensagem envia o Guia de cálculo e a sua folha inteira.` |
 | What it keeps, every provider | `<host> keeps what you send under its own terms.` | `<host> guarda o que você envia de acordo com os próprios termos.` |
 | Where the key is kept, web | `Kept in this browser only. Anyone using this browser profile can send with it; remove it when you leave a shared computer.` | `Guardada somente neste navegador. Qualquer pessoa que use este perfil do navegador pode enviar com ela; remova-a ao sair de um computador compartilhado.` |
@@ -4459,9 +4466,11 @@ arrive, in whatever language, after `<provider> said:`.
 - **A chip's words are the panel's** ("Pipe flow, line 3", `Bloco 2, linha 3`).
 - **A file's size** is written in MB with one decimal, and in kB below 0.1 MB, with the
   decimal mark of the language shown.
-- **The key pages** in three cost lines (`<OpenAI's key page>` and the others) are filled in
-  by the issue that builds the card, from each provider's documentation that day, as plain
-  text with no `https://`. The cents come from the defaults and are rechecked with them.
+- **The key pages** in three cost lines were filled in by the issue that built the card
+  (#307, 2026-11-22), as plain text with no `https://`: `platform.openai.com/api-keys` and
+  `openrouter.ai/settings/keys` as each provider's documentation named them that day, and
+  `aistudio.google.com/apikey`, which could not be read from Google's documentation then and
+  is rechecked with the defaults. The cents come from the defaults and are rechecked with them.
 - **Each built-in's "no credit" answer** has its own recogniser and fixture: Anthropic's
   "Your credit balance is too low to access the Anthropic API", OpenAI's 429
   `insufficient_quota`, OpenRouter's 402. Google's has not been read; until it is, Google's
