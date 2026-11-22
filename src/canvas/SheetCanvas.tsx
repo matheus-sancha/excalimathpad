@@ -93,6 +93,11 @@ export interface SheetPanelSlot {
   /** The built-in constants. */
   constants?: ReactNode
   /**
+   * The Math assistant (section 8, Math assistant, 0.7.0): the seventh tab and
+   * its More tools item. Unset, there is neither.
+   */
+  assistant?: ReactNode
+  /**
    * The pinned row above the tab icons, on touch while a line or the title is
    * open (section 4, Touch, M4d); unset, there is none.
    */
@@ -409,6 +414,8 @@ export function SheetCanvas({
           problems: sheetPanel.problemsTab,
           constants: sheetPanel.constants,
           settings: sheetPanel.settings,
+          // Never on a phone's bottom sheet (section 8, Math assistant, Its place).
+          assistant: phone ? undefined : sheetPanel.assistant,
         }[tab]
         return content ? [[tab, content] as const] : []
       })
@@ -479,6 +486,23 @@ export function SheetCanvas({
                       </span>
                     )}
                   </MoreToolsItem>
+                </div>
+              )}
+              {sheetPanel?.assistant && !phone && (
+                // The third item (section 8, App chrome, 0.7.0): it opens the panel on
+                // Math assistant, or closes the panel when that tab is the one showing.
+                <div className="math-tools__trigger sidebar-trigger">
+                  <MoreToolsItem
+                    icon={<TabIcon tab="assistant" />}
+                    label={words.tools.assistant}
+                    pressed={isShowing(appState.openSidebar, 'assistant')}
+                    title={words.tools.assistant}
+                    onSelect={() => {
+                      closeMoreTools(root)
+                      if (isShowing(api.getAppState().openSidebar, 'assistant')) api.toggleSidebar({ name: SHEET_PANEL, force: false })
+                      else api.toggleSidebar({ name: SHEET_PANEL, tab: 'assistant', force: true })
+                    }}
+                  />
                 </div>
               )}
             </>,
@@ -607,10 +631,16 @@ function isPanelTab(tab: string | undefined): tab is SheetPanelTab {
   return (SHEET_PANEL_TABS as readonly (string | undefined)[]).includes(tab)
 }
 
+/** Whether Excalidraw's open sidebar is the Sheet panel on `tab`. */
+function isShowing(open: { name: string; tab?: string } | null, tab: SheetPanelTab): boolean {
+  return open?.name === SHEET_PANEL && open.tab === tab
+}
+
 /**
  * A tab's icon (section 8, from M4d), drawn like Excalidraw's own: Format a
  * letter over a rule, Symbols π, Variables x =, Problems a warning sign,
- * Constants ∞, Settings the sliders of Math settings.
+ * Constants ∞, Settings the sliders of Math settings, Math assistant a speech
+ * bubble (0.7.0).
  */
 function TabIcon({ tab }: { tab: SheetPanelTab }) {
   if (tab === 'settings') return <SettingsIcon />
@@ -621,6 +651,7 @@ function TabIcon({ tab }: { tab: SheetPanelTab }) {
     problems: 'M12 4.5l8.5 15h-17zM12 10v4.5M12 17v.01',
     constants:
       'M12 12c-2-2.5-3.5-3.5-5.5-3.5a3.5 3.5 0 0 0 0 7c2 0 3.5-1 5.5-3.5s3.5-3.5 5.5-3.5a3.5 3.5 0 0 1 0 7c-2 0-3.5-1-5.5-3.5z',
+    assistant: 'M6.5 5h11a2.5 2.5 0 0 1 2.5 2.5v6a2.5 2.5 0 0 1-2.5 2.5H12l-4.5 3.5V16h-1A2.5 2.5 0 0 1 4 13.5v-6A2.5 2.5 0 0 1 6.5 5z',
   }
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">

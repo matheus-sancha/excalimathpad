@@ -36,6 +36,7 @@ export default defineConfig([
     'vite.config.ts',
     'vitest.probe.config.ts',
     'buildStamp.ts',
+    'assistantSwitch.ts',
     // Tests and their helpers, as the community scanner leaves them out.
     '**/*.test.*',
     '**/*.probe.*',

@@ -98,3 +98,13 @@ is neither.
 App imports none of the browser ports at run time, so
 the plugin's bundle holds none. `initialElements` gives tests a sheet.
 Depends on: shell, canvas, overlay, file.
+
+**The Math assistant** (spec section 8, Math assistant, Its place; section 14, 0.7.0;
+[assistant](assistant.md)): `AppProps.assistant?: AssistantPorts` is handed in by each home,
+as the file pickers are, and never imported. With it, Sheet fills the panel's `assistant`
+slot with `AssistantTab` in a tab boundary; without it the slot is unset, and the canvas
+draws no seventh tab and no More tools item. **An edit keeps the chat** (section 8, Sheet
+panel): `onEdit` still notes the panel's state in `beforeEdit` when a line or the title
+opens, but asks for nothing when the panel is open on `assistant`, so the panel stays there;
+the edit's end restores that same state, as for any tab. App never reads the build-time
+switch.

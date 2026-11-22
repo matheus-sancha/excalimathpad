@@ -33,6 +33,8 @@ export const en = {
     addMathTitle: 'Add math — M',
     mathSettings: 'Math settings',
     mathSettingsTitle: 'Math settings: variables, problems and settings',
+    /** The third item, where the assistant is on (section 13, Math assistant, 0.7.0). */
+    assistant: 'Math assistant',
     /** The badge's accessible name: the sheet's error count. */
     errors: (count: number) => (count === 1 ? '1 error' : `${count} errors`),
   },
@@ -76,6 +78,7 @@ export const en = {
       problems: 'Problems',
       constants: 'Constants',
       settings: 'Settings',
+      assistant: 'Math assistant',
     },
     /** The bottom sheet's region and its tab row (section 8, On a phone). */
     region: 'Math settings',

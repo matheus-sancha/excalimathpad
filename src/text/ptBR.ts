@@ -24,6 +24,7 @@ export const ptBR: Words = {
     addMathTitle: 'Adicionar cálculo — M',
     mathSettings: 'Configurações de cálculo',
     mathSettingsTitle: 'Configurações de cálculo: variáveis, problemas e configurações',
+    assistant: 'Assistente de cálculo',
     errors: (count) => (count === 1 ? '1 erro' : `${count} erros`),
   },
   welcome: {
@@ -51,6 +52,7 @@ export const ptBR: Words = {
       problems: 'Problemas',
       constants: 'Constantes',
       settings: 'Configurações',
+      assistant: 'Assistente de cálculo',
     },
     region: 'Configurações de cálculo',
     tabList: 'Abas de Configurações de cálculo',

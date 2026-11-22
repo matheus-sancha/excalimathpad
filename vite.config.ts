@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url'
 import react from '@vitejs/plugin-react'
 import type { Plugin } from 'vite'
 import { defineConfig } from 'vitest/config'
+import { ASSISTANT_SWITCH, assistantSwitch } from './assistantSwitch.ts'
 import { buildStamp } from './buildStamp.ts'
 import { GUIDE_QUERY, guideModule } from './src/guide/markdown.ts'
 
@@ -47,6 +48,8 @@ export default defineConfig({
     __BUILD_STAMP__: JSON.stringify(buildStamp(process.env.GITHUB_SHA, new Date())),
     // Section 4, Unexpected failures: Copy details names the version.
     __APP_VERSION__: JSON.stringify(version),
+    // Section 14, 0.7.0: the Math assistant is off unless the build says on.
+    __ASSISTANT__: JSON.stringify(assistantSwitch(process.env[ASSISTANT_SWITCH])),
   },
   test: {
     environment: 'jsdom',

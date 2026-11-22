@@ -18,7 +18,8 @@ Read these, and no more, before starting an issue:
    [overlay](docs/context/overlay.md), [file](docs/context/file.md),
    [plugin](docs/context/plugin.md), [guide](docs/context/guide.md),
    [panel](docs/context/panel.md), [failure](docs/context/failure.md),
-   [print](docs/context/print.md), [text](docs/context/text.md).
+   [print](docs/context/print.md), [text](docs/context/text.md),
+   [assistant](docs/context/assistant.md).
 4. **An ADR by number, when the issue or a section names it,** in [`docs/adr/`](docs/adr/).
 
 Read on demand only, when one of the above points there: the spec's "Changes since agreed"
