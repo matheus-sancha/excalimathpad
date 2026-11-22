@@ -534,7 +534,8 @@ With no request, a page can only read the address's form. **Inferred**, from the
 3. **PDFs through Google's compatible endpoint,** and whether its implicit caching applies there.
 4. **PDFs through Mistral's compatible endpoint** and through xAI's Chat Completions.
 5. **Ollama's answer to a refused origin,** and any call from Obsidian to `http://localhost`.
-6. **What Obsidian sends as its `Origin`** (on the hand check, #258).
+6. **What Obsidian sends as its `Origin`:** answered by the hand check, `app://obsidian.md` on a
+   computer ([`obsidian-hand-check.md`](obsidian-hand-check.md), #258). A phone is still unchecked.
 7. **Whether Azure's v1 API takes a Bearer key.**
 8. **xAI's terms and privacy policy** (403), **DeepSeek's FAQ** (no readable page), **Mozilla's
    support article** on local network access, and **Safari**.
