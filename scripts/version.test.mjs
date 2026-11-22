@@ -2,9 +2,9 @@ import { execFileSync, spawnSync } from 'node:child_process'
 import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
-import { fileURLToPath, pathToFileURL } from 'node:url'
+import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
-import { compareVersions, isEntry, latestMinAppVersion, nextFiles } from './version.mjs'
+import { compareVersions, latestMinAppVersion, nextFiles } from './version.mjs'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const manifest = { id: 'excalimathpad', version: '0.0.0', minAppVersion: '1.7.2', isDesktopOnly: true }
@@ -61,27 +61,6 @@ describe('one version (docs/spec-v1.md section 12a, Releases)', () => {
   })
 })
 
-describe('isEntry: whether Node was started on the script', () => {
-  const self = join(root, 'scripts/version.mjs')
-  const url = pathToFileURL(self).href
-
-  it('is true for the script itself, and false for another file or none', () => {
-    expect(isEntry(self, url)).toBe(true)
-    expect(isEntry(join(root, 'scripts/docs.test.mjs'), url)).toBe(false)
-    expect(isEntry(undefined, url)).toBe(false)
-  })
-
-  it('on Windows, ignores a difference of letter case only, as in a drive letter', () => {
-    // Paths that don't exist, so no file system resolves their case first (Windows' would).
-    const ghost = join(root, 'no-such-folder', 'entry.mjs')
-    const ghostUrl = pathToFileURL(ghost).href
-    const otherCase = join(root, 'NO-SUCH-FOLDER', 'ENTRY.MJS')
-    expect(isEntry(otherCase, ghostUrl, 'win32')).toBe(true)
-    expect(isEntry(otherCase, ghostUrl, 'linux')).toBe(false)
-    expect(isEntry(ghost, ghostUrl, 'linux')).toBe(true)
-  })
-})
-
 describe('npm version, in a scratch repository', () => {
   let dir
   afterEach(() => dir && rmSync(dir, { recursive: true, force: true }))
@@ -103,10 +82,14 @@ describe('npm version, in a scratch repository', () => {
     git('commit', '-q', '-m', 'start')
     // On Windows npm is npm.cmd, which Node starts only through a shell. npm's own words are
     // kept, so a failing check below says what npm and the script did.
+    // npm's own variables of the run that started the tests (npm_package_version 0.5.0,
+    // npm_lifecycle_event "test") are left out: on Windows they reached the scratch run's script,
+    // which then read the wrong version and staged nothing.
+    const outside = Object.fromEntries(Object.entries(process.env).filter(([name]) => !/^npm_/i.test(name)))
     const npm = spawnSync('npm', ['version', bump], {
       cwd: dir,
       encoding: 'utf8',
-      env: { ...process.env, ...ident },
+      env: { ...outside, ...ident },
       shell: process.platform === 'win32',
     })
     const log = `npm version ${bump} exited ${npm.status}\n--- stdout\n${npm.stdout}\n--- stderr\n${npm.stderr}`

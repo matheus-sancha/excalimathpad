@@ -11,7 +11,6 @@
 // writes the files without staging them. `nextFiles` is the same step for tests.
 
 import { execFileSync } from 'node:child_process'
-import { realpathSync } from 'node:fs'
 import { readFile, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -70,25 +69,6 @@ async function main() {
   )
 }
 
-/**
- * Whether Node was started on this file. On Windows the path Node was given and this module's
- * own can differ in a drive letter's case or a short (8.3) name, so both are resolved and,
- * there, compared ignoring case: a plain comparison skipped main() and released without
- * moving manifest.json.
- */
-export function isEntry(argv1, url, platform = process.platform) {
-  if (!argv1) return false
-  const real = (path) => {
-    try {
-      return realpathSync.native(path)
-    } catch {
-      return path
-    }
-  }
-  const [a, b] = [real(argv1), real(fileURLToPath(url))]
-  return platform === 'win32' ? a.toLowerCase() === b.toLowerCase() : a === b
-}
-
-if (isEntry(process.argv[1], import.meta.url)) {
+if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   await main()
 }
