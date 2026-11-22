@@ -1,13 +1,6 @@
-# from documentation, 2026-11-22, https://platform.claude.com/docs/en/api/errors
-# The page's example body, verbatim: 404 not_found_error, what an unknown model gets.
+# recorded 2026-11-22 from api.anthropic.com
+# by npm run assistant:record, the key and account ids taken out.
 HTTP 404
 content-type: application/json
 
-{
-  "type": "error",
-  "error": {
-    "type": "not_found_error",
-    "message": "The requested resource could not be found."
-  },
-  "request_id": "req_011CSHoEeqs5C35K2UUqR7Fy"
-}
+{"type":"error","error":{"type":"not_found_error","message":"model: no-such-model-excalimathpad"},"request_id":"req_recorded"}
