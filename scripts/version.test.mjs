@@ -1,4 +1,4 @@
-import { execFileSync } from 'node:child_process'
+import { execFileSync, spawnSync } from 'node:child_process'
 import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -101,13 +101,16 @@ describe('npm version, in a scratch repository', () => {
     git('init', '-q', '-b', 'main')
     git('add', '.')
     git('commit', '-q', '-m', 'start')
-    // On Windows npm is npm.cmd, which Node starts only through a shell.
-    execFileSync('npm', ['version', bump], {
+    // On Windows npm is npm.cmd, which Node starts only through a shell. npm's own words are
+    // kept, so a failing check below says what npm and the script did.
+    const npm = spawnSync('npm', ['version', bump], {
       cwd: dir,
       encoding: 'utf8',
       env: { ...process.env, ...ident },
       shell: process.platform === 'win32',
     })
+    const log = `npm version ${bump} exited ${npm.status}\n--- stdout\n${npm.stdout}\n--- stderr\n${npm.stderr}`
+    if (npm.status !== 0) throw new Error(log)
     const read = (name) => JSON.parse(readFileSync(join(dir, name), 'utf8'))
     return {
       tags: git('tag'),
@@ -115,13 +118,14 @@ describe('npm version, in a scratch repository', () => {
       clean: git('status', '--porcelain') === '',
       manifest: read('manifest.json'),
       versions: read('versions.json'),
+      log,
     }
   }
 
   it('the first release: minor from 0.0.0 gives 0.1.0, and versions.json starts "0.1.0": "1.7.2"', () => {
     const result = release('minor', { version: '0.0.0', versions: {} })
     expect(result.tags).toBe('0.1.0')
-    expect(result.commit).toEqual(['Release 0.1.0', 'manifest.json', 'package.json', 'versions.json'])
+    expect(result.commit, result.log).toEqual(['Release 0.1.0', 'manifest.json', 'package.json', 'versions.json'])
     expect(result.manifest.version).toBe('0.1.0')
     expect(result.versions).toEqual({ '0.1.0': '1.7.2' })
     expect(result.clean).toBe(true)
@@ -130,7 +134,7 @@ describe('npm version, in a scratch repository', () => {
   it('patch moves package.json and manifest.json in one commit, and versions.json only when minAppVersion changes', () => {
     const result = release('patch', { version: '0.1.0', versions: { '0.1.0': '1.7.2' } })
     expect(result.tags).toBe('0.1.1')
-    expect(result.commit).toEqual(['Release 0.1.1', 'manifest.json', 'package.json'])
+    expect(result.commit, result.log).toEqual(['Release 0.1.1', 'manifest.json', 'package.json'])
     expect(result.manifest.version).toBe('0.1.1')
     expect(result.versions).toEqual({ '0.1.0': '1.7.2' })
     expect(result.clean).toBe(true)
