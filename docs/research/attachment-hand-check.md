@@ -30,11 +30,13 @@ Three labels:
    stop the event. The same in all three places.
 4. **In a pop-out window, a dropped or pasted file is not an `instanceof` the code's `File`.**
    It belongs to the pop-out's window. Its `name`, `type`, `size` and `arrayBuffer()` work.
-5. **A file input inside Obsidian: not run yet.** The throwaway plugin is ready and passes
-   against a mock; Matheus runs it on the Windows PC (below).
-6. **Not checked:** how a model that takes no pictures answers one; a drop in a real Obsidian
-   window, where Obsidian's own drop handling may act first (the throwaway plugin checks it); a
-   scanned PDF with no text layer.
+5. **A hidden file input opens the system's Open dialog inside Obsidian** and hands over files
+   from outside the vault, read whole. A drop and a paste on a view reach the view's own
+   listeners there, and Obsidian does nothing else with them. Main window only: the pop-out
+   steps were not run in Obsidian.
+6. **Not checked:** how a model that takes no pictures answers one; a scanned PDF with no text
+   layer; inside Obsidian, the three steps in a pop-out window, a dialog closed with nothing
+   chosen, and a paste of a file copied in Explorer.
 
 ## 1. Google's compatible endpoint and a PDF
 
@@ -129,7 +131,7 @@ The three places gave the same result on every row but the last.
 
 ## 3. A file input inside Obsidian
 
-**Not run yet.** [`attachment-hand-check/`](attachment-hand-check/) holds a throwaway plugin
+**How it was run.** [`attachment-hand-check/`](attachment-hand-check/) holds a throwaway plugin
 (`main.js.txt` and `manifest.json.txt`, renamed without `.txt` in
 `<vault>/.obsidian/plugins/emp-attachment-check/`). It opens a view with three steps and writes
 what happens to the note "Excalimathpad attachment check.md", with no file name or content:
@@ -150,4 +152,25 @@ read. That run also gave point 4 of the answer: a file from the input (made in t
 document, then moved with the view) is the code's `File`; a dropped or pasted one in the
 pop-out is the pop-out's.
 
-Results from Obsidian go here when Matheus has run it.
+**Where it ran.** Matheus's Windows PC, one run, 2026-11-22 15:12 to 15:13 UTC: Obsidian
+`apiVersion` 1.15.1, `obsidian/1.12.7 Electron/39.8.3`, the view in the main window, a vault of
+3 files with 11 tabs open. Matheus pasted the note back; nothing below is his report by eye.
+
+| Step | What the note says |
+| --- | --- |
+| 1. The button, two files picked | "the dialog gave 2 file(s)": a `.png`, `image/png`, 1,977,038 bytes and a `.pdf`, `application/pdf`, 333,839 bytes; `arrayBuffer()` read every byte of each; no vault file of that name and size |
+| 1. The button again, twice, one file each | the PDF, then the PNG, each read whole |
+| 2. A `.webp` dropped on the box | the box's listener got 1 file, `image/webp`, 83,456 bytes, read whole; 1.5 s later vault files 3 → 3, open tabs 11 → 11 |
+| 2. The PDF dropped on the box | the listener got it, read whole; vault files 3 → 3, open tabs 11 → 11 |
+| 3. A screenshot pasted in the field | the listener got 1 file, items `file:image/png`, 14,386 bytes, read whole; 1.5 s later vault files 3 → 3, the field's text 0 → 0 characters |
+
+- **The dialog opens from `input.click()` in a button's handler** and gives the files chosen,
+  several at once with `multiple`. The input was in the main document.
+- **Files outside the vault are read whole,** up to 1.98 MB here, with their type set.
+- **Obsidian leaves a stopped drop alone:** no file joined the vault and no tab opened.
+- **Obsidian leaves a paste in a plain field alone:** nothing joined the vault and no text was
+  put in the field. A screenshot arrives as one `image/png` file.
+- **Every file was the code's `File`** in the main window, as in Chromium.
+- **Not run in Obsidian:** the same three steps with the view in a pop-out window; a dialog
+  closed with nothing chosen (the input's `cancel` event); a paste of a file copied in Explorer.
+  In Chromium with the mock the pop-out gave the same results as the main window.
