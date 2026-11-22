@@ -1,0 +1,10 @@
+# Every text file is checked out with LF line endings, on Windows too. The tests read
+# documents and fixtures byte for byte (a CRLF checkout once failed 179 of them), and
+# CI runs on Linux, so the repository has one form.
+* text=auto eol=lf
+
+# Binary: never touched.
+*.png binary
+*.pdf binary
+*.woff binary
+*.woff2 binary

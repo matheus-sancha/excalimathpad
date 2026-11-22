@@ -80,7 +80,13 @@ describe('npm version, in a scratch repository', () => {
     git('init', '-q', '-b', 'main')
     git('add', '.')
     git('commit', '-q', '-m', 'start')
-    execFileSync('npm', ['version', bump], { cwd: dir, encoding: 'utf8', env: { ...process.env, ...ident } })
+    // On Windows npm is npm.cmd, which Node starts only through a shell.
+    execFileSync('npm', ['version', bump], {
+      cwd: dir,
+      encoding: 'utf8',
+      env: { ...process.env, ...ident },
+      shell: process.platform === 'win32',
+    })
     const read = (name) => JSON.parse(readFileSync(join(dir, name), 'utf8'))
     return {
       tags: git('tag'),
