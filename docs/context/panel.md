@@ -36,8 +36,8 @@ where the name stands in it), the reason under the field (the refusal, or
 the shadow warning), the lines whose result would differ, `canRename`, and
 the `plan` itself; null when the line no longer assigns the name.
 The form's words are the table's `panel.rename` (its heading's words before
-and after the name, which is code and never breaks); `RENAME_WORDS` keeps
-only the toast's; the lines' marks are the engine's `markParts`. The sheet it
+and after the name, which is code and never breaks), and the toast's are
+`offer.renamed` ([overlay](overlay.md)); the lines' marks are the engine's `markParts`. The sheet it
 reads is a `RenameElement`: the panel's element with its `source` and
 `formats`, which `EvaluatedElement` carries. `RenameForm.tsx` draws it: a
 `type="text"` field that takes the keyboard as it mounts, the old name

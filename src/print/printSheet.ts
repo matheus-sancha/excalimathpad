@@ -1,5 +1,6 @@
 import { printPages, type Box, type PageSetting } from './pages.ts'
 import { buildPrintView, printCss, printDate, type PageDrawings, type PrintElementView } from './printView.ts'
+import { words } from '../text/words.ts'
 
 /**
  * Print… (docs/spec-v1.md section 11, Print flow and Changed on 2026-11-15;
@@ -11,8 +12,8 @@ import { buildPrintView, printCss, printDate, type PageDrawings, type PrintEleme
  * prints, which the route gives.
  */
 
-/** The notice when the pages couldn't be built (section 13, App). */
-export const PRINT_FAILED = "The pages couldn't be built, so nothing was printed."
+/** The notice when the pages couldn't be built (section 13, App), worded as it shows. */
+export const printFailed = (): string => words().printView.failed
 
 /** The sheet as it is drawn, read at the moment Print… is chosen. */
 export interface SheetToPrint {
@@ -110,7 +111,7 @@ export async function printSheet(route: PrintRoute): Promise<boolean> {
   } catch (error) {
     for (const step of undo.reverse()) step()
     console.error('Excalimathpad: the print pages', error)
-    route.notify(PRINT_FAILED)
+    route.notify(printFailed())
     return false
   }
   const title = route.title

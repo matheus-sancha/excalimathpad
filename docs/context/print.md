@@ -31,7 +31,8 @@ Print) is plain DOM built into any document (`doc.importNode` of each copy), so 
 the plugin's frame share it. `buildPrintView(doc, PrintParts)` takes the layout, the elements
 (`PrintElementView`: place, laid-out size, rows and the overlay's `.math-element` to copy), each
 page's drawings (`PageDrawings`: one SVG and its scene top-left, or null), the footer's name and date
-(`printDate`), the overlay's `--math-*` colours and `rowNodes` (`printRowNodes`, so the Nth node of a
+(`printDate`, ISO in both languages; the page count, `2 of 3` or `2 de 3`, is the text tables'
+`printView.pageOf`, read when the view is built), the overlay's `--math-*` colours and `rowNodes` (`printRowNodes`, so the Nth node of a
 copy is its Nth measured row). It returns an unattached root (`PRINT_VIEW_CLASS`); each row is marked
 shown or hidden for its page, and a split table's header is a copy with only that row shown.
 `printCss(layout)` is the `@page` rule and section 14's recipe, and in print shows the view alone.
@@ -41,7 +42,9 @@ elements, the Page, the colours, `drawingsOn(top, bottom)` and `rowNodes`), lays
 `printPages`, exports each page's drawings, builds the view, adds its styles with `adoptStyles`
 (constructed style sheets, never a `<style>`), awaits `doc.fonts.ready` and two frames, sets the
 route's `title` to its plain name, calls `print()` and, when it returns, takes everything off and puts
-the title back. A throw before the dialog calls `notify(PRINT_FAILED)` and leaves nothing behind.
+the title back. A throw before the dialog calls `notify(printFailed())`, the text tables' `printView.failed`
+in the language shown, and leaves nothing behind. The footer's name is the route's: on the web
+App's `printOnTheWeb` gives the file's, or `words().file.untitled` (Sem título) unsaved.
 `styles` is CSS the document lacks, for a frame. `printView.test.ts` and `printSheet.test.ts` hold it
 in jsdom; the **print run** (`scripts/print-run.mjs`, read back by `scripts/pdf-read.mjs`) holds the
 web's Print… in real Chromium PDFs.
@@ -58,4 +61,6 @@ document's sheets that hold the app's cascade layer, as text), the window's titl
 and a `print` that shows the paper's notice (`paperNotice`), waits two frames and the frame's fonts, and
 calls the frame's `contentWindow.print()`; then removes the frame. The print run holds it in the built
 plugin, printing the frame's document from a page of its own; the pop-out run prints from each window.
-Depends on: nothing.
+Its Português passes (0.6.0) print the pump sheet and an untitled sheet under ☰ → Language →
+Português and read `1 de 2`, the ISO date and Sem título from the PDF.
+Depends on: text ([text](text.md): its words).

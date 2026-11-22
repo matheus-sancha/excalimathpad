@@ -1,7 +1,8 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import type { PlotClause } from '../math/plotLine.ts'
 import { PlotSettings } from './PlotSettings.tsx'
+import { showLanguage } from '../text/words.ts'
 
 afterEach(cleanup)
 
@@ -29,6 +30,23 @@ describe('the plot settings popover (docs/spec-v1.md section 10)', () => {
     expect(screen.getByLabelText('x to')).toHaveValue('30 L/s')
     expect(screen.getByLabelText('Size')).toHaveValue('L')
     expect(screen.getByLabelText('Title')).toHaveValue('Pump')
+  })
+
+  it('words its labels and choices in the language shown; the clauses stay as typed (0.6.0)', () => {
+    showLanguage('pt-BR')
+    onTestFinished(() => showLanguage('en'))
+    const { onChange } = open([{ kind: 'mark', expression: 'Q_op' }, { kind: 'log', axis: 'y' }])
+
+    expect(screen.getByRole('dialog', { name: 'Configurações do gráfico' })).toBeInTheDocument()
+    expect(screen.getByLabelText('Marca')).toHaveValue('Q_op')
+    expect(screen.getByLabelText('Escala de y')).toHaveValue('log')
+    expect(screen.getByLabelText('x até')).toHaveAttribute('placeholder', 'auto')
+    expect(screen.getByLabelText('Título')).toHaveAttribute('placeholder', 'Nenhum')
+    const labels = [...document.querySelectorAll('.math-plot-settings__label')].map((label) => label.textContent)
+    expect(labels).toEqual(['Marca', 'Ponto', 'Círculo', 'Nomes das séries', 'Pontos', 'Eixo x', 'Eixo y', 'Escalas iguais', 'Tamanho', 'Título'])
+    expect([...screen.getByLabelText<HTMLSelectElement>('Nomes das séries').options].map((o) => o.textContent)).toEqual(['Legenda', 'No fim das linhas'])
+    fireEvent.click(screen.getByLabelText('Pontos'))
+    expect(onChange).toHaveBeenLastCalledWith([{ kind: 'mark', expression: 'Q_op' }, { kind: 'points' }, { kind: 'log', axis: 'y' }])
   })
 
   it('hands back the whole clause list for each change, in the popover’s order', () => {

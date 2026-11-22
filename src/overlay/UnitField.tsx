@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { SheetLine } from '../math/evaluate.ts'
 import { vaultKeyRoute } from '../canvas/vaultKeys.ts'
+import { useWords } from '../text/words.ts'
 
 /**
  * The unit slot's field (docs/spec-v1.md section 5, Unit slot): a text field
@@ -28,6 +29,7 @@ export function UnitField({
   onApply: (unit: string | null) => void
   onCancel: () => void
 }) {
+  const { unitSlot: words } = useWords()
   const inputRef = useRef<HTMLInputElement>(null)
   const [text, setText] = useState(slot.chosen ?? '')
   const [invalid, setInvalid] = useState(false)
@@ -58,7 +60,7 @@ export function UnitField({
       <input
         ref={inputRef}
         className="math-unit-field__input"
-        aria-label="Unit"
+        aria-label={words.field}
         aria-invalid={invalid}
         aria-controls="math-unit-list"
         spellCheck={false}
@@ -90,7 +92,7 @@ export function UnitField({
         onBlur={onCancel}
       />
       {entries.length > 0 && (
-        <ul className="math-unit-field__list" id="math-unit-list" role="listbox" aria-label="Units">
+        <ul className="math-unit-field__list" id="math-unit-list" role="listbox" aria-label={words.list}>
           {entries.map((entry, i) => (
             <li
               key={entry.unit ?? 'sheet'}
@@ -102,7 +104,7 @@ export function UnitField({
                 onApply(entry.unit)
               }}
             >
-              <span className="math-unit-field__label">{entry.unit ?? 'Sheet units'}</span>
+              <span className="math-unit-field__label">{entry.unit ?? words.sheetUnits}</span>
               <span className="math-unit-field__value">{entry.text}</span>
             </li>
           ))}

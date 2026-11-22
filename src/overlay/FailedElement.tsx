@@ -1,8 +1,8 @@
 import { useLayoutEffect, useRef } from 'react'
 import type { MathAnchor } from '../canvas/mathAnchor.ts'
 import { isLineField } from '../canvas/panelPresses.ts'
-import { FailureActions } from '../failure/FailureActions.tsx'
-import { FAILURE_MESSAGES, type Failure } from '../failure/details.ts'
+import { FailedNotice, FailureActions } from '../failure/FailureActions.tsx'
+import type { Failure } from '../failure/details.ts'
 import { splitLines } from '../math/evaluate.ts'
 import { TITLE_LINE, type LineEdit, type LineMove } from './lineEdit.ts'
 import { sceneToStage, type Viewport } from './viewport.ts'
@@ -61,7 +61,7 @@ export function FailedElement({ anchor, viewport, source, edit, failure, onType,
       >
         <div className="math-element__failed" role="alert" data-tip={failure.text}>
           <span className="math-element__gutter">●</span>
-          <span className="math-element__failed-text">{FAILURE_MESSAGES.element}</span>
+          <span className="math-element__failed-text"><FailedNotice thing="element" /></span>
           <FailureActions what="element" failure={failure} />
         </div>
         {(anchor.title !== '' || edit?.lineIndex === TITLE_LINE) && (

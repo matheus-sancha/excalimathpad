@@ -447,6 +447,109 @@ export const en = {
     unit: 'unit',
     electrical: 'Electrical',
   },
+  /**
+   * The web's file dialogs and their messages (section 13, App; section 7). A
+   * `<reason>` the browser gives passes through as it arrives; `reasons` are
+   * the ones the app words itself.
+   */
+  dialogs: {
+    /** The recovery copy's question; `name` is null for an untitled sheet. */
+    restore: (name: string | null) =>
+      name ? `Restore unsaved changes to ${name}?` : 'Restore unsaved changes to an untitled sheet?',
+    /** Opening with unsaved changes; `name` is the file's, `Untitled.excalimathpad` unsaved. */
+    saveChanges: (name: string) => `Save changes to ${name}?`,
+    restoreButton: 'Restore',
+    discard: 'Discard',
+    save: 'Save',
+    dontSave: "Don't save",
+    cancel: 'Cancel',
+    newer: 'This sheet was saved by a newer Excalimathpad. Update the app.',
+    notASheet: "This file isn't a sheet, so it wasn't opened.",
+    saveFailed: (name: string, reason: string) => `Couldn't save ${name}: ${reason}`,
+    openFailed: (reason: string) => `Couldn't open the file: ${reason}`,
+    reasons: {
+      writeRefused: 'permission to write the file was refused',
+      cannotWriteBack: 'this browser cannot write back to a file',
+      cannotReadAgain: 'this browser cannot read a file again',
+      /** The recovery copy's three (`recovery.ts`). */
+      storeWontOpen: 'IndexedDB would not open',
+      storeFailed: 'IndexedDB transaction failed',
+      storeAborted: 'IndexedDB transaction aborted',
+    },
+  },
+  /** The print view's own words (section 11, Furniture) and Print…'s notice (section 13, App). */
+  printView: {
+    /** The footer's page count, at its right; the date beside it is ISO in both languages. */
+    pageOf: (page: number, pages: number) => `${page} of ${pages}`,
+    failed: "The pages couldn't be built, so nothing was printed.",
+  },
+  /**
+   * Unexpected failures (section 4; section 13, Unexpected failures). The text
+   * Copy details copies is not here: it stays English in both (`details.ts`).
+   */
+  failure: {
+    element: 'this element hit an unexpected error in Excalimathpad',
+    chart: 'this chart hit an unexpected error in Excalimathpad',
+    tab: 'this tab hit an unexpected error in Excalimathpad',
+    view: 'This sheet hit an unexpected error in Excalimathpad.',
+    kept: 'Your sheet is kept up to the last finished line.',
+    typing: 'You were typing:',
+    reload: 'Reload the sheet',
+    copyDetails: 'Copy details',
+    copy: 'Copy',
+    copied: 'Copied',
+    report: 'Report this error',
+  },
+  /** A rename's offer on a committed line, its row on a phone and the toast after a rename (section 13, Rename and Language). */
+  offer: {
+    /** The card's question as plain text: its accessible name. */
+    ask: (from: string, to: string, count: number) => `Rename ${from} to ${to} in ${count === 1 ? '1 line' : `${count} lines`}?`,
+    /**
+     * The card's question as drawn: the names show as code and the count is a
+     * button, each where the language puts it among the words.
+     */
+    question: <T>(from: T, to: T, count: T): (string | T)[] => ['Rename ', from, ' to ', to, ' ', count, '?'],
+    /** The count, after the names: it opens the list of lines. */
+    count: (count: number) => (count === 1 ? 'in 1 line' : `in ${count} lines`),
+    rename: 'Rename',
+    keep: (from: string) => `Keep ${from}`,
+    /** On a phone, with more than one offer waiting. */
+    of: (index: number, total: number) => `${index} of ${total}`,
+    results: (count: number) => (count === 1 ? 'This changes 1 result:' : `This changes ${count} results:`),
+    /** A listed line's place: its element's title, else its place in reading order (from 1), and the line (from 1). */
+    where: (title: string | null, element: number, line: number) => `${title ?? `Element ${element}`}, line ${line}`,
+    /** The toast after a rename, from the form or the offer; on touch there is no Ctrl+Z to name. */
+    renamed: (from: string, to: string, count: number, touch: boolean) =>
+      `Renamed ${from} to ${to} in ${count === 1 ? '1 line' : `${count} lines`}. ${touch ? 'Undo' : 'Ctrl+Z'} takes it back.`,
+  },
+  /** The unit slot's field and list (section 5, Unit slot). Unit symbols stay as they are. */
+  unitSlot: {
+    field: 'Unit',
+    list: 'Units',
+    sheetUnits: 'Sheet units',
+  },
+  /** A plot's settings popover (section 10, Plots). The clause words a line holds stay as typed. */
+  plotSettings: {
+    dialog: 'Plot settings',
+    mark: 'Mark',
+    point: 'Point',
+    circle: 'Circle',
+    seriesNames: 'Series names',
+    legend: 'Legend',
+    atLineEnds: 'At line ends',
+    points: 'Points',
+    axis: (axis: string) => `${axis} axis`,
+    scale: (axis: string) => `${axis} scale`,
+    linear: 'Linear',
+    log: 'Log',
+    from: (axis: string) => `${axis} from`,
+    to: (axis: string) => `${axis} to`,
+    auto: 'auto',
+    equalScales: 'Equal scales',
+    size: 'Size',
+    title: 'Title',
+    none: 'None',
+  },
   /** The plugin's own words in Obsidian (section 8, Language: In Obsidian; section 13, In a vault). */
   vault: {
     /** The command, the ribbon's tooltip and the folder menu's item (section 7, A sheet in a vault). */

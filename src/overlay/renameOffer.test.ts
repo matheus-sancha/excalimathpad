@@ -1,7 +1,10 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, onTestFinished } from 'vitest'
 import { elementLabel } from '../panel/sheetPanel.ts'
 import type { SheetBlock } from '../math/evaluate.ts'
-import { followOffers, noteCommit, offerLines, OFFER_WORDS, type RenameOffer } from './renameOffer.ts'
+import { followOffers, noteCommit, offerLines, type RenameOffer } from './renameOffer.ts'
+import { en } from '../text/en.ts'
+import { ptBR } from '../text/ptBR.ts'
+import { showLanguage } from '../text/words.ts'
 
 /**
  * The offer on a committed line, as state (docs/spec-v1.md section 4,
@@ -68,11 +71,27 @@ describe('following the scene (followOffers)', () => {
 
 describe('the card’s words and lines (section 13, Rename and Language)', () => {
   it('words the question, the count, Keep and a phone’s count of offers', () => {
-    expect(OFFER_WORDS.ask('rho', 'rho_w', 6)).toBe('Rename rho to rho_w in 6 lines?')
-    expect(OFFER_WORDS.ask('rho', 'rho_w', 1)).toBe('Rename rho to rho_w in 1 line?')
-    expect(OFFER_WORDS.keep('rho')).toBe('Keep rho')
-    expect(OFFER_WORDS.of(1, 2)).toBe('1 of 2')
-    expect(OFFER_WORDS.results(2)).toBe('This changes 2 results:')
+    expect(en.offer.ask('rho', 'rho_w', 6)).toBe('Rename rho to rho_w in 6 lines?')
+    expect(en.offer.ask('rho', 'rho_w', 1)).toBe('Rename rho to rho_w in 1 line?')
+    expect(en.offer.question('rho', 'rho_w', en.offer.count(6)).join('')).toBe('Rename rho to rho_w in 6 lines?')
+    expect(en.offer.keep('rho')).toBe('Keep rho')
+    expect(en.offer.of(1, 2)).toBe('1 of 2')
+    expect(en.offer.results(2)).toBe('This changes 2 results:')
+  })
+
+  it('in Português, as section 13 words it, the card drawn from the same parts', () => {
+    expect(ptBR.offer.ask('rho', 'rho_w', 6)).toBe('Renomear rho para rho_w em 6 linhas?')
+    expect(ptBR.offer.ask('rho', 'rho_w', 1)).toBe('Renomear rho para rho_w em 1 linha?')
+    expect(ptBR.offer.question('rho', 'rho_w', ptBR.offer.count(1)).join('')).toBe('Renomear rho para rho_w em 1 linha?')
+    expect([ptBR.offer.rename, ptBR.offer.keep('rho'), ptBR.offer.of(1, 2)]).toEqual(['Renomear', 'Manter rho', '1 de 2'])
+    expect([ptBR.offer.results(2), ptBR.offer.results(1)]).toEqual(['Isto altera 2 resultados:', 'Isto altera 1 resultado:'])
+  })
+
+  it('words the toast: Ctrl+Z on a computer, and Excalidraw’s own Undo on touch, in each language', () => {
+    expect(en.offer.renamed('rho', 'rho_w', 7, false)).toBe('Renamed rho to rho_w in 7 lines. Ctrl+Z takes it back.')
+    expect(en.offer.renamed('rho', 'rho_w', 1, true)).toBe('Renamed rho to rho_w in 1 line. Undo takes it back.')
+    expect(ptBR.offer.renamed('rho', 'rho_w', 7, false)).toBe('rho foi renomeado para rho_w em 7 linhas. Ctrl+Z desfaz.')
+    expect(ptBR.offer.renamed('rho', 'rho_w', 1, true)).toBe('rho foi renomeado para rho_w em 1 linha. Toque em Desfazer para voltar.')
   })
 
   it('names each line’s element as the Sheet panel does, by its title or its place', () => {
@@ -88,5 +107,17 @@ describe('the card’s words and lines (section 13, Rename and Language)', () =>
       { text: 'rho', marked: true },
     ])
     expect(offerLines([{ id: 'a', line: 0 }], sheet, titles)[0].where).toBe('Fluid, line 1')
+  })
+
+  it('names each line’s place in the language shown', () => {
+    showLanguage('pt-BR')
+    onTestFinished(() => showLanguage('en'))
+    const sheet: SheetBlock[] = [
+      { id: 'a', source: 'rho_w = 1000' },
+      { id: 'b', source: 'x = 1\ny = rho' },
+    ]
+    const titles = new Map([['a', 'Fluido'], ['b', null]])
+    expect(offerLines([{ id: 'b', line: 1 }], sheet, titles)[0].where).toBe('Bloco 2, linha 2')
+    expect(offerLines([{ id: 'a', line: 0 }], sheet, titles)[0].where).toBe('Fluido, linha 1')
   })
 })

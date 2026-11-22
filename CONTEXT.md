@@ -107,11 +107,11 @@ an issue touches that module ([`CLAUDE.md`](CLAUDE.md) has the reading route).
   (ADR 0005). `planRename` (`rename.ts`, 0.5.0) plans a rename from that same reading.
   Depends on: `mathjs`. [`docs/context/math.md`](docs/context/math.md)
 - **overlay** (`src/overlay/`) — draws math elements over the canvas as typeset grids, and
-  holds the line edit, a rename's offer, the unit slot, tables and plots. Depends on: canvas, math, print, `katex`
+  holds the line edit, a rename's offer, the unit slot, tables and plots. Depends on: canvas, math, print, text, `katex`
   (lazily). [`docs/context/overlay.md`](docs/context/overlay.md)
 - **file** (`src/file/`) — the sheet file (ADR 0004): format 2 and its migration from 1, the
   session (save, open, the clean mark, the recovery copy) over ports, and the vault's
-  sheet. Depends on: canvas (file routes, layers).
+  sheet. Depends on: canvas (file routes, layers), text.
   [`docs/context/file.md`](docs/context/file.md)
 - **plugin** (`plugin/`) — the Obsidian plugin (ADR 0006), the only code that imports
   `obsidian`: the `Plugin`, the `TextFileView`, and their tests against a fake `obsidian`.
@@ -124,13 +124,13 @@ an issue touches that module ([`CLAUDE.md`](CLAUDE.md) has the reading route).
   Depends on: math, overlay (KaTeX), print. [`docs/context/panel.md`](docs/context/panel.md)
 - **print** (`src/print/`) — the print pages (spec section 11): `printPages`, one pure function
   from the scene's boxes, the overlay's measured rows (`printRows`) and the Page to the pages and
-  their breaks; the print view, drawn in any document; and Print… (`printSheet`). Depends on: nothing. [`docs/context/print.md`](docs/context/print.md)
+  their breaks; the print view, drawn in any document; and Print… (`printSheet`). Depends on: text. [`docs/context/print.md`](docs/context/print.md)
 - **text** (`src/text/`) — the app's own words: two text tables of one shape (`en.ts`,
   `ptBR.ts`) and the reader (`words.ts`), which answers the language Excalidraw shows, for
   React and for code outside it (0.6.0). Depends on: nothing. [`docs/context/text.md`](docs/context/text.md)
 - **failure** (`src/failure/`) — unexpected failures (spec section 4): the boundary, the
   failure screen, Copy details and Report this error. `App` wraps the sheet in the view's
-  boundary. Depends on: nothing. [`docs/context/failure.md`](docs/context/failure.md)
+  boundary. Depends on: text. [`docs/context/failure.md`](docs/context/failure.md)
 - **shell** (`src/shell/`) — full-viewport layout with three slots: `canvas`,
   `overlay` (stacked exactly over the canvas, pointer-transparent by default)
   and `sidePanel` (docked right). Empty (falsy) slots render nothing. The

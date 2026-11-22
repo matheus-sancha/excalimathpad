@@ -1,5 +1,6 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { PRINT_FAILED, printSheet, type PrintRoute, type SheetToPrint } from './printSheet.ts'
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
+import { printSheet, type PrintRoute, type SheetToPrint } from './printSheet.ts'
+import { showLanguage } from '../text/words.ts'
 
 /**
  * Print…'s steps (docs/spec-v1.md section 11, Print flow and Changed on
@@ -78,7 +79,6 @@ describe('printSheet', () => {
 
     expect(print).not.toHaveBeenCalled()
     expect(notify).toHaveBeenCalledWith("The pages couldn't be built, so nothing was printed.")
-    expect(PRINT_FAILED).toBe("The pages couldn't be built, so nothing was printed.")
     expect(title()).toBe('● pump-sizing')
     expect(document.querySelector('.print-view')).toBeNull()
     expect(document.adoptedStyleSheets).toEqual([])
@@ -92,8 +92,20 @@ describe('printSheet', () => {
     await expect(printSheet(r)).resolves.toBe(false)
 
     expect(print).not.toHaveBeenCalled()
-    expect(notify).toHaveBeenCalledWith(PRINT_FAILED)
+    expect(notify).toHaveBeenCalledWith("The pages couldn't be built, so nothing was printed.")
     expect(document.querySelector('.print-view')).toBeNull()
+  })
+
+  it('words the notice in the language shown, when it shows (section 13, App, 0.6.0)', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    delete (document as { adoptedStyleSheets?: unknown }).adoptedStyleSheets
+    showLanguage('pt-BR')
+    onTestFinished(() => showLanguage('en'))
+    const { route: r, notify } = route()
+
+    await expect(printSheet(r)).resolves.toBe(false)
+
+    expect(notify).toHaveBeenCalledWith('Não foi possível montar as páginas, então nada foi impresso.')
   })
 
   it('puts the title and the document back even if the dialog throws', async () => {

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { en } from '../text/en.ts'
 import { ptBR } from '../text/ptBR.ts'
-import { RENAME_WORDS, renameBlocks, renameFormView, type RenameElement } from './renameForm.ts'
+import { renameBlocks, renameFormView, type RenameElement } from './renameForm.ts'
 
 /**
  * The rename form's view (docs/spec-v1.md section 4, Renaming a name: The
@@ -148,10 +148,5 @@ describe('the rename’s words (section 13)', () => {
   it('names each line in the language it is given', () => {
     const view = renameFormView([element('a', 'rho = 1\ny = rho')], { id: 'a', line: 0, name: 'rho' }, 'rho_w', undefined, ptBR)
     expect(view?.lines.map(({ where }) => where)).toEqual(['Bloco 1, linha 1', 'Bloco 1, linha 2'])
-  })
-
-  it('the toast names Ctrl+Z, and Undo on touch', () => {
-    expect(RENAME_WORDS.renamed('rho', 'rho_w', 7, false)).toBe('Renamed rho to rho_w in 7 lines. Ctrl+Z takes it back.')
-    expect(RENAME_WORDS.renamed('rho', 'rho_w', 1, true)).toBe('Renamed rho to rho_w in 1 line. Undo takes it back.')
   })
 })

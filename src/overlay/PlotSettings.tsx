@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { PLOT_SIZES, SQUARE_SIZES, type PlotClause, type PlotSize } from '../math/plotLine.ts'
 import { vaultKeyRoute } from '../canvas/vaultKeys.ts'
+import { useWords } from '../text/words.ts'
 
 /**
  * The plot's settings popover (docs/spec-v1.md section 10, Plots): Mark,
@@ -22,6 +23,7 @@ export function PlotSettings({
   onChange: (clauses: PlotClause[]) => void
   onClose: () => void
 }) {
+  const { plotSettings: words } = useWords()
   const root = useRef<HTMLDivElement>(null)
   useEffect(() => {
     root.current?.querySelector<HTMLElement>('input, select')?.focus()
@@ -60,15 +62,15 @@ export function PlotSettings({
       ref={root}
       className="math-plot-settings"
       role="dialog"
-      aria-label="Plot settings"
+      aria-label={words.dialog}
       onKeyDown={keys}
       onBlur={(event) => {
         if (!root.current?.contains(event.relatedTarget)) onClose()
       }}
     >
-      <Row label="Mark">
+      <Row label={words.mark}>
         <TextSetting
-          label="Mark"
+          label={words.mark}
           value={marks.join('; ')}
           placeholder="Q_op; Q_d"
           onCommit={(text) =>
@@ -79,9 +81,9 @@ export function PlotSettings({
           }
         />
       </Row>
-      <Row label="Point">
+      <Row label={words.point}>
         <TextSetting
-          label="Point"
+          label={words.point}
           value={points.join('; ')}
           placeholder="(Q_d, H_d)"
           onCommit={(text) =>
@@ -93,38 +95,38 @@ export function PlotSettings({
           }
         />
       </Row>
-      <Row label="Circle">
+      <Row label={words.circle}>
         <TextSetting
-          label="Circle"
+          label={words.circle}
           value={circles.join('; ')}
           placeholder="r; (x0, y0) r"
           onCommit={(text) => change((clause) => clause.kind === 'circle', parts(text).map((expression) => ({ kind: 'circle', expression })))}
         />
       </Row>
-      <Row label="Series names">
+      <Row label={words.seriesNames}>
         <select
-          aria-label="Series names"
+          aria-label={words.seriesNames}
           value={has('labels-direct') ? 'direct' : 'legend'}
           onChange={(event) =>
             change((clause) => clause.kind === 'labels-direct', event.target.value === 'direct' ? [{ kind: 'labels-direct' }] : [])
           }
         >
-          <option value="legend">Legend</option>
-          <option value="direct">At line ends</option>
+          <option value="legend">{words.legend}</option>
+          <option value="direct">{words.atLineEnds}</option>
         </select>
       </Row>
-      <Row label="Points">
+      <Row label={words.points}>
         <input
           type="checkbox"
-          aria-label="Points"
+          aria-label={words.points}
           checked={has('points')}
           onChange={(event) => change((clause) => clause.kind === 'points', event.target.checked ? [{ kind: 'points' }] : [])}
         />
       </Row>
       {(['x', 'y'] as const).map((axis) => (
-        <Row key={axis} label={`${axis} axis`}>
+        <Row key={axis} label={words.axis(axis)}>
           <select
-            aria-label={`${axis} scale`}
+            aria-label={words.scale(axis)}
             value={log(axis) ? 'log' : 'linear'}
             onChange={(event) =>
               change(
@@ -133,37 +135,37 @@ export function PlotSettings({
               )
             }
           >
-            <option value="linear">Linear</option>
-            <option value="log">Log</option>
+            <option value="linear">{words.linear}</option>
+            <option value="log">{words.log}</option>
           </select>
           <TextSetting
-            label={`${axis} from`}
+            label={words.from(axis)}
             value={range(axis)?.start ?? ''}
-            placeholder="auto"
+            placeholder={words.auto}
             onCommit={(start) => setRange(axis, start, range(axis)?.end ?? '')}
           />
           <span className="math-plot-settings__dots">..</span>
           <TextSetting
-            label={`${axis} to`}
+            label={words.to(axis)}
             value={range(axis)?.end ?? ''}
-            placeholder="auto"
+            placeholder={words.auto}
             onCommit={(end) => setRange(axis, range(axis)?.start ?? '', end)}
           />
         </Row>
       ))}
-      <Row label="Equal scales">
+      <Row label={words.equalScales}>
         {/* A circle brings equal scales, with no way to turn them off (section 10). */}
         <input
           type="checkbox"
-          aria-label="Equal scales"
+          aria-label={words.equalScales}
           checked={has('equal') || circles.length > 0}
           disabled={circles.length > 0}
           onChange={(event) => change((clause) => clause.kind === 'equal', event.target.checked ? [{ kind: 'equal' }] : [])}
         />
       </Row>
-      <Row label="Size">
+      <Row label={words.size}>
         <select
-          aria-label="Size"
+          aria-label={words.size}
           value={size?.kind === 'size' ? size.size : 'M'}
           onChange={(event) => {
             const chosen = event.target.value as PlotSize
@@ -177,11 +179,11 @@ export function PlotSettings({
           ))}
         </select>
       </Row>
-      <Row label="Title">
+      <Row label={words.title}>
         <TextSetting
-          label="Title"
+          label={words.title}
           value={title?.kind === 'title' ? title.text : ''}
-          placeholder="None"
+          placeholder={words.none}
           onCommit={(text) =>
             change((clause) => clause.kind === 'title', text.trim() === '' ? [] : [{ kind: 'title', text: text.trim() }])
           }

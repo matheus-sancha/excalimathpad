@@ -25,16 +25,6 @@ export interface RenameElement extends PanelElement {
   formats?: string
 }
 
-/**
- * Section 13, Rename and Language: the toast's words. The form's own are the
- * text table's (`panel.rename`, 0.6.0).
- */
-export const RENAME_WORDS = {
-  /** After a rename; on touch there is no Ctrl+Z to name. */
-  renamed: (from: string, to: string, count: number, touch: boolean) =>
-    `Renamed ${from} to ${to} in ${count === 1 ? '1 line' : `${count} lines`}. ${touch ? 'Undo' : 'Ctrl+Z'} takes it back.`,
-} as const
-
 export type { MarkedPart }
 
 /** A line the form lists: "Fluid and pipe, line 2" and its source. */

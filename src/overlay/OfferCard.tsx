@@ -1,8 +1,9 @@
-import { useDeferredValue, useMemo, useState, type MouseEvent, type Ref } from 'react'
+import { Fragment, useDeferredValue, useMemo, useState, type MouseEvent, type Ref } from 'react'
 import type { DisplaySettings } from '../math/display.ts'
 import type { SheetBlock } from '../math/evaluate.ts'
 import { planOffer, type MarkedPart } from '../math/rename.ts'
-import { OFFER_WORDS, offerLines, target, type FollowedOffer, type OfferLine } from './renameOffer.ts'
+import { useWords } from '../text/words.ts'
+import { offerLines, target, type FollowedOffer, type OfferLine } from './renameOffer.ts'
 
 /**
  * The offer's card (docs/spec-v1.md section 4, Renaming a name: The offer, on
@@ -34,6 +35,7 @@ export interface OfferCardProps {
 
 export function OfferCard({ followed, blocks, titles, settings, row, touch, onRename, onKeep, ref }: OfferCardProps) {
   const { offer, plan } = followed
+  const { offer: words } = useWords()
   const [listOpen, setListOpen] = useState(false)
   // "Changes a result" runs the sheet twice: the card is drawn first, and the check follows (section 14).
   const checked = useDeferredValue(blocks)
@@ -51,40 +53,45 @@ export function OfferCard({ followed, blocks, titles, settings, row, touch, onRe
       ref={ref}
       className={`math-offer${row ? ' is-row' : ''}${touch ? ' is-touch' : ''}`}
       role="group"
-      aria-label={OFFER_WORDS.ask(offer.from, offer.to, count)}
+      aria-label={words.ask(offer.from, offer.to, count)}
       data-offer={`${offer.anchorId}:${offer.line}`}
       // A press here isn't the canvas's, and never takes the keyboard from an open line.
       onMouseDown={keepFocus}
     >
       <p className="math-offer__ask">
-        {row && row.total > 1 && <span className="math-offer__of">{OFFER_WORDS.of(1, row.total)}</span>}
-        Rename <code>{offer.from}</code> to <code>{offer.to}</code>{' '}
-        <button
-          type="button"
-          className="math-offer__count"
-          tabIndex={-1}
-          aria-expanded={listOpen}
-          onClick={() => setListOpen((open) => !open)}
-        >
-          {OFFER_WORDS.count(count)}
-        </button>
-        ?
+        {row && row.total > 1 && <span className="math-offer__of">{words.of(1, row.total)}</span>}
+        {words
+          .question(
+            <code>{offer.from}</code>,
+            <code>{offer.to}</code>,
+            <button
+              type="button"
+              className="math-offer__count"
+              tabIndex={-1}
+              aria-expanded={listOpen}
+              onClick={() => setListOpen((open) => !open)}
+            >
+              {words.count(count)}
+            </button>,
+          )
+          // The words and the parts, in the order the language puts them.
+          .map((part, i) => (typeof part === 'string' ? part : <Fragment key={i}>{part}</Fragment>))}
       </p>
-      {listOpen && <Lines lines={offerLines(plan.lines, now, titles)} label={OFFER_WORDS.count(count)} />}
+      {listOpen && <Lines lines={offerLines(plan.lines, now, titles)} label={words.count(count)} />}
       {changes.length > 0 && (
         <>
           <p className="math-offer__results" role="status">
-            {OFFER_WORDS.results(changes.length)}
+            {words.results(changes.length)}
           </p>
-          <Lines lines={offerLines(changes, sheet, titles)} label={OFFER_WORDS.results(changes.length)} />
+          <Lines lines={offerLines(changes, sheet, titles)} label={words.results(changes.length)} />
         </>
       )}
       <div className="math-offer__actions">
         <button type="button" className="math-offer__button is-primary" tabIndex={-1} onClick={onRename}>
-          {OFFER_WORDS.rename}
+          {words.rename}
         </button>
         <button type="button" className="math-offer__button" tabIndex={-1} onClick={onKeep}>
-          {OFFER_WORDS.keep(offer.from)}
+          {words.keep(offer.from)}
         </button>
       </div>
     </div>
