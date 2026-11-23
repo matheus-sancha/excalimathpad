@@ -2696,7 +2696,9 @@ How to write:
 - **A reference is a chip.** The model cites a line as `[E2:3]` inside its prose, and the
   chat draws it in the words the panel already uses: "Pipe flow, line 3"; an element with
   no title by its position, as Variables and Problems name it; a text element by its first
-  words.
+  four words, on one line. An element is named as the sheet names it now; one that is gone,
+  as it was sent. A chip for a whole element (`[E2]`) or a text (`[T1]`) selects it and
+  flashes no line.
 - **A click on a chip is the Problems row's jump:** the element scrolls to the middle, is
   selected, the line flashes for about 1.5 s (the reduced-motion outline as there), and
   nothing opens. A docked panel stays on the chat.
@@ -2707,10 +2709,15 @@ How to write:
   plain text.
 - **Suggested lines** show as source in a code block marked "not run by the app". Until
   [the paste of several lines](#while-editing-a-line) ships, each line of the block has its
-  own **Copy**; in the release that brings the paste, the block has one Copy.
+  own **Copy**; in the release that brings the paste, the block has one Copy. A Copy says
+  "Copied" for a moment; where the clipboard refuses, the line stays there to select.
+- **An answer draws as it arrives,** and nothing in it turns into something else as the
+  rest comes: a label, a link or a list's number waits until it is whole, and a bold or
+  inline code not yet closed shows as such.
 - **"Sent with this"** is under each sent message: "Sent with this: 9 math elements, 142
   lines, 3 texts". A press opens the listing exactly as it was sent, read-only. The guide
-  and the instructions are named there, not shown (the guide is in ☰).
+  and the instructions are named there, not shown (the guide is in ☰). Under a message
+  sent with an empty sheet it says so, and there is nothing to open.
 
 **Proposals** (the second slice, a `0.7.x`)
 
@@ -4417,7 +4424,7 @@ arrive, in whatever language, after `<provider> said:`.
 | The empty conversation | `Ask about this sheet. The assistant reads it and answers; it writes nothing to the sheet by itself.` Then `This conversation isn't saved: it ends when the sheet closes.` | `Pergunte sobre esta folha. O assistente a lê e responde; ele não escreve nada na folha por conta própria.` Depois `Esta conversa não é salva: ela termina quando a folha é fechada.` |
 | The three suggested questions | `Check this sheet`, `What is missing?`, `Explain this sheet` | `Verifique esta folha`, `O que está faltando?`, `Explique esta folha` |
 | The field's placeholder, and the line under it | `Ask about this sheet`; `Enter sends · Shift+Enter starts a new line` | `Pergunte sobre esta folha`; `Enter envia · Shift+Enter começa uma nova linha` |
-| The chat's buttons | `Send`, `Stop`, `New chat`, `Try again`, `Copy`; the key button `Provider and key` | `Enviar`, `Parar`, `Nova conversa`, `Tentar de novo`, `Copiar`; `Provedor e chave` |
+| The chat's buttons | `Send`, `Stop`, `New chat`, `Try again`, `Copy` (`Copied` for a moment once pressed); the key button `Provider and key` | `Enviar`, `Parar`, `Nova conversa`, `Tentar de novo`, `Copiar` (`Copiado`); `Provedor e chave` |
 | Above the field | `Goes with your message: the sheet (9 math elements, 142 lines, 3 texts), the Math guide and this conversation, to <host>.` (`1 math element`, `1 line`, `1 text`) | `Vai com a sua mensagem: a folha (9 blocos, 142 linhas, 3 textos), o Guia de cálculo e esta conversa, para <host>.` (`1 bloco`, `1 linha`, `1 texto`) |
 | Above the field, on an empty sheet | `Goes with your message: the Math guide and this conversation, to <host>. The sheet is empty.` | `Vai com a sua mensagem: o Guia de cálculo e esta conversa, para <host>. A folha está vazia.` |
 | Under that line's list of math elements, when pressed | `Sent to the provider only when you press Send.` | `Enviado ao provedor somente quando você pressiona Enviar.` |
@@ -4435,7 +4442,7 @@ arrive, in whatever language, after `<provider> said:`.
 | A typed model is unknown to the provider, then the provider's words | `<provider> doesn't know the model "<name>". Check its name, or press Show models.` | `<provider> não conhece o modelo "<name>". Confira o nome, ou pressione Mostrar modelos.` |
 | No credit left at a built-in, then where its credit is added, then the provider's words | `No credit left.` For Anthropic also: `On Claude Max or Ultra, link your plan's API credits (claude.ai › Settings › Billing).` | `Sem créditos.` `No Claude Max ou Ultra, vincule os créditos de API do seu plano (claude.ai › Settings › Billing).` |
 | Any other error from the provider, with `Try again` | `<provider> said: "…"` | `<provider> respondeu: "…"` |
-| A chip whose line changed since it was sent | `Pipe flow, line 3 · changed` | `Pipe flow, linha 3 · alterada` |
+| A chip whose line changed since it was sent; a text's | `Pipe flow, line 3 · changed`; `Pump sizing, rev B · changed` | `Pipe flow, linha 3 · alterada`; `Pump sizing, rev B · alterado` |
 | A block of suggested lines, its mark | `not run by the app` | `não executado pelo app` |
 | **Proposals** (the second slice). The card's heading | `Proposal: 2 line changes, 1 math element` (`1 line change`, `5 math elements, 29 lines` when it has no changes) | `Proposta: 2 alterações de linha, 1 bloco` (`1 alteração de linha`, `5 blocos, 29 linhas`) |
 | The card's two parts | `Line changes`; `New math elements` | `Alterações de linha`; `Novos blocos` |
@@ -5299,6 +5306,10 @@ working key while this was specified.
 - **The chat's Markdown is the app's own small reader:** it never makes an image, a link, a
   frame or a style from any answer. A unit test over hostile answers holds it, and the
   assistant run's step 6.
+  As built (#311): `markdown.ts` reads an answer into parts, never markup, and
+  `AnswerText.tsx` draws each part as text in the chat's own elements; the test is
+  `AnswerText.test.tsx`, over Markdown's and raw HTML's images, links, frames, styles and
+  scripts, whole and as they arrive.
 - **Every string it shows has an English and a Português key** in the text tables, from the
   first issue. The instructions, the listing's marks and the Math guide for the model are
   English and aren't in the tables.
@@ -5328,7 +5339,9 @@ working key while this was specified.
   at `c3b55a7`, against a budget of 3,574,000; the estimate is 85 to 95 kB, not measured).
   The first issue records `main.js` before. The Send (#310) crosses the old budget, so it
   raises `BUDGET` to 3,585,000 (its build, 3,580,181 bytes, plus 5% of the slice's growth so
-  far, 87,169, rounded up). The issue that turns the assistant on measures after and raises
+  far, 87,169, rounded up). The answer's form (#311) crosses it too, by the same rule: to
+  3,595,000 (its build, 3,589,407 bytes, plus 5% of 96,395). The issue that turns the
+  assistant on measures after and raises
   `BUDGET` again, by the measured growth plus 5%, rounded up to the next 1,000 bytes, in a
   commit that says so. Going over 120,000 stops that issue and comes back
   to Matheus. The 5,000,000 cap holds, and 0.6.0's Portuguese guide is outside this number.
@@ -6083,6 +6096,12 @@ Each section above ends with its own tickets.
 
 ## Changes since agreed
 
+- 2026-11-23, [section 14](#14-engineering-constraints), 0.7.0, Size ([#311](https://github.com/matheus-sancha/excalimathpad/issues/311),
+  confirmed by Matheus on its pull request): **`BUDGET` is raised a third
+  time in the first slice.** The answer's form (the reader, the chips, Sent with this and
+  their words) adds 9,226 bytes, taking `main.js` to 3,589,407, over 3,585,000. It raises
+  the budget by #310's rule to 3,595,000. The 120,000-byte allowance is unchanged (96,395
+  used).
 - 2026-11-22, [section 14](#14-engineering-constraints), 0.7.0, Size ([#310](https://github.com/matheus-sancha/excalimathpad/issues/310),
   chosen by Matheus while building): **`BUDGET` is raised twice in the first slice, not
   once.** The Send, with the Math guide's second copy (42,903 bytes), took `main.js` to

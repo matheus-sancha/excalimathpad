@@ -187,18 +187,163 @@
   gap: 4px;
 }
 
-/* A message and an answer as plain text, its line breaks kept (until the answer's form). */
-.assistant-chat__message,
-.assistant-chat__text {
-  white-space: pre-wrap;
+/* A message as plain text, its line breaks kept, with "Sent with this" under it. */
+.assistant-chat__sent-message {
+  display: flex;
+  flex-direction: column;
+  align-items: end;
+  gap: 2px;
+  min-width: 0;
 }
 
 .assistant-chat__message {
-  align-self: end;
   max-width: 90%;
   padding: 6px 8px;
   border-radius: 6px;
   background: var(--color-surface-low, #f1f3f5);
+  white-space: pre-wrap;
+}
+
+.assistant-chat__sent {
+  align-self: stretch;
+  display: grid;
+  justify-items: end;
+  gap: 4px;
+  min-width: 0;
+  font-size: 12px;
+  color: var(--color-gray-50, #868e96);
+}
+
+.assistant-chat__sent .assistant-card__link {
+  text-align: end;
+  text-decoration: none;
+}
+
+/* The listing as it was sent: read-only, its lines as they went; a long one scrolls sideways. */
+.assistant-chat__listing {
+  justify-self: stretch;
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 6px 8px;
+  border: 1px solid var(--default-border-color, #dee2e6);
+  border-radius: 6px;
+}
+
+.assistant-chat__listing-heading {
+  font-weight: 600;
+}
+
+.assistant-chat__listing-text {
+  margin: 0;
+  max-height: 320px;
+  overflow: auto;
+  font-family: var(--ui-font-mono, ui-monospace, monospace);
+  font-size: 11px;
+  white-space: pre;
+  overflow-wrap: normal;
+  color: var(--text-primary-color, inherit);
+}
+
+/* An answer in the small Markdown (section 8, An answer). */
+.assistant-answer {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.assistant-answer__list {
+  margin: 0;
+  padding-inline-start: 20px;
+}
+
+.assistant-answer__list > li + li {
+  margin-top: 2px;
+}
+
+.assistant-answer__code {
+  padding: 0 3px;
+  border-radius: 3px;
+  background: var(--color-surface-low, #f1f3f5);
+  font-family: var(--ui-font-mono, ui-monospace, monospace);
+  font-size: 0.92em;
+}
+
+/* A reference: the line in the panel's words. It wraps with the prose, never cut. */
+.assistant-chip {
+  display: inline;
+  padding: 0 4px;
+  border: 1px solid var(--color-primary-light, #e0dfff);
+  border-radius: 4px;
+  background: var(--color-primary-light, #e0dfff);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
+.assistant-chip:hover {
+  border-color: var(--color-primary, #6965db);
+}
+
+.assistant-chip[data-state='changed'] {
+  border-style: dashed;
+  background: transparent;
+}
+
+.assistant-chip.is-gone {
+  border-color: var(--default-border-color, #dee2e6);
+  background: transparent;
+  color: var(--color-gray-50, #868e96);
+  cursor: default;
+}
+
+/* Suggested lines: the mark, then each line as source with its Copy. A long line scrolls
+   sideways inside its own row; the Copy stays beside it. */
+.assistant-code {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  padding: 4px 6px;
+  border: 1px solid var(--default-border-color, #dee2e6);
+  border-radius: 6px;
+  background: var(--color-surface-low, #f1f3f5);
+}
+
+.assistant-code__mark {
+  font-size: 11px;
+  color: var(--color-gray-50, #868e96);
+}
+
+.assistant-code__line {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.assistant-code__source {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-x: auto;
+  font-family: var(--ui-font-mono, ui-monospace, monospace);
+  font-size: 12px;
+  white-space: pre;
+  overflow-wrap: normal;
+}
+
+.assistant-code__copy {
+  flex: none;
+  padding: 0 6px;
+  border: 1px solid var(--default-border-color, #dee2e6);
+  border-radius: 4px;
+  background: var(--island-bg-color, #fff);
+  color: inherit;
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
 }
 
 .assistant-chat__answer {

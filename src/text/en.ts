@@ -677,6 +677,21 @@ export const en = {
     noCreditAnthropic: "On Claude Max or Ultra, link your plan's API credits (claude.ai › Settings › Billing).",
     /** A provider's own words, quoted as they arrived. */
     said: (provider: string, said: string) => `${provider} said: "${said}"`,
+    /**
+     * An answer (section 8, An answer): a chip whose line, or text, changed since it was sent.
+     * English says both alike; Português agrees with linha or texto.
+     */
+    changed: (name: string, _kind: 'line' | 'text') => `${name} · changed`,
+    /** A block of suggested lines: its mark, and each line's Copy and what it says once pressed. */
+    notRun: 'not run by the app',
+    copy: 'Copy',
+    copied: 'Copied',
+    /** Under a sent message; the listing opened from it, its heading and its last line. */
+    sentWith: (elements: number, lines: number, texts: number) =>
+      `Sent with this: ${elements === 1 ? '1 math element' : `${elements} math elements`}, ${lines === 1 ? '1 line' : `${lines} lines`}, ${texts === 1 ? '1 text' : `${texts} texts`}`,
+    sentWithEmpty: 'Sent with this: an empty sheet',
+    sentHeading: 'The sheet as it was sent',
+    sentLast: "The Math guide and the assistant's instructions went with it.",
   },
   /** The plugin's own words in Obsidian (section 8, Language: In Obsidian; section 13, In a vault). */
   vault: {

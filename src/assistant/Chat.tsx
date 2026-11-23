@@ -2,11 +2,13 @@ import { useEffect, useState, useSyncExternalStore, type KeyboardEvent, type Mou
 import { useWords } from '../text/words.ts'
 import type { Answer, Conversation, SentWith } from './conversation.ts'
 import { failureLines, QUIET_MS } from './answerWords.ts'
+import { AnswerText } from './AnswerText.tsx'
+import { chipOf, type Chip } from './chips.ts'
 import { useHostGate } from './hostGate.tsx'
 import guide from '../../docs/math-guide.md?text'
 import type { AssistantRequest } from './ports.ts'
 import type { SetupKeeper, Setup } from './setup.ts'
-import { hostOfSetup, targetOf, type AssistantSheet } from './sheet.ts'
+import { hostOfSetup, targetOf, type AssistantSheet, type JumpTarget, type SheetNow } from './sheet.ts'
 
 /**
  * The conversation in the Math assistant's tab (docs/spec-v1.md section 8, Math assistant,
@@ -16,7 +18,8 @@ import { hostOfSetup, targetOf, type AssistantSheet } from './sheet.ts'
  *
  * Every request goes through the host gate first. The field is a `<textarea>`: it takes
  * focus, so it leaves the open line; the chat's buttons never take it, and a Send from one
- * leaves the open line first. An answer shows as plain text until the answer's form (#311).
+ * leaves the open line first. An answer is drawn in the small Markdown (`AnswerText`), its
+ * references as chips read against its own Send's map; under each message, "Sent with this".
  */
 export interface ChatProps {
   conversation: Conversation
@@ -134,23 +137,34 @@ export function Chat({ conversation, sheet, setup, keeper, request, onKey, compo
             </div>
           </div>
         ) : (
-          entries.map((entry) =>
-            entry.kind === 'message' ? (
-              <p key={entry.id} className="assistant-chat__message" data-testid="assistant-message">
-                {entry.text}
-              </p>
-            ) : (
+          entries.map((entry, index) => {
+            if (entry.kind === 'message') {
+              return (
+                <div key={entry.id} className="assistant-chat__sent-message">
+                  <p className="assistant-chat__message" data-testid="assistant-message">
+                    {entry.text}
+                  </p>
+                  <SentWithView sent={entry.sent} />
+                </div>
+              )
+            }
+            // An answer's labels are read against the map of the Send it answers.
+            const message = entries[index - 1]
+            return (
               <AnswerView
                 key={entry.id}
                 answer={entry}
+                sent={message?.kind === 'message' ? message.sent : null}
+                now={now}
+                onJump={sheet.jump}
                 setup={setup}
                 last={entry === last}
                 busy={busy}
                 onRetry={retry}
                 onCheckKey={() => checkKey(entry)}
               />
-            ),
-          )
+            )
+          })
         )}
       </div>
 
@@ -233,6 +247,10 @@ function usePassed(at: number | null): boolean {
 
 interface AnswerViewProps {
   answer: Answer
+  /** What went with the message this answers: its map names the chips. */
+  sent: SentWith | null
+  now: SheetNow
+  onJump: (to: JumpTarget) => void
   setup: Setup
   /** Only the last answer has Try again: it asks the last message again. */
   last: boolean
@@ -241,8 +259,9 @@ interface AnswerViewProps {
   onCheckKey: () => void
 }
 
-function AnswerView({ answer, setup, last, busy, onRetry, onCheckKey }: AnswerViewProps) {
-  const w = useWords().assistant
+function AnswerView({ answer, sent, now, onJump, setup, last, busy, onRetry, onCheckKey }: AnswerViewProps) {
+  const words = useWords()
+  const w = words.assistant
   const host = hostOfSetup(setup)
   const arriving = answer.state === 'waiting' || answer.state === 'arriving'
   const quiet = usePassed(arriving ? answer.quietSince + QUIET_MS : null)
@@ -254,7 +273,13 @@ function AnswerView({ answer, setup, last, busy, onRetry, onCheckKey }: AnswerVi
   const canRetry = last && (answer.state === 'failed' || answer.state === 'cut')
   return (
     <div className="assistant-chat__answer" data-testid="assistant-answer" data-state={answer.state}>
-      {answer.text && <p className="assistant-chat__text">{answer.text}</p>}
+      {answer.text && (
+        <AnswerText
+          text={answer.text}
+          arriving={arriving}
+          reference={(label) => <ChipView label={label} chip={chipOf(sent?.map ?? null, label, now, words)} onJump={onJump} />}
+        />
+      )}
       {arriving && (
         <p className="assistant-chat__status" role="status">
           {answer.state === 'waiting' && w.reading} {quiet && w.stillWaiting(host)}
@@ -279,6 +304,56 @@ function AnswerView({ answer, setup, last, busy, onRetry, onCheckKey }: AnswerVi
               {w.tryAgain}
             </button>
           )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+/**
+ * A reference (section 8, An answer): a chip that jumps, one that says its line changed and
+ * jumps to its element, one struck through that does nothing, or the label as written. A press
+ * is the Problems row's jump: it never opens a line and never takes the keyboard.
+ */
+function ChipView({ label, chip, onJump }: { label: string; chip: Chip | null; onJump: (to: JumpTarget) => void }) {
+  if (!chip) return <>[{label}]</>
+  const to = chip.to
+  if (!to) {
+    return (
+      <s className="assistant-chip is-gone" data-chip={label}>
+        {chip.name}
+      </s>
+    )
+  }
+  return (
+    <button type="button" className="assistant-chip" data-chip={label} data-state={chip.state} tabIndex={-1} onMouseDown={keep} onClick={() => onJump(to)}>
+      {chip.name}
+    </button>
+  )
+}
+
+/**
+ * "Sent with this" under a sent message (section 8, An answer): its counts, and pressed, the
+ * listing exactly as it was sent, read-only, with its heading and its last line. An empty sheet
+ * carried none, so there is nothing to open.
+ */
+function SentWithView({ sent }: { sent: SentWith }) {
+  const w = useWords().assistant
+  const [open, setOpen] = useState(false)
+  if (!sent.counts || sent.listing === null) return <p className="assistant-chat__sent">{w.sentWithEmpty}</p>
+  const { elements, lines, texts } = sent.counts
+  return (
+    <div className="assistant-chat__sent">
+      <button type="button" className="assistant-card__link" tabIndex={-1} onMouseDown={keep} aria-expanded={open} onClick={() => setOpen(!open)}>
+        {w.sentWith(elements, lines, texts)}
+      </button>
+      {open && (
+        <div className="assistant-chat__listing" role="region" aria-label={w.sentHeading}>
+          <p className="assistant-chat__listing-heading">{w.sentHeading}</p>
+          <pre className="assistant-chat__listing-text" data-testid="assistant-sent-listing">
+            {sent.listing}
+          </pre>
+          <p className="assistant-chat__listing-last">{w.sentLast}</p>
         </div>
       )}
     </div>

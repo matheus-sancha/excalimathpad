@@ -1,6 +1,7 @@
 import type { Target } from './adapters.ts'
 import { hostOf } from './address.ts'
-import { listSheet, type Listing, type ListingInput } from './listing.ts'
+import { readingOrder } from '../overlay/readingOrder.ts'
+import { listSheet, type Listing, type ListingInput, type SceneNow } from './listing.ts'
 import { PROVIDERS } from './providers.ts'
 import type { Setup } from './setup.ts'
 
@@ -19,12 +20,27 @@ export interface AssistantSheet {
   subscribe: (listener: () => void) => () => void
   /** Leaves the open line, so a Send from a button sends the sheet as written. */
   leaveLine: () => void
+  /**
+   * A chip's press (section 8, An answer): the Problems row's jump to the element or text `id`,
+   * flashing `line` when there is one. Nothing opens.
+   */
+  jump: (to: JumpTarget) => void
+}
+
+/** Where a chip goes: a math element or a text element, and the line to flash, or none. */
+export interface JumpTarget {
+  id: string
+  line: number | null
 }
 
 /** The sheet's listing, and each math element's name and line count for "Goes with your message". */
 export interface SheetNow {
   listing: Listing
   elements: readonly { name: string; lines: number }[]
+  /** Each math element's lines and each text's text, as the chips read them (`chipTarget`). */
+  scene: SceneNow
+  /** Each math element's name, by its anchor's id: its title, else its position in reading order. */
+  names: ReadonlyMap<string, string>
 }
 
 /**
@@ -33,20 +49,30 @@ export interface SheetNow {
  */
 export function sheetNow(input: ListingInput): SheetNow {
   const listing = listSheet(input)
-  if (listing.kind !== 'listing') return { listing, elements: [] }
   const titles = new Map(input.elements.map(({ anchorId, title }) => [anchorId, title?.trim() || null]))
+  const scene: SceneNow = {
+    anchors: input.elements.map(({ anchorId, source, formats }) => ({ id: anchorId, source, formats })),
+    texts: input.texts.map(({ id, text }) => ({ id, text })),
+  }
+  const names = new Map<string, string>()
+  const order = readingOrder(input.anchors.filter(({ id }) => titles.has(id)))
+  // An element whose anchor wasn't handed in still has a name, after the placed ones.
+  const placed = new Set(order)
+  for (const { anchorId } of input.elements) if (!placed.has(anchorId)) order.push(anchorId)
+  order.forEach((id, index) => names.set(id, titles.get(id) ?? input.words.panel.element(index + 1)))
+  if (listing.kind !== 'listing') return { listing, elements: [], scene, names }
   const elements: { name: string; lines: number }[] = []
   const at = new Map<string, number>()
   for (const entry of listing.map.values()) {
     if (entry.kind === 'element') {
       at.set(entry.anchorId, elements.length)
-      elements.push({ name: titles.get(entry.anchorId) ?? input.words.panel.element(elements.length + 1), lines: 0 })
+      elements.push({ name: names.get(entry.anchorId) ?? input.words.panel.element(elements.length + 1), lines: 0 })
     } else if (entry.kind === 'line') {
       const index = at.get(entry.anchorId)
       if (index !== undefined) elements[index].lines++
     }
   }
-  return { listing, elements }
+  return { listing, elements, scene, names }
 }
 
 /** The built-in a setup names, or undefined for a typed address. */

@@ -54,7 +54,8 @@ export interface ListingInput {
 
 /** What a label stands for in the scene. Never sent. */
 export type MapEntry =
-  | { kind: 'element'; anchorId: string }
+  /** `title` is the element's as it was sent, for a chip whose element is gone. */
+  | { kind: 'element'; anchorId: string; title: string | null }
   /** `line` is the line's index, from 0; `text` the line as the listing gave it. */
   | { kind: 'line'; anchorId: string; line: number; text: string }
   | { kind: 'text'; textId: string; text: string }
@@ -102,7 +103,7 @@ export function listSheet(input: ListingInput, limit = LISTING_LIMIT): Listing {
     const element = byAnchor.get(id)
     if (element) {
       const label = `E${++counts.elements}`
-      map.set(label, { kind: 'element', anchorId: id })
+      map.set(label, { kind: 'element', anchorId: id, title: element.title?.trim() || null })
       out.push('', element.title ? `${label}  title: ${quoted(element.title)}` : `${label}  (no title)`)
       const sent = sentLines(element.source, element.formats ?? '')
       sent.forEach((text, i) => {

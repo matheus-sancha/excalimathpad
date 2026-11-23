@@ -348,6 +348,23 @@ function Sheet({
   const [flash, setFlash] = useState<FlashLines | null>(null)
   const errors = sheet ? errorCount(sheet) : 0
 
+  // A jump from the Sheet panel (section 8): a Variables or Problems row, or a Math assistant
+  // chip. The element scrolls to the middle and is selected; a line, when there is one,
+  // flashes. Nothing opens.
+  const jumpTo = useCallback(
+    (id: string, line: number | null) => {
+      if (!canvas) return
+      jumpToAnchor(canvas.api, id)
+      if (line !== null) setFlash({ lines: [{ anchorId: id, line }], key: Date.now() })
+      // Floating over a small window, or a sheet on a phone, the panel gets out of the way.
+      if (!canvas.panelDocks()) {
+        canvas.showSheetPanel({ open: false, tab: canvas.sheetPanel().tab })
+      }
+      canvas.focusCanvas()
+    },
+    [canvas],
+  )
+
   // What the Math assistant reads of the sheet (section 8, What a Send carries): the last
   // evaluation, the anchors' boxes, the scene's texts and the settings, read when asked.
   const latest = useRef({ sheet, settings, count: 0, listeners: new Set<() => void>() })
@@ -393,8 +410,9 @@ function Sheet({
         }
       },
       leaveLine: () => line.current?.leaveLine(),
+      jump: ({ id, line: at }) => jumpTo(id, at),
     }
-  }, [canvas, line])
+  }, [canvas, line, jumpTo])
 
   // The opened sheet: its start has loaded it (the vault's file, or on the web
   // the recovery copy once answered). `start` is the sheet's own, run once.
@@ -553,19 +571,7 @@ function Sheet({
   const canInsert = editTarget !== null || selectedMath !== null
   const insert = (symbol: SymbolInsert) => line.current?.insert(symbol, editTarget ? null : selectedMath)
 
-  const jump = useCallback(
-    (target: PanelTarget) => {
-      if (!canvas) return
-      jumpToAnchor(canvas.api, target.anchorId)
-      setFlash({ lines: [{ anchorId: target.anchorId, line: target.line }], key: Date.now() })
-      // Floating over a small window, or a sheet on a phone, the panel gets out of the way.
-      if (!canvas.panelDocks()) {
-        canvas.showSheetPanel({ open: false, tab: canvas.sheetPanel().tab })
-      }
-      canvas.focusCanvas()
-    },
-    [canvas],
-  )
+  const jump = useCallback((target: PanelTarget) => jumpTo(target.anchorId, target.line), [jumpTo])
 
   // Rename, from the form on a Variables row (section 4, Renaming a name,
   // 0.5.0): the plan the form showed is written to every anchor it changes in

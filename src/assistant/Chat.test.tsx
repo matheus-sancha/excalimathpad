@@ -33,10 +33,12 @@ const twoElements: SheetNow = {
     { name: 'Pipe flow', lines: 4 },
     { name: 'Element 2', lines: 1 },
   ],
+  scene: { anchors: [], texts: [] },
+  names: new Map(),
 }
 
 function fakeSheet(now: SheetNow = twoElements) {
-  const sheet = { now: vi.fn(() => now), subscribe: () => () => {}, leaveLine: vi.fn() } satisfies AssistantSheet
+  const sheet = { now: vi.fn(() => now), subscribe: () => () => {}, leaveLine: vi.fn(), jump: vi.fn() } satisfies AssistantSheet
   return sheet
 }
 
@@ -126,7 +128,7 @@ describe('the tab with a setup saved', () => {
 
   it('on an empty sheet says so, and the message still goes', async () => {
     const fake = fakeRequest('messages/answer.http')
-    draw(fake.request, { now: { listing: { kind: 'empty' }, elements: [] } })
+    draw(fake.request, { now: { listing: { kind: 'empty' }, elements: [], scene: twoElements.scene, names: twoElements.names } })
     expect(screen.getByText(w.goesWithEmpty(HOST))).toBeInTheDocument()
     typeIn('How do I write a range?')
     fireEvent.keyDown(field(), { key: 'Enter' })
@@ -137,7 +139,7 @@ describe('the tab with a setup saved', () => {
   it('a sheet over the cap refuses the Send in section 13’s words, and nothing is sent', () => {
     const fake = fakeRequest('messages/answer.http')
     const message = en.assistant.tooLong(412_300, 200_000)
-    draw(fake.request, { now: { listing: { kind: 'tooLong', length: 412_300, limit: 200_000, message }, elements: [] } })
+    draw(fake.request, { now: { listing: { kind: 'tooLong', length: 412_300, limit: 200_000, message }, elements: [], scene: twoElements.scene, names: twoElements.names } })
     typeIn('Check it')
     fireEvent.keyDown(field(), { key: 'Enter' })
     expect(screen.getByRole('alert')).toHaveTextContent(message)
@@ -373,5 +375,134 @@ describe('the key button and Remove', () => {
     // With no key, the key button no longer brings the field back.
     fireEvent.click(button(w.keyButton))
     expect(screen.queryByRole('textbox', { name: w.placeholder })).toBeNull()
+  })
+})
+
+/** A request whose answer is `text`, whole, in Anthropic's stream. */
+function answering(text: string) {
+  const sent: Sent[] = []
+  const event = (name: string, data: unknown) => `event: ${name}\ndata: ${JSON.stringify(data)}\n\n`
+  const request: AssistantRequest = (address, init) => {
+    sent.push({ address, ...init })
+    const stream =
+      event('content_block_delta', { type: 'content_block_delta', delta: { type: 'text_delta', text } }) +
+      event('message_stop', { type: 'message_stop' })
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode(stream))
+        controller.close()
+      },
+    })
+    return Promise.resolve({ status: 200, headers: { get: () => null }, body })
+  }
+  return { request, sent }
+}
+
+describe("the answer's form", () => {
+  // The Send's map: Pipe flow's third line, an element with no title, and a text.
+  const mapped: SheetNow = {
+    ...twoElements,
+    listing: {
+      ...listing,
+      map: new Map([
+        ['E1', { kind: 'element', anchorId: 'a-1', title: 'Pipe flow' }],
+        ['E1:2', { kind: 'line', anchorId: 'a-1', line: 1, text: 'v = Q / A' }],
+        ['E1:3', { kind: 'line', anchorId: 'a-1', line: 2, text: 'Re = rho*v*D/mu' }],
+        ['E2', { kind: 'element', anchorId: 'a-2', title: null }],
+        ['E2:1', { kind: 'line', anchorId: 'a-2', line: 0, text: 'x = 1' }],
+        ['T1', { kind: 'text', textId: 't-1', text: 'Pump sizing, rev B' }],
+      ]),
+    },
+    // Since the Send: line 2 was edited, and Element 2 was deleted.
+    scene: {
+      anchors: [{ id: 'a-1', source: 'Q = 30 L/s\nv = Q / (2 m^2)\nRe = rho*v*D/mu' }],
+      texts: [{ id: 't-1', text: 'Pump sizing, rev B' }],
+    },
+    names: new Map([['a-1', 'Pipe flow']]),
+  }
+  const text = '**Units** are fine at [E1:3] and [T1]. Check [E1:2], [E2:1] and [E7:1].\n\n1. `A` is never defined in [E1].'
+
+  it('draws the small Markdown, each reference a chip in the panel’s words', async () => {
+    const { sheet } = draw(answering(text).request, { now: mapped })
+    typeIn('Check this sheet')
+    fireEvent.keyDown(field(), { key: 'Enter' })
+    await ended()
+    const drawn = answer()
+    expect(drawn.querySelector('strong')).toHaveTextContent('Units')
+    expect(drawn.querySelector('ol li code')).toHaveTextContent('A')
+
+    // A chip that jumps: the Problems row's jump, its line flashed; it never takes the keyboard.
+    const line3 = within(drawn).getByRole('button', { name: 'Pipe flow, line 3' })
+    expect(line3).toHaveAttribute('tabindex', '-1')
+    expect(fireEvent.mouseDown(line3)).toBe(false)
+    fireEvent.click(line3)
+    expect(sheet.jump).toHaveBeenLastCalledWith({ id: 'a-1', line: 2 })
+    fireEvent.click(within(drawn).getByRole('button', { name: 'Pump sizing, rev B' }))
+    expect(sheet.jump).toHaveBeenLastCalledWith({ id: 't-1', line: null })
+    fireEvent.click(within(drawn).getByRole('button', { name: 'Pipe flow' }))
+    expect(sheet.jump).toHaveBeenLastCalledWith({ id: 'a-1', line: null })
+
+    // Its line changed: it says so, and jumps to the element with no flash.
+    fireEvent.click(within(drawn).getByRole('button', { name: w.changed('Pipe flow, line 2', 'line') }))
+    expect(sheet.jump).toHaveBeenLastCalledWith({ id: 'a-1', line: null })
+
+    // Its element is gone: struck through, and nothing to press.
+    const gone = drawn.querySelector('[data-chip="E2:1"]')!
+    expect(gone.tagName).toBe('S')
+    expect(gone).toHaveTextContent('Element 2, line 1')
+    // A label in no map is the text the model wrote.
+    expect(drawn.querySelector('[data-chip="E7:1"]')).toBeNull()
+    expect(drawn).toHaveTextContent('and [E7:1].')
+    expect(sheet.jump).toHaveBeenCalledTimes(4)
+  })
+
+  it('is worded in Português when the app shows it', async () => {
+    showLanguage('pt-BR')
+    draw(answering(text).request, { now: mapped })
+    const ptField = screen.getByRole('textbox', { name: ptBR.assistant.placeholder })
+    fireEvent.change(ptField, { target: { value: 'Verifique' } })
+    fireEvent.keyDown(ptField, { key: 'Enter' })
+    await ended()
+    expect(within(answer()).getByRole('button', { name: 'Pipe flow, linha 2 · alterada' })).toBeInTheDocument()
+    expect(answer().querySelector('[data-chip="E2:1"]')).toHaveTextContent('Bloco 2, linha 1')
+  })
+
+  it('draws an answer as it arrives, holding back a label not yet whole', async () => {
+    const { request } = hanging('**Units** at [E1:')
+    draw(request, { now: mapped })
+    typeIn('Check')
+    fireEvent.keyDown(field(), { key: 'Enter' })
+    await waitFor(() => expect(answer().dataset.state).toBe('arriving'))
+    expect(answer().querySelector('strong')).toHaveTextContent('Units')
+    expect(answer()).not.toHaveTextContent('[E1:')
+    fireEvent.click(button(w.stop))
+    await ended()
+  })
+
+  it('"Sent with this" under a message opens the listing as it was sent, read-only', async () => {
+    draw(answering('Fine.').request, { now: mapped })
+    typeIn('Check this sheet')
+    fireEvent.keyDown(field(), { key: 'Enter' })
+    await ended()
+    const under = button(w.sentWith(2, 5, 1))
+    expect(under).toHaveAttribute('aria-expanded', 'false')
+    expect(under).toHaveAttribute('tabindex', '-1')
+    fireEvent.click(under)
+    const opened = screen.getByRole('region', { name: w.sentHeading })
+    expect(opened).toHaveTextContent(w.sentHeading)
+    expect(within(opened).getByTestId('assistant-sent-listing').textContent).toBe(listing.text)
+    expect(opened).toHaveTextContent(w.sentLast)
+    // Read-only: nothing in it takes typing.
+    expect(within(opened).queryByRole('textbox')).toBeNull()
+    fireEvent.click(under)
+    expect(screen.queryByRole('region', { name: w.sentHeading })).toBeNull()
+  })
+
+  it('"Sent with this" on an empty sheet says so, with nothing to open', async () => {
+    draw(answering('Use `x = 0 .. 5`.').request, { now: { ...mapped, listing: { kind: 'empty' } } })
+    typeIn('How do I write a range?')
+    fireEvent.keyDown(field(), { key: 'Enter' })
+    await ended()
+    expect(screen.getByText(w.sentWithEmpty).tagName).toBe('P')
   })
 })
