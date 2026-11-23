@@ -26,7 +26,9 @@
 // (820 px) it is too narrow to dock, so an edit opens no panel and Math
 // settings opens it floating, with the quick keys (M4e, #198). It
 // runs in Chromium, so it covers neither WebKit nor a real on-screen keyboard:
-// those are the device checklist's (CONTRIBUTING.md). It fails on any check
+// those are the device checklist's (CONTRIBUTING.md). From 0.7.0 it also sees
+// six tabs and no Math assistant item on every device: the plugin passes the
+// assistant's ports only on a computer. It fails on any check
 // that doesn't hold, and on any page error.
 //
 // Then the Português pass (0.6.0, #293; section 8, Sheet panel, and section
@@ -236,9 +238,12 @@ try {
       // settings isn't reachable while it is open.
       const closePanel = async () =>
         tap(await pointOf(device.phone ? '.sheet-bottom__close' : '.sheet-sidebar [data-testid="sidebar-close"]', 1000))
+      /** Every More tools item seen while Math settings was pressed. */
+      const moreTools = []
       const mathSettings = async () => {
         await tap(await pointOf('[data-testid="toolbar-more-tools"], .App-toolbar__extra-tools-trigger', 1000))
         await pause(200)
+        moreTools.push(...(await tab.evaluate(() => [...document.querySelectorAll('.dropdown-menu-item__text')].map((item) => item.childNodes[0]?.textContent.trim()))))
         await tap(await pointOf('.dropdown-menu-item:has-text("Math settings")', 1000))
         await pause(200)
       }
@@ -260,6 +265,12 @@ try {
         const line = await field().boundingBox()
         row('the open line sits above the bottom sheet', line.y + line.height <= sheetTop, `line bottom ${Math.round(line.y + line.height)}, sheet top ${Math.round(sheetTop)}`)
       }
+
+      // No Math assistant on a phone or a tablet (section 14, 0.7.0: the plugin passes its ports
+      // only on a computer): six tabs, and no item in More tools.
+      const count = await tab.evaluate(() => document.querySelectorAll('.sheet-sidebar .sheet-tab, .sheet-bottom .sheet-tab').length)
+      const assistant = await tab.evaluate(() => !!document.querySelector('.assistant-tab, [data-testid="assistant-tab"]'))
+      row('the panel has six tabs and no Math assistant', count === 6 && !assistant, `${count} tabs`)
 
       // The quick keys: above the tab icons, typing at the caret and keeping the line, each one Ctrl+Z step.
       const keys = await tab.locator('.sheet-quick-keys').boundingBox()
@@ -301,6 +312,7 @@ try {
       // The panel open on Variables: an edit switches it to Format, and an end on the canvas puts it back.
       await tap(await pointOf(lineOf('calc', 1)))
       await mathSettings()
+      row('More tools has Math settings and no Math assistant', moreTools.includes('Math settings') && !moreTools.includes('Math assistant'), moreTools.join(', '))
       await tabTo('Variables')
       const opened = await activeTab()
       await doubleTap(await pointOf(lineOf('calc', 2)))
@@ -888,4 +900,4 @@ if (failed.length || errors.length || results.length === 0) {
   process.exit(1)
 }
 for (const { where, ms } of timings) console.log(`${where}: the Português pass took ${(ms / 1000).toFixed(1)} s`)
-console.log('Touch run passed: a phone and a tablet, as Android and as iOS, edit by touch; the bottom sheet in Português.')
+console.log('Touch run passed: a phone and a tablet, as Android and as iOS, edit by touch, with six tabs and no Math assistant; the bottom sheet in Português.')

@@ -106,7 +106,10 @@ of `plugin/` that names a request API or Obsidian's secret storage
 nowhere). `assistantPorts(on, mobile, app)` gives the ports only when the build-time switch
 is on and the device is a computer; `SheetView` calls it with `__ASSISTANT__` (or its
 `assistant` option, for tests), `Platform.isMobile` and its `app`, and passes the result as
-App's `assistant` prop. **The setup's store** is one entry, `excalimathpad-assistant`
+App's `assistant` prop. **The switch is on since #312,** so a built plugin on a computer has
+the seventh tab and its More tools item, and on a phone or a tablet neither (the touch run
+sees six tabs); the network-blocked run opens the tab and types in the card with nothing
+saved, and the assistant run walks the rule against a stand-in provider. **The setup's store** is one entry, `excalimathpad-assistant`
 (`SETUP_ENTRY`), in `App#secretStorage`: the one thing the plugin keeps outside the vault.
 It is made, and the storage named, only inside `if (requireApiVersion('1.11.4'))`, which is
 what lets Obsidian's lint pass at `minAppVersion` 1.7.2 with no exception; on an older

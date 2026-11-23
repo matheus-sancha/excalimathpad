@@ -5,13 +5,12 @@
  * assistant's ports only when it is true. It is a constant of the build: no
  * address, setting or file changes it in a built home.
  *
- * Off by default, so a build from `main` has no tab and makes no request. A
- * developer's build turns it on with `EXCALIMATHPAD_ASSISTANT=on` in the
- * build's environment. The issue that adds the assistant run turns the
- * default on (#312).
+ * On since the assistant run proved it (#312), so a build from `main` has the
+ * tab on a computer. A developer's build can still turn it off with
+ * `EXCALIMATHPAD_ASSISTANT=off` in the build's environment.
  */
 export const ASSISTANT_SWITCH = 'EXCALIMATHPAD_ASSISTANT'
 
 export function assistantSwitch(value: string | undefined): boolean {
-  return value === 'on'
+  return value !== 'off'
 }

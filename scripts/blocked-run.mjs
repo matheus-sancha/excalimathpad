@@ -24,6 +24,12 @@
 // From 0.6.0 the app's own ☰ items, More tools' Cálculo items and the canvas
 // hint read in Portuguese too, from the text tables in `main.js`.
 //
+// From 0.7.0 it also opens the Math assistant's tab from More tools, types in
+// the setup card (a built-in's key and model, then another provider's, then a
+// typed address), saves nothing, and still sees no request: it stays the proof
+// of "not set up, no request" (section 12a, Checked on every pull request).
+// The secret storage is read and never written.
+//
 // The page also carries a stand-in for Obsidian's global rules for buttons,
 // inputs and selects (plugin/test/obsidian-globals.css), on a dark-theme body:
 // the run fails if a Sheet panel row takes any of them (the view's guard in
@@ -226,6 +232,7 @@ try {
   else if (guide.contents !== 17 || guide.sections < 17) failures.push(`the Math guide shows ${JSON.stringify(guide)}, not its 17 sections`)
   await tab.keyboard.press('Escape')
   if (await tab.$('.math-guide')) failures.push("Esc didn't close the Math guide")
+  await notSetUp(tab)
   await portuguese(tab, manifest)
   // Let late work (fonts, the plot's chunk, image decoding) try anything it would.
   await tab.waitForTimeout(1500)
@@ -244,6 +251,51 @@ try {
 } finally {
   await browser.close()
   server.close()
+}
+
+/**
+ * Not set up, no request (section 12a, Data protection, 0.7.0): the Math
+ * assistant's tab opens from More tools and the setup card is typed in, with
+ * nothing saved. Each check that fails is added to `failures`; any request is
+ * in the run's own log.
+ */
+async function notSetUp(tab) {
+  await tab.click('.App-toolbar__extra-tools-trigger')
+  const item = tab.locator('.App-toolbar__extra-tools-dropdown .dropdown-menu-item', { hasText: 'Math assistant' })
+  if (!(await item.count())) {
+    failures.push("More tools has no Math assistant item: the switch isn't on in the built plugin")
+    await tab.keyboard.press('Escape')
+    return
+  }
+  await item.click()
+  const card = await tab.waitForSelector('[data-testid="assistant-tab"] .assistant-card', { timeout: 10_000 }).catch(() => null)
+  if (!card) {
+    failures.push("the Math assistant's tab didn't show its setup card")
+    return
+  }
+  const provider = tab.locator('.assistant-card select').first()
+  const key = tab.locator('.assistant-card input[type="password"]')
+  const model = tab.locator('.assistant-card__row.is-wrapping input')
+  // A built-in: a key and a model typed, a character at a time.
+  await key.pressSequentially('sk-blocked-run-0000', { delay: 5 })
+  await model.fill('')
+  await model.pressSequentially('a-model', { delay: 5 })
+  // Another built-in, then a typed address: nothing is saved, so no confirm asks.
+  await provider.selectOption('google')
+  await key.pressSequentially('AQ.blocked', { delay: 5 })
+  await provider.selectOption('other')
+  await tab.locator('.assistant-card__field input[type="text"]').first().pressSequentially('https://llm.example.com/v1', { delay: 5 })
+  await tab.waitForTimeout(500)
+  const state = await tab.evaluate(() => ({
+    writes: window.__app.secretStorage.calls.filter((call) => call.startsWith('setSecret')),
+    secrets: [...window.__app.secretStorage.secrets.keys()],
+    saved: !!document.querySelector('[data-testid="assistant-saved-key"]'),
+  }))
+  if (state.writes.length || state.secrets.length || state.saved) {
+    failures.push(`typing in the setup card saved something: ${JSON.stringify(state)}`)
+  }
+  // Back to the Variables tab for the rest of the run.
+  await tab.locator('.sheet-sidebar .sheet-tab').first().click().catch(() => {})
 }
 
 /**
@@ -294,7 +346,7 @@ async function portuguese(tab, manifest) {
       generate: shown(dropdown?.querySelector('.dropdown-menu-container > div:not([class])')),
     }
   })
-  if (tools.heading !== 'Cálculo' || tools.items.join() !== 'Adicionar cálculo,Configurações de cálculo') {
+  if (tools.heading !== 'Cálculo' || tools.items.join() !== 'Adicionar cálculo,Configurações de cálculo,Assistente de cálculo') {
     failures.push(`More tools' Math items under Português: ${JSON.stringify(tools)}`)
   }
   if (tools.embed || tools.generate) failures.push(`a hidden More tools item shows under Português: ${JSON.stringify(tools)}`)
@@ -349,4 +401,6 @@ if (failures.length) {
   for (const failure of [...new Set(failures)]) console.error(`  - ${failure}`)
   process.exit(1)
 }
-console.log('Network-blocked run passed: math, a table, a plot, an image, CJK text, the Math guide and Português, and no request.')
+console.log(
+  "Network-blocked run passed: math, a table, a plot, an image, CJK text, the Math guide, the Math assistant's setup card typed in and nothing saved, and Português, and no request.",
+)

@@ -23,24 +23,23 @@ what to read for an issue and where to write.
 - `plugin/main.ts` — the plugin's entry (section 12a), built by
   `esbuild.plugin.mjs` into `dist-plugin/` (`main.js`, `styles.css`, a copy of
   the root `manifest.json`). `tsconfig.plugin.json` type-checks `plugin/`.
-- `npm run dev | build | build:web | build:plugin | preview | test | lint |
-  audit:plugin | test:blocked | test:print | check` — see `package.json`. `build` runs
+- `npm run dev | build | test | lint | audit:plugin | test:* | check` — see
+  `package.json`. `build` runs
   `tsc -b` and both builds; `lint` is oxlint, then Obsidian's ESLint rules
   (`eslint.config.mjs`) at `--max-warnings 0`; `check` is lint, the tests, the
   build, the **bundle audit** (`scripts/audit-plugin.mjs`) and the
   **network-blocked run** (`scripts/blocked-run.mjs`) and the **pop-out run**
   (`scripts/popout-run.mjs`: the built plugin with sheet tabs in a second,
   same-origin window, as an Obsidian pop-out), and the **touch run**
-  (`scripts/touch-run.mjs`, M4d, #147: the built plugin by touch, Playwright's
-  `hasTouch`, at a phone and a tablet viewport, each as Android and as iOS;
-  the phone with `Platform.isPhone`), and the **follow run** (`scripts/follow-run.mjs`,
-  0.2.1, #191: the built plugin with real keys, the math on its box and the
-  caret in view as a line is typed; its header lists the checks), and the
+  (`scripts/touch-run.mjs`, M4d, #147: the built plugin by touch at a phone
+  and a tablet viewport, each as Android and as iOS), and the **follow run** (`scripts/follow-run.mjs`,
+  #191: the math on its box and the caret in view as a line is typed), and the
   **panel run** (`scripts/panel-run.mjs`,
   M4e, #198: the Sheet panel's widths, docking, drag handle and 280 px, in
   the built plugin and web app; the sample, #199; the charts, #200; the Page
   row and the page breaks, M5, #80; a rename, #261, and its offer, #262), and the **print run** (`scripts/print-run.mjs`, M5, #81:
-  the built web app's and plugin's Print… in Chromium PDFs, read by `scripts/pdf-read.mjs`). `npm test` holds the **typing test**
+  the built web app's and plugin's Print… in Chromium PDFs, read by `scripts/pdf-read.mjs`), and the **assistant
+  run** (`scripts/assistant-run.mjs`, #312: both homes against a stand-in provider, a canary key). `npm test` holds the **typing test**
   (`src/typing.test.tsx`, M4e, #193: the guide's examples and the acceptance
   sheets, a character at a time); `npm run test:probe` is the **odd-values
   probe** (`src/oddValues.probe.tsx`), by hand before a release. `npm test`
@@ -49,7 +48,7 @@ what to read for an issue and where to write.
   child process that Node runs from the TypeScript as it is) and the **font
   test** (`src/overlay/katexFonts.test.tsx`, #201: no KaTeX class the guide
   or a sheet draws is in a family the plugin drops). CI installs Playwright's Chromium (the
-  version `package.json` pins) for the last six. The network-blocked run and the pop-out
+  version `package.json` pins) for the last seven. The network-blocked run and the pop-out
   run also open ☰ → Math guide in the built plugin (M4d, #148).
 - `docs/math-guide.md` — the **Math guide** (spec section 8, M4d, #148): every
   form, key and setting, for users, in 17 sections. Both builds turn it into
@@ -129,8 +128,8 @@ an issue touches that module ([`CLAUDE.md`](CLAUDE.md) has the reading route).
   `ptBR.ts`) and the reader (`words.ts`), which answers the language Excalidraw shows, for
   React and for code outside it (0.6.0). Depends on: math's message types. [`docs/context/text.md`](docs/context/text.md)
 - **assistant** (`src/assistant/`) — the Math assistant (0.7.0, ADR 0008), reached only through
-  the two ports a home hands App. Off in every build until its switch is turned on; so far the
-  setup and its card, the listing, the adapters, the Send and the answer's form.
+  the two ports a home hands App. On in every build, on a computer, since the assistant run
+  proved it (#312): the setup, the listing, the adapters, the Send and the answer's form.
   Depends on: text, math, overlay's reading order.
   [`docs/context/assistant.md`](docs/context/assistant.md)
 - **failure** (`src/failure/`) — unexpected failures (spec section 4): the boundary, the
@@ -426,7 +425,8 @@ and everything downstream recalculates. Engine: math.js, client-side.
 - **`src/` never imports `obsidian` or `plugin/`** (section 12a): oxlint's
   `no-restricted-imports` under `src/**` and `plugin/test/boundary.test.ts`,
   which reads every file in `src/`. `plugin/` imports `src/`, never the reverse.
-- **The plugin's bundle names no browser storage and reaches no host.** App
+- **The plugin's bundle names no browser storage, and reaches no host but the assistant's
+  provider, on a press.** App
   takes the web's ports as props, so `recovery.ts`, `fileAccess.ts` and
   `localStorage` stay out of `main.js`; importing one into App at run time
   fails the audit. `esbuild.plugin.mjs`'s trims and rewrites
@@ -434,8 +434,8 @@ and everything downstream recalculates. Engine: math.js, client-side.
   text of Excalidraw 0.18.1, math.js or KaTeX; the build or the audit fails an
   upgrade that moves one. The audit's allowlist (`scripts/plugin-allowlist.json`)
   says why each host and each library `<style>`/`<link>` site is harmless; its
-  `reached` list (0.7.0, #307) is the four built-in providers' hosts, which
-  `main.js` names once each and nothing reaches until the assistant is on (#312).
+  `reached` list (0.7.0) is exactly the four built-in providers' hosts, each named
+  once in `main.js`, or the audit fails; the assistant run proves only a press sends.
 - **Excalidraw's typings give some of its API as `any`** (its `.d.ts` imports
   types the package doesn't ship; `setCursor` indexes a private member).
   `setCanvasCursor` (`addMath.ts`), `clearHistory` (`sceneFile.ts`) and
@@ -494,7 +494,7 @@ and everything downstream recalculates. Engine: math.js, client-side.
   names the file.
 - Where the Sheet panel floats (an editor at or below its docking width), it
   covers Excalidraw's More tools; its ✕ closes it.
-- The plugin's `main.js` is about 3.40 MB and `styles.css` 0.56 MB; the audit
+- The plugin's `main.js` is about 3.59 MB and `styles.css` 0.57 MB; the audit
   fails either over its budget (`BUDGET`, about 5% above, #203) or above
   5,000,000 bytes, Obsidian Sync Standard's cap.
 - Excalidraw 0.18.1 listens on the global `document` (copy, cut, paste, `keyup`,
@@ -549,4 +549,4 @@ marked with a milestone aren't built yet.
   returns message codes (0.6.0).
 - [ADR 0008](docs/adr/0008-math-assistant-calls-the-users-provider-directly.md) — the
   Math assistant calls the user's provider directly, with the user's key, only on a press
-  (0.7.0, not built yet).
+  (0.7.0, on since #312).

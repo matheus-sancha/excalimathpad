@@ -24,9 +24,10 @@
     "test:follow": "node scripts/follow-run.mjs",
     "test:panel": "node scripts/panel-run.mjs",
     "test:print": "node scripts/print-run.mjs",
+    "test:assistant": "node scripts/assistant-run.mjs",
     "assistant:record": "node scripts/assistant-record.mjs",
     "test:probe": "vitest run --config vitest.probe.config.ts",
-    "check": "npm run lint && npm run test && npm run build && npm run audit:plugin && npm run test:blocked && npm run test:popout && npm run test:touch && npm run test:follow && npm run test:panel && npm run test:print",
+    "check": "npm run lint && npm run test && npm run build && npm run audit:plugin && npm run test:blocked && npm run test:popout && npm run test:touch && npm run test:follow && npm run test:panel && npm run test:print && npm run test:assistant",
     "version": "node scripts/version.mjs"
   },
   "dependencies": {

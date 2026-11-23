@@ -1,6 +1,6 @@
 # Security
 
-Excalimathpad promises that your data stays yours. The Obsidian plugin makes no network requests and keeps nothing outside your vault, and the web app sends your sheets nowhere (see [Privacy](README.md#privacy)). A way to break that promise is a security problem. So is anything that lets a sheet run code beyond its math, or reach a file other than the ones the README's Privacy section names.
+Excalimathpad promises that your data stays yours. Until you set up the Math assistant, the Obsidian plugin makes no network requests and the web app sends your sheets nowhere; with it, a sheet goes only to the provider you chose, only when you press Send, and the plugin keeps nothing outside your vault but that setup in Obsidian's keychain (see [Privacy](README.md#privacy)). A way to break that promise is a security problem. So is anything that lets a sheet run code beyond its math, or reach a file other than the ones the README's Privacy section names.
 
 ## Report a vulnerability
 

@@ -7,7 +7,7 @@
 // - At 1536, 1280 and 1000 px the panel is 320 px, opens at launch docked
 //   beside the sheet, and an edit shows Format and puts the tab back; at
 //   880 px it stays closed at launch and on an edit, and floats when Math
-//   settings opens it. Its tabs are six icons of 32 px, the shown tab's name a
+//   settings opens it. Its tabs are seven icons (the Math assistant's last, 0.7.0) of about 29.9 px, the shown tab's name a
 //   heading over its content.
 // - A drag of the left edge moves the width with the pointer between 280 and
 //   480 px, with a line open and half typed: the line stays open, nothing is
@@ -96,9 +96,15 @@ const web = join(root, 'dist')
 const FILE = 'Calcs/panel.excalimathpad'
 const SHOTS = process.env.PANEL_RUN_SHOTS
 const ONLY = process.env.PANEL_RUN_ONLY
-const TABS = ['Format', 'Symbols', 'Variables', 'Problems', 'Constants', 'Settings']
+// From 0.7.0 a seventh, the Math assistant, last, on a computer (section 8, Sheet panel).
+const TABS = ['Format', 'Symbols', 'Variables', 'Problems', 'Constants', 'Settings', 'Math assistant']
 // The same tabs in Português, read to check, never pressed by (0.6.0).
-const TABS_PT = ['Formato', 'Símbolos', 'Variáveis', 'Problemas', 'Constantes', 'Configurações']
+const TABS_PT = ['Formato', 'Símbolos', 'Variáveis', 'Problemas', 'Constantes', 'Configurações', 'Assistente de cálculo']
+/**
+ * A tab's width with seven (section 8, Sheet panel, 0.7.0): 29.9 px at 320 px and 24.1 px at
+ * 280 px, as measured on the prototype; 32 px, the most, at 480 px or floating (no Keep sidebar open).
+ */
+const TAB = { 320: 29.9, 280: 24.1, most: 32 }
 
 const fake = await build({
   absWorkingDir: root,
@@ -592,12 +598,12 @@ try {
         row('the panel opens at launch, docked beside the sheet', docked(s) && s.tab === 'Variables', `panel ${s.panel ? px(s.panel.width) : 'closed'} px, UI layer ${px(s.layer.width)} of ${px(s.editor.width)}, dock button ${s.dock}`)
         row('the panel itself is 8 px narrower, at the editor’s right edge', s.panel && Math.abs(s.panel.width - 312) < 0.5 && Math.abs(s.panel.right - s.editor.right) < 0.5, s.panel && `${px(s.panel.width)} px`)
         row(
-          'the six tabs are icons of 32 px with no name shown',
-          s.tabs.length === 6 && s.tabs.every((t, i) => t.title === TABS[i] && t.name === TABS[i] && Math.abs(t.box.width - 32) < 0.5 && t.label.width <= 1 && t.icon.left >= t.box.left && t.icon.right <= t.box.right),
+          'the seven tabs are icons of about 29.9 px with no name shown, the Math assistant last',
+          s.tabs.length === 7 && s.tabs.every((t, i) => t.title === TABS[i] && t.name === TABS[i] && Math.abs(t.box.width - TAB[320]) < 0.5 && t.label.width <= 1 && t.icon.left >= t.box.left && t.icon.right <= t.box.right),
           s.tabs.map((t) => `${t.title} ${px(t.box.width)}`).join(', '),
         )
         row('the shown tab’s name is a heading over its content', s.headings.join() === 'Variables' && s.heading.left >= s.panel.left && s.heading.right <= s.panel.right, s.headings.join())
-        row('Close stays in the header, inside the panel', s.close && s.close.right <= s.panel.right && s.close.left > s.tabs[5].box.right - 0.5, s.close && `Close ${px(s.close.left)}–${px(s.close.right)}, panel to ${px(s.panel.right)}`)
+        row('Close stays in the header, inside the panel', s.close && s.close.right <= s.panel.right && s.close.left > s.tabs.at(-1).box.right - 0.5, s.close && `Close ${px(s.close.left)}–${px(s.close.right)}, panel to ${px(s.panel.right)}`)
         await edit()
         s = await read('edit')
         row('an edit shows Format', s.field?.focused && s.tab === 'Format' && s.headings.join() === 'Format' && docked(s), `tab ${s.tab}`)
@@ -613,7 +619,8 @@ try {
         await mathSettings()
         s = await read('asked')
         row('Math settings opens it floating over the sheet', floating(s) && Math.abs(s.panel.width - 312) < 0.5, `panel ${s.panel ? px(s.panel.width) : 'closed'} px, UI layer ${px(s.layer.width)} of ${px(s.editor.width)}, dock button ${s.dock}`)
-        row('floating, its tabs and Close fit it too', s.close && s.close.right <= s.panel.right && s.tabs.every((t) => Math.abs(t.box.width - 32) < 0.5))
+        // Floating, the header has no Keep sidebar open, so the seven tabs have their 32 px.
+        row('floating, its seven tabs (32 px: no Keep sidebar open) and Close fit it too', s.close && s.close.right <= s.panel.right && s.tabs.length === 7 && s.tabs.every((t) => Math.abs(t.box.width - TAB.most) < 0.5), s.tabs.map((t) => px(t.box.width)).join(', '))
         // With the panel open, an edit from it (Format's Edit) switches it to Format.
         await tab.click('.sheet-sidebar .sheet-tab[title="Format"]')
         await tab.click('.sheet-sidebar [aria-label="Edit (Enter)"]')
@@ -652,7 +659,7 @@ try {
     await drag(700)
     s = await read('widest')
     row('480 px is the most', s.variable === 480 && Math.abs(s.panel.width - 472) < 0.5, `--right-sidebar-width ${s.variable}`)
-    row('at 480 px the tabs are still 32 px', s.tabs.every((t) => Math.abs(t.box.width - 32) < 0.5), s.tabs.map((t) => px(t.box.width)).join(', '))
+    row('at 480 px the seven tabs are 32 px', s.tabs.length === 7 && s.tabs.every((t) => Math.abs(t.box.width - TAB.most) < 0.5), s.tabs.map((t) => px(t.box.width)).join(', '))
     await drag(100)
     s = await read('narrowest')
     row('280 px is the least', s.variable === 280 && Math.abs(s.panel.width - 272) < 0.5, `--right-sidebar-width ${s.variable}`)
@@ -747,14 +754,14 @@ try {
       await tab.click('.sheet-sidebar .sheet-rules__add')
       await tab.keyboard.type('> v_max and v < 1000000 m/s and v > 0 m/s')
       let s = await read('format')
-      const size = least === 280 ? 28 : 32
+      const size = TAB[least]
       row(`the panel opens at ${least} px`, s.variable === least && Math.abs(s.panel.width - (least - 8)) < 0.5, `--right-sidebar-width ${s.variable}`)
       row(
-        `the tabs are ${least === 280 ? 'about 28' : '32'} px, their icons whole`,
-        s.tabs.length === 6 && s.tabs.every((t) => Math.abs(t.box.width - size) <= 1 && t.icon.left >= t.box.left - 0.5 && t.icon.right <= t.box.right + 0.5 && t.icon.width >= 17),
+        `the seven tabs are about ${size} px, their icons whole`,
+        s.tabs.length === 7 && s.tabs.every((t) => Math.abs(t.box.width - size) <= 1 && t.icon.left >= t.box.left - 0.5 && t.icon.right <= t.box.right + 0.5 && t.icon.width >= 17),
         s.tabs.map((t) => px(t.box.width)).join(', '),
       )
-      row('Keep sidebar open and Close stay in the header, inside the panel', s.dock && s.close.right <= s.panel.right && s.close.left >= s.tabs[5].box.right - 0.5, `Close ${px(s.close.left)}–${px(s.close.right)}, panel to ${px(s.panel.right)}`)
+      row('Keep sidebar open and Close stay in the header, inside the panel', s.dock && s.close.right <= s.panel.right && s.close.left >= s.tabs.at(-1).box.right - 0.5, `Close ${px(s.close.left)}–${px(s.close.right)}, panel to ${px(s.panel.right)}`)
       const format = await tab.evaluate(() => {
         const field = document.querySelector('.sheet-rules__field')
         const panel = document.querySelector('.excalidraw .sidebar.sheet-sidebar').getBoundingClientRect()
@@ -805,6 +812,8 @@ try {
             cut.length ? cut.map((k) => `${k.option} ${px(k.text)} px in ${k.width} px`).join(', ') : `${kinds.length} selects, the narrowest ${Math.min(...kinds.map((k) => k.width))} px`,
           )
         }
+        // The Math assistant's setup card (0.7.0) with its longest choice: a typed address, its field shown too.
+        if (index === 6) await tab.locator('.sheet-sidebar .assistant-card select').first().selectOption('other')
         s = await read(name)
         const cut = await tab.evaluate(() => window.__cut())
         row(
@@ -1471,4 +1480,4 @@ if (failed.length || errors.length || results.length === 0) {
   process.exit(1)
 }
 for (const { where, ms } of timings.filter(({ where }) => where.includes('pt-BR'))) console.log(`${where}: the Português pass took ${(ms / 1000).toFixed(1)} s`)
-console.log('Panel run passed: 320 px, icon tabs, the drag handle, docking by width, every tab usable at 280 px, the Format tab’s sample, the charts, the Page row, the page breaks, a rename from a Variables row, the offer on a committed line, the Português pass and Language on the web.')
+console.log('Panel run passed: 320 px, seven icon tabs, the drag handle, docking by width, every tab usable at 280 px (the Math assistant’s setup card too), the Format tab’s sample, the charts, the Page row, the page breaks, a rename from a Variables row, the offer on a committed line, the Português pass and Language on the web.')

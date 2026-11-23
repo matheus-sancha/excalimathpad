@@ -118,6 +118,28 @@ describe('Excalidraw’s items hidden in the plugin (section 8, Inside an Obsidi
     expect(document.querySelector('[data-testid="toolbar-magicframe"]')).toBeNull()
   })
 
+  // Section 12a, Data protection (0.7.0): `aiEnabled` is `false` in both homes, so the Math
+  // assistant is the only AI in the app. Excalidraw draws Text to diagram and Magic frame in
+  // More tools only for a host that adds their plugins, which the app never does, so the one
+  // place the prop shows is a magic frame's own "Convert to code" button, under `aiEnabled`.
+  it.each([
+    ['a vault', true],
+    ['the web app', false],
+  ])('in %s, a magic frame has no Convert to code (aiEnabled is false)', async (_home, vault) => {
+    const { api } = await mount(vault)
+    act(() =>
+      api.updateScene({
+        elements: [
+          ...api.getSceneElements(),
+          { ...api.getSceneElements()[0], id: 'magic', type: 'magicframe', name: null, index: 'a1' } as never,
+        ],
+        appState: { selectedElementIds: { magic: true } },
+      }),
+    )
+    await waitFor(() => expect(api.getAppState().selectedElementIds).toEqual({ magic: true }))
+    expect(document.querySelector('[title="Convert to code"]')).toBeNull()
+  })
+
   it('Browse libraries, in the library', async () => {
     const { api } = await mount()
     act(() => api.toggleSidebar({ name: 'default', tab: 'library', force: true }))

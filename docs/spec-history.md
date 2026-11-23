@@ -676,6 +676,20 @@ The items with a recorded result. Those still open are in
   6.3 s each, about 19 s. Together about 26 s added to a check of about 25 minutes. Each run prints its passes'
   times at its end.
 
+**0.7.0**
+
+- Whether Playwright's own answer to a route can arrive in pieces in the pinned version.
+  **No (#312):** Playwright 1.63's `route.fulfill` takes its body whole, so Chromium gets an
+  answer in one piece. The assistant run proves Stop twice: with the typed address against the
+  local server, which writes the answer a piece every 400 ms, Stop pressed once the first piece
+  shows, and the server sees the connection closed before its end; and with the built-in, the
+  answer held by the stand-in, where Chromium reports the request aborted
+  (`net::ERR_ABORTED`). Stop ending a request inside Obsidian stays a line of the release
+  checklist.
+- The time the seventh run adds to `npm run check`. **Measured (#312)** in headless Chromium
+  on the built plugin and the built web app: 37.6 s for its four passes (each 8 to 11 s), the
+  plugin's network-blocked run's new step a fraction of a second more.
+
 ## 18. Decision index
 
 | Ticket | Fed sections |

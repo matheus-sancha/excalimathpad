@@ -164,7 +164,9 @@ describe('the view failing as a whole, in a vault', () => {
     const lines = copied[0].split('\n')
     expect(lines.slice(1, 4)).toEqual(['Obsidian plugin, desktop', 'Language: Português (Brasil)', 'What failed: the view'])
     expect(lines.at(-1)).toBe(NO_CONTENT)
-    expect(within(screenBox).getByRole('button', { name: ptBR.failure.copied })).toBeInTheDocument()
+    // The clipboard has the text as soon as the button is pressed; its label changes once the
+    // write's promise resolves and React draws again, so this waits for it.
+    expect(await within(screenBox).findByRole('button', { name: ptBR.failure.copied })).toBeInTheDocument()
   })
 
   it('Reload the sheet mounts what the tab held, up to the last line commit, and autosave goes on from there', async () => {

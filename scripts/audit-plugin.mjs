@@ -9,6 +9,7 @@
 import { readdir, readFile, stat } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { PROVIDERS } from '../src/assistant/providers.ts'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 
@@ -26,7 +27,8 @@ export const MAX_BYTES = 5_000_000
  * (#310): 3,580,181 bytes plus 5% of the first slice's growth so far (87,169),
  * rounded up; and again by the answer's form (#311): 3,589,407 bytes plus 5% of
  * the growth so far (96,395), rounded up. The issue that turns the assistant on
- * (#312) raises it again.
+ * (#312) measured 3,589,415 bytes (the slice's whole growth, 96,403 of its
+ * 120,000); the same rule gives 3,595,000, so it stands.
  */
 export const BUDGET = {
   'main.js': 3_595_000,
@@ -54,12 +56,29 @@ const URL = /\bhttps?:\/\/([a-z0-9][a-z0-9.-]*)/gi
 /** How far either side of a createElement to look for its library's mark. */
 const MARK_WINDOW = 400
 
+/** The hosts of the built-in providers' addresses (`src/assistant/providers.ts`). */
+export const PROVIDER_HOSTS = PROVIDERS.map(({ address }) => new globalThis.URL(address).host)
+
+/** The allowlist's `reached` hosts (0.7.0), its comment left out. */
+export const reachedHosts = (allowlist) => Object.keys(allowlist.reached ?? {}).filter((key) => !key.startsWith('$'))
+
+const escape = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
 /**
  * Returns the problems found (empty when the bundle passes) and each file's
- * size. `files` maps a name to its text; `allowlist` is plugin-allowlist.json.
+ * size. `files` maps a name to its text; `allowlist` is plugin-allowlist.json;
+ * `providerHosts` the hosts of the built-in providers' addresses.
  */
-export function auditBundle({ files, sizes, packageVersion, allowlist }) {
+export function auditBundle({ files, sizes, packageVersion, allowlist, providerHosts = PROVIDER_HOSTS }) {
   const problems = []
+  // 0.7.0: `reached` is exactly the built-in providers' hosts, in either direction.
+  const reached = reachedHosts(allowlist)
+  for (const host of reached.filter((host) => !providerHosts.includes(host)).sort()) {
+    problems.push(`plugin-allowlist.json's reached list names ${host}, which no built-in provider's address in src/assistant/ has`)
+  }
+  for (const host of providerHosts.filter((host) => !reached.includes(host)).sort()) {
+    problems.push(`a built-in provider's address in src/assistant/ has ${host}, which plugin-allowlist.json's reached list doesn't name`)
+  }
   const names = Object.keys(files).sort()
   if (names.join() !== [...FILES].sort().join()) {
     problems.push(`dist-plugin/ must hold exactly ${FILES.join(', ')}; it holds ${names.join(', ') || 'nothing'}`)
@@ -105,6 +124,12 @@ export function auditBundle({ files, sizes, packageVersion, allowlist }) {
         problems.push(`${name}: creates a <${match[1]}> element outside the known library sites, at ${match.index}`)
       }
     }
+    // 0.7.0: only the provider's constant names a reached host's address, so a second
+    // `https://` to it is a request the constant doesn't make.
+    for (const host of reached) {
+      const count = [...text.matchAll(new RegExp(`https?://${escape(host)}(?![a-z0-9.-])`, 'gi'))].length
+      if (count > 1) problems.push(`${name}: names https://${host} ${count} times; only its provider's constant may name it, once`)
+    }
     const hosts = new Set([...text.matchAll(URL)].map((match) => match[1].toLowerCase()))
     for (const host of [...hosts].sort()) {
       // `reached` (0.7.0): the built-in providers' hosts, which the Math assistant reaches on a press.
@@ -145,6 +170,8 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
     process.exit(1)
   }
   console.log(
-    'Bundle audit passed: three files, each under 5,000,000 bytes and within its budget, nothing reaching the network.',
+    'Bundle audit passed: three files, each under 5,000,000 bytes and within its budget. ' +
+      `The only hosts reached are ${new Intl.ListFormat('en').format(PROVIDER_HOSTS)}, ` +
+      "the Math assistant's built-in providers, on a press; every other host is named, never reached.",
   )
 }

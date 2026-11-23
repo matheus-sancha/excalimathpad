@@ -114,9 +114,13 @@ describe('the Math assistant in a sheet tab', () => {
     return Array.from(document.querySelectorAll('.math-tools .dropdown-menu-item__text'), (item) => item.textContent)
   }
 
-  it('is off in a build from main: no More tools item', async () => {
-    expect(__ASSISTANT__).toBe(false)
-    expect(await openPump(undefined)).toEqual(['Add math', 'Math settings'])
+  it('is on in a build from main (#312): its More tools item on a computer', async () => {
+    expect(__ASSISTANT__).toBe(true)
+    expect(await openPump(undefined)).toEqual(['Add math', 'Math settings', 'Math assistant'])
+  })
+
+  it('has none on a computer with the switch off', async () => {
+    expect(await openPump(false)).toEqual(['Add math', 'Math settings'])
   })
 
   it('has its item on a computer with the switch on', async () => {

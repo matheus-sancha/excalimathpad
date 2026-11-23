@@ -56,7 +56,7 @@ export interface SheetViewOptions {
   lookbehind?: () => boolean
   /** The clock a conflict copy is named by. */
   now?: () => Date
-  /** Tests turn the Math assistant's build-time switch on (section 14, 0.7.0). */
+  /** Tests set the Math assistant's build-time switch, on or off (section 14, 0.7.0). */
   assistant?: boolean
 }
 
