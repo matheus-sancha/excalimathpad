@@ -14,7 +14,9 @@ inline code, bold, italic and links to the guide's own headings. It refuses
 anything else, so a link to a file or a site, or a construct the dialog
 can't draw, fails the build. `guideModule` is the module both builds hand
 the app for `?guide` (typed in `mathGuide.d.ts`): the tree as JSON, so the
-bundle holds no Markdown code and nothing sets `innerHTML`. `MathGuide.tsx`
+bundle holds no Markdown code and nothing sets `innerHTML`. `?text` (`guideTextModule`,
+typed in `src/assistant/guideText.d.ts`, 0.7.0, #310) is the file's own text, unchanged,
+for the Math assistant's model: a second copy in the bundle, read nowhere else. `MathGuide.tsx`
 is the dialog: React draws the tree in a box that scrolls and starts at
 the top (the contents list) with the keyboard; it closes on Esc, ✕ or a
 click outside that also started outside; its links scroll within it; its

@@ -19,7 +19,8 @@ the clean mark is taken from the loaded scene. The session's state carries the s
 `setSettings` changes them. `sheetSession.ts` is the deep module: save, save as, open,
 startup with the recovery offer, the clean mark and the recovery copy, over
 ports (scene, file access, recovery store, dialogs, line), so it knows no
-Excalidraw, React or DOM. `fileAccess.ts` wraps the File System Access API,
+Excalidraw, React or DOM. Its `onOpened` is called once another sheet has loaded in this
+one's place, which ends the Math assistant's conversation (0.7.0, #310). `fileAccess.ts` wraps the File System Access API,
 with a download and file-input fallback. `recovery.ts` keeps the one copy in
 IndexedDB. `vaultSheet.ts` is the vault's counterpart (M4d): the same
 clean-key rule and `keepClean` over the scene and line ports, but it never

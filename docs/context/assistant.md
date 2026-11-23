@@ -12,8 +12,10 @@ ports a home hands App. Depends on: text, math (the evaluation's types and the l
 engine reads it), overlay (the reading order) and canvas's `sceneTexts` (a type). Built so
 far: the first four issues of the first slice, which are the module, its ports, the switch
 and its tab (#306), the setup: its record, both stores and the card (#307), the
-listing (#308), and the two adapters, their readers, the fixtures and the default models
-(#309). It makes no request yet: nothing calls the adapters until the Send (#310).
+listing (#308), the two adapters, their readers, the fixtures and the default models
+(#309), and the Send: the conversation, the chat, the first request's confirm, Show models
+and Check key (#310). Only a press makes a request: Send, Show models, Check key, and
+Try again or Check key under a failed answer.
 
 **The ports** (`ports.ts`). `AssistantPorts` is `{ request, store }`, App's `assistant` prop:
 
@@ -35,7 +37,7 @@ listing (#308), and the two adapters, their readers, the fixtures and the defaul
 
 **The setup** (`setup.ts`, section 8, The setup card). `Setup` is the record:
 `{ provider, address, model, key, hosts }`, `provider` a built-in's id or `other`, `hosts`
-the confirmed hosts (nothing writes one yet: the first request is a later issue's).
+the confirmed hosts (`confirmHost` adds one, after the first request's confirm).
 `setupText` and `readSetup` are the only code that knows the record's text; `readSetup`
 gives `null` for nothing, an empty entry or text that isn't a record, takes a built-in's
 address from the constant whatever the entry says, and refuses a typed address that fails
@@ -55,8 +57,11 @@ the trimmed address and its host (with its port), or why Save refuses (`notUrl`,
 **The card** (`SetupCard.tsx`, `AssistantTab.css`; its words are the text tables'
 `assistant` group, [text](text.md)). It takes the keeper and whether the home is a vault
 (where the key is kept reads differently). The key is in it only as the field's value
-between a paste and Save. Show models and Check key are drawn dimmed: their request is a
-later issue's. A label wraps its field only, never a button, or the button's words become
+between a paste and Save. **Show models and Check key** (#310) read the card's fields as
+they are (Save's refusals first) and ask `listModels` through the gate: Show models fills a
+pick list, or says it couldn't and leaves the field; Check key says accepted, refused, the
+provider's words, or that nothing came back with the origin the address must allow. A host
+confirmed here before Save is kept by Save; one for the saved setup, at once. A label wraps its field only, never a button, or the button's words become
 part of the field's name. `SetupCard.test.tsx` holds the card against fake ports,
 `canary.test.tsx` the canary key in the real app, and `plugin/test/assistant.test.ts` both
 in a vault. The card at a 280 px panel is a hand check in Chromium (a build with the switch
@@ -84,7 +89,9 @@ inside a tab boundary, when it has ports; the canvas draws the tab's trigger (a 
 bubble), its heading and the More tools item ([canvas](canvas.md)), and App keeps the chat
 when an edit opens ([app](app.md)). It takes the ports and `vault`, and draws the setup card
 in `.assistant-tab`, or the line that it needs Obsidian 1.11.4 where the store is `null`.
-The conversation (#310) takes the card's place where a setup is saved.
+App also hands it the open sheet's `conversation` and `sheet` (`AssistantSheet`, `sheet.ts`);
+with both and a saved setup it draws the chat, whose field gives way to the card when the
+key button opens it or when the setup can't send (a built-in with its key removed).
 `place.test.tsx` holds its place against the real Excalidraw.
 
 **The listing** (`listing.ts`, section 8, The listing and What a Send carries; section 14,
@@ -110,8 +117,11 @@ no Result colour and no Page, and the map's ids are never written into the text.
 every acceptance sheet and Math guide example in both languages. **The map**
 (`ListingMap`): each label (`E2`, `E2:3`, `T1`) to its anchor or text element, the line's
 index from 0 and the line's text as sent. `chipTarget(map, label, now)` is what a chip does
-after the sheet changed: `jumps`, `changed`, `gone` or `unknown`. Nothing calls them yet: the
-Send (#310) keeps a listing per Send, and the chips and "Sent with this" (#311) read it.
+after the sheet changed: `jumps`, `changed`, `gone` or `unknown`. The Send (#310) keeps each
+message's listing, counts and map (`SentWith`); `chipTarget` waits for the chips (#311).
+`sheetNow` (`sheet.ts`) is the listing with each math element's name and line count, for
+"Goes with your message"; App's `AssistantSheet.now()` gives it, cached until the sheet may
+have changed.
 
 **The provider constants** (`providers.ts`, section 14, 0.7.0): `PROVIDERS`, the four
 built-ins in the setup card's order, each `{ id, name, address, adapter, defaultModel,
@@ -184,8 +194,44 @@ documentation's answer in two pieces, which the live one wasn't, for the tests b
 A new fixture may not show up in `npm test` until `node_modules/.vitest-cache` is deleted:
 Vitest's module cache keeps the old list.
 
+**The conversation** (`conversation.ts`, section 8, The conversation and What a Send
+carries; section 14, The conversation is held outside the tab's content).
+`createConversation()` is an external store, one per open sheet, held by App: `entries`
+(each `Message` with its `SentWith`, each `Answer` with its `state`, `waiting`, `arriving`,
+`answer`, `stopped`, `cut` or `failed`, its `failure` and a Check key's `check`), `busy` and
+the field's `draft`. `send` runs `ask` with the instructions, the guide, that Send's listing,
+`turnsOf` the entries before (each message and each answer's text, as the list shows it) and
+the message; `retry` asks the last message again with the sheet as it is now, in place of
+what failed; `checkKey` is `listModels` under a failed answer; `stop` aborts the request's
+signal; `clear` (New chat) and `end` (the sheet closed) abort it and empty the list, and a
+late piece of the old request changes nothing. It has no timer: `quietSince` is when
+something last arrived, for the tab's 30-second hint (`QUIET_MS`, `answerWords.ts`).
+
+**The chat** (`Chat.tsx`). The header (New chat, the key button), the list (the empty state
+with the three suggested questions, each message and answer as plain text until #311, the
+status line, the failure's lines from `failureLines` with Check key and Try again), the
+confirm, a too-long sheet's refusal, "Goes with your message" (pressed: each element and
+its line count), the `<textarea>` and Send or Stop, and the hint. Enter sends, Shift+Enter
+is a new line, Esc stops; a suggested question and Try again leave the open line first
+(`leaveLine`). Every chat button has `tabIndex={-1}` and prevents its `mousedown`. A key in
+the field never reaches Excalidraw: it is inside `.sheet-sidebar__keys`, and Excalidraw's own
+document listener ignores a textarea; `conversation.app.test.tsx` holds it with a math
+element selected (`m r 1 d`, Delete, Backspace), against the real Excalidraw, with the
+control. **The first request's confirm** (`hostGate.tsx`, `HostConfirm.tsx`, section 12a, To
+the one host): `useHostGate(confirmed).ask(reason, target, go)` runs `go` at once for a
+confirmed host, else shows the confirm; Cancel sends nothing, Send or Continue calls
+`confirmed` (the keeper's `confirmHost`) and then `go`.
+
+**What goes with every Send.** `instructions.ts` holds the instructions, the spec's text word
+for word, which `instructions.test.ts` reads from the spec. The Math guide goes as a **second
+copy of the English file** (`docs/math-guide.md?text`, [guide](guide.md)), not rebuilt from
+the elements, so the model reads the file #247 tested; the test holds it to the file.
+
 **Size** (section 14, Size). `main.js` before the slice: **3,493,012 bytes** at `a90b6a9`
 (the same as at `c3b55a7`), against a budget of 3,574,000. The first slice may add at most
 120,000 bytes; #312 measures after and raises `BUDGET` once. After #307: 3,508,154. The
 adapters and the two readers (#309), alone with the plugin's esbuild settings, are 4,698
 bytes minified (2,087 gzipped), against the research's 3,825; the constants grew by 499.
+After #310: **3,580,181** bytes (`main` before it: 3,509,028, so +71,153: about 42,900 for the
+guide's copy, the rest the conversation, the chat and their words); the slice so far,
++87,169 of its 120,000.

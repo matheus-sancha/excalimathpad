@@ -5282,7 +5282,8 @@ working key while this was specified.
   elements the bundle already holds (0 kB). If it is rebuilt, the model reads a
   reconstruction, and
   [whether the model writes sheets the engine runs](https://github.com/matheus-sancha/excalimathpad/issues/247)
-  has to test that form.
+  has to test that form. As built (#310): a second copy, `docs/math-guide.md?text`, 42,903
+  bytes in `main.js`, so the model reads the file #247 tested.
 - **The listing is one pure function** from the last evaluation and the scene's text
   elements to the text, its counts and **the map**: for each label, its anchor (or text
   element), its line index and the line's text as sent. The map is kept per Send and never
@@ -5325,9 +5326,11 @@ working key while this was specified.
   1.11.4 and the storage is never called. `aiEnabled` is `false` in both homes, with a test.
 - **Size.** The first slice may add at most **120,000 bytes** to `main.js` (3,493,012 bytes
   at `c3b55a7`, against a budget of 3,574,000; the estimate is 85 to 95 kB, not measured).
-  The first issue records `main.js` before. The issue that turns the assistant on measures
-  after and raises `BUDGET` once, by the measured growth plus 5%, rounded up to the next
-  1,000 bytes, in a commit that says so. Going over 120,000 stops that issue and comes back
+  The first issue records `main.js` before. The Send (#310) crosses the old budget, so it
+  raises `BUDGET` to 3,585,000 (its build, 3,580,181 bytes, plus 5% of the slice's growth so
+  far, 87,169, rounded up). The issue that turns the assistant on measures after and raises
+  `BUDGET` again, by the measured growth plus 5%, rounded up to the next 1,000 bytes, in a
+  commit that says so. Going over 120,000 stops that issue and comes back
   to Matheus. The 5,000,000 cap holds, and 0.6.0's Portuguese guide is outside this number.
 - **Documents.** `CONTEXT.md` gets the module's line, and its Load-bearing "names no browser
   storage and reaches no host" is rewritten, by the issues that make them untrue; a new
@@ -6080,6 +6083,12 @@ Each section above ends with its own tickets.
 
 ## Changes since agreed
 
+- 2026-11-22, [section 14](#14-engineering-constraints), 0.7.0, Size ([#310](https://github.com/matheus-sancha/excalimathpad/issues/310),
+  chosen by Matheus while building): **`BUDGET` is raised twice in the first slice, not
+  once.** The Send, with the Math guide's second copy (42,903 bytes), took `main.js` to
+  3,580,181 bytes, over the budget of 3,574,000 with the slice not yet on. It raises the
+  budget to 3,585,000; the issue that turns the assistant on raises it again. The slice's
+  120,000-byte allowance is unchanged (87,169 used).
 - 2026-11-22, [sections 1](#1-what-v1-is-and-what-it-isnt), [2](#invariants),
   [8](#math-assistant) and [12a](#data-protection) (the map
   [Spec for 0.7.0: the Math assistant](https://github.com/matheus-sancha/excalimathpad/issues/238),

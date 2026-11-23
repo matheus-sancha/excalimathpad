@@ -23,7 +23,7 @@ import { copyFile, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { ASSISTANT_SWITCH, assistantSwitch } from './assistantSwitch.ts'
-import { GUIDE_QUERY, guideModule } from './src/guide/markdown.ts'
+import { GUIDE_QUERY, GUIDE_TEXT_QUERY, guideModule, guideTextModule } from './src/guide/markdown.ts'
 import { trimKatexCss } from './src/overlay/katexFonts.ts'
 
 const root = dirname(fileURLToPath(import.meta.url))
@@ -121,6 +121,16 @@ const mathGuide = {
     }))
     b.onLoad({ filter: /.*/, namespace: 'math-guide' }, async (args) => ({
       contents: guideModule(await readFile(args.path, 'utf8')),
+      loader: 'js',
+      watchFiles: [args.path],
+    }))
+    // `?text`: the guide's own text, for the Math assistant's model (section 14, 0.7.0).
+    b.onResolve({ filter: /\.md\?text$/ }, (args) => ({
+      path: resolve(args.resolveDir, args.path.slice(0, -GUIDE_TEXT_QUERY.length)),
+      namespace: 'math-guide-text',
+    }))
+    b.onLoad({ filter: /.*/, namespace: 'math-guide-text' }, async (args) => ({
+      contents: guideTextModule(await readFile(args.path, 'utf8')),
       loader: 'js',
       watchFiles: [args.path],
     }))

@@ -242,6 +242,18 @@ function marks(text: string, anchors: ReadonlySet<string>, at: number): GuideNod
 /** The import that brings the guide in: `docs/math-guide.md?guide`. */
 export const GUIDE_QUERY = '?guide'
 
+/**
+ * The import that brings the guide's own text in, as the file is: `docs/math-guide.md?text`.
+ * The Math assistant sends it to the model (spec section 14, 0.7.0, The Math guide for the
+ * model): a second copy of the file, not the text rebuilt from the elements.
+ */
+export const GUIDE_TEXT_QUERY = '?text'
+
+/** The module both builds hand the app for that import: the file's text, unchanged. */
+export function guideTextModule(markdown: string): string {
+  return `export default ${JSON.stringify(markdown)}\n`
+}
+
 /** The module both builds hand the app for that import: the guide's elements, as JSON. */
 export function guideModule(markdown: string): string {
   return `export default ${JSON.stringify(guideTree(markdown))}\n`

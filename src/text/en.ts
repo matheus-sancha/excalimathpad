@@ -628,6 +628,55 @@ export const en = {
     /** A listing over the cap (section 8, What a Send carries): both numbers, and nothing goes. */
     tooLong: (length: number, limit: number) =>
       `This sheet is too long to send: ${grouped(length, ',')} characters, and the limit is ${grouped(limit, ',')}. Nothing was sent.`,
+    /** Check key's answers, in the card. */
+    accepted: (host: string) => `${host} accepted this key.`,
+    refusedThis: (host: string) => `${host} refused this key.`,
+    modelsFailed: (host: string) => `Couldn't list ${host}'s models. Type the model's name.`,
+    /** The first request to a host this device hasn't confirmed (section 12a): the confirm. */
+    first: {
+      send: (host: string) => `Your message, the conversation and this whole sheet go to ${host}.`,
+      models: (host: string) => `Your key goes to ${host} to list its models.`,
+      check: (host: string) => `Your key goes to ${host} to check it.`,
+      /** For a typed address, after the first sentence; a built-in's is `keeps`, with its name. */
+      unknown: 'Excalimathpad knows nothing about this address.',
+      sendButton: 'Send',
+      continueButton: 'Continue',
+    },
+    /** The empty conversation: what it does, then that it isn't saved. */
+    emptyAbout: 'Ask about this sheet. The assistant reads it and answers; it writes nothing to the sheet by itself.',
+    emptySaved: "This conversation isn't saved: it ends when the sheet closes.",
+    suggested: ['Check this sheet', 'What is missing?', 'Explain this sheet'],
+    placeholder: 'Ask about this sheet',
+    fieldHint: 'Enter sends · Shift+Enter starts a new line',
+    send: 'Send',
+    stop: 'Stop',
+    newChat: 'New chat',
+    tryAgain: 'Try again',
+    keyButton: 'Provider and key',
+    /** Above the field: what Send will carry, and to whom. */
+    goesWith: (elements: number, lines: number, texts: number, host: string) =>
+      `Goes with your message: the sheet (${elements === 1 ? '1 math element' : `${elements} math elements`}, ${lines === 1 ? '1 line' : `${lines} lines`}, ${texts === 1 ? '1 text' : `${texts} texts`}), the Math guide and this conversation, to ${host}.`,
+    goesWithEmpty: (host: string) => `Goes with your message: the Math guide and this conversation, to ${host}. The sheet is empty.`,
+    /** One math element in that line's list, when pressed. */
+    goesElement: (name: string, lines: number) => `${name} · ${lines === 1 ? '1 line' : `${lines} lines`}`,
+    goesNote: 'Sent to the provider only when you press Send.',
+    reading: 'Reading the sheet…',
+    stillWaiting: (host: string) => `Still waiting for ${host}. Stop ends it.`,
+    stopped: 'Stopped.',
+    cutShort: 'The answer was cut short.',
+    /** A failed answer (section 13, Math assistant). */
+    noAnswer: (host: string) => `No answer from ${host}. You may be offline, or it refused your key.`,
+    noAnswerAgain: (host: string, origin: string) =>
+      `No answer from ${host}. You may be offline, the address may be wrong, or it doesn't accept calls from this app. It must allow requests from ${origin}.`,
+    offline: "You're offline.",
+    refusedKey: (host: string) => `${host} refused this key. Enter it again in the assistant's settings.`,
+    retired: (provider: string) =>
+      `This version's model was retired by ${provider}. Update Excalimathpad, or type another model in the assistant's settings.`,
+    unknownModel: (provider: string, name: string) => `${provider} doesn't know the model "${name}". Check its name, or press Show models.`,
+    noCredit: 'No credit left.',
+    noCreditAnthropic: "On Claude Max or Ultra, link your plan's API credits (claude.ai › Settings › Billing).",
+    /** A provider's own words, quoted as they arrived. */
+    said: (provider: string, said: string) => `${provider} said: "${said}"`,
   },
   /** The plugin's own words in Obsidian (section 8, Language: In Obsidian; section 13, In a vault). */
   vault: {

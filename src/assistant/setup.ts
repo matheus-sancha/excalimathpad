@@ -83,6 +83,8 @@ export interface SetupKeeper {
   save: (setup: Setup) => void
   /** Forgets the key only: the entry is written again without it. */
   removeKey: () => void
+  /** Keeps `host` as confirmed (section 12a): its first request asked, and the user went on. */
+  confirmHost: (host: string) => void
   /** Forgets all of it. */
   forget: () => void
 }
@@ -133,6 +135,10 @@ function makeKeeper(store: SetupStore): SetupKeeper {
     save: (setup) => keep(setup, false),
     removeKey: () => {
       if (state.setup) keep({ ...state.setup, key: '' }, true)
+    },
+    confirmHost: (host) => {
+      const { setup, removed } = state
+      if (setup && !setup.hosts.includes(host)) keep({ ...setup, hosts: [...setup.hosts, host] }, removed)
     },
     forget: () => {
       try {

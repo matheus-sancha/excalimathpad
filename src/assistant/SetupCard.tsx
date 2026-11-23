@@ -1,6 +1,9 @@
-import { useId, useState, useSyncExternalStore } from 'react'
-import { useWords } from '../text/words.ts'
+import { useEffect, useId, useRef, useState, useSyncExternalStore } from 'react'
+import { useWords, type Words } from '../text/words.ts'
 import { checkAddress, hostOf, type AddressRefusal } from './address.ts'
+import { listModels, type Target } from './adapters.ts'
+import { useHostGate, type GateReason } from './hostGate.tsx'
+import type { AssistantRequest } from './ports.ts'
 import { PROVIDERS, type ProviderId } from './providers.ts'
 import { keyEnding, type SetupKeeper } from './setup.ts'
 
@@ -8,19 +11,32 @@ import { keyEnding, type SetupKeeper } from './setup.ts'
  * The setup card (docs/spec-v1.md section 8, Math assistant, The setup card;
  * its words are section 13's): the provider, the address for a typed one, the
  * key, the model, the four lines for the provider chosen, Save and Forget this
- * setup. Nothing here makes a request: Save only keeps the setup, and Show
- * models and Check key have their places and send nothing until they are
- * built (issue 5 of the slice).
+ * setup. Save makes no request. Show models and Check key each make one, the
+ * model list with the key (`GET <address>/models`), only when pressed, after the
+ * first request to a host asks once (section 12a); both read the card's fields
+ * as they are, so a key can be checked before it is saved.
  *
  * The key is in this file only as the field's own value, between a paste and
  * Save. Once saved it is never shown again: only its last four characters.
  */
 type Choice = ProviderId | 'other'
 type Refusal = AddressRefusal | 'keySpaces' | 'noModel'
+/** What Show models or Check key found, said under the buttons. */
+type Note =
+  | { kind: 'accepted' | 'refused' | 'modelsFailed' | 'nothing'; host: string }
+  | { kind: 'said'; provider: string; said: string }
 
 const builtIn = (choice: Choice) => PROVIDERS.find(({ id }) => id === choice)
 
-export function SetupCard({ keeper, vault }: { keeper: SetupKeeper; /** In Obsidian: where the key is kept differs. */ vault: boolean }) {
+export interface SetupCardProps {
+  keeper: SetupKeeper
+  /** How Show models and Check key make their request (`ports.ts`). */
+  request: AssistantRequest
+  /** In Obsidian: where the key is kept differs. */
+  vault: boolean
+}
+
+export function SetupCard({ keeper, request, vault }: SetupCardProps) {
   const w = useWords().assistant
   const { setup, session, removed } = useSyncExternalStore(keeper.subscribe, keeper.state)
 
@@ -33,6 +49,14 @@ export function SetupCard({ keeper, vault }: { keeper: SetupKeeper; /** In Obsid
   const [refusal, setRefusal] = useState<Refusal | null>(null)
   /** The provider picked while a key is saved, until Cancel or Change. */
   const [pending, setPending] = useState<Choice | null>(null)
+  /** Show models' list, once it answered. */
+  const [models, setModels] = useState<readonly string[] | null>(null)
+  const [note, setNote] = useState<Note | null>(null)
+  const [asking, setAsking] = useState<GateReason | null>(null)
+  /** Hosts confirmed from this card before a setup for them is saved: Save keeps them. */
+  const [confirmedHere, setConfirmedHere] = useState<readonly string[]>([])
+  const flight = useRef<AbortController | null>(null)
+  useEffect(() => () => flight.current?.abort(), [])
 
   // A label holds its field only: a button inside it would be read as part of the field's name.
   const keyLabel = useId()
@@ -44,6 +68,61 @@ export function SetupCard({ keeper, vault }: { keeper: SetupKeeper; /** In Obsid
   const kept = setup !== null && setup.key !== '' && !replacing
   // A built-in needs a key; a typed address may have none, for a local model.
   const canSave = kept || provider === 'other' || key.trim() !== ''
+  /** The saved setup is the one the fields show: a host confirmed here is kept in it. */
+  const isSaved = (keptAddress: string) => setup !== null && setup.provider === provider && setup.address === keptAddress
+  const hostsFor = (keptAddress: string) => [...new Set([...(isSaved(keptAddress) && setup ? setup.hosts : []), ...confirmedHere])]
+
+  const gate = useHostGate((confirmed) => {
+    setConfirmedHere((hosts) => (hosts.includes(confirmed) ? hosts : [...hosts, confirmed]))
+    if (setup && setup.provider === provider && hostOf(setup.address) === confirmed) keeper.confirmHost(confirmed)
+  })
+
+  /** The fields' address, or null after saying why it can't be used: Save's own refusals. */
+  const fieldsAddress = (): string | null => {
+    if (chosen) return chosen.address
+    const check = checkAddress(address)
+    if (check.ok) return check.address
+    setRefusal(check.reason)
+    return null
+  }
+
+  /** Show models and Check key: the same request, pressed for another reason. */
+  const listFor = (reason: 'models' | 'check') => {
+    const keptAddress = fieldsAddress()
+    if (keptAddress === null) return
+    const typed = key.trim()
+    if (!kept && /\s/.test(typed)) return setRefusal('keySpaces')
+    const target: Target = {
+      address: keptAddress,
+      adapter: chosen?.adapter ?? 'chat',
+      provider: chosen?.id ?? null,
+      key: kept ? setup.key : typed,
+    }
+    const listedHost = hostOf(keptAddress) ?? keptAddress
+    setNote(null)
+    gate.ask(reason, { provider, address: keptAddress, hosts: hostsFor(keptAddress) }, () => {
+      flight.current?.abort()
+      const controller = new AbortController()
+      flight.current = controller
+      setAsking(reason)
+      void listModels(request, target, controller.signal).then((found) => {
+        if (controller.signal.aborted) return
+        flight.current = null
+        setAsking(null)
+        if (reason === 'models') {
+          if (found.kind === 'models') setModels(found.names)
+          // The field stays as it is: typing a name always works.
+          else setNote({ kind: 'modelsFailed', host: listedHost })
+          return
+        }
+        if (found.kind === 'models') return setNote({ kind: 'accepted', host: listedHost })
+        const { failure } = found
+        if (failure.kind === 'nothing') return setNote({ kind: 'nothing', host: listedHost })
+        if (failure.kind === 'refusedKey') return setNote({ kind: 'refused', host: listedHost })
+        setNote({ kind: 'said', provider: chosen?.name ?? listedHost, said: failure.said })
+      })
+    })
+  }
 
   const choose = (choice: Choice) => {
     setProvider(choice)
@@ -54,6 +133,8 @@ export function SetupCard({ keeper, vault }: { keeper: SetupKeeper; /** In Obsid
     setReplacing(false)
     setRefusal(null)
     setPending(null)
+    setModels(null)
+    setNote(null)
   }
 
   const save = () => {
@@ -68,7 +149,7 @@ export function SetupCard({ keeper, vault }: { keeper: SetupKeeper; /** In Obsid
     if (!kept && /\s/.test(typed)) return setRefusal('keySpaces')
     const name = model.trim()
     if (!name) return setRefusal('noModel')
-    keeper.save({ provider, address: keptAddress, model: name, key: kept ? setup.key : typed, hosts: setup?.hosts ?? [] })
+    keeper.save({ provider, address: keptAddress, model: name, key: kept ? setup.key : typed, hosts: hostsFor(keptAddress) })
     setAddress(chosen ? '' : keptAddress)
     setModel(name)
     setKey('')
@@ -213,11 +294,28 @@ export function SetupCard({ keeper, vault }: { keeper: SetupKeeper; /** In Obsid
               setRefusal(null)
             }}
           />
-          {/* Its place: it asks the provider for its list, only when pressed, once it is built. */}
-          <button type="button" className="assistant-card__button" disabled>
+          {/* It asks the provider for its list, only when pressed. */}
+          <button type="button" className="assistant-card__button" disabled={asking !== null} onClick={() => listFor('models')}>
             {w.showModels}
           </button>
         </span>
+        {models && models.length > 0 && (
+          <select
+            aria-label={w.showModels}
+            value={models.includes(model) ? model : ''}
+            onChange={(event) => {
+              setModel(event.target.value)
+              setRefusal(null)
+            }}
+          >
+            {!models.includes(model) && <option value="" disabled />}
+            {models.map((name) => (
+              <option key={name} value={name}>
+                {name}
+              </option>
+            ))}
+          </select>
+        )}
       </div>
 
       <ul className="assistant-card__lines">
@@ -242,11 +340,17 @@ export function SetupCard({ keeper, vault }: { keeper: SetupKeeper; /** In Obsid
         <button type="button" className="assistant-card__button is-primary" disabled={!canSave} onClick={save}>
           {w.save}
         </button>
-        {/* Its place: the same request as Show models, pressed for another reason. */}
-        <button type="button" className="assistant-card__button" disabled>
+        {/* The same request as Show models, pressed for another reason. */}
+        <button type="button" className="assistant-card__button" disabled={asking !== null} onClick={() => listFor('check')}>
           {w.checkKey}
         </button>
       </div>
+      {gate.prompt}
+      {note && (
+        <p className="assistant-card__note" role="status">
+          {noteText(note, w)}
+        </p>
+      )}
       {setup && (
         <button
           type="button"
@@ -261,6 +365,15 @@ export function SetupCard({ keeper, vault }: { keeper: SetupKeeper; /** In Obsid
       )}
     </div>
   )
+}
+
+/** What Show models or Check key found, in section 13's words. */
+function noteText(note: Note, w: Words['assistant']): string {
+  if (note.kind === 'said') return w.said(note.provider, note.said)
+  if (note.kind === 'accepted') return w.accepted(note.host)
+  if (note.kind === 'refused') return w.refusedThis(note.host)
+  if (note.kind === 'modelsFailed') return w.modelsFailed(note.host)
+  return w.noAnswerAgain(note.host, window.location.origin)
 }
 
 /** The eye: open while the key is masked (press to show it), struck through while it shows. */

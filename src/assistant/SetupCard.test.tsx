@@ -4,6 +4,7 @@ import { showLanguage } from '../text/words.ts'
 import { en } from '../text/en.ts'
 import { ptBR } from '../text/ptBR.ts'
 import { AssistantTab } from './AssistantTab.tsx'
+import { fakeRequest } from './fixtures/load.ts'
 import { sessionSetupStore, type AssistantPorts, type SetupStore } from './ports.ts'
 import { readSetup, setupText, type Setup } from './setup.ts'
 
@@ -108,13 +109,82 @@ describe('the card, with no setup saved', () => {
     expect(key()).toHaveAttribute('type', 'password')
   })
 
-  it('leaves Show models and Check key their places, and they send nothing', () => {
+  it('makes no request on its own: not drawn, typed into, or saved', () => {
     const fake = ports()
     render(<AssistantTab ports={fake} />)
-    expect(button(w.showModels)).toBeDisabled()
-    expect(button(w.checkKey)).toBeDisabled()
+    type(key()!, CANARY)
+    type(model(), 'claude-haiku-5-5')
+    fireEvent.click(button(w.save))
+    expect(fake.request).not.toHaveBeenCalled()
+  })
+})
+
+describe('Show models and Check key', () => {
+  const routed = (models: string | null) => {
+    const fake = fakeRequest(models)
+    return { ...fake, store: sessionSetupStore(), request: vi.fn(fake.request) }
+  }
+
+  it('the first request to a host asks once; Cancel sends nothing and confirms nothing', async () => {
+    const fake = routed('messages/models.http')
+    render(<AssistantTab ports={fake} />)
+    type(key()!, CANARY)
     fireEvent.click(button(w.showModels))
+    const confirm = screen.getByTestId('assistant-first-request')
+    expect(confirm).toHaveTextContent(w.first.models('api.anthropic.com'))
+    // A built-in's terms are named before a Send only.
+    expect(confirm).not.toHaveTextContent(w.keeps('Anthropic'))
+    fireEvent.click(within(confirm).getByRole('button', { name: w.cancel }))
+    expect(fake.request).not.toHaveBeenCalled()
+
+    // Asked again, since Cancel confirmed nothing; Continue sends the model list's request.
+    fireEvent.click(button(w.showModels))
+    fireEvent.click(button(w.first.continueButton))
+    const list = await screen.findByRole<HTMLSelectElement>('combobox', { name: w.showModels })
+    expect(fake.sent.map(({ method, address }) => `${method} ${address}`)).toEqual(['GET https://api.anthropic.com/v1/models'])
+    expect(fake.sent[0].headers.authorization).toBe(`Bearer ${CANARY}`)
+    expect(fake.sent[0].body).toBeUndefined()
+
+    // A pick fills the field; the host is confirmed now, and Save keeps it.
+    fireEvent.change(list, { target: { value: list.options[list.options.length - 1].value } })
+    expect(model().value).toBe(list.options[list.options.length - 1].value)
     fireEvent.click(button(w.checkKey))
+    expect(screen.queryByTestId('assistant-first-request')).toBeNull()
+    await screen.findByText(w.accepted('api.anthropic.com'))
+    fireEvent.click(button(w.save))
+    expect(readSetup(fake.store.read())?.hosts).toEqual(['api.anthropic.com'])
+  })
+
+  it('Check key says a refused key; Show models leaves the field as it is when it fails', async () => {
+    const fake = routed('messages/refused-key.http')
+    render(<AssistantTab ports={{ ...fake, store: saved({ hosts: ['api.anthropic.com'] }) }} />)
+    fireEvent.click(button(w.checkKey))
+    await screen.findByText(w.refusedThis('api.anthropic.com'))
+    fireEvent.click(button(w.showModels))
+    await screen.findByText(w.modelsFailed('api.anthropic.com'))
+    expect(model().value).toBe('claude-sonnet-5-5')
+    expect(screen.queryByRole('combobox', { name: w.showModels })).toBeNull()
+  })
+
+  it('with nothing readable, Check key names the origin the address must allow', async () => {
+    const fake = routed(null)
+    render(<AssistantTab ports={{ ...fake, store: saved({ hosts: ['api.anthropic.com'] }) }} />)
+    fireEvent.click(button(w.checkKey))
+    await screen.findByText(w.noAnswerAgain('api.anthropic.com', window.location.origin))
+  })
+
+  it('for a typed address, refuses as Save does, and says the app knows nothing of it', () => {
+    const fake = routed('chat/models.http')
+    render(<AssistantTab ports={fake} />)
+    pick('other')
+    type(address()!, 'http://example.com/v1')
+    fireEvent.click(button(w.showModels))
+    expect(alert()).toBe(w.refused.notHttps)
+    type(address()!, 'https://llm.example.com/v1')
+    fireEvent.click(button(w.checkKey))
+    const confirm = screen.getByTestId('assistant-first-request')
+    expect(confirm).toHaveTextContent(w.first.check('llm.example.com'))
+    expect(confirm).toHaveTextContent(w.first.unknown)
     expect(fake.request).not.toHaveBeenCalled()
   })
 })

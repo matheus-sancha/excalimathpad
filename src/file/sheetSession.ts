@@ -116,6 +116,11 @@ export interface SessionPorts {
   recoveryDelayMs?: number
   /** A sheet a failed view kept: `start` loads it without asking, in place of the recovery offer. */
   resume?: KeptSheet | null
+  /**
+   * Another sheet was opened in this one's place: what lasts only while a sheet is open ends
+   * (the Math assistant's conversation, spec section 8, 0.7.0).
+   */
+  onOpened?: () => void
 }
 
 /**
@@ -141,6 +146,7 @@ export function createSheetSession({
   line,
   recoveryDelayMs = 500,
   resume = null,
+  onOpened,
 }: SessionPorts): SheetSession {
   let name: string | null = null
   let handle: SheetFileHandle | null = null
@@ -386,6 +392,7 @@ export function createSheetSession({
         adopt(picked, read.settings)
         // The user chose not to keep the old sheet's changes, so its copy goes too.
         markClean(currentKey())
+        onOpened?.()
       }, undefined),
 
     commitPending() {

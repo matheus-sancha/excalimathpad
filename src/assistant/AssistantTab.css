@@ -143,3 +143,102 @@
   text-decoration: underline;
   cursor: pointer;
 }
+
+.assistant-card__note {
+  margin: 0;
+}
+
+/* The conversation (section 8, The conversation): a column, the list of messages over the
+   field. The panel scrolls the tab as one; the field comes last, under the list. */
+.assistant-chat {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  padding: 0 4px;
+  overflow-wrap: anywhere;
+}
+
+.assistant-chat p {
+  margin: 0;
+}
+
+.assistant-chat__header {
+  display: flex;
+  justify-content: space-between;
+  gap: 4px;
+}
+
+.assistant-chat__list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.assistant-chat__empty {
+  display: grid;
+  gap: 8px;
+}
+
+.assistant-chat__suggested {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+/* A message and an answer as plain text, its line breaks kept (until the answer's form). */
+.assistant-chat__message,
+.assistant-chat__text {
+  white-space: pre-wrap;
+}
+
+.assistant-chat__message {
+  align-self: end;
+  max-width: 90%;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: var(--color-surface-low, #f1f3f5);
+}
+
+.assistant-chat__answer {
+  display: grid;
+  gap: 4px;
+}
+
+.assistant-chat__status,
+.assistant-chat__hint,
+.assistant-chat__goes-list {
+  font-size: 12px;
+  color: var(--color-gray-50, #868e96);
+}
+
+.assistant-chat__goes .assistant-card__link {
+  text-align: start;
+  text-decoration: none;
+}
+
+.assistant-chat__goes-list ul {
+  margin: 4px 0;
+  padding-inline-start: 16px;
+}
+
+.assistant-chat__compose {
+  display: flex;
+  align-items: end;
+  gap: 4px;
+  min-width: 0;
+}
+
+.assistant-chat__field {
+  box-sizing: border-box;
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 4px 6px;
+  border: 1px solid var(--default-border-color, #dee2e6);
+  border-radius: 6px;
+  background: var(--input-bg-color, transparent);
+  color: inherit;
+  font: inherit;
+  resize: vertical;
+}

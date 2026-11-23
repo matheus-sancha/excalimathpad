@@ -5,16 +5,18 @@ import { createMathAnchorElements } from '../canvas/mathAnchor.ts'
 import { failureDetails, failureOf } from '../failure/details.ts'
 import { fakeFileAccess, fakeRecovery } from '../test/files.ts'
 import { en } from '../text/en.ts'
-import { sessionSetupStore, type AssistantPorts } from './ports.ts'
+import { fakeRequest } from './fixtures/load.ts'
+import { sessionSetupStore, type AssistantPorts, type AssistantRequestInit } from './ports.ts'
 import { readSetup } from './setup.ts'
 
 /**
  * The canary key on the web (docs/spec-v1.md section 12a, Storage only in the
  * vault, with one exception; section 14, 0.7.0, The key is never logged,
  * thrown or shown): a key saved through the card, in the real app, shows
- * nowhere but the store's entry. Not in the sheet file, the recovery copy,
- * a failure's text (what Copy details and Report this error carry), the
- * console or any text on screen.
+ * nowhere but the store's entry and the request's header, through a Show
+ * models, a Check key and a Send. Not in a request's address or body, the
+ * sheet file, the recovery copy, a failure's text (what Copy details and
+ * Report this error carry), the console or any text on screen.
  */
 const CANARY = 'sk-canary-9f3c7e21d8b64a05-a1B2'
 
@@ -41,13 +43,18 @@ const onScreen = () =>
   document.documentElement.outerHTML +
   Array.from(document.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>('input, textarea'), (field) => field.value).join('\n')
 
-it('a key saved through the card shows nowhere but the store’s entry', async () => {
+it('a key saved through the card shows nowhere but the store’s entry and a request’s header', async () => {
   const client = Object.getOwnPropertyDescriptor(Element.prototype, 'clientWidth')!
   Object.defineProperty(Element.prototype, 'clientWidth', { configurable: true, get: () => 1440 })
   onTestFinished(() => void Object.defineProperty(Element.prototype, 'clientWidth', client))
 
   const store = sessionSetupStore()
-  const request = vi.fn<AssistantPorts['request']>(() => Promise.reject(new Error('no request is made')))
+  // The model list for Show models and Check key, an answer for a Send.
+  const models = fakeRequest('messages/models.http')
+  const answer = fakeRequest('messages/answer.http')
+  const request = vi.fn<AssistantPorts['request']>((address, init) =>
+    (init.method === 'GET' ? models : answer).request(address, init),
+  )
   // The tab's next draw fails once `broken` is set: how Copy details and Report this error come up.
   let broken = false
   const ports: AssistantPorts = {
@@ -74,11 +81,39 @@ it('a key saved through the card shows nowhere but the store’s entry', async (
   fireEvent.change(key, { target: { value: CANARY } })
   fireEvent.click(within(tab).getByRole('button', { name: en.assistant.showKey }))
   fireEvent.click(within(tab).getByRole('button', { name: en.assistant.save }))
+  // Saved, the tab holds the conversation; the key button opens the card again.
+  fireEvent.click(await within(tab).findByRole('button', { name: en.assistant.keyButton }))
   await within(tab).findByText('Saved key ending a1B2')
 
-  // The one place it is.
+  // The one place it is kept.
   expect(readSetup(store.read())?.key).toBe(CANARY)
   expect(request).not.toHaveBeenCalled()
+  expect(onScreen()).not.toContain(CANARY)
+
+  // Show models (the first request to the host asks), Check key, then a Send.
+  fireEvent.click(within(tab).getByRole('button', { name: en.assistant.showModels }))
+  fireEvent.click(within(tab).getByRole('button', { name: en.assistant.first.continueButton }))
+  await within(tab).findByRole('combobox', { name: en.assistant.showModels })
+  fireEvent.click(within(tab).getByRole('button', { name: en.assistant.checkKey }))
+  await within(tab).findByText(en.assistant.accepted('api.anthropic.com'))
+  fireEvent.click(within(tab).getByRole('button', { name: en.assistant.keyButton }))
+  const field = within(tab).getByRole('textbox', { name: en.assistant.placeholder })
+  fireEvent.change(field, { target: { value: 'Check this sheet' } })
+  fireEvent.keyDown(field, { key: 'Enter' })
+  await waitFor(() => expect(within(tab).getByTestId('assistant-answer')).toHaveAttribute('data-state', 'answer'))
+
+  // Each request has the key in its header, and nowhere else.
+  expect(request.mock.calls.map(([address, init]) => `${init.method} ${address}`)).toEqual([
+    'GET https://api.anthropic.com/v1/models',
+    'GET https://api.anthropic.com/v1/models',
+    'POST https://api.anthropic.com/v1/messages',
+  ])
+  for (const [address, init] of request.mock.calls) {
+    expect(init.headers.authorization).toBe(`Bearer ${CANARY}`)
+    const { headers, ...rest } = init as AssistantRequestInit
+    const others = Object.entries(headers).filter(([name]) => name !== 'authorization')
+    expect(JSON.stringify([address, rest, others])).not.toContain(CANARY)
+  }
   expect(onScreen()).not.toContain(CANARY)
 
   // The sheet file, saved, and the recovery copy.
