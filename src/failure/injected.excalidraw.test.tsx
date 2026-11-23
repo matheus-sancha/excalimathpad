@@ -477,7 +477,8 @@ describe('in Português (section 8, Language, 0.6.0)', () => {
     const lines = copied[0].split('\n')
     expect(lines.slice(1, 5)).toEqual(['web', 'Language: Português (Brasil)', 'What failed: an element', 'RangeError: injected: an element'])
     expect(lines.at(-1)).toBe(NO_CONTENT)
-    expect(within(failed).getByRole('button', { name: ptBR.failure.copied })).toBeInTheDocument()
+    // The label changes once the clipboard's promise resolves: wait for it.
+    expect(await within(failed).findByRole('button', { name: ptBR.failure.copied })).toBeInTheDocument()
   })
 
   it('shows the failure screen in Português', async () => {
