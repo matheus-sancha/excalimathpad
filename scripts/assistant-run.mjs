@@ -280,12 +280,22 @@ const INIT = () => {
       return true
     },
   })
-  // A real handle, in the page's private file system: the recovery copy keeps it as it is.
-  window.showSaveFilePicker = async ({ suggestedName }) => {
-    const handle = await (await navigator.storage.getDirectory()).getFileHandle(suggestedName, { create: true })
-    window.__saved.push(handle)
-    return handle
+  // A file handle whose methods are on its prototype: IndexedDB keeps the recovery copy's
+  // handle as a plain object (methods aren't cloned), and what Ctrl+S writes goes to __saved.
+  // No real file system: with the browser's own (OPFS) here, CI's runners lost the browser
+  // while the run read the saved file and the recovery copy back (#342).
+  const methods = {
+    async getFile() {
+      return new File([window.__saved.at(-1) ?? ''], this.name)
+    },
+    async createWritable() {
+      return { write: async (data) => void window.__saved.push(String(data)), close: async () => {} }
+    },
+    async queryPermission() {
+      return 'granted'
+    },
   }
+  window.showSaveFilePicker = async ({ suggestedName }) => Object.assign(Object.create(methods), { kind: 'file', name: suggestedName })
 }
 
 // --- The run -------------------------------------------------------------------------------------
@@ -597,7 +607,7 @@ async function pass(home, target) {
       home === 'plugin'
         ? await tab.evaluate(() => window.__kept())
         : await tab.evaluate(async () => ({
-            saved: (await Promise.all(window.__saved.map(async (handle) => (await handle.getFile()).text()))).join('\n'),
+            saved: window.__saved.join('\n'),
             others: JSON.stringify(Object.entries(localStorage).filter(([name]) => name !== 'excalimathpad.assistant')),
             recovery: await new Promise((resolve) => {
               const open = indexedDB.open('excalimathpad', 1)

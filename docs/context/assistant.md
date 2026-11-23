@@ -275,7 +275,7 @@ script), passes the typed address on to the script's own server, and logs every 
 the step it belongs to; anything else is aborted and fails the pass. It reads the store's
 record for the confirmed hosts (`secretStorage` in the fake `obsidian`, `localStorage` on the
 web) and looks for the canary in `data.json`, the vault's text and writes, the recovery copy,
-a saved file (the save dialog stood in by a file of the page's private file system), the
+a saved file (the save dialog stood in by a handle that keeps what is written), the
 page, the console, and Copy details and Report this error. The page's init script makes
 those reachable: a clipboard that keeps what is copied, a `navigator.onLine` that throws on
 demand (the chat reads it as it draws, so its tab fails into its notice) and a `Map` lookup
