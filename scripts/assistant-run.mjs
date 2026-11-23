@@ -291,7 +291,6 @@ const INIT = () => {
 // --- The run -------------------------------------------------------------------------------------
 
 const { chromium } = createRequire(import.meta.url)('playwright')
-const browser = await chromium.launch()
 const manifest = JSON.parse(await readFile(join(dist, 'manifest.json'), 'utf8'))
 const results = []
 const errors = []
@@ -310,6 +309,12 @@ async function pass(home, target) {
   if (ONLY && !where.startsWith(ONLY)) return
   const began = Date.now()
   const row = (check, ok, detail = '') => results.push({ where, check, ok: !!ok, detail })
+  // A browser of its own: a browser that goes away fails this pass, by name, and not the next.
+  const phase = { now: 'starting' }
+  const browser = await chromium.launch()
+  browser.on('disconnected', () => {
+    if (phase.now !== 'done') errors.push(`${where}: the browser went away while ${phase.now}`)
+  })
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 })
   await context.addInitScript(INIT)
   /** The step the requests that arrive now belong to. */
@@ -378,6 +383,7 @@ async function pass(home, target) {
 
   const tab = await context.newPage()
   tab.on('pageerror', (error) => errors.push(`${where}: ${error.message}`))
+  tab.on('crash', () => errors.push(`${where}: the page crashed while ${phase.now}`))
   tab.on('console', (message) => said.push(message.text()))
   /** The requests of `step` the app made: no preflight. */
   const made = (step) => log.filter((e) => e.step === step && !e.preflight)
@@ -417,7 +423,9 @@ async function pass(home, target) {
     const mark = (step) => {
       stepTimes.push(`${now.step}: ${((Date.now() - began) / 1000).toFixed(1)} s`)
       now.step = step
+      phase.now = `in step ${step}`
     }
+    phase.now = 'in step 1'
     now.step = 1
     if (home === 'plugin') {
       await tab.goto(`${origin}/`)
@@ -633,7 +641,12 @@ async function pass(home, target) {
   } finally {
     plan.next = 'answer'
     for (const release of held.values()) release()
-    await context.close()
+    phase.now = 'closing its context'
+    const closing = Date.now()
+    await context.close().catch((error) => errors.push(`${where}: closing its context: ${error.message.split('\n')[0]}`))
+    if (Date.now() - closing > 3000) console.log(`${where}: closing its context took ${((Date.now() - closing) / 1000).toFixed(1)} s`)
+    phase.now = 'done'
+    await browser.close().catch(() => {})
     timings.push({ where, ms: Date.now() - began })
   }
 }
@@ -678,9 +691,13 @@ function carriedBy(entry, target, messages) {
 
 const began = Date.now()
 try {
-  for (const home of ['plugin', 'web']) for (const target of [BUILT_IN, TYPED]) await pass(home, target)
+  for (const home of ['plugin', 'web']) {
+    for (const target of [BUILT_IN, TYPED]) {
+      const where = `${home} ${target === BUILT_IN ? 'built-in' : 'typed'}`
+      await pass(home, target).catch((error) => errors.push(`${where}: the pass didn't start: ${error.message.split('\n')[0]}`))
+    }
+  }
 } finally {
-  await browser.close()
   pages.close()
   provider.close()
 }
