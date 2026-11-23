@@ -6097,7 +6097,7 @@ Each section above ends with its own tickets.
 ## Changes since agreed
 
 - 2026-11-23, [section 14](#14-engineering-constraints), 0.7.0, Size ([#311](https://github.com/matheus-sancha/excalimathpad/issues/311),
-  while building, for Matheus to confirm on its pull request): **`BUDGET` is raised a third
+  confirmed by Matheus on its pull request): **`BUDGET` is raised a third
   time in the first slice.** The answer's form (the reader, the chips, Sent with this and
   their words) adds 9,226 bytes, taking `main.js` to 3,589,407, over 3,585,000. It raises
   the budget by #310's rule to 3,595,000. The 120,000-byte allowance is unchanged (96,395
