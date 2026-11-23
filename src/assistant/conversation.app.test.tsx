@@ -199,3 +199,57 @@ describe('only a press makes a request', () => {
     expect(request.mock.calls[0][0]).toBe('https://api.anthropic.com/v1/messages')
   })
 })
+
+describe('a chip in the real app', () => {
+  /** A request whose answer is `text`, whole. */
+  const answering = (text: string): AssistantRequest => () => {
+    const encoder = new TextEncoder()
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        const delta = JSON.stringify({ type: 'content_block_delta', delta: { type: 'text_delta', text } })
+        controller.enqueue(encoder.encode(`event: content_block_delta\ndata: ${delta}\n\nevent: message_stop\ndata: {"type":"message_stop"}\n\n`))
+        controller.close()
+      },
+    })
+    return Promise.resolve({ status: 200, headers: { get: () => null }, body })
+  }
+
+  it('is the Problems row’s jump: the line flashes, nothing opens, and a docked panel stays on the chat', async () => {
+    await start(answering('Look at [E1:2] in [E1].'))
+    await openTab()
+    await send('Check this sheet')
+    await waitFor(() => expect(answers()[0].dataset.state).toBe('answer'))
+    fireEvent.click(within(answers()[0]).getByRole('button', { name: 'Pipe flow, line 2' }))
+
+    await waitFor(() => expect(document.querySelector('[data-anchor-id="m1"] [data-line="1"]')).toHaveClass('is-flash'))
+    expect(lineField()).toBeNull()
+    expect(screen.getByTestId('assistant-tab')).toBeInTheDocument()
+    // A jump adds no undo step and leaves the sheet clean.
+    expect(document.title).toBe('Untitled')
+
+    // An element's chip selects it and flashes no line.
+    fireEvent.pointerDown(window)
+    await waitFor(() => expect(document.querySelector('.is-flash')).toBeNull())
+    fireEvent.click(within(answers()[0]).getByRole('button', { name: 'Pipe flow' }))
+    await settle()
+    expect(document.querySelector('.is-flash')).toBeNull()
+    expect(lineField()).toBeNull()
+  })
+
+  it('is struck through once its element is deleted from the canvas', async () => {
+    await start(answering('See [E1:2].'))
+    await openTab()
+    await send('Check this sheet')
+    await waitFor(() => expect(answers()[0].dataset.state).toBe('answer'))
+    expect(within(answers()[0]).getByRole('button', { name: 'Pipe flow, line 2' })).toBeInTheDocument()
+
+    // The element deleted from the canvas: the chip goes nowhere.
+    const [element] = mathElements()
+    fireEvent.click(within(answers()[0]).getByRole('button', { name: 'Pipe flow, line 2' }))
+    await settle()
+    expect(element).toBeInTheDocument()
+    fireEvent.keyDown(document.querySelector('.excalidraw')!, { key: 'Delete' })
+    await waitFor(() => expect(mathElements()).toHaveLength(0))
+    await waitFor(() => expect(answers()[0].querySelector('[data-chip="E1:2"]')?.tagName).toBe('S'))
+  })
+})

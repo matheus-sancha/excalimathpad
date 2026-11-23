@@ -569,6 +569,15 @@ export const ptBR: Words = {
     noCredit: 'Sem créditos.',
     noCreditAnthropic: 'No Claude Max ou Ultra, vincule os créditos de API do seu plano (claude.ai › Settings › Billing).',
     said: (provider: string, said: string) => `${provider} respondeu: "${said}"`,
+    changed: (name: string, kind: 'line' | 'text') => `${name} · ${kind === 'line' ? 'alterada' : 'alterado'}`,
+    notRun: 'não executado pelo app',
+    copy: 'Copiar',
+    copied: 'Copiado',
+    sentWith: (elements: number, lines: number, texts: number) =>
+      `Enviado com esta mensagem: ${elements === 1 ? '1 bloco' : `${elements} blocos`}, ${lines === 1 ? '1 linha' : `${lines} linhas`}, ${texts === 1 ? '1 texto' : `${texts} textos`}`,
+    sentWithEmpty: 'Enviado com esta mensagem: uma folha vazia',
+    sentHeading: 'A folha como foi enviada',
+    sentLast: 'O Guia de cálculo e as instruções do assistente foram junto.',
   },
   vault: {
     newSheet: 'Nova folha',

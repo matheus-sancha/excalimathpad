@@ -309,7 +309,7 @@ describe('the map', () => {
   it('holds each label’s anchor or text element, its line index and the line as sent', () => {
     expect([...listing.map]).toEqual([
       ['T1', { kind: 'text', textId: 'text-1', text: 'Pump sizing' }],
-      ['E1', { kind: 'element', anchorId: 'anchor-1' }],
+      ['E1', { kind: 'element', anchorId: 'anchor-1', title: 'Pipe flow' }],
       ['E1:1', { kind: 'line', anchorId: 'anchor-1', line: 0, text: 'Q = 30 L/s @bold' }],
       ['E1:2', { kind: 'line', anchorId: 'anchor-1', line: 1, text: 'v = Q / (2 m^2)' }],
     ])

@@ -13,8 +13,9 @@ engine reads it), overlay (the reading order) and canvas's `sceneTexts` (a type)
 far: the first four issues of the first slice, which are the module, its ports, the switch
 and its tab (#306), the setup: its record, both stores and the card (#307), the
 listing (#308), the two adapters, their readers, the fixtures and the default models
-(#309), and the Send: the conversation, the chat, the first request's confirm, Show models
-and Check key (#310). Only a press makes a request: Send, Show models, Check key, and
+(#309), the Send: the conversation, the chat, the first request's confirm, Show models
+and Check key (#310), and the answer's form: the small Markdown, the chips, suggested lines
+and Sent with this (#311). Only a press makes a request: Send, Show models, Check key, and
 Try again or Check key under a failed answer.
 
 **The ports** (`ports.ts`). `AssistantPorts` is `{ request, store }`, App's `assistant` prop:
@@ -116,12 +117,15 @@ no Result colour and no Page, and the map's ids are never written into the text.
 `listing.test.ts` holds the form mark for mark, what it never holds, the cap, the map, and
 every acceptance sheet and Math guide example in both languages. **The map**
 (`ListingMap`): each label (`E2`, `E2:3`, `T1`) to its anchor or text element, the line's
-index from 0 and the line's text as sent. `chipTarget(map, label, now)` is what a chip does
-after the sheet changed: `jumps`, `changed`, `gone` or `unknown`. The Send (#310) keeps each
-message's listing, counts and map (`SentWith`); `chipTarget` waits for the chips (#311).
+index from 0 and the line's text as sent, and an element's title as sent. `chipTarget(map,
+label, now)` is what a chip does after the sheet changed: `jumps`, `changed`, `gone` or
+`unknown`. The Send (#310) keeps each message's listing, counts and map (`SentWith`).
 `sheetNow` (`sheet.ts`) is the listing with each math element's name and line count, for
-"Goes with your message"; App's `AssistantSheet.now()` gives it, cached until the sheet may
-have changed.
+"Goes with your message", and the scene as the chips read it: each element's lines and each
+text (`scene`) and each element's name now (`names`, as `elementLabel` names it). App's
+`AssistantSheet.now()` gives it, cached until the sheet may have changed; its `jump` is the
+Problems row's (App's `jumpTo`: scroll, select, the flash only for a line, a floating panel
+closed, the keyboard to the canvas).
 
 **The provider constants** (`providers.ts`, section 14, 0.7.0): `PROVIDERS`, the four
 built-ins in the setup card's order, each `{ id, name, address, adapter, defaultModel,
@@ -208,8 +212,8 @@ late piece of the old request changes nothing. It has no timer: `quietSince` is 
 something last arrived, for the tab's 30-second hint (`QUIET_MS`, `answerWords.ts`).
 
 **The chat** (`Chat.tsx`). The header (New chat, the key button), the list (the empty state
-with the three suggested questions, each message and answer as plain text until #311, the
-status line, the failure's lines from `failureLines` with Check key and Try again), the
+with the three suggested questions, each message as plain text with "Sent with this" under
+it, each answer in the small Markdown, the status line, the failure's lines from `failureLines` with Check key and Try again), the
 confirm, a too-long sheet's refusal, "Goes with your message" (pressed: each element and
 its line count), the `<textarea>` and Send or Stop, and the hint. Enter sends, Shift+Enter
 is a new line, Esc stops; a suggested question and Try again leave the open line first
@@ -221,6 +225,27 @@ control. **The first request's confirm** (`hostGate.tsx`, `HostConfirm.tsx`, sec
 the one host): `useHostGate(confirmed).ask(reason, target, go)` runs `go` at once for a
 confirmed host, else shows the confirm; Cancel sends nothing, Send or Continue calls
 `confirmed` (the keeper's `confirmHost`) and then `go`.
+
+**The answer's form** (section 8, An answer; section 14, 0.7.0). **The reader**
+(`markdown.ts`, no dependency): `readAnswer(text, arriving)` gives blocks (`paragraph`, its
+lines kept; `list`, ordered from its first number, a nested item a line of its item with its
+mark; `code`, its lines unread) of parts (`text`, `bold`, `code`, `ref`). Everything else is
+text: a heading, a table, a quote, raw HTML, a formula; a link is its text, an image its
+words. It reads the whole text on every piece. While `arriving`, a last line that is only a
+list's number or a fence's first backticks waits, and so does a tail that may yet be a label,
+a link, a `*` run, a `\` or a `!`; an unclosed bold or inline code runs to the end.
+`markdown.test.ts` cuts an answer at every character and holds that each block drawn is the
+whole answer's, character by character as drawn. **`AnswerText.tsx`** draws the parts as text
+in the chat's own elements, a code block with its mark and a Copy on each line with text
+(the button's own window's clipboard; "Copied" for 1.5 s); `AnswerText.test.tsx` is the
+hostile answers. **The chips** (`chips.ts`): `chipOf(map, label, now, words)` gives `{ state,
+name, to }` or `null` for plain text (no map, or a label in none); a line in the panel's words
+(`panel.line`), an element by its name now or, gone, as sent; a text by `firstWords` (four
+words, 32 characters). `Chat.tsx`'s `ChipView` draws it: a button that calls `sheet.jump`, or
+`<s>` when gone. An answer reads its labels against the `SentWith` of the message before it.
+**Sent with this** (`SentWithView`) opens the sent listing in a `<pre>`, with its heading and
+last line; an empty sheet's is a plain line. When the paste of several lines (#313) is in
+`main`, a code block has one Copy.
 
 **What goes with every Send.** `instructions.ts` holds the instructions, the spec's text word
 for word, which `instructions.test.ts` reads from the spec. The Math guide goes as a **second
@@ -234,4 +259,6 @@ adapters and the two readers (#309), alone with the plugin's esbuild settings, a
 bytes minified (2,087 gzipped), against the research's 3,825; the constants grew by 499.
 After #310: **3,580,181** bytes (`main` before it: 3,509,028, so +71,153: about 42,900 for the
 guide's copy, the rest the conversation, the chat and their words); the slice so far,
-+87,169 of its 120,000.
++87,169 of its 120,000. After #311: **3,589,407** (+9,226: the reader, the chips, Sent with
+this, their words and styles), over 3,585,000, so `BUDGET` is 3,595,000 by #310's rule; the
+slice so far, +96,395.

@@ -24,10 +24,12 @@ export const MAX_BYTES = 5_000_000
  * styles.css 555,370). Raise one only on purpose, in a commit that says what
  * was added. main.js was raised on 2026-11-22 by the Math assistant's Send
  * (#310): 3,580,181 bytes plus 5% of the first slice's growth so far (87,169),
- * rounded up; the issue that turns the assistant on (#312) raises it again.
+ * rounded up; and again by the answer's form (#311): 3,589,407 bytes plus 5% of
+ * the growth so far (96,395), rounded up. The issue that turns the assistant on
+ * (#312) raises it again.
  */
 export const BUDGET = {
-  'main.js': 3_585_000,
+  'main.js': 3_595_000,
   'styles.css': 584_000,
 }
 
