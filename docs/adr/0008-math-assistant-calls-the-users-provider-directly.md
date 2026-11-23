@@ -1,6 +1,6 @@
 # 0008. The Math assistant calls the user's provider directly, with the user's key, only on a press
 
-- **Status**: accepted, 0.7.0; not built yet. Amends [0006](0006-plugin-bundles-the-app-from-one-source.md)'s "No network and nothing outside the vault, enforced".
+- **Status**: accepted, 0.7.0; built by #306 to #312, and on since #312. Amends [0006](0006-plugin-bundles-the-app-from-one-source.md)'s "No network and nothing outside the vault, enforced".
 - **Date**: 2026-11-22
 
 ## Context

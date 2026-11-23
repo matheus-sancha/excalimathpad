@@ -1,6 +1,6 @@
 # Excalimathpad
 
-Open and edit .excalimathpad calc sheets: an Excalidraw whiteboard with live, unit-aware math that recalculates as you edit. Works fully offline; makes no network requests.
+Open and edit .excalimathpad calc sheets: an Excalidraw whiteboard with live, unit-aware math that recalculates as you edit. Works offline. An optional Math assistant uses your own AI key and sends only when you press Send.
 
 <p align="center">
   <img src=".github/assets/obsidian.png" alt="A calc sheet in an Obsidian tab: math elements with typeset lines, results and units beside a pump curve plot, and the Sheet panel listing every variable with its value" width="900">
@@ -37,14 +37,23 @@ Two complete worked examples are the [pump-sizing sheet](docs/acceptance/pump-si
 
 **In Obsidian:**
 
-- **No network requests.** The plugin loads nothing from the internet and sends nothing to it. Every font is inside the plugin, embeds are off, and a link on the sheet opens your browser only when you click it.
-- **No telemetry and no account.**
+- **No network requests until you set up the Math assistant.** Until then, the plugin loads nothing from the internet and sends nothing to it. Every font is inside the plugin, embeds are off, and a link on the sheet opens your browser only when you click it.
+- **The Math assistant, if you set it up,** sends to one place: the AI provider you choose in its tab, at the address shown there, with your own key.
+  - **When:** only when you press Send, Show models or Check key. The first time it sends to an address on this device, it asks you.
+  - **What Send gives the provider:** your message, the conversation so far, your whole sheet as text (lines, results and the sheet's texts; never images, drawings, the file's name or any other note) and the Math guide. Show models and Check key send only your key. The provider also sees your IP address, as any website does.
+  - **What the provider keeps** is under its own terms. Some providers use what you send to train their models on a free tier or with free credits; read your provider's terms before you send a sheet.
+  - **Confidential sheets:** each Send gives the provider your whole sheet. Send only what you're allowed to share with an outside AI service.
+  - **Cost:** each message costs money, billed by your provider.
+- **Your key stays on this device,** in Obsidian's keychain. It is never in your vault, `data.json`, a sheet or a synced file, and a new device asks for it again. Anyone using this Obsidian, and other plugins in it, can read it; remove it when you leave a shared computer. The Math assistant needs Obsidian 1.11.4 or later.
+- **No telemetry and no account.** Excalimathpad has no server; nothing goes to us.
 - **Nothing outside your vault.** Your sheets are files in the vault. The plugin's own memory (whether the panel is open, its width, and light or dark) is in its `data.json`, through Obsidian.
 - **It reads only what you open.** The plugin reads only the sheet open in its tab and an image you pick to place on it. It writes only that sheet, its `data.json`, the new sheets you create and a conflict copy when sync changes a sheet you are editing. It never lists, renames or deletes another note.
 
 **In the browser:**
 
-- The web app is static files, fonts included, served from `excalimathpad.pages.dev`. It has no telemetry and no account, and it sends your sheets nowhere.
+- The web app is static files, served from `excalimathpad.pages.dev`. It has no telemetry and no account. Until you set up the Math assistant, it sends your sheets nowhere. With it, the rules are the same as in Obsidian, from this browser.
+- The web app also loads its own files from its address and, until it can be installed, Excalidraw's drawing fonts from esm.sh. Nothing of a sheet goes with those requests.
+- Your Math assistant setup, key included, is kept in this browser's local storage, in this profile only. Anyone using this browser profile can send with it; remove it when you leave a shared computer.
 - Your sheets save as files on your own disk. While a sheet has unsaved changes, the browser keeps a recovery copy of it in its own IndexedDB, on your computer. Whether the Sheet panel is open, and its width, are kept in the browser's local storage.
 - An embed you add to a sheet, such as a YouTube video, loads from its own site, as in Excalidraw.
 

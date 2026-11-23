@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { auditBundle, BUDGET, MAX_BYTES } from './audit-plugin.mjs'
+import { auditBundle, BUDGET, MAX_BYTES, PROVIDER_HOSTS } from './audit-plugin.mjs'
 import allowlist from './plugin-allowlist.json'
 
 /** A bundle that passes; each test breaks one thing. */
@@ -12,7 +12,13 @@ function bundle(overrides = {}) {
   }
   for (const [name, text] of Object.entries(files)) if (text === undefined) delete files[name]
   const sizes = Object.fromEntries(Object.entries(files).map(([name, text]) => [name, text.length]))
-  return auditBundle({ files, sizes: { ...sizes, ...overrides.sizes }, packageVersion: '1.2.3', allowlist })
+  return auditBundle({
+    files,
+    sizes: { ...sizes, ...overrides.sizes },
+    packageVersion: '1.2.3',
+    allowlist: overrides.allowlist ?? allowlist,
+    providerHosts: overrides.providerHosts,
+  })
 }
 
 describe('the bundle audit (docs/spec-v1.md section 12a, Data protection)', () => {
@@ -88,6 +94,33 @@ describe('the bundle audit (docs/spec-v1.md section 12a, Data protection)', () =
     expect(bundle({ files: { 'main.js': 'var a="The address must start with https://. http:// is allowed only for this computer"' } })).toEqual([])
     // A reached host is never also a host that is only named.
     for (const host of Object.keys(allowlist.reached)) expect(Object.hasOwn(allowlist.hosts, host), host).toBe(false)
+  })
+
+  it('reads the built-in providers’ hosts from src/assistant/ (0.7.0)', () => {
+    expect([...PROVIDER_HOSTS].sort()).toEqual(['api.anthropic.com', 'api.openai.com', 'generativelanguage.googleapis.com', 'openrouter.ai'])
+  })
+
+  it('fails when the reached list and the built-in providers’ hosts differ, in either direction (0.7.0)', () => {
+    // A provider added to src/assistant/ but not to the list.
+    expect(bundle({ providerHosts: [...PROVIDER_HOSTS, 'api.mistral.ai'] })).toEqual([
+      "a built-in provider's address in src/assistant/ has api.mistral.ai, which plugin-allowlist.json's reached list doesn't name",
+    ])
+    // A host left in the list after its provider went.
+    const { 'openrouter.ai': _gone, ...fewer } = allowlist.reached
+    expect(bundle({ allowlist: { ...allowlist, reached: { ...fewer, 'api.mistral.ai': 'x' } } })).toEqual([
+      "plugin-allowlist.json's reached list names api.mistral.ai, which no built-in provider's address in src/assistant/ has",
+      "a built-in provider's address in src/assistant/ has openrouter.ai, which plugin-allowlist.json's reached list doesn't name",
+    ])
+  })
+
+  it('fails when main.js names https:// and a reached host more than once (0.7.0)', () => {
+    expect(bundle({ files: { 'main.js': 'var a="https://api.anthropic.com";fetch("https://api.anthropic.com/v1/x")' } })).toEqual([
+      'main.js: names https://api.anthropic.com 2 times; only its provider\'s constant may name it, once',
+    ])
+    // A key page in a cost line is plain text, with no https://, and another host that starts the same is another host.
+    expect(
+      bundle({ files: { 'main.js': 'var a="https://openrouter.ai/api/v1",b="openrouter.ai/settings/keys",c="https://openrouter.ai.example"' } }),
+    ).toEqual(["main.js: names https://openrouter.ai.example, which isn't in the allowlist"])
   })
 
   it('fails on a <style> or <link> created outside the known library sites', () => {

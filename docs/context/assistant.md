@@ -15,8 +15,9 @@ and its tab (#306), the setup: its record, both stores and the card (#307), the
 listing (#308), the two adapters, their readers, the fixtures and the default models
 (#309), the Send: the conversation, the chat, the first request's confirm, Show models
 and Check key (#310), and the answer's form: the small Markdown, the chips, suggested lines
-and Sent with this (#311). Only a press makes a request: Send, Show models, Check key, and
-Try again or Check key under a failed answer.
+and Sent with this (#311). **It is on since #312,** which added the assistant run and turned
+the switch on. Only a press makes a request: Send, Show models, Check key, and Try again or
+Check key under a failed answer.
 
 **The ports** (`ports.ts`). `AssistantPorts` is `{ request, store }`, App's `assistant` prop:
 
@@ -65,8 +66,8 @@ provider's words, or that nothing came back with the origin the address must all
 confirmed here before Save is kept by Save; one for the saved setup, at once. A label wraps its field only, never a button, or the button's words become
 part of the field's name. `SetupCard.test.tsx` holds the card against fake ports,
 `canary.test.tsx` the canary key in the real app, and `plugin/test/assistant.test.ts` both
-in a vault. The card at a 280 px panel is a hand check in Chromium (a build with the switch
-on), until the panel run has the tab (#312).
+in a vault. The panel run holds the card at 280 and 320 px, in English and Português, with a
+typed address's field shown (#312).
 
 **Where the ports come from.** `src/main.tsx` (the web) and `plugin/assistant.ts`
 (`assistantPorts(on, mobile)`, called by `SheetView`) are the only two files that name a
@@ -77,13 +78,13 @@ The plugin passes no ports when `Platform.isMobile` is true.
 
 **The switch** (section 14, Off until it is proved). `assistantSwitch.ts`, at the repository
 root, is read by both builds (`vite.config.ts`, `esbuild.plugin.mjs`), which define the
-constant `__ASSISTANT__` (typed in `src/buildStamp.d.ts`): `true` only when the build's
-environment has `EXCALIMATHPAD_ASSISTANT=on`, so off in every build from `main`, in CI and
-in the tests. Each home passes the ports only when it is true. A developer's build:
-`EXCALIMATHPAD_ASSISTANT=on npm run dev` (or `npm run build`). #312 turns the default on.
-**App never reads the constant:** it shows the assistant where it is handed ports, which is
-how the tests show it with the switch off (a fake `assistant` prop; `SheetView`'s
-`assistant` option in `plugin/test/assistant.test.ts`).
+constant `__ASSISTANT__` (typed in `src/buildStamp.d.ts`): **on since #312,** in every build
+from `main`, in CI and in the tests, and `false` only when the build's environment has
+`EXCALIMATHPAD_ASSISTANT=off` (a developer's build). Each home passes the ports only when it
+is true, and the plugin only on a computer. **App never reads the constant:** it shows the
+assistant where it is handed ports (a fake `assistant` prop in the tests; `SheetView`'s
+`assistant` option, `false` for a build with the switch off, in
+`plugin/test/assistant.test.ts`).
 
 **The tab** (`AssistantTab.tsx`). App fills the Sheet panel's `assistant` slot with it,
 inside a tab boundary, when it has ports; the canvas draws the tab's trigger (a speech
@@ -137,8 +138,9 @@ file imports nothing, so Node runs it as it is, for the Release button. **The ca
 the constants, so every build's `main.js` holds the four addresses,** switch on or off, each
 once: `scripts/plugin-allowlist.json` names their hosts in its `reached` list, which the
 bundle audit lets through (#307), and `providers.test.ts` fails when that list and the
-constants' hosts differ, in either direction. The audit's check of the built bundle for a
-host named twice is #312's (section 12a, Data protection). A key page in a cost line, and a
+constants' hosts differ, in either direction, and so does the bundle audit, which reads the
+constants itself (`PROVIDER_HOSTS`, #312) and also fails when `main.js` names `https://` and
+a reached host more than once (section 12a, Data protection). A key page in a cost line, and a
 `deprecations` page, are plain text with no `https://` for that reason.
 
 **The Release button's check** (section 12a, A default model's retirement):
@@ -261,4 +263,22 @@ After #310: **3,580,181** bytes (`main` before it: 3,509,028, so +71,153: about 
 guide's copy, the rest the conversation, the chat and their words); the slice so far,
 +87,169 of its 120,000. After #311: **3,589,407** (+9,226: the reader, the chips, Sent with
 this, their words and styles), over 3,585,000, so `BUDGET` is 3,595,000 by #310's rule; the
-slice so far, +96,395.
+slice so far, +96,395. After #312 (the switch on, `aiEnabled` off): **3,589,415**, the
+slice's whole growth +96,403 of its 120,000; by the same rule the budget stays 3,595,000.
+
+**The assistant run** (`scripts/assistant-run.mjs`, `npm run test:assistant`, section 12a,
+Checked on every pull request; #312). Four passes, each home with the built-in (Anthropic)
+and with a typed address (`http://127.0.0.1:<port>/v1`), the setup entered in the card. A
+`context.route` over every request is the stand-in: it answers `api.anthropic.com` from
+`fixtures/` (and step 6's hostile answer, and a 401 that echoes the key, built in the
+script), passes the typed address on to the script's own server, and logs every request by
+the step it belongs to; anything else is aborted and fails the pass. It reads the store's
+record for the confirmed hosts (`secretStorage` in the fake `obsidian`, `localStorage` on the
+web) and looks for the canary in `data.json`, the vault's text and writes, the recovery copy,
+a saved file (the save dialog stood in by a file of the page's private file system), the
+page, the console, and Copy details and Report this error. The page's init script makes
+those reachable: a clipboard that keeps what is copied, a `navigator.onLine` that throws on
+demand (the chat reads it as it draws, so its tab fails into its notice) and a `Map` lookup
+of the `\rho` row's TeX that throws on demand (so an element fails, with Copy details and
+Report this error). `--probe-background` and `--probe-host` fail it on purpose; each pass
+prints its time.

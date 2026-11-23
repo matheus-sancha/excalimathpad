@@ -3,7 +3,7 @@
   "name": "Excalimathpad",
   "version": "0.5.0",
   "minAppVersion": "1.7.2",
-  "description": "Open and edit .excalimathpad calc sheets: an Excalidraw whiteboard with live, unit-aware math that recalculates as you edit. Works fully offline; makes no network requests.",
+  "description": "Open and edit .excalimathpad calc sheets: an Excalidraw whiteboard with live, unit-aware math that recalculates as you edit. Works offline. An optional Math assistant uses your own AI key and sends only when you press Send.",
   "author": "matheus-sancha",
   "authorUrl": "https://github.com/matheus-sancha",
   "isDesktopOnly": false

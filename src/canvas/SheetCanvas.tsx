@@ -435,7 +435,9 @@ export function SheetCanvas({
         initialData={initialData}
         UIOptions={uiOptions}
         langCode={langCode}
-        aiEnabled={!vault}
+        // Section 12a, Data protection (0.7.0): Excalidraw's AI items, Text to diagram and
+        // Magic frame, are off in both homes, so the Math assistant is the only AI in the app.
+        aiEnabled={false}
         // `false` makes every embed invalid, so none loads its iframe.
         validateEmbeddable={embeds ? undefined : false}
         // Nothing is drawn top right: the app's items go into More tools.

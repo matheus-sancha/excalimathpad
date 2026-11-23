@@ -3993,6 +3993,13 @@ touch in [section 4](#touch). Research: [`docs/research/obsidian-plugin.md`](res
     the page's own origin and a `GET` of a font file from `esm.sh` (answered by Playwright,
     counted), and fails on anything else; in the plugin home it lets through nothing but
     the stand-in.
+    As built (#312): the built-in is Anthropic and the typed address Chat Completions at
+    `http://127.0.0.1:<port>/v1`, in four passes. Playwright 1.63 answers a route in one
+    piece, so step 5 is proved against the local server, which writes the answer in pieces
+    and sees the connection closed; with the built-in, Stop aborts a request whose answer
+    the stand-in holds. Copy details and Report this error are read from a math element made
+    to fail as it draws, and the canary is also looked for in the tab's own failure text.
+    The deliberate cases are `--probe-background` and `--probe-host`.
   - **CI never calls a real provider, and no key is ever kept in GitHub.** The real
     conversation is a line of the release checklist ([Releases](#releases)).
   - **Obsidian's lint:** `eslint-plugin-obsidianmd` over `plugin/` and `src/`, with
@@ -5247,7 +5254,9 @@ working key while this was specified.
   constant of the build, never an address, a setting or a file a user could change. As
   built (#306): both builds define it from `EXCALIMATHPAD_ASSISTANT` in the build's own
   environment, on only when that reads `on`, so a developer's build can have the assistant
-  before it is proved and nothing in a built home can change it.
+  before it is proved and nothing in a built home can change it. Turned on by #312, with the
+  assistant run: every build is on unless its environment reads `off`, which only a
+  developer's build sets.
 - **A source test** (beside `plugin/test/boundary.test.ts`, which already reads every file
   in `src/`) fails when `fetch`, `XMLHttpRequest`, `WebSocket`, `EventSource` or
   `sendBeacon` is named in `src/` anywhere but `src/main.tsx`, or when `fetch` or
@@ -5343,7 +5352,9 @@ working key while this was specified.
   3,595,000 (its build, 3,589,407 bytes, plus 5% of 96,395). The issue that turns the
   assistant on measures after and raises
   `BUDGET` again, by the measured growth plus 5%, rounded up to the next 1,000 bytes, in a
-  commit that says so. Going over 120,000 stops that issue and comes back
+  commit that says so. Measured by #312, with the switch on and `aiEnabled` off: 3,589,415
+  bytes, so the slice added 96,403 of its 120,000; by the same rule (3,589,415 plus 5% of
+  96,403, rounded up) the budget is 3,595,000, as #311 left it, so it isn't raised again. Going over 120,000 stops that issue and comes back
   to Matheus. The 5,000,000 cap holds, and 0.6.0's Portuguese guide is outside this number.
 - **Documents.** `CONTEXT.md` gets the module's line, and its Load-bearing "names no browser
   storage and reaches no host" is rewritten, by the issues that make them untrue; a new
@@ -6045,9 +6056,6 @@ M1 to M5, is in [`docs/spec-history.md`](spec-history.md#17-verify-first), with 
 - Whether a model keeps to `[E2:3]` labels, to the small Markdown and to "no TeX": first
   seen in the first build, and in
   [whether the model writes sheets the engine runs](https://github.com/matheus-sancha/excalimathpad/issues/247).
-- Whether Playwright's own answer to a route can arrive in pieces in the pinned version. If
-  not, the assistant run's Stop is proved against the local server only.
-- The time the seventh run adds to `npm run check`.
 - `secretStorage` on Linux with no keyring, and on a second device.
 - "An edit keeps the chat" itself: chosen from two screenshots, never built.
 - The chat in the plugin, in a pop-out window and in the dark theme: the prototype tried

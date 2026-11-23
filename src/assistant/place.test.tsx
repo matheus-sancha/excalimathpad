@@ -231,7 +231,7 @@ describe('the tab’s name and the item, in both text tables (section 13, Math a
 })
 
 describe('the build-time switch (section 14, 0.7.0, Off until it is proved)', () => {
-  it('is off in this run, as in a build from main', () => {
-    expect(__ASSISTANT__).toBe(false)
+  it('is on in this run, as in a build from main since the assistant run proved it (#312)', () => {
+    expect(__ASSISTANT__).toBe(true)
   })
 })
