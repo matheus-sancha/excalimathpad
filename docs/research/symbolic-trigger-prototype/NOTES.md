@@ -32,4 +32,13 @@ In every mode, a formula whose symbols all have values by the line that uses it 
 
 ## Verdict
 
-To be filled in from the ticket's resolution.
+Agreed with the user (ticket #347):
+
+- **Declared symbols.** A `symbols F, d` line names the symbols from that line down in reading
+  order. A declared name is a symbol even where it is also a math.js unit or constant (`F`, `h`,
+  `E`). Any other name with no value is still an error, so a typo still errors.
+- **A later value wins from there down.** `b = 40 mm` below the declaration gives `b` a value
+  for the lines below it, like any assignment today; a line below that uses a formula with all
+  its symbols valued shows a number. Formulas above stay formulas.
+- **Syntax:** a line of its own, `symbols F, d`, read before math.js.
+- Not chosen: auto (typos become formulas, unit names stay units) and a per-line `->` marker.
