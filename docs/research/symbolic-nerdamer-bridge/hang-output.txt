@@ -1,0 +1,45 @@
+limit 5000 ms per case; nerdamer from node_modules/nerdamer/dist/bundle.js
+(a+b)^30 [plain]: 6 ms, 8 chars; num (a+b)^30 | den 1
+(a+b)^30 [simplify]: 47 ms, 8 chars; num (a+b)^30 | den 1
+(a+b)^30 / (a+b)^29 [plain]: 6 ms, 3 chars; num a+b | den 1
+(a+b)^30 / (a+b)^29 [simplify]: 13 ms, 3 chars; num a+b | den 1
+(a+b+c+d)^12 [plain]: 5 ms, 12 chars; num (a+b+c+d)^12 | den 1
+(a+b+c+d)^12 [simplify]: 1915 ms, 12 chars; num (a+b+c+d)^12 | den 1
+(a+b)^200 [plain]: 5 ms, 9 chars; num (a+b)^200 | den 1
+(a+b)^200 [simplify]: 362 ms, 9 chars; num (a+b)^200 | den 1
+2/x^2 - x^(2*z) (hangs math.js simplify) [plain]: 7 ms, 14 chars; num 2*x^-2-x^(2*z) | den 1
+2/x^2 - x^(2*z) (hangs math.js simplify) [simplify]: 18 ms, 18 chars; num 2-x^(2+2*z) | den x^2
+sum of 10 fractions [plain]: 6 ms, 89 chars; num a0*b0^-1+a1*b1^-1+a2*b2^-1+a3*b3^-1+a4*b4^-1+a5*b5^-1+a6*b6^ | den 1
+sum of 10 fractions [simplify]: TIMEOUT, worker killed after 5012 ms
+sum of 20 fractions [plain]: 9 ms, 199 chars; num a0*b0^-1+a1*b1^-1+a2*b2^-1+a3*b3^-1+a4*b4^-1+a5*b5^-1+a6*b6^ | den 1
+sum of 20 fractions [simplify]: TIMEOUT, worker killed after 5006 ms
+sum of 40 fractions [plain]: 15 ms, 419 chars; num a0*b0^-1+a1*b1^-1+a2*b2^-1+a3*b3^-1+a4*b4^-1+a5*b5^-1+a6*b6^ | den 1
+sum of 40 fractions [simplify]: TIMEOUT, worker killed after 5008 ms
+nested fraction, 20 deep [plain]: 11 ms, 169 chars; num a19 | den a18*(a17*(a16*(a15*(a14*(a13*(a12*(a11*(a10*(a9*(a8*(a7*(a6*
+nested fraction, 20 deep [simplify]: 82 ms, 76 chars; num a1*a11*a13*a15*a17*a19*a3*a5*a7*a9*x | den a8*a6*a4*a2*a18*a16*a14*a12*a10*a0
+nested fraction, 100 deep [plain]: 43 ms, 889 chars; num a99 | den a98*(a97*(a96*(a95*(a94*(a93*(a92*(a91*(a90*(a89*(a88*(a87*(
+nested fraction, 100 deep [simplify]: 1457 ms, 396 chars; num a1*a11*a13*a15*a17*a19*a21*a23*a25*a27*a29*a3*a31*a33*a35*a3 | den a98*a96*a94*a92*a90*a88*a86*a84*a82*a80*a8*a78*a76*a74*a72*a
+nested sqrt, 20 deep [plain]: 13 ms, 231 chars; num (a19+(a18+(a17+(a16+(a15+(a14+(a13+(a12+(a11+(a10+(a9+(a8+(a | den 1
+nested sqrt, 20 deep [simplify]: 29 ms, 231 chars; num (a19+(a18+(a17+(a16+(a15+(a14+(a13+(a12+(a11+(a10+(a9+(a8+(a | den 1
+product of 20 binomials [plain]: 16 ms, 179 chars; num (x0+y0)*(x1+y1)*(x2+y2)*(x3+y3)*(x4+y4)*(x5+y5)*(x6+y6)*(x7+ | den 1
+product of 20 binomials [simplify]: TIMEOUT, worker killed after 5015 ms
+product of 20 binomials / its first factor [plain]: 16 ms, 192 chars; num (x0+y0)*(x1+y1)*(x2+y2)*(x3+y3)*(x4+y4)*(x5+y5)*(x6+y6)*(x7+ | den x0+y0
+product of 20 binomials / its first factor [simplify]: TIMEOUT, worker killed after 5011 ms
+von Mises with 0.5 coefficients [plain]: 10 ms, 53 chars; num 2.0^(1/2)*(((s1-s2)^2+(s2-s3)^2+(s3-s1)^2)^(1/2)) | den 2
+von Mises with 0.5 coefficients [simplify]: 25 ms, 54 chars; num 2.0^(1/2)*(((-s1+s3)^2+(s1-s2)^2+(s2-s3)^2)^(1/2)) | den 2
+long decimal [plain]: 3 ms, 24 chars; num 48414427107237956519*x | den 387315420387315420000
+long decimal [simplify]: 6 ms, 24 chars; num 48414427107237956519*x | den 387315420387315420000
+2^(10^6)*x [plain]: 5 ms, 11 chars; num 2^1000000*x | den 1
+2^(10^6)*x [simplify]: 11 ms, 11 chars; num 2^1000000*x | den 1
+10^100000*x [plain]: 42 ms, 100003 chars; num 100000000000000000000000000000000000000000000000000000000000 | den 1
+10^100000*x [simplify]: 85 ms, 100003 chars; num 100000000000000000000000000000000000000000000000000000000000 | den 1
+9^9^9 [plain]: 3 ms, 11 chars; num 9^387420489 | den 1
+9^9^9 [simplify]: 9 ms, 11 chars; num 9^387420489 | den 1
+x^(10^9)/x [plain]: 5 ms, 11 chars; num x^999999999 | den 1
+x^(10^9)/x [simplify]: 7 ms, 11 chars; num x^999999999 | den 1
+1e308*x*1e308 [plain]: 3 ms, 619 chars; num 100000000000000000000000000000000000000000000000000000000000 | den 1
+1e308*x*1e308 [simplify]: 6 ms, 619 chars; num 100000000000000000000000000000000000000000000000000000000000 | den 1
+(x^2-1)/(x-1) [plain]: 6 ms, 20 chars; num -1+x^2 | den -1+x
+(x^2-1)/(x-1) [simplify]: 15 ms, 3 chars; num 1+x | den 1
+(a^10-b^10)/(a-b) [plain]: 6 ms, 22 chars; num a^10-b^10 | den a-b
+(a^10-b^10)/(a-b) [simplify]: 83 ms, 65 chars; num (a^4-a^3*b+a^2*b^2-a*b^3+b^4)*(a+b)*(a^4+a^3*b+a^2*b^2+a*b^3 | den 1

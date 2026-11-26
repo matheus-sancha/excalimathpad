@@ -1,0 +1,9 @@
+sum of 40 fractions: 1220 ms; (b39 * (b38 * (b37 * (b36 * (b35 * (b34 * (b33 * (b32 * (b31 * (b30 * (b29 * (b28 * (b27 * (b26 * (b... (5097 chars)
+sum of 12 fractions over binomials: 197 ms; ((b0 + c0) * (b1 + c1) * (b2 + c2) * (b3 + c3) * (b4 + c4) * (b5 + c5) * (b6 + c6) * (b7 + c7) * (b8... (2815 chars)
+nested fraction, 100 deep: 47 ms; a99 * x * a89 * a87 * a85 * a83 * a81 * a79 * a77 * a75 * a73 * a71 * a97 * a69 * a67 * a65 * a63 * ... (593 chars)
+(a + b)^30 / (a + b)^29: 1 ms; a + b
+2 / x^2 - x^(2 z): 2 ms; (2 - x ^ (2 + 2 * z)) / x ^ 2
+(a + b)^200 * (a - b)^200 / (a^2 - b^2): 2 ms; ((a - b) ^ 200) * ((a + b) ^ 200) / (a ^ 2 - b ^ 2)
+10^100000 * x: 85 ms; Infinity * x
+10^1000000 * x: 1 ms; 10 ^ 1e+6 * x
+chain of 30 formulas, each the one above squared over 2: 24 ms; x ^ 1.073741824e+9 / (2 * 9.223372036854776e+18 ^ 3.4087042e+7)
