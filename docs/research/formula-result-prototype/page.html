@@ -1,0 +1,319 @@
+<title>Formula Result Layouts</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<!--
+  PROTOTYPE, throwaway. Question: How is a formula result drawn in the result cell and printed? (#357)
+  Four layouts for a symbolic result, switched from the bar at the bottom (← →, or #a … #d).
+  Each is drawn three ways: the screen at 100%, a phone's view, and an A4 portrait print page.
+  The grid mimics src/overlay/MathOverlay.css (16/24 px monospace body, 1px rule, blue results).
+  KaTeX's CSS is inlined by build.mjs at the marker in the style block, its script comes from cdnjs.
+-->
+<style>
+/*KATEX_CSS*/
+
+/* Layout: a header with the question and the unit-tag control, then three labelled frames stacked
+   (screen, phone, print), then a notes strip for the variant. The sheet inside each frame is
+   always light, as Excalidraw's canvas and print are. */
+:root {
+  --bg: #f3f5f8;
+  --panel: #ffffff;
+  --fg: #1d232b;
+  --muted: #5f6b7a;
+  --line: #d6dce4;
+  --accent: #1971c2;
+  --chip: #e7eef7;
+  --bar: #1d232b;
+  --bar-fg: #ffffff;
+  --sans: "Inter", system-ui, "Segoe UI", sans-serif;
+  --head: "Space Grotesk", "Inter", system-ui, sans-serif;
+  /* the sheet's own colours (src/overlay/MathOverlay.css) */
+  --math-text: #1e1e1e;
+  --math-result: #1971c2;
+  --math-quiet: #868e96;
+  --math-rule: #dee2e6;
+  --math-error: #e03131;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #12161b; --panel: #1b2027; --fg: #e6ebf1; --muted: #9aa6b4; --line: #2e3640;
+    --accent: #5aa2e6; --chip: #233041; --bar: #e6ebf1; --bar-fg: #12161b; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #12161b; --panel: #1b2027; --fg: #e6ebf1; --muted: #9aa6b4; --line: #2e3640;
+  --accent: #5aa2e6; --chip: #233041; --bar: #e6ebf1; --bar-fg: #12161b; color-scheme: dark;
+}
+body {
+  background: var(--bg); color: var(--fg); font: 15px/1.55 var(--sans);
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 24px 110px;
+}
+.wrap { max-width: 1100px; margin: 0 auto; display: grid; gap: 22px; }
+h1 { font: 600 1.6rem/1.2 var(--head); margin: 0; text-wrap: balance; }
+h2 { font: 600 1.05rem/1.3 var(--head); margin: 0; }
+p { margin: 0; max-width: 70ch; }
+.lede { color: var(--muted); }
+.controls { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; }
+.label { font-size: .75rem; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.seg button { font: inherit; font-size: .88rem; padding: 6px 12px; border: 0; background: var(--panel); color: var(--fg); cursor: pointer; }
+.seg button + button { border-left: 1px solid var(--line); }
+.seg button[aria-pressed="true"] { background: var(--chip); color: var(--accent); font-weight: 600; }
+.seg button:focus-visible, .switcher button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.variant-head { display: grid; gap: 6px; padding: 16px 18px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; }
+.variant-head ul { margin: 4px 0 0; padding-left: 20px; color: var(--muted); max-width: 80ch; }
+.frame { display: grid; gap: 8px; min-width: 0; }
+.frame-head { display: flex; flex-wrap: wrap; gap: 4px 14px; align-items: baseline; }
+.measure { font-size: .85rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.measure b { color: var(--fg); font-weight: 600; }
+.scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; background: #ffffff; }
+.screen { padding: 24px; width: max-content; min-width: 100%; box-sizing: border-box; }
+.phone-shell { width: 390px; max-width: 100%; height: 560px; overflow: hidden; border: 10px solid #2b3038; border-radius: 34px; background: #fff; position: relative; box-sizing: content-box; }
+.phone-shell .viewport { position: absolute; inset: 0; padding: 16px 0 0 12px; }
+.phone-shell .fade { position: absolute; right: 0; top: 0; bottom: 0; width: 22px; background: linear-gradient(90deg, transparent, rgba(255,255,255,.95)); }
+.page-scroll { overflow-x: auto; }
+.page { width: 794px; height: 1123px; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.18); border: 1px solid #c9ced6; box-sizing: border-box; padding: 57px; position: relative; color: #1e1e1e; }
+.page .content { transform-origin: 0 0; }
+.page .footer { position: absolute; left: 57px; right: 57px; bottom: 26px; display: flex; justify-content: space-between; font: 10px/1 var(--sans); color: #868e96; }
+.page .margin-line { position: absolute; inset: 57px; outline: 1px dashed #e3e7ec; pointer-events: none; }
+
+/* ---------- the sheet ---------- */
+.sheet { display: grid; gap: 28px; justify-items: start; color: var(--math-text); }
+.drawing { width: 470px; height: 96px; border: 2px solid #1e1e1e; border-radius: 4px; position: relative; font: 14px/1 "Virgil", "Comic Sans MS", cursive; }
+.drawing::before { content: ""; position: absolute; left: 30px; right: 30px; top: 40px; height: 14px; border: 2px solid #1e1e1e; }
+.drawing span { position: absolute; left: 12px; top: 10px; }
+.el { border: 1px dashed transparent; padding: 12px 14px; font: 16px/24px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; width: max-content; }
+.el-title { font: 600 16px/24px var(--sans); border-bottom: 1px solid var(--math-rule); padding: 0 0 3px 14px; margin-bottom: 4px; }
+.grid { display: grid; grid-template-columns: 14px auto auto minmax(auto, 1fr); align-items: center; }
+.row { display: contents; }
+.cell-eq { grid-column: 2; padding-right: 12px; padding-block: 3px; min-height: 24px; display: flex; align-items: center; }
+.cell-res { grid-column: 3; align-self: stretch; display: flex; align-items: center; gap: 6px; padding-left: 10px; border-left: 1px solid var(--math-rule); color: var(--math-result); white-space: pre; min-height: 24px; padding-block: 3px; }
+.cell-note { grid-column: 4; padding-left: 12px; color: var(--math-quiet); font: italic 15px/24px system-ui, sans-serif; white-space: pre; }
+.symbols { color: var(--math-quiet); grid-column: 2 / -1; }
+.tag { font: 12px/1 var(--sans); color: var(--math-quiet); border: 1px solid var(--math-rule); border-radius: 4px; padding: 2px 5px; white-space: nowrap; }
+.unit-tex { color: var(--math-result); }
+
+/* B: the formula on a row of its own, under its equation */
+.cell-below { grid-column: 2 / -1; padding: 2px 0 6px 28px; color: var(--math-result); display: flex; align-items: center; gap: 8px; }
+.cell-below .eqs { color: var(--math-quiet); }
+.cell-res.is-moved { color: var(--math-quiet); font: 12px/1 var(--sans); }
+
+/* C: linear, wrapping inside the cell */
+.cell-res.is-linear { white-space: normal; max-width: 320px; display: block; padding-block: 2px; line-height: 26px; }
+.cell-res.is-linear .katex { white-space: normal; }
+.cell-res.is-linear .katex .base { margin-block: 1px; }
+
+/* D: capped like an error, whole on hover */
+.cell-res.is-capped { max-width: 320px; overflow: hidden; position: relative; }
+.cell-res.is-capped.is-cut::after { content: "…"; position: absolute; right: 0; top: 0; bottom: 0; display: flex; align-items: center; padding: 0 4px 0 18px; background: linear-gradient(90deg, rgba(255,255,255,0), #fff 45%); color: var(--math-result); }
+.tipwrap { position: relative; }
+.tip { display: none; position: absolute; left: 0; top: calc(100% + 4px); z-index: 5; background: #fff; border: 1px solid #ced4da; box-shadow: 0 2px 8px rgba(0,0,0,.15); padding: 6px 10px; border-radius: 6px; color: var(--math-result); white-space: nowrap; }
+.screen .cell-res.is-capped:hover + .tip-anchor .tip, .tip-anchor:hover .tip { display: block; }
+.tip-anchor { grid-column: 3; position: relative; height: 0; }
+
+.notes { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+.note-card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; min-width: 0; }
+.note-card h3 { margin: 0 0 4px; font: 600 .9rem/1.3 var(--head); }
+.note-card ul { margin: 0; padding-left: 18px; color: var(--muted); font-size: .9rem; }
+
+.switcher { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(16px + env(safe-area-inset-bottom, 0px)); display: flex; align-items: center; gap: 4px; background: var(--bar); color: var(--bar-fg); border-radius: 999px; padding: 6px; box-shadow: 0 6px 20px rgba(0,0,0,.25); z-index: 20; max-width: calc(100vw - 32px); }
+.switcher button { font: 600 1rem/1 var(--sans); width: 38px; height: 38px; border-radius: 50%; border: 0; background: transparent; color: inherit; cursor: pointer; }
+.switcher button:hover { background: rgba(127,127,127,.25); }
+.switcher .name { font: 600 .9rem/1.2 var(--sans); padding: 0 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="wrap">
+  <header style="display:grid;gap:8px">
+    <span class="label">Prototype · symbolic results · How is a formula result drawn in the result cell and printed?</span>
+    <h1>Formula result layouts</h1>
+    <p class="lede">Four ways to draw a formula in a result cell, each on screen, on a phone and on an A4 portrait page. The sheet is the same in all four: a bolt in shear (short formulas, then numbers once F and d get values) and a combined stress check (one long formula). The formulas are what the nerdamer bridge would write: substituted and put over one fraction.</p>
+  </header>
+
+  <div class="controls">
+    <span class="label">Beside a formula</span>
+    <div class="seg" id="tagseg" role="group" aria-label="What shows beside a formula">
+      <button type="button" id="tag-none" data-tag="none">Nothing</button>
+      <button type="button" id="tag-unit" data-tag="unit">Its unit</button>
+      <button type="button" id="tag-kind" data-tag="kind">Its kind</button>
+    </div>
+  </div>
+
+  <section class="variant-head" id="vhead"></section>
+
+  <section class="frame">
+    <div class="frame-head"><h2>Screen, 100%</h2><span class="measure" id="m-screen"></span></div>
+    <div class="scroll"><div class="screen" id="f-screen"></div></div>
+  </section>
+
+  <section class="frame">
+    <div class="frame-head"><h2>Phone, 390 px wide, before panning</h2><span class="measure" id="m-phone"></span></div>
+    <div class="phone-shell"><div class="viewport" id="f-phone"></div><div class="fade"></div></div>
+  </section>
+
+  <section class="frame">
+    <div class="frame-head"><h2>Print, A4 portrait</h2><span class="measure" id="m-print"></span></div>
+    <div class="page-scroll"><div class="page"><div class="margin-line"></div><div class="content" id="f-print"></div>
+      <div class="footer"><span>bolt-and-strip.excalimath</span><span>2026-11-26</span><span>1 of 1</span></div></div></div>
+  </section>
+
+  <section class="notes" id="vnotes"></section>
+</div>
+
+<nav class="switcher" aria-label="Prototype variant">
+  <button type="button" id="prev" aria-label="Previous variant">←</button>
+  <span class="name" id="vname"></span>
+  <button type="button" id="next" aria-label="Next variant">→</button>
+</nav>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.11/katex.min.js"></script>
+<script>
+// ---------- the sheet's lines ----------
+// kind: symbols | formula | input | number. res: built-up TeX; lin: linear TeX; split: B's broken form.
+const LONG_NUM = '4 t^{2} (N h + 6 M)^{2} - 4 b h^{2} p r t (N h + 6 M) + 4 b^{2} h^{4} p^{2} r^{2} + 27 h^{2} t^{2} V^{2}';
+const ELEMENTS = [
+  { title: 'Bolt in shear', rows: [
+    { kind: 'symbols', eq: '\\mathrm{symbols}\\;\\; F\\ \\mathrm{in}\\ \\mathrm{kN},\\; d\\ \\mathrm{in}\\ \\mathrm{mm}', },
+    { kind: 'formula', eq: 'A \\coloneqq \\frac{\\pi \\cdot d^{2}}{4}', res: '\\frac{\\pi d^{2}}{4}', lin: '\\pi d^{2} / 4', unit: 'm^{2}', kw: 'area', note: 'bolt area' },
+    { kind: 'formula', eq: '\\tau \\coloneqq \\frac{F}{A}', res: '\\frac{4 F}{\\pi d^{2}}', lin: '4 F / (\\pi d^{2})', unit: '\\mathrm{MPa}', kw: 'pressure', note: 'in MPa' },
+    { kind: 'input', eq: '\\tau_{\\mathrm{allow}} \\coloneqq 120\\ \\mathrm{MPa}' },
+    { kind: 'input', eq: 'F \\coloneqq 12\\ \\mathrm{kN}', note: 'values from here down' },
+    { kind: 'input', eq: 'd \\coloneqq 10\\ \\mathrm{mm}' },
+    { kind: 'number', eq: '\\tau_{F} \\coloneqq \\tau', res: '152.8\\ \\mathrm{MPa}' },
+    { kind: 'number', eq: 'u \\coloneqq \\frac{\\tau_{F}}{\\tau_{\\mathrm{allow}}}', res: '1.273', note: 'utilisation' },
+  ]},
+  { title: 'Combined stress, plate strip', rows: [
+    { kind: 'symbols', eq: '\\mathrm{symbols}\\;\\; N\\ \\mathrm{in}\\ \\mathrm{kN},\\; M\\ \\mathrm{in}\\ \\mathrm{kN\\,m},\\; V\\ \\mathrm{in}\\ \\mathrm{kN},\\; b, h, r, t\\ \\mathrm{in}\\ \\mathrm{mm},\\; p\\ \\mathrm{in}\\ \\mathrm{MPa}' },
+    { kind: 'formula', eq: '\\sigma_{x} \\coloneqq \\frac{N}{b \\cdot h}+\\frac{6 \\cdot M}{b \\cdot h^{2}}', res: '\\frac{N h + 6 M}{b h^{2}}', lin: '(N h + 6 M) / (b h^{2})', unit: '\\mathrm{Pa}', kw: 'pressure' },
+    { kind: 'formula', eq: '\\sigma_{y} \\coloneqq \\frac{p \\cdot r}{t}', res: '\\frac{p r}{t}', lin: 'p r / t', unit: '\\mathrm{Pa}', kw: 'pressure', note: 'same as its equation' },
+    { kind: 'formula', eq: '\\tau_{xy} \\coloneqq \\frac{3}{2} \\cdot \\frac{V}{b \\cdot h}', res: '\\frac{3 V}{2 b h}', lin: '3 V / (2 b h)', unit: '\\mathrm{Pa}', kw: 'pressure' },
+    { kind: 'formula', long: true,
+      eq: '\\sigma_{\\mathrm{vm}} \\coloneqq \\sqrt{\\sigma_{x}^{2}-\\sigma_{x} \\cdot \\sigma_{y}+\\sigma_{y}^{2}+3 \\cdot \\tau_{xy}^{2}}',
+      res: '\\sqrt{\\frac{' + LONG_NUM + '}{4 b^{2} h^{4} t^{2}}}',
+      lin: '\\surd\\big[\\,(' + LONG_NUM + ') / (4 b^{2} h^{4} t^{2})\\,\\big]',
+      split: '\\sqrt{\\dfrac{\\begin{aligned}&4 t^{2} (N h + 6 M)^{2} - 4 b h^{2} p r t (N h + 6 M)\\\\ &\\quad {}+ 4 b^{2} h^{4} p^{2} r^{2} + 27 h^{2} t^{2} V^{2}\\end{aligned}}{4 b^{2} h^{4} t^{2}}}',
+      unit: '\\mathrm{MPa}', kw: 'pressure', note: 'von Mises, in MPa' },
+  ]},
+];
+
+const VARIANTS = {
+  a: { name: 'A · In the result cell, never wraps',
+    gist: 'The formula takes the result cell exactly as a number does, typeset at the cell\'s size (the app\'s inline KaTeX, so fractions are small). Math never wraps today, so a long formula widens the element.',
+    points: ['Nothing new to learn: a formula reads as a result, in the result colour, after the rule.',
+             'The long formula sets the element\'s width, and through it the print scale of the whole sheet.',
+             'Same rule for screen and print; no hover needed.'] },
+  b: { name: 'B · On its own row, under the equation',
+    gist: 'A formula result leaves the result column: it gets a row of its own under its equation, led by a grey =, at display size. The result cell keeps a small grey "formula ↓". A long numerator breaks into lines under one fraction bar.',
+    points: ['Formulas read big and clear; numbers keep the result column.',
+             'Needs a break rule of our own (KaTeX can\'t break inside a fraction): the bridge splits a long numerator at its top-level + and −.',
+             'Each formula line takes two rows, so the element grows taller.'] },
+  c: { name: 'C · Linear, wrapping in the cell',
+    gist: 'The formula is written on one line with slashes (4 F / (π d²)), like the source, and wraps inside a result cell capped at 320 px at its top-level operators.',
+    points: ['Compact: rows stay one line tall for short formulas, and the element keeps its width.',
+             'Reads less like a textbook; a long one is a paragraph of symbols.',
+             'Uses the same 320 px cap an error has today.'] },
+  d: { name: 'D · Capped at 320 px, whole on hover',
+    gist: 'Built up as in A, but the cell is capped at 320 px like an error and ends in "…". The whole formula is on hover and, on a phone, on a tap. Print shows what the cell shows.',
+    points: ['The element keeps a sane width; the sheet\'s layout doesn\'t move when a formula grows.',
+             'Hover over the cut σ_vm on the Screen frame to see the tip.',
+             'On paper the long formula is cut: the one place you can\'t hover.'] },
+};
+const ORDER = ['a', 'b', 'c', 'd'];
+
+let variant = (location.hash || '#a').slice(1); if (!VARIANTS[variant]) variant = 'a';
+let tagMode = 'unit';
+try { tagMode = localStorage.getItem('proto-tag') || 'unit'; } catch (e) {}
+
+function tex(s, display) {
+  const span = document.createElement('span');
+  try { katex.render(s, span, { throwOnError: false, strict: 'ignore', displayMode: false }); }
+  catch (e) { span.textContent = s; }
+  if (display) span.classList.add('is-display');
+  return span;
+}
+function tag(row) {
+  if (tagMode === 'unit') { const u = tex('\\mathrm{\\,}' + row.unit); u.className = 'unit-tex'; return u; }
+  if (tagMode === 'kind') { const k = document.createElement('span'); k.className = 'tag'; k.textContent = row.kw; return k; }
+  return null;
+}
+function div(cls, kids) { const d = document.createElement('div'); d.className = cls; (kids || []).forEach(k => k && d.append(k)); return d; }
+
+function renderSheet(interactive) {
+  const sheet = div('sheet');
+  const drawing = div('drawing'); const lab = document.createElement('span'); lab.textContent = 'sketch: plate strip under N, M, V'; drawing.append(lab);
+  sheet.append(drawing);
+  for (const el of ELEMENTS) {
+    const box = div('el'); const t = div('el-title'); t.textContent = el.title; box.append(t);
+    const grid = div('grid');
+    for (const r of el.rows) {
+      const eq = div('cell-eq', [tex(r.eq)]); if (r.kind === 'symbols') eq.classList.add('symbols');
+      const res = div('cell-res');
+      const note = div('cell-note'); note.textContent = r.note || '';
+      let extra = null;
+      if (r.kind === 'number') res.append(tex(r.res));
+      if (r.kind === 'formula') {
+        if (variant === 'a') { res.append(tex(r.res)); const g = tag(r); if (g) res.append(g); }
+        if (variant === 'b') {
+          res.classList.add('is-moved'); res.textContent = 'formula ↓';
+          const f = tex('\\displaystyle ' + (r.split || r.res));
+          const eqs = document.createElement('span'); eqs.className = 'eqs'; eqs.append(tex('='));
+          extra = div('cell-below', [eqs, f, tag(r)]);
+        }
+        if (variant === 'c') {
+          res.classList.add('is-linear'); res.append(tex(r.lin));
+          const g = tag(r); if (g) { res.append(document.createTextNode(' ')); res.append(g); }
+        }
+        if (variant === 'd') {
+          res.classList.add('is-capped'); res.append(tex(r.res)); const g = tag(r); if (g) res.append(g);
+          if (r.long) {
+            res.classList.add('is-cut');
+            if (interactive) {
+              const a = div('tip-anchor'); const tp = div('tip', [tex(r.res)]); const g2 = tag(r); if (g2) tp.append(g2); a.append(tp);
+              extra = a;
+            }
+          }
+        }
+      }
+      grid.append(div('row', r.kind === 'symbols' ? [div(''), eq] : [div(''), eq, res, note]));
+      if (extra) grid.append(extra);
+    }
+    box.append(grid); sheet.append(box);
+  }
+  return sheet;
+}
+
+function draw() {
+  const v = VARIANTS[variant];
+  document.getElementById('vname').textContent = v.name;
+  const head = document.getElementById('vhead'); head.innerHTML = '';
+  const h = document.createElement('h2'); h.textContent = v.name; const p = document.createElement('p'); p.textContent = v.gist;
+  const ul = document.createElement('ul'); v.points.forEach(x => { const li = document.createElement('li'); li.textContent = x; ul.append(li); });
+  head.append(h, p, ul);
+  document.querySelectorAll('#tagseg button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.tag === tagMode)));
+
+  const fs = document.getElementById('f-screen'), fp = document.getElementById('f-phone'), fr = document.getElementById('f-print');
+  fs.replaceChildren(renderSheet(true)); fp.replaceChildren(renderSheet(false)); fr.replaceChildren(renderSheet(false));
+
+  requestAnimationFrame(() => {
+    const sheet = fs.querySelector('.sheet');
+    const els = [...sheet.children];
+    const W = Math.max(...els.map(e => e.getBoundingClientRect().width));
+    const longest = Math.max(...[...sheet.querySelectorAll('.el')].map(e => e.getBoundingClientRect().width));
+    document.getElementById('m-screen').innerHTML = `widest element <b>${Math.round(longest)} px</b>`;
+    const visible = 390 - 12;
+    document.getElementById('m-phone').innerHTML = W > visible ? `<b>${Math.round(W - visible)} px</b> off the right edge` : `fits`;
+    const scale = Math.min(1, 680 / W);
+    fr.style.transform = `scale(${scale})`;
+    document.getElementById('m-print').innerHTML = `sheet ${Math.round(W)} px into 680 px: printed at <b>${Math.round(scale * 100)}%</b>, so 16 px math is <b>${(16 * scale * 0.75).toFixed(1)} pt</b> on paper`;
+  });
+}
+
+function go(step) { const i = ORDER.indexOf(variant); variant = ORDER[(i + step + ORDER.length) % ORDER.length]; history.replaceState(null, '', '#' + variant); draw(); }
+document.getElementById('prev').onclick = () => go(-1);
+document.getElementById('next').onclick = () => go(1);
+addEventListener('keydown', e => { if (e.target.closest('input,textarea')) return; if (e.key === 'ArrowLeft') go(-1); if (e.key === 'ArrowRight') go(1); });
+addEventListener('hashchange', () => { const v = location.hash.slice(1); if (VARIANTS[v] && v !== variant) { variant = v; draw(); } });
+document.querySelectorAll('#tagseg button').forEach(b => b.onclick = () => { tagMode = b.dataset.tag; try { localStorage.setItem('proto-tag', tagMode); } catch (e) {} draw(); });
+if (window.katex) { (document.fonts && document.fonts.ready ? document.fonts.ready : Promise.resolve()).then(draw); draw(); }
+else document.getElementById('vhead').textContent = 'KaTeX did not load.';
+</script>
