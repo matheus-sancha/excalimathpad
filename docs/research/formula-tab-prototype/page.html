@@ -1,0 +1,466 @@
+<meta charset="utf-8">
+<title>Formulas Tab Layouts</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<!-- PROTOTYPE (#363): throwaway. Three layouts of the Sheet panel's formulas tab, beside a mock sheet.
+     Build: node docs/research/formula-tab-prototype/build.mjs <out.html>. Nothing here is production code. -->
+<style>/*KATEX_CSS*/</style>
+<style>
+/* Layout: prototype controls on top, then the mock sheet (left) and the mock Sheet panel (right); stacks on a phone. */
+:root {
+  --page: #eef0f4; --sheet: #ffffff; --panel: #ffffff; --ink: #1e1e1e; --muted: #6b7280; --rule: #dee2e6;
+  --hover: rgba(0,0,0,0.05); --accent: #6965db; --accent-soft: #ecebfd; --result: #1971c2; --ghost: rgba(105,101,219,0.12);
+  --chrome: #1f2430; --chrome-ink: #f4f5f8; --warn: #b54708; --sel: #4dabf7;
+  --ui: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; --mono: ui-monospace, "Cascadia Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --page: #121318; --sheet: #191a20; --panel: #232329; --ink: #e3e3e8; --muted: #9aa0ab; --rule: #3a3a44;
+  --hover: rgba(255,255,255,0.07); --accent: #a8a5ff; --accent-soft: #2e2d4a; --result: #74c0fc; --ghost: rgba(168,165,255,0.14);
+  --chrome: #e8eaf0; --chrome-ink: #1b1d24; --warn: #f79009; --sel: #4dabf7; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --page: #121318; --sheet: #191a20; --panel: #232329; --ink: #e3e3e8; --muted: #9aa0ab; --rule: #3a3a44;
+  --hover: rgba(255,255,255,0.07); --accent: #a8a5ff; --accent-soft: #2e2d4a; --result: #74c0fc; --ghost: rgba(168,165,255,0.14);
+  --chrome: #e8eaf0; --chrome-ink: #1b1d24; --warn: #f79009; --sel: #4dabf7; color-scheme: dark }
+body { background: var(--page); color: var(--ink); font-family: var(--ui); }
+.wrap { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 12px 96px; display: flex; flex-direction: column; gap: 12px; }
+.controls { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; font-size: 13px; }
+.controls b { font-weight: 600; letter-spacing: .04em; text-transform: uppercase; font-size: 11px; color: var(--muted); }
+.seg { display: inline-flex; border: 1px solid var(--rule); border-radius: 7px; overflow: hidden; }
+.seg button { border: 0; background: var(--panel); color: var(--ink); font: inherit; font-size: 12px; padding: 4px 9px; cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--accent); color: #fff; }
+.note { font-size: 12.5px; color: var(--muted); max-width: 70ch; line-height: 1.45; margin: 0; }
+.stage { display: flex; gap: 0; align-items: stretch; border: 1px solid var(--rule); border-radius: 10px; overflow: hidden; min-height: 640px; }
+.sheet { flex: 1; min-width: 0; position: relative; background: var(--sheet); background-image: radial-gradient(var(--rule) 1px, transparent 1px); background-size: 20px 20px; overflow: hidden; cursor: default; }
+.sheet.placing { cursor: crosshair; }
+.el { position: absolute; border: 1px solid transparent; border-radius: 4px; padding: 6px 10px; font-size: 13px; line-height: 1.7; background: var(--sheet); cursor: pointer; max-width: 300px; }
+.el:hover { border-color: var(--rule); }
+.el.sel { border: 1px solid var(--sel); box-shadow: 0 0 0 1px var(--sel); }
+.el .t { font-weight: 700; font-size: 14px; }
+.el .c { color: var(--muted); font-style: italic; }
+.el .m { font-family: var(--mono); font-size: 12px; white-space: pre; }
+.el .r { color: var(--result); }
+.ghost { position: absolute; pointer-events: none; border: 1.5px dashed var(--accent); background: var(--ghost); border-radius: 4px; padding: 6px 10px; font-size: 12px; color: var(--accent); }
+.banner { position: absolute; left: 12px; right: 12px; top: 10px; background: var(--chrome); color: var(--chrome-ink); border-radius: 8px; padding: 6px 10px; font-size: 12.5px; }
+.toast { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); background: var(--chrome); color: var(--chrome-ink); border-radius: 8px; padding: 8px 12px; font-size: 13px; display: flex; gap: 12px; align-items: center; max-width: calc(100% - 24px); }
+.toast button { background: none; border: 0; color: var(--accent); font: inherit; font-weight: 600; cursor: pointer; }
+:root .toast button { color: #a8a5ff; }
+.side { flex: none; background: var(--panel); border-left: 1px solid var(--rule); display: flex; flex-direction: column; min-width: 0; }
+@media (max-width: 760px) { .stage { flex-direction: column; } .side { border-left: 0; border-top: 1px solid var(--rule); width: 100% !important; max-width: 100%; } .sheet { min-height: 360px; } }
+/* The panel's own look, after src/panel/SheetPanel.css. */
+.ph { display: flex; align-items: center; gap: 2px; padding: 8px 8px 6px; border-bottom: 1px solid var(--rule); }
+.ti { flex: none; height: 30px; display: grid; place-items: center; border-radius: 6px; font-size: 13px; color: var(--muted); border: 0; background: none; }
+.ti.on { background: var(--accent-soft); color: var(--accent); font-weight: 700; }
+.ti.new { outline: 1.5px dashed var(--accent); outline-offset: -2px; }
+.ph .x { margin-left: auto; flex: none; width: 28px; text-align: center; color: var(--muted); }
+.tabw { font-size: 11px; color: var(--muted); padding: 4px 12px 0; }
+.pb { padding: 6px 10px 12px; display: flex; flex-direction: column; gap: 8px; font-size: 13px; overflow-y: auto; flex: 1; min-height: 0; }
+.pb h2 { font-size: 15px; margin: 4px 2px 0; font-weight: 700; }
+.filter { box-sizing: border-box; width: 100%; padding: 6px 8px; border: 1px solid var(--rule); border-radius: 6px; background: transparent; color: inherit; font: inherit; }
+.filter:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+.gl { margin: 8px 4px 2px; font-size: 12px; font-weight: 600; color: var(--muted); display: flex; gap: 6px; align-items: baseline; }
+.gl button { all: unset; cursor: pointer; display: flex; gap: 6px; width: 100%; }
+.gl .n { font-weight: 400; margin-left: auto; }
+ul.l { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 1px; }
+.row { display: flex; align-items: flex-start; gap: 4px; border-radius: 6px; }
+.row:hover { background: var(--hover); }
+.row > .main { all: unset; box-sizing: border-box; flex: 1; min-width: 0; padding: 5px 6px; cursor: pointer; display: flex; flex-direction: column; gap: 1px; }
+.row > .main:focus-visible { outline: 2px solid var(--accent); border-radius: 6px; }
+.row .nm { font-weight: 600; }
+.row .ds { color: var(--muted); font-size: 12px; line-height: 1.35; }
+.row .why { font-size: 11px; color: var(--accent); }
+.row .tx { overflow-x: auto; overflow-y: hidden; max-width: 100%; font-size: 12px; padding: 1px 0; }
+.ib { all: unset; cursor: pointer; flex: none; width: 26px; height: 26px; display: grid; place-items: center; border-radius: 5px; color: var(--muted); margin-top: 3px; font-size: 13px; }
+.ib:hover { background: var(--hover); color: var(--ink); }
+.ib:focus-visible { outline: 2px solid var(--accent); }
+.open { margin: 0 6px 8px; padding: 8px; border: 1px solid var(--rule); border-radius: 6px; display: flex; flex-direction: column; gap: 6px; }
+.open .tx { overflow-x: auto; font-size: 13px; }
+.open .meta { color: var(--muted); font-size: 12px; line-height: 1.4; }
+.btn { all: unset; box-sizing: border-box; cursor: pointer; padding: 6px 10px; border-radius: 6px; background: var(--accent); color: #fff; font-weight: 600; text-align: center; font-size: 13px; }
+.btn.ghostb { background: none; color: var(--accent); border: 1px solid var(--rule); font-weight: 500; }
+.btn[aria-disabled="true"] { opacity: .45; cursor: default; }
+.btn:focus-visible { outline: 2px solid var(--ink); }
+.hint { color: var(--muted); font-size: 12px; margin: 0 4px; }
+.foot { border-top: 1px solid var(--rule); padding: 8px 10px; display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; font-size: 12px; color: var(--muted); }
+.foot .lk { all: unset; cursor: pointer; color: var(--accent); }
+.empty { color: var(--muted); margin: 8px 4px; line-height: 1.4; }
+.crumb { all: unset; cursor: pointer; color: var(--accent); font-size: 12.5px; }
+.tiles { display: flex; flex-direction: column; gap: 4px; }
+.tile { all: unset; box-sizing: border-box; cursor: pointer; border: 1px solid var(--rule); border-radius: 8px; padding: 8px 10px; display: flex; flex-direction: column; gap: 2px; }
+.tile:hover { background: var(--hover); }
+.tile .nm { font-weight: 600; display: flex; } .tile .nm span { margin-left: auto; color: var(--muted); font-weight: 400; }
+.tile .tx { font-size: 11.5px; color: var(--muted); overflow: hidden; white-space: nowrap; }
+.block { font-family: var(--mono); font-size: 11.5px; line-height: 1.6; white-space: pre-wrap; word-break: break-word; background: var(--sheet); border: 1px solid var(--rule); border-radius: 6px; padding: 8px; }
+.block .c { color: var(--muted); }
+.chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.chip { all: unset; cursor: pointer; padding: 3px 9px; border-radius: 99px; border: 1px solid var(--rule); font-size: 12px; }
+.chip[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); font-weight: 600; }
+.kind { font-size: 10.5px; color: var(--muted); letter-spacing: .04em; text-transform: uppercase; }
+.dense .row > .main { padding: 4px 6px; }
+.menu { margin: 0 6px 6px; display: flex; gap: 6px; flex-wrap: wrap; }
+.renamebox { display: flex; gap: 4px; padding: 4px 6px; } .renamebox input { flex: 1; min-width: 0; }
+mark { background: color-mix(in srgb, var(--accent) 25%, transparent); color: inherit; border-radius: 2px; }
+.switch { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(14px + env(safe-area-inset-bottom, 0px)); background: var(--chrome); color: var(--chrome-ink); border-radius: 99px; display: flex; align-items: center; gap: 4px; padding: 4px; box-shadow: 0 6px 24px rgba(0,0,0,.25); z-index: 20; font-size: 13px; max-width: calc(100vw - 32px); }
+.switch button { all: unset; cursor: pointer; width: 32px; height: 32px; display: grid; place-items: center; border-radius: 99px; font-size: 16px; }
+.switch button:hover { background: rgba(127,127,127,.25); }
+.switch span { padding: 0 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+@media (prefers-reduced-motion: no-preference) { .open, .toast { animation: in .14s ease-out; } @keyframes in { from { opacity: .3; transform: translateY(-2px); } } .toast { animation: none; } }
+</style>
+
+<div class="wrap">
+  <div class="controls">
+    <b>Prototype controls</b>
+    <span>Language <span class="seg" id="lang"><button data-v="en">English</button><button data-v="pt">Português</button></span></span>
+    <span>Panel width <span class="seg" id="width"><button data-v="320">320 px</button><button data-v="280">280 px</button></span></span>
+    <span>Search matches <span class="seg" id="scope"><button data-v="shown">language shown</button><button data-v="both">both languages</button></span></span>
+  </div>
+  <p class="note" id="vnote"></p>
+  <div class="stage">
+    <div class="sheet" id="sheet"></div>
+    <div class="side" id="side"></div>
+  </div>
+  <p class="note">Try: search <code>inertia</code>, <code>momento de inércia</code>, <code>von mises</code>, <code>P_cr</code>, <code>flecha</code>, <code>bolt</code>. Click a math element on the sheet to select it, then Save to my formulas. Sources, example values and Português words are placeholders for the prototype. The phone's bottom sheet is not drawn.</p>
+</div>
+<div class="switch" role="toolbar" aria-label="Prototype variant"><button id="prev" aria-label="Previous variant">←</button><span id="vlabel"></span><button id="next" aria-label="Next variant">→</button></div>
+
+<script>/*KATEX_JS*/</script>
+<script>
+'use strict'
+// ---- Data: the 42 built-in entries (#351), example values and words are prototype placeholders ----
+const GROUPS = [
+  ['sec', 'Section properties', 'Propriedades de seção'],
+  ['str', 'Stress', 'Tensão'],
+  ['def', 'Beam deflection', 'Deflexão de vigas'],
+  ['buc', 'Buckling', 'Flambagem'],
+  ['ene', 'Energy and rotation', 'Energia e rotação'],
+  ['flu', 'Fluid mechanics', 'Mecânica dos fluidos'],
+  ['ele', 'Electricity and magnetism', 'Eletricidade e magnetismo'],
+]
+// [id, group, en, pt, en desc, pt desc, en keywords, pt keywords, tex, inputs, results, source]
+const E = [
+ ['rect','sec','Rectangle','Retângulo','Area, second moment of area and section modulus of a solid rectangle','Área, momento de inércia e módulo resistente de um retângulo maciço','moment of inertia, inertia, I, section modulus, beam section','momento de inércia, inércia, módulo de resistência, seção retangular','I_x = \\dfrac{b_s h_s^3}{12}','b_s = 40 mm; h_s = 80 mm','A_s = b_s h_s; I_x = b_s h_s^3 / 12; W_x = I_x / (h_s / 2)','Shigley, 11th ed.'],
+ ['hrect','sec','Hollow rectangle','Retângulo vazado','Area and second moment of area of a rectangular tube','Área e momento de inércia de um tubo retangular','box section, rectangular tube, RHS, moment of inertia','seção caixão, tubo retangular, metalon, momento de inércia','I_x = \\dfrac{b_o h_o^3 - b_i h_i^3}{12}','b_o = 60 mm; h_o = 100 mm; b_i = 52 mm; h_i = 92 mm','A_s = b_o h_o - b_i h_i; I_x = (b_o h_o^3 - b_i h_i^3) / 12','Shigley, 11th ed.'],
+ ['circ','sec','Solid circle','Círculo maciço','Area, second moment of area and polar moment of a round bar','Área, momento de inércia e momento polar de uma barra redonda','round bar, shaft, polar moment, J, moment of inertia','barra redonda, eixo, momento polar, momento de inércia','I_x = \\dfrac{\\pi d_o^4}{64},\\; J_p = \\dfrac{\\pi d_o^4}{32}','d_o = 30 mm','A_s = pi d_o^2 / 4; I_x = pi d_o^4 / 64; J_p = pi d_o^4 / 32','Shigley, 11th ed.'],
+ ['tube','sec','Tube','Tubo','Area, second moment of area and polar moment of a round tube','Área, momento de inércia e momento polar de um tubo redondo','pipe, hollow shaft, CHS, polar moment','tubo, eixo vazado, momento polar','I_x = \\dfrac{\\pi (d_o^4 - d_i^4)}{64}','d_o = 60 mm; d_i = 50 mm','A_s = pi (d_o^2 - d_i^2) / 4; I_x = pi (d_o^4 - d_i^4) / 64; J_p = 2 I_x','Shigley, 11th ed.'],
+ ['isec','sec','Symmetric I-section','Perfil I simétrico','Second moment of area of an I-beam about its strong axis','Momento de inércia de um perfil I no eixo forte','I-beam, H-beam, W shape, flange, web','viga I, perfil W, mesa, alma','I_x = \\dfrac{b_f h_t^3 - (b_f - t_w)(h_t - 2 t_f)^3}{12}','b_f = 100 mm; h_t = 200 mm; t_f = 8 mm; t_w = 6 mm','I_x = (b_f h_t^3 - (b_f - t_w) (h_t - 2 t_f)^3) / 12','Roark, 9th ed.'],
+ ['steiner','sec','Parallel axis theorem','Teorema dos eixos paralelos','Moves a second moment of area to a parallel axis','Transfere o momento de inércia para um eixo paralelo','Steiner, transfer, offset axis','Steiner, translação de eixos','I_p = I_c + A_s d_c^2','I_c = 1.2e6 mm^4; A_s = 2400 mm^2; d_c = 50 mm','I_p = I_c + A_s d_c^2','Hibbeler, Mechanics of Materials'],
+ ['axial','str','Axial stress','Tensão normal','Normal stress from an axial force on a cross-section','Tensão normal de uma força axial na seção','normal stress, tension, compression, sigma','tração, compressão, tensão axial','\\sigma_a = \\dfrac{F_a}{A_s}','F_a = 12 kN; A_s = 80 mm^2','sigma_a = F_a / A_s','Hibbeler, Mechanics of Materials'],
+ ['bend','str','Bending stress','Tensão de flexão','Stress at a fibre from a bending moment','Tensão numa fibra causada por momento fletor','flexure, bending moment, Mc/I','flexão, momento fletor','\\sigma_b = \\dfrac{M_b c_f}{I_x}','M_b = 1.5 kN m; c_f = 40 mm; I_x = 1.71e6 mm^4','sigma_b = M_b c_f / I_x','Shigley, 11th ed.'],
+ ['shear','str','Transverse shear stress','Tensão de cisalhamento transversal','Shear stress in a beam from a shear force, VQ/(Ib)','Cisalhamento numa viga por força cortante, VQ/(Ib)','shear flow, VQ/Ib, shear force','cisalhamento, força cortante','\\tau_v = \\dfrac{V_s Q_s}{I_x b_w}','V_s = 5 kN; Q_s = 32e3 mm^3; I_x = 1.71e6 mm^4; b_w = 40 mm','tau_v = V_s Q_s / (I_x b_w)','Shigley, 11th ed.'],
+ ['tors','str','Torsion of a round shaft','Torção em eixo circular','Shear stress and angle of twist of a round shaft under torque','Tensão de cisalhamento e ângulo de torção de um eixo sob torque','torque, twist, shaft, Tr/J','torque, ângulo de torção, eixo','\\tau_t = \\dfrac{T_q r_o}{J_p},\\; \\theta_t = \\dfrac{T_q L_s}{G_s J_p}','T_q = 200 N m; r_o = 15 mm; L_s = 500 mm; G_s = 79 GPa; J_p = 79500 mm^4','tau_t = T_q r_o / J_p; theta_t = T_q L_s / (G_s J_p)','Shigley, 11th ed.'],
+ ['vessel','str','Thin-walled pressure vessel','Vaso de pressão de parede fina','Hoop and axial stress in a thin cylinder under internal pressure','Tensões circunferencial e axial num cilindro fino sob pressão interna','hoop stress, cylinder, tank, boiler','tensão circunferencial, cilindro, tanque, caldeira','\\sigma_h = \\dfrac{p_i r_m}{t_w},\\; \\sigma_{ax} = \\dfrac{p_i r_m}{2 t_w}','p_i = 1.2 MPa; r_m = 400 mm; t_w = 8 mm','sigma_h = p_i r_m / t_w; sigma_ax = p_i r_m / (2 t_w)','Hibbeler, Mechanics of Materials'],
+ ['princ','str','Principal stresses in 2D','Tensões principais em 2D','Largest and smallest normal stress of a plane stress state','Maior e menor tensão normal de um estado plano de tensões','Mohr circle, plane stress, maximum shear','círculo de Mohr, estado plano, cisalhamento máximo','\\sigma_1 = \\tfrac{\\sigma_x + \\sigma_y}{2} + \\sqrt{\\left(\\tfrac{\\sigma_x - \\sigma_y}{2}\\right)^2 + \\tau_{xy}^2}','sigma_x = 80 MPa; sigma_y = 20 MPa; tau_xy = 30 MPa','sigma_1 = (sigma_x + sigma_y) / 2 + sqrt(((sigma_x - sigma_y) / 2)^2 + tau_xy^2); sigma_2 = (sigma_x + sigma_y) / 2 - sqrt(((sigma_x - sigma_y) / 2)^2 + tau_xy^2)','Shigley, 11th ed.'],
+ ['mises','str','Von Mises stress','Tensão de von Mises','Equivalent stress of a plane stress state, for yield checks','Tensão equivalente de um estado plano, para verificar escoamento','equivalent stress, distortion energy, yield criterion','tensão equivalente, energia de distorção, critério de escoamento','\\sigma_{vm} = \\sqrt{\\sigma_x^2 - \\sigma_x \\sigma_y + \\sigma_y^2 + 3 \\tau_{xy}^2}','sigma_x = 80 MPa; sigma_y = 20 MPa; tau_xy = 30 MPa','sigma_vm = sqrt(sigma_x^2 - sigma_x sigma_y + sigma_y^2 + 3 tau_xy^2)','Shigley, 11th ed.'],
+ ['cant_p','def','Cantilever, end load','Viga em balanço, carga na ponta','Maximum moment and deflection of a cantilever with a point load at its end','Momento e flecha máximos de uma viga em balanço com carga na ponta','cantilever, point load, deflection, tip','balanço, carga concentrada, flecha, deslocamento','\\delta_m = \\dfrac{F_a L_b^3}{3 E_y I_x}','F_a = 2 kN; L_b = 1.2 m; E_y = 200 GPa; I_x = 4.1e6 mm^4','M_m = F_a L_b; delta_m = F_a L_b^3 / (3 E_y I_x)','Roark, 9th ed.'],
+ ['cant_w','def','Cantilever, uniform load','Viga em balanço, carga distribuída','Maximum moment and deflection of a cantilever under a uniform load','Momento e flecha máximos de uma viga em balanço com carga uniforme','cantilever, distributed load, UDL, deflection','balanço, carga distribuída, flecha','\\delta_m = \\dfrac{w_d L_b^4}{8 E_y I_x}','w_d = 3 kN/m; L_b = 1.2 m; E_y = 200 GPa; I_x = 4.1e6 mm^4','M_m = w_d L_b^2 / 2; delta_m = w_d L_b^4 / (8 E_y I_x)','Roark, 9th ed.'],
+ ['ss_c','def','Simply supported, centre load','Biapoiada, carga no centro','Maximum moment and deflection of a simply supported beam with a load at mid-span','Momento e flecha máximos de uma viga biapoiada com carga no meio do vão','simply supported, point load, mid-span, deflection','biapoiada, carga concentrada, meio do vão, flecha','\\delta_m = \\dfrac{F_a L_b^3}{48 E_y I_x}','F_a = 5 kN; L_b = 3 m; E_y = 200 GPa; I_x = 8.3e6 mm^4','M_m = F_a L_b / 4; delta_m = F_a L_b^3 / (48 E_y I_x)','Roark, 9th ed.'],
+ ['ss_o','def','Simply supported, off-centre load','Biapoiada, carga fora do centro','Maximum moment and deflection of a simply supported beam with a point load anywhere','Momento e flecha máximos de uma viga biapoiada com carga em qualquer ponto','simply supported, eccentric load, point load','biapoiada, carga excêntrica, carga concentrada','M_m = \\dfrac{F_a a_d b_d}{L_b}','F_a = 5 kN; a_d = 1 m; b_d = 2 m; E_y = 200 GPa; I_x = 8.3e6 mm^4','L_b = a_d + b_d; M_m = F_a a_d b_d / L_b; delta_m = F_a b_d (L_b^2 - b_d^2)^1.5 / (9 sqrt(3) L_b E_y I_x)','Roark, 9th ed.'],
+ ['ss_w','def','Simply supported, uniform load','Biapoiada, carga distribuída','Maximum moment and deflection of a simply supported beam under a uniform load','Momento e flecha máximos de uma viga biapoiada com carga uniforme','simply supported, distributed load, UDL, 5/384','biapoiada, carga distribuída, flecha','\\delta_m = \\dfrac{5 w_d L_b^4}{384 E_y I_x}','w_d = 4 kN/m; L_b = 3 m; E_y = 200 GPa; I_x = 8.3e6 mm^4','M_m = w_d L_b^2 / 8; delta_m = 5 w_d L_b^4 / (384 E_y I_x)','Roark, 9th ed.'],
+ ['ff_w','def','Fixed–fixed, uniform load','Biengastada, carga distribuída','Maximum moment and deflection of a beam fixed at both ends under a uniform load','Momento e flecha máximos de uma viga engastada nas duas pontas com carga uniforme','built-in, encastré, fixed ends, distributed load','biengastada, engaste, carga distribuída','\\delta_m = \\dfrac{w_d L_b^4}{384 E_y I_x}','w_d = 4 kN/m; L_b = 3 m; E_y = 200 GPa; I_x = 8.3e6 mm^4','M_m = w_d L_b^2 / 12; delta_m = w_d L_b^4 / (384 E_y I_x)','Roark, 9th ed.'],
+ ['euler','buc','Euler buckling load','Carga crítica de Euler','Critical load of a slender column, with an effective-length factor','Carga crítica de uma coluna esbelta, com fator de comprimento efetivo','column, critical load, effective length, K factor','coluna, carga crítica, comprimento efetivo','P_{cr} = \\dfrac{\\pi^2 E_y I_x}{(K_e L_c)^2}','E_y = 200 GPa; I_x = 1.2e6 mm^4; K_e = 1; L_c = 2.5 m','P_cr = pi^2 E_y I_x / (K_e L_c)^2','Shigley, 11th ed.'],
+ ['slend','buc','Slenderness and the Euler–Johnson transition','Esbeltez e transição Euler–Johnson','Slenderness ratio, and the ratio above which Euler applies','Índice de esbeltez e o valor acima do qual vale Euler','slenderness ratio, radius of gyration, transition','índice de esbeltez, raio de giração, transição','\\lambda_s = \\dfrac{K_e L_c}{r_g},\\; \\lambda_t = \\sqrt{\\dfrac{2 \\pi^2 E_y}{S_y}}','K_e = 1; L_c = 2.5 m; r_g = 22 mm; E_y = 200 GPa; S_y = 250 MPa','lambda_s = K_e L_c / r_g; lambda_t = sqrt(2 pi^2 E_y / S_y)','Shigley, 11th ed.'],
+ ['johnson','buc','Johnson buckling stress','Tensão crítica de Johnson','Critical stress of an intermediate column, below the transition','Tensão crítica de uma coluna intermediária, abaixo da transição','intermediate column, parabolic formula','coluna intermediária, fórmula parabólica','\\sigma_{cr} = S_y - \\dfrac{1}{E_y}\\left(\\dfrac{S_y \\lambda_s}{2 \\pi}\\right)^2','S_y = 250 MPa; E_y = 200 GPa; lambda_s = 80','sigma_cr = S_y - (S_y lambda_s / (2 pi))^2 / E_y','Shigley, 11th ed.'],
+ ['omega','ene','Angular velocity from rpm','Velocidade angular a partir de rpm','Angular velocity from a speed in rpm, and rim speed','Velocidade angular a partir da rotação em rpm, e velocidade periférica','rpm, rotational speed, rim speed, omega','rpm, rotação, velocidade periférica','\\omega_s = 2 \\pi n_r,\\; v_r = \\omega_s r_o','n_r = 1450 / minute; r_o = 0.1 m','omega_s = 2 pi n_r in 1/s; v_r = omega_s r_o','Hibbeler, Dynamics'],
+ ['ptorq','ene','Power from torque','Potência a partir do torque','Shaft power from torque and angular velocity','Potência no eixo a partir de torque e velocidade angular','shaft power, motor, kW','potência no eixo, motor','P_w = T_q \\omega_s','T_q = 50 N m; omega_s = 150 / s','P_w = T_q omega_s','Hibbeler, Dynamics'],
+ ['torq','ene','Torque from force','Torque a partir de força','Torque of a force at a lever arm','Torque de uma força num braço de alavanca','moment, lever arm, wrench','momento, braço de alavanca, chave','T_q = F_a r_a','F_a = 200 N; r_a = 0.25 m','T_q = F_a r_a','Hibbeler, Statics'],
+ ['pfv','ene','Power from force and speed','Potência a partir de força e velocidade','Power of a force moving at a speed','Potência de uma força que se move a uma velocidade','conveyor, hoist, drag','esteira, guincho, arrasto','P_w = F_a v_m','F_a = 1.5 kN; v_m = 2 m/s','P_w = F_a v_m','Hibbeler, Dynamics'],
+ ['ek','ene','Kinetic energy','Energia cinética','Kinetic energy of a moving mass','Energia cinética de uma massa em movimento','kinetic, velocity, mass','cinética, velocidade, massa','E_k = \\tfrac{1}{2} m_b v_m^2','m_b = 1200 kg; v_m = 15 m/s','E_k = m_b v_m^2 / 2','Hibbeler, Dynamics'],
+ ['erot','ene','Rotational kinetic energy of a disc','Energia cinética de rotação de um disco','Kinetic energy of a spinning solid disc','Energia cinética de um disco maciço girando','flywheel, moment of inertia, rotation','volante, momento de inércia de massa, rotação','E_r = \\tfrac{1}{2} I_m \\omega_s^2,\\; I_m = \\tfrac{1}{2} m_d r_d^2','m_d = 20 kg; r_d = 0.2 m; omega_s = 150 / s','I_m = m_d r_d^2 / 2; E_r = I_m omega_s^2 / 2','Hibbeler, Dynamics'],
+ ['ep','ene','Potential energy','Energia potencial','Gravitational potential energy of a raised mass','Energia potencial gravitacional de uma massa elevada','gravity, height, mgh','gravidade, altura, mgh','E_p = m_b\\, g\\, h_e','m_b = 50 kg; h_e = 3 m','E_p = m_b gravity h_e','Hibbeler, Dynamics'],
+ ['qflow','flu','Volumetric flow rate','Vazão volumétrica','Flow rate from a flow area and a mean velocity','Vazão a partir da área e da velocidade média','flow rate, discharge, Q = A v','vazão, Q = A v','Q_v = A_s v_m','A_s = 50 cm^2; v_m = 1.8 m/s','Q_v = A_s v_m','Munson, Fluid Mechanics'],
+ ['mflow','flu','Mass flow rate','Vazão mássica','Mass flow from a density and a volumetric flow','Vazão mássica a partir da massa específica e da vazão','mass flow, kg/s, density','vazão mássica, massa específica','\\dot m = \\rho_f Q_v','rho_f = 998 kg/m^3; Q_v = 9 L/s','m_dot = rho_f Q_v','Munson, Fluid Mechanics'],
+ ['hydro','flu','Hydrostatic pressure','Pressão hidrostática','Pressure at a depth in a fluid at rest','Pressão a uma profundidade num fluido em repouso','depth, head, column of fluid','profundidade, coluna de fluido','p_h = \\rho_f\\, g\\, h_d','rho_f = 998 kg/m^3; h_d = 5 m','p_h = rho_f gravity h_d','Munson, Fluid Mechanics'],
+ ['bern','flu','Bernoulli equation','Equação de Bernoulli','Pressure at a second point of a streamline, no losses','Pressão num segundo ponto de uma linha de corrente, sem perdas','energy equation, streamline, head','equação da energia, linha de corrente','p_2 = p_1 + \\tfrac{1}{2}\\rho_f (v_1^2 - v_2^2) + \\rho_f g (z_1 - z_2)','p_1 = 200 kPa; v_1 = 1.5 m/s; v_2 = 3 m/s; z_1 = 0 m; z_2 = 2 m; rho_f = 998 kg/m^3','p_2 = p_1 + rho_f (v_1^2 - v_2^2) / 2 + rho_f gravity (z_1 - z_2)','Munson, Fluid Mechanics'],
+ ['re','flu','Reynolds number','Número de Reynolds','Reynolds number of a pipe flow','Número de Reynolds de um escoamento em tubo','laminar, turbulent, Re','laminar, turbulento, Re','Re_d = \\dfrac{\\rho_f v_m D_i}{\\mu_f}','rho_f = 998 kg/m^3; v_m = 1.8 m/s; D_i = 80 mm; mu_f = 1.0 mPa s','Re_d = rho_f v_m D_i / mu_f','Munson, Fluid Mechanics'],
+ ['darcy','flu','Darcy–Weisbach head loss','Perda de carga de Darcy–Weisbach','Head loss and pressure loss of a full pipe, from a friction factor','Perda de carga e de pressão num tubo cheio, a partir do fator de atrito','head loss, friction factor, pressure drop, Moody','perda de carga, fator de atrito, queda de pressão, Moody','h_f = f_D \\dfrac{L_p}{D_i} \\dfrac{v_m^2}{2 g}','f_D = 0.02; L_p = 120 m; D_i = 80 mm; v_m = 1.8 m/s','h_f = f_D L_p / D_i v_m^2 / (2 gravity); dp_f = 998 kg/m^3 gravity h_f','Munson, Fluid Mechanics'],
+ ['hpow','flu','Hydraulic power','Potência hidráulica','Power given to a fluid by a pump','Potência entregue ao fluido por uma bomba','pump power, Q Δp','potência de bomba, Q Δp','P_h = Q_v\\, \\Delta p','Q_v = 9 L/s; dp_p = 350 kPa','P_h = Q_v dp_p','Munson, Fluid Mechanics'],
+ ['ohm','ele',"Ohm's law with power",'Lei de Ohm com potência','Current and power of a resistor at a voltage','Corrente e potência de um resistor sob uma tensão','resistance, current, voltage, watt','resistência, corrente, tensão elétrica, watt','I_r = \\dfrac{V_r}{R_1},\\; P_e = V_r I_r','V_r = 12 V; R_1 = 47 ohm','I_r = V_r / R_1; P_e = V_r I_r','Nilsson & Riedel, 11th ed.'],
+ ['res','ele','Series and parallel resistors','Resistores em série e em paralelo','Equivalent resistance of two resistors','Resistência equivalente de dois resistores','equivalent resistance, network','resistência equivalente, associação','R_s = R_1 + R_2,\\; R_p = \\dfrac{R_1 R_2}{R_1 + R_2}','R_1 = 100 ohm; R_2 = 220 ohm','R_s = R_1 + R_2; R_p = R_1 R_2 / (R_1 + R_2)','Nilsson & Riedel, 11th ed.'],
+ ['rc','ele','RC time constant','Constante de tempo RC','Time constant of a resistor–capacitor circuit','Constante de tempo de um circuito resistor–capacitor','tau, charging, filter','tau, carga do capacitor, filtro','\\tau_{rc} = R_1 C_1','R_1 = 10 kohm; C_1 = 100 uF','tau_rc = R_1 C_1','Nilsson & Riedel, 11th ed.'],
+ ['estore','ele','Energy in a capacitor and an inductor','Energia num capacitor e num indutor','Stored energy of a charged capacitor and a carrying inductor','Energia armazenada num capacitor carregado e num indutor','stored energy, capacitance, inductance','energia armazenada, capacitância, indutância','U_C = \\tfrac{1}{2} C_1 V_c^2,\\; U_L = \\tfrac{1}{2} L_1 I_l^2','C_1 = 470 uF; V_c = 50 V; L_1 = 10 mH; I_l = 3 A','U_C = C_1 V_c^2 / 2; U_L = L_1 I_l^2 / 2','Nilsson & Riedel, 11th ed.'],
+ ['bil','ele','Force on a conductor','Força num condutor','Force on a straight current-carrying wire in a magnetic field','Força num fio reto com corrente num campo magnético','Lorentz, BIL, magnetic field','Lorentz, campo magnético','F_c = B_f I_c L_w','B_f = 0.5 T; I_c = 10 A; L_w = 0.2 m','F_c = B_f I_c L_w','Halliday, Fundamentals of Physics'],
+ ['p3','ele','Three-phase power','Potência trifásica','Real power of a balanced three-phase load, from line-to-line voltage','Potência ativa de uma carga trifásica equilibrada, com tensão de linha','three phase, power factor, cos phi, motor','trifásico, fator de potência, cos fi, motor','P_3 = \\sqrt{3}\\, V_{LL} I_l \\cos\\varphi','V_LL = 380 V; I_l = 20 A; phi_p = 30 deg','P_3 = sqrt(3) V_LL I_l cos(phi_p)','Nilsson & Riedel, 11th ed.'],
+].map(([id, group, en, pt, den, dpt, ken, kpt, tex, inputs, results, source]) => ({
+  id, group, name: { en, pt }, desc: { en: den, pt: dpt }, kw: { en: ken.split(/,\s*/), pt: kpt.split(/,\s*/) }, tex,
+  inputs: inputs.split(/;\s*/), results: results.split(/;\s*/), source,
+}))
+const SYMS = e => [...new Set([...e.inputs, ...e.results].map(l => l.split('=')[0].trim()))]
+
+// The user's own formulas (#353): a whole titled math element, as typed. No description.
+let mine = [
+  { id: 'm1', title: 'Bolt preload', lines: ['A_t = 58 mm^2', 'S_p = 600 MPa', 'F_i = 0.75 A_t S_p', 'T_i = 0.2 F_i 10 mm'], tex: 'F_i = 0.75\\, A_t S_p' },
+  { id: 'm2', title: 'Pump sizing', lines: ['Q_v = 12 L/s', 'H_p = 25 m', 'eta_p = 0.7', 'P_s = 998 kg/m^3 gravity Q_v H_p / eta_p'], tex: 'P_s = \\dfrac{\\rho g Q_v H_p}{\\eta_p}' },
+  { id: 'm3', title: 'Gear ratio check', lines: ['z_1 = 18', 'z_2 = 54', 'i_g = z_2 / z_1'], tex: 'i_g = \\dfrac{z_2}{z_1}' },
+]
+// Constants, for variant C's merged tab (a few, as in the Constants tab).
+const CONSTS = [
+  { id: 'c', tex: 'c', val: '299\\,792\\,458\\ \\mathrm{m/s}', name: { en: 'speed of light', pt: 'velocidade da luz' } },
+  { id: 'g', tex: 'g', val: '9.807\\ \\mathrm{m/s^2}', name: { en: 'standard gravity', pt: 'gravidade padrão' } },
+  { id: 'G', tex: 'G', val: '6.674\\times10^{-11}\\ \\mathrm{m^3/(kg\\,s^2)}', name: { en: 'gravitational constant', pt: 'constante gravitacional' } },
+  { id: 'R', tex: 'R', val: '8.314\\ \\mathrm{J/(mol\\,K)}', name: { en: 'molar gas constant', pt: 'constante dos gases' } },
+  { id: 'sigma', tex: '\\sigma', val: '5.670\\times10^{-8}\\ \\mathrm{W/(m^2 K^4)}', name: { en: 'Stefan–Boltzmann constant', pt: 'constante de Stefan–Boltzmann' } },
+]
+
+// ---- Words ----
+const W = {
+  en: { tab: 'Formulas', filter: 'Filter formulas', mine: 'My formulas', builtin: 'Built-in', save: 'Save to my formulas', needTitle: 'Give it a title first', needSel: 'Select one titled math element to save it', place: 'Place on sheet', rename: 'Rename', remove: 'Remove', exp: 'Export', imp: "Add this sheet's formulas", kept: 'Kept in this browser', empty: 'Select a titled math element and press Save to my formulas', inputs: 'Inputs', source: 'Source', none: 'No formula matches', lines: n => `${n} lines`, back: 'All groups', placing: t => `Placing “${t}”: click on the sheet, Esc cancels`, removed: t => `Removed “${t}”`, undo: 'Undo', saved: t => `Saved “${t}” to my formulas`, library: 'Library', all: 'All', consts: 'Constants', forms: 'Formulas', preview: 'Lines it adds', ex: '# Example values: replace them', src: '# Source:', count: n => `${n}`, why: { name: 'name', desc: 'description', kw: 'keyword', sym: 'symbol', other: 'Português', line: 'line' }, ok: 'Rename', cancel: 'Cancel', exported: n => `Export would write a sheet with ${n} titled elements`, imported: 'Import would add every titled element of the open sheet', constNote: 'Inserts at the caret', results: 'Results', placed: t => `Placed “${t}”` },
+  pt: { tab: 'Fórmulas', filter: 'Filtrar fórmulas', mine: 'Minhas fórmulas', builtin: 'Incluídas', save: 'Salvar em minhas fórmulas', needTitle: 'Dê um título primeiro', needSel: 'Selecione um bloco com título para salvá-lo', place: 'Colocar na folha', rename: 'Renomear', remove: 'Remover', exp: 'Exportar', imp: 'Adicionar as fórmulas desta folha', kept: 'Guardadas neste navegador', empty: 'Selecione um bloco com título e pressione Salvar em minhas fórmulas', inputs: 'Entradas', source: 'Fonte', none: 'Nenhuma fórmula corresponde', lines: n => `${n} linhas`, back: 'Todos os grupos', placing: t => `Colocando “${t}”: clique na folha, Esc cancela`, removed: t => `“${t}” removida`, undo: 'Desfazer', saved: t => `“${t}” salva em minhas fórmulas`, library: 'Biblioteca', all: 'Tudo', consts: 'Constantes', forms: 'Fórmulas', preview: 'Linhas que adiciona', ex: '# Valores de exemplo: substitua-os', src: '# Fonte:', count: n => `${n}`, why: { name: 'nome', desc: 'descrição', kw: 'palavra-chave', sym: 'símbolo', other: 'English', line: 'linha' }, ok: 'Renomear', cancel: 'Cancelar', exported: n => `Exportar escreveria uma folha com ${n} blocos com título`, imported: 'Importar adicionaria cada bloco com título da folha aberta', constNote: 'Insere no cursor', results: 'Resultados', placed: t => `“${t}” colocada` },
+}
+
+// ---- State ----
+const S = { v: 'A', lang: 'en', width: 320, scope: 'shown', q: '', openId: null, collapsed: new Set(GROUPS.map(g => g[0])), bView: { seg: 'built', group: null, entry: null }, chip: 'all', renaming: null, toast: null, placing: null, sel: null, els: null, ptr: null }
+try { const v = new URLSearchParams(location.search).get('variant') || location.hash.slice(1); if ('ABC'.includes(v) && v) S.v = v } catch {}
+const w = () => W[S.lang]
+const VARIANTS = {
+  A: ['A — Own tab, one list', 'An eighth tab after Constants. One scrolling list: My formulas first, then the seven groups folded. A press opens a row in place, showing its formulas, inputs and source, with Place on sheet. Two presses to place.'],
+  B: ['B — Own tab, pages', 'An eighth tab after Constants. Built-in and My formulas are two pages. Built-in starts on seven group tiles; a group lists its entries with their formula typeset; an entry opens a page with the lines it adds. Search covers everything. Three presses to place.'],
+  C: ['C — Merged into Constants', 'No new tab: Constants becomes Library, holding constants and formulas, with chips to narrow. Dense rows with the formula typeset first; one press starts placing. ⓘ shows the lines first. Constants still insert at the caret.'],
+}
+
+// ---- KaTeX ----
+const kcache = new Map()
+const K = (tex, display) => { const k = tex + display; if (!kcache.has(k)) kcache.set(k, katex.renderToString(tex, { throwOnError: false, displayMode: !!display })); return kcache.get(k) }
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c])
+const norm = s => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+
+// ---- Search: every word must match somewhere; the best field is reported ----
+function matchBuiltin(e) {
+  const q = norm(S.q).trim(); if (!q) return { hit: true }
+  const L = S.lang, O = L === 'en' ? 'pt' : 'en'
+  const fields = [['name', e.name[L], 4], ['kw', e.kw[L].join(' · '), 3], ['desc', e.desc[L], 2], ['sym', SYMS(e).join(' '), 2]]
+  if (S.scope === 'both') fields.push(['other', e.name[O] + ' · ' + e.kw[O].join(' · ') + ' · ' + e.desc[O], 1])
+  const words = q.split(/\s+/)
+  let score = 0, best = null
+  for (const word of words) {
+    let found = false
+    for (const [f, text, s] of fields) {
+      if (norm(text).includes(word) || (f === 'sym' && norm(text).replace(/_/g, '').includes(word.replace(/_/g, '')))) {
+        found = true; score += s
+        if (!best || s > best.s) best = { f, text, s }
+        break
+      }
+    }
+    if (!found) return { hit: false }
+  }
+  let why = null
+  if (best.f === 'kw') why = `${w().why.kw}: ${e.kw[L].find(k => words.some(x => norm(k).includes(x))) || ''}`
+  else if (best.f === 'sym') why = `${w().why.sym}: ${SYMS(e).find(s => words.some(x => norm(s).replace(/_/g, '').includes(x.replace(/_/g, '')))) || ''}`
+  else if (best.f === 'other') why = `${w().why.other}: ${e.name[O]}`
+  return { hit: true, score, why, nameHit: best.f === 'name' }
+}
+function matchMine(m) {
+  const q = norm(S.q).trim(); if (!q) return { hit: true }
+  const words = q.split(/\s+/); let why = null
+  for (const word of words) {
+    if (norm(m.title).includes(word)) continue
+    const line = m.lines.find(l => norm(l).includes(word))
+    if (!line) return { hit: false }
+    why = `${w().why.line}: ${line}`
+  }
+  return { hit: true, score: 5, why }
+}
+const hl = text => { const q = norm(S.q).trim(); if (!q) return esc(text); let out = esc(text); for (const word of q.split(/\s+/)) { const i = norm(text).indexOf(word); if (i >= 0) { out = esc(text.slice(0, i)) + '<mark>' + esc(text.slice(i, i + word.length)) + '</mark>' + esc(text.slice(i + word.length)); break } } return out }
+
+// ---- The block an entry inserts (#352) ----
+function blockLines(e) {
+  return [{ t: e.name[S.lang], k: 't' }, { t: w().ex, k: 'c' }, ...e.inputs.map(t => ({ t, k: 'm' })), ...e.results.map(t => ({ t, k: 'r' })), { t: `${w().src} ${e.source}`, k: 'c' }]
+}
+const blockHtml = lines => `<div class="block">${lines.map(l => l.k === 't' ? `<b>${esc(l.t)}</b>` : l.k === 'c' ? `<span class="c">${esc(l.t)}</span>` : esc(l.t)).join('\n')}</div>`
+
+// ---- Actions shared by the variants (stubs: nothing persists) ----
+function startPlacing(title, lines) { S.placing = { title, lines }; toast(null); render() }
+function toast(t, undo) { S.toast = t ? { t, undo } : null; clearTimeout(toast.h); if (t) toast.h = setTimeout(() => { S.toast = null; renderSheet() }, 5000) }
+function saveSel() {
+  const el = S.els.find(x => x.id === S.sel); if (!el || !el.title) return
+  let t = el.title, n = 2; while (mine.some(m => m.title === t)) t = `${el.title} (${n++})`
+  mine.push({ id: 'm' + Date.now(), title: t, lines: el.lines.map(l => l.t), tex: '' })
+  toast(w().saved(t)); render()
+}
+function removeMine(id) { const i = mine.findIndex(m => m.id === id); const [m] = mine.splice(i, 1); toast(w().removed(m.title), () => { mine.splice(i, 0, m); S.toast = null; render() }); render() }
+function renameMine(id, t) { const m = mine.find(x => x.id === id); if (t.trim()) m.title = t.trim(); S.renaming = null; render() }
+const mineLines = m => [{ t: m.title, k: 't' }, ...m.lines.map(t => ({ t, k: 'm' }))]
+function saveState() {
+  const el = S.els.find(x => x.id === S.sel)
+  if (!el) return { on: false, why: w().needSel }
+  if (!el.title) return { on: false, why: w().needTitle }
+  return { on: true }
+}
+
+// ---- Panel header: the icon tabs, with the formulas tab ----
+// Tab widths from spec section 8: seven tabs are 29.9 px at 320 px and 24.1 px at 280 px.
+function header() {
+  const eight = S.v !== 'C'
+  const room = S.width === 320 ? 29.9 * 7 : 24.1 * 7
+  const n = eight ? 8 : 7, tw = room / n
+  const tabs = [['Aa', 'Format'], ['Ω', 'Symbols'], ['x', 'Variables'], ['!', 'Problems'], ['π', S.v === 'C' ? w().library : 'Constants']]
+  if (eight) tabs.push(['ƒ', w().tab])
+  tabs.push(['⚙', 'Settings'], ['✦', 'Math assistant'])
+  const active = S.v === 'C' ? 4 : 5
+  return `<div class="ph">${tabs.map(([g, t], i) => `<span class="ti${i === active ? ' on' : ''}${(eight && i === 5) || (!eight && i === 4) ? ' new' : ''}" style="width:${tw.toFixed(1)}px" title="${esc(t)}">${g}</span>`).join('')}<span class="x">✕</span></div>
+  <div class="tabw">${n} tabs, about ${tw.toFixed(1)} px each at ${S.width} px${eight ? ' (seven today: ' + (room / 7).toFixed(1) + ' px)' : ' (as today)'}</div>`
+}
+function footer() {
+  const st = saveState()
+  return `<div class="foot" style="flex-direction:column;align-items:stretch">
+    <span class="btn ghostb" role="button" tabindex="0" data-a="save" aria-disabled="${!st.on}">${w().save}</span>
+    ${st.on ? '' : `<span class="hint">${st.why}</span>`}
+    <span style="display:flex;gap:10px;flex-wrap:wrap;align-items:center"><span>${w().kept}</span><button class="lk" data-a="exp">${w().exp}</button><button class="lk" data-a="imp">${w().imp}</button></span></div>`
+}
+function mineRow(m, opts = {}) {
+  if (S.renaming === m.id) return `<li><div class="renamebox"><input class="filter" id="rn" value="${esc(m.title)}"><span class="btn" role="button" tabindex="0" data-a="rnok" data-id="${m.id}">${w().ok}</span></div></li>`
+  const r = matchMine(m); if (!r.hit) return ''
+  const open = S.openId === m.id
+  const sub = opts.tex && m.tex ? `<span class="tx">${K(m.tex)}</span>` : `<span class="ds">${w().lines(m.lines.length)}</span>`
+  return `<li><div class="row"><button class="main" data-a="${opts.one ? 'placeM' : 'openM'}" data-id="${m.id}"><span class="nm">${hl(m.title)}</span>${sub}${r.why ? `<span class="why">${esc(r.why)}</span>` : ''}</button>
+    ${opts.one ? `<button class="ib" data-a="openM" data-id="${m.id}" title="${w().preview}">ⓘ</button>` : ''}
+    <button class="ib" data-a="rn" data-id="${m.id}" title="${w().rename}">✎</button><button class="ib" data-a="rm" data-id="${m.id}" title="${w().remove}">🗑</button></div>
+    ${open ? `<div class="open">${blockHtml(mineLines(m))}${opts.one ? '' : `<span class="btn" role="button" tabindex="0" data-a="placeM" data-id="${m.id}">${w().place}</span>`}</div>` : ''}</li>`
+}
+const sorted = list => list.map(e => [e, matchBuiltin(e)]).filter(([, r]) => r.hit)
+
+// ---- Variant A: own tab, one list, rows open in place ----
+function VariantA() {
+  const searching = !!S.q.trim()
+  const mineHtml = mine.map(m => mineRow(m)).join('')
+  let groups = ''
+  for (const [g, en, pt] of GROUPS) {
+    const hits = sorted(E.filter(e => e.group === g))
+    if (searching && !hits.length) continue
+    const folded = !searching && S.collapsed.has(g)
+    groups += `<div class="gl"><button data-a="fold" data-g="${g}"><span>${folded ? '▸' : '▾'}</span><span>${S.lang === 'en' ? en : pt}</span><span class="n">${hits.length}</span></button></div>`
+    if (!folded) groups += `<ul class="l">${hits.map(([e, r]) => {
+      const open = S.openId === e.id
+      return `<li><div class="row"><button class="main" data-a="open" data-id="${e.id}"><span class="nm">${hl(e.name[S.lang])}</span><span class="ds">${hl(e.desc[S.lang])}</span>${r.why ? `<span class="why">${esc(r.why)}</span>` : ''}</button></div>
+      ${open ? `<div class="open"><div class="tx">${K(e.tex, true)}</div><div class="meta">${w().inputs}: ${e.inputs.map(l => esc(l.split('=')[0].trim())).join(', ')}<br>${w().source}: ${esc(e.source)}</div><span class="btn" role="button" tabindex="0" data-a="place" data-id="${e.id}">${w().place}</span></div>` : ''}</li>`
+    }).join('')}</ul>`
+  }
+  const anyMine = mine.some(m => matchMine(m).hit)
+  return `<div class="pb"><h2>${w().tab}</h2><input class="filter" id="q" placeholder="${w().filter}" value="${esc(S.q)}">
+    ${!searching || anyMine ? `<div class="gl"><span>${w().mine}</span><span class="n">${mine.length}</span></div>${mine.length ? `<ul class="l">${mineHtml}</ul>` : `<p class="empty">${w().empty}</p>`}` : ''}
+    ${groups || (searching && !anyMine ? `<p class="empty">${w().none}</p>` : '')}</div>${footer()}`
+}
+
+// ---- Variant B: own tab, pages (groups → entries → entry) ----
+function VariantB() {
+  const b = S.bView, searching = !!S.q.trim()
+  const seg = `<span class="seg" style="align-self:flex-start"><button data-a="seg" data-v="built" aria-pressed="${b.seg === 'built'}">${w().builtin}</button><button data-a="seg" data-v="mine" aria-pressed="${b.seg === 'mine'}">${w().mine} (${mine.length})</button></span>`
+  const entryRow = ([e, r]) => `<li><div class="row"><button class="main" data-a="bEntry" data-id="${e.id}"><span class="nm">${hl(e.name[S.lang])}</span><span class="tx">${K(e.tex)}</span>${r.why ? `<span class="why">${esc(r.why)}</span>` : ''}</button></div></li>`
+  let body
+  if (b.entry) {
+    const e = E.find(x => x.id === b.entry)
+    body = `<button class="crumb" data-a="bBack">‹ ${S.lang === 'en' ? GROUPS.find(g => g[0] === e.group)[1] : GROUPS.find(g => g[0] === e.group)[2]}</button>
+      <h2 style="font-size:14px">${esc(e.name[S.lang])}</h2><p class="ds" style="margin:0 2px;color:var(--muted)">${esc(e.desc[S.lang])}</p>
+      <div class="tx" style="overflow-x:auto">${K(e.tex, true)}</div><div class="gl">${w().preview}</div>${blockHtml(blockLines(e))}
+      <span class="btn" role="button" tabindex="0" data-a="place" data-id="${e.id}">${w().place}</span>`
+  } else if (searching) {
+    const hits = sorted(E).sort((x, y) => y[1].score - x[1].score)
+    const mh = mine.map(m => mineRow(m, { tex: true })).join('')
+    body = `${mh ? `<div class="gl">${w().mine}</div><ul class="l">${mh}</ul>` : ''}${hits.length ? `<div class="gl">${w().builtin}</div><ul class="l">${hits.map(entryRow).join('')}</ul>` : ''}${!mh && !hits.length ? `<p class="empty">${w().none}</p>` : ''}`
+  } else if (b.seg === 'mine') {
+    body = mine.length ? `<ul class="l">${mine.map(m => mineRow(m, { tex: true })).join('')}</ul>` : `<p class="empty">${w().empty}</p>`
+  } else if (b.group) {
+    const g = GROUPS.find(x => x[0] === b.group)
+    body = `<button class="crumb" data-a="bUp">‹ ${w().back}</button><div class="gl">${S.lang === 'en' ? g[1] : g[2]}</div><ul class="l">${sorted(E.filter(e => e.group === b.group)).map(entryRow).join('')}</ul>`
+  } else {
+    body = `<div class="tiles">${GROUPS.map(([g, en, pt]) => { const es = E.filter(e => e.group === g); return `<button class="tile" data-a="bGroup" data-g="${g}"><span class="nm">${S.lang === 'en' ? en : pt}<span>${es.length}</span></span><span class="tx">${es.map(e => esc(e.name[S.lang])).join(' · ')}</span></button>` }).join('')}</div>`
+  }
+  return `<div class="pb"><h2>${w().tab}</h2>${b.entry ? '' : seg}<input class="filter" id="q" placeholder="${w().filter}" value="${esc(S.q)}">${body}</div>${b.seg === 'mine' || searching ? footer() : `<div class="foot"><span>${w().kept}</span></div>`}`
+}
+
+// ---- Variant C: Constants and formulas in one Library tab, one press to place ----
+function VariantC() {
+  const chips = [['all', w().all], ['consts', w().consts], ['forms', w().forms], ['mine', w().mine]]
+  const showC = S.chip === 'all' || S.chip === 'consts', showF = S.chip === 'all' || S.chip === 'forms', showM = S.chip === 'all' || S.chip === 'mine'
+  const q = norm(S.q).trim()
+  let html = ''
+  if (showM) { const mh = mine.map(m => mineRow(m, { tex: true, one: true })).join(''); if (mh) html += `<div class="gl">${w().mine}</div><ul class="l">${mh}</ul>` }
+  if (showF) for (const [g, en, pt] of GROUPS) {
+    const hits = sorted(E.filter(e => e.group === g)); if (!hits.length) continue
+    html += `<div class="gl">${S.lang === 'en' ? en : pt}</div><ul class="l">${hits.map(([e, r]) => `<li><div class="row"><button class="main" data-a="place" data-id="${e.id}"><span class="tx">${K(e.tex)}</span><span class="ds">${hl(e.name[S.lang])}</span>${r.why ? `<span class="why">${esc(r.why)}</span>` : ''}</button><button class="ib" data-a="open" data-id="${e.id}" title="${w().preview}">ⓘ</button></div>${S.openId === e.id ? `<div class="open">${blockHtml(blockLines(e))}</div>` : ''}</li>`).join('')}</ul>`
+  }
+  if (showC) { const cs = CONSTS.filter(c => !q || norm(c.name[S.lang] + ' ' + c.id).includes(q)); if (cs.length) html += `<div class="gl">${w().consts} <span class="n">${w().constNote}</span></div><ul class="l">${cs.map(c => `<li><div class="row"><button class="main" data-a="const"><span class="tx">${K(c.tex + ' = ' + c.val)}</span><span class="ds">${esc(c.name[S.lang])}</span></button></div></li>`).join('')}</ul>` }
+  return `<div class="pb dense"><h2>${w().library}</h2><input class="filter" id="q" placeholder="${w().filter}" value="${esc(S.q)}"><div class="chips">${chips.map(([k, t]) => `<button class="chip" data-a="chip" data-v="${k}" aria-pressed="${S.chip === k}">${t}</button>`).join('')}</div>${html || `<p class="empty">${w().none}</p>`}</div>${showM ? footer() : ''}`
+}
+
+// ---- The mock sheet: two elements to select and save, and placing ----
+function initSheet() {
+  S.els = [
+    { id: 's1', x: 24, y: 64, title: 'Beam check', lines: [{ t: 'Beam check', k: 't' }, { t: 'b = 40 mm', k: 'm' }, { t: 'h = 80 mm', k: 'm' }, { t: 'I_x = b h^3 / 12', k: 'r', res: '1.707e6 mm^4' }, { t: 'sigma = 1.5 kN m · 40 mm / I_x', k: 'r', res: '35.16 MPa' }] },
+    { id: 's2', x: 40, y: 290, title: null, lines: [{ t: 'L = 2.5 m', k: 'm' }, { t: 'F = 3 kN', k: 'm' }, { t: 'M = F L', k: 'r', res: '7.5 kN m' }] },
+  ]
+}
+function elHtml(el) {
+  return `<div class="el${S.sel === el.id ? ' sel' : ''}" data-el="${el.id}" style="left:${el.x}px;top:${el.y}px">${el.lines.map(l => l.k === 't' ? `<div class="t">${esc(l.t)}</div>` : l.k === 'c' ? `<div class="c">${esc(l.t)}</div>` : `<div class="m">${esc(l.t)}${l.res ? `  <span class="r">= ${esc(l.res)}</span>` : ''}</div>`).join('')}</div>`
+}
+function renderSheet() {
+  const sh = document.getElementById('sheet')
+  let h = S.els.map(elHtml).join('')
+  if (S.placing) { h += `<div class="banner">${esc(w().placing(S.placing.title))}</div>`; if (S.ptr) h += `<div class="ghost" style="left:${S.ptr.x}px;top:${S.ptr.y}px">${esc(S.placing.title)}<br>${S.placing.lines.length} ${S.lang === 'en' ? 'lines' : 'linhas'}</div>` }
+  if (S.toast) h += `<div class="toast"><span>${esc(S.toast.t)}</span>${S.toast.undo ? `<button data-a="undo">${w().undo}</button>` : ''}</div>`
+  sh.innerHTML = h; sh.classList.toggle('placing', !!S.placing)
+}
+
+function render() {
+  const focusQ = document.activeElement && document.activeElement.id === 'q', caret = focusQ ? document.activeElement.selectionStart : 0
+  const side = document.getElementById('side')
+  side.style.width = S.width + 'px'
+  side.innerHTML = header() + ({ A: VariantA, B: VariantB, C: VariantC })[S.v]()
+  document.getElementById('vlabel').textContent = VARIANTS[S.v][0]
+  document.getElementById('vnote').textContent = VARIANTS[S.v][1]
+  for (const id of ['lang', 'width', 'scope']) for (const b of document.querySelectorAll(`#${id} button`)) b.setAttribute('aria-pressed', String(b.dataset.v === String({ lang: S.lang, width: S.width, scope: S.scope }[id])))
+  if (focusQ) { const q = document.getElementById('q'); q.focus(); q.setSelectionRange(caret, caret) }
+  const rn = document.getElementById('rn'); if (rn) { rn.focus(); rn.select() }
+  renderSheet()
+}
+
+// ---- Events ----
+document.addEventListener('click', ev => {
+  const t = ev.target.closest('[data-a], [data-v], [data-el]'); const sheet = ev.target.closest('#sheet')
+  if (sheet && S.placing) {
+    const r = sheet.getBoundingClientRect()
+    const el = { id: 's' + Date.now(), x: ev.clientX - r.left, y: ev.clientY - r.top, title: S.placing.title, lines: S.placing.lines }
+    S.els.push(el); S.sel = el.id; const title = S.placing.title; S.placing = null; toast(w().placed(title)); render(); return
+  }
+  if (!t) { if (sheet) { S.sel = null; render() } return }
+  if (t.dataset.el) { S.sel = t.dataset.el; render(); return }
+  const a = t.dataset.a, id = t.dataset.id
+  const ctl = t.closest('.controls .seg')
+  if (ctl && !a) { const k = ctl.id; S[k] = k === 'width' ? Number(t.dataset.v) : t.dataset.v; render(); return }
+  if (t.getAttribute('aria-disabled') === 'true') return
+  const e = E.find(x => x.id === id), m = mine.find(x => x.id === id)
+  switch (a) {
+    case 'fold': S.collapsed.has(t.dataset.g) ? S.collapsed.delete(t.dataset.g) : S.collapsed.add(t.dataset.g); break
+    case 'open': case 'openM': S.openId = S.openId === id ? null : id; break
+    case 'place': startPlacing(e.name[S.lang], blockLines(e)); return
+    case 'placeM': startPlacing(m.title, mineLines(m)); return
+    case 'rn': S.renaming = id; break
+    case 'rnok': renameMine(id, document.getElementById('rn').value); return
+    case 'rm': removeMine(id); return
+    case 'undo': S.toast.undo(); return
+    case 'save': saveSel(); return
+    case 'exp': toast(w().exported(mine.length)); break
+    case 'imp': toast(w().imported); break
+    case 'seg': S.bView = { seg: t.dataset.v, group: null, entry: null }; break
+    case 'bGroup': S.bView.group = t.dataset.g; break
+    case 'bUp': S.bView.group = null; break
+    case 'bEntry': S.bView.group = e.group; S.bView.entry = id; break
+    case 'bBack': S.bView.entry = null; break
+    case 'chip': S.chip = t.dataset.v; break
+    case 'const': toast(w().constNote); break
+    default: return
+  }
+  render()
+})
+document.addEventListener('input', ev => { if (ev.target.id === 'q') { S.q = ev.target.value; S.openId = null; if (S.v === 'B') S.bView.entry = null; render() } })
+document.addEventListener('keydown', ev => {
+  if (ev.key === 'Escape' && S.placing) { S.placing = null; render(); return }
+  if (ev.target.id === 'rn' && ev.key === 'Enter') { renameMine(S.renaming, ev.target.value); return }
+  if (ev.target.id === 'rn' && ev.key === 'Escape') { S.renaming = null; render(); return }
+  if ((ev.key === 'Enter' || ev.key === ' ') && ev.target.getAttribute('role') === 'button') { ev.preventDefault(); ev.target.click(); return }
+  if (ev.target.matches('input')) return
+  if (ev.key === 'ArrowLeft') cycle(-1); if (ev.key === 'ArrowRight') cycle(1)
+})
+document.getElementById('sheet').addEventListener('pointermove', ev => { if (!S.placing) return; const r = ev.currentTarget.getBoundingClientRect(); S.ptr = { x: ev.clientX - r.left, y: ev.clientY - r.top }; renderSheet() })
+function cycle(d) { const vs = ['A', 'B', 'C']; S.v = vs[(vs.indexOf(S.v) + d + 3) % 3]; S.openId = null; S.renaming = null; try { history.replaceState(null, '', '#' + S.v) } catch {} render() }
+document.getElementById('prev').addEventListener('click', ev => { ev.stopPropagation(); cycle(-1) })
+document.getElementById('next').addEventListener('click', ev => { ev.stopPropagation(); cycle(1) })
+initSheet(); render()
+</script>
