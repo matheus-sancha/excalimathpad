@@ -7,6 +7,12 @@
   through the sheet's settings, unit-named names warn, local unknowns and per-point
   lines). Amended items name the milestone that builds them; until then
   [`CONTEXT.md`](../../CONTEXT.md) says what the code does.
+- **Amended**: 2026-11-28 (the symbols release, after 1.0.0; #347, #360, not built): a
+  name declared on a symbols line is a definition in the one scope, from that line down. It is
+  a symbol even where it would read as a unit, an app constant or a built-in value, and it
+  doesn't warn. A use above the declaration keeps the fallback and its warning. A later
+  assignment gives it a value from there down, as any assignment does. See
+  [`docs/spec-v1.md`](../spec-v1.md) section 9a.
 
 ## Context
 

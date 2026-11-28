@@ -14,12 +14,13 @@ const count = (n) => n.toLocaleString('en-US')
  * 14, M4e, Documents), raised by 400 B for the text module's line and its
  * reader in Load-bearing (0.6.0, #290), and by 300 B for ADR 0008's line in
  * Decisions (0.7.0, the Math assistant's spec change), and by 500 B for the
- * assistant module's line in Modules (0.7.0, #306). Every build session
+ * assistant module's line in Modules (0.7.0, #306), and by 200 B for ADR
+ * 0009's line in Decisions (the symbols release's spec change). Every build session
  * reads the file whole, so it holds the model, the terms and where things
  * are, and nothing else. If the growth is meant, raise the budget in a commit
  * that says what was added.
  */
-export const CONTEXT_BUDGET = 38_900
+export const CONTEXT_BUDGET = 39_100
 
 /** The files a build session is routed through, and the history beside the spec. */
 const modules = readdirSync(join(root, 'docs/context')).map((name) => `docs/context/${name}`)
@@ -83,7 +84,7 @@ describe('the documents a build session reads (docs/spec-v1.md section 14, M4e, 
 
   it('keeps the spec at its path with every numbered section, so citations by number hold', () => {
     const numbers = [...read('docs/spec-v1.md').matchAll(/^## (\d+a?)\. /gm)].map((m) => m[1])
-    const expected = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '12a']
+    const expected = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '9a', '10', '11', '12', '12a']
     expect(numbers).toEqual([...expected, '13', '14', '15', '16', '17', '18'])
     expect(read('docs/spec-v1.md')).toMatch(/^### The finish line$/m)
   })

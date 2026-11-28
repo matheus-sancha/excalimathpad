@@ -550,3 +550,5 @@ marked with a milestone aren't built yet.
 - [ADR 0008](docs/adr/0008-math-assistant-calls-the-users-provider-directly.md) — the
   Math assistant calls the user's provider directly, with the user's key, only on a press
   (0.7.0, not built yet).
+- [ADR 0009](docs/adr/0009-formula-results-come-from-nerdamers-plain-parse.md) — formula
+  results come from nerdamer's plain parse through the app's own bridge (after 1.0.0, not built).

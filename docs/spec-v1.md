@@ -17,7 +17,9 @@ Edge on desktop. Installing it as an offline app is M6, built after 1.0.0
 calls the AI provider the user chooses, directly, with the user's own key, and only on a press.
 With no setup it makes no request ([section 12a](#data-protection), [Math assistant](#math-assistant)).
 From `0.6.0` the app's own text reads in English or in Português (Brasil), chosen in ☰
-([Language](#language)).
+([Language](#language)). After 1.0.0, a minor release of its own adds **formulas with symbols**:
+a `symbols F, d` line, and lines that show a combined formula instead of an error
+([section 9a](#9a-formulas-with-symbols)).
 
 From M4d it has a second home: an **Obsidian community plugin** that opens
 `.excalimathpad` files from a vault in its own tab, on desktop, phone and tablet,
@@ -92,9 +94,11 @@ a term that never reaches the screen. The words were agreed in
 | **Typeset row** | One line on screen: *gutter · equation (name · `≔` · expression, plus guess, search range or step) · result · note* | — |
 | **Line edit** | The one line shown as raw source, held as *anchor id + line index*. UI state | — |
 | **Line commit** | The moment an edit leaves a line whose text differs from the scene. Writes the source once and, from M4e, the line's stored format with it | — |
-| **Result** | What a line computes: a value with unit, a list, an error, or empty | resultado |
+| **Result** | What a line computes: a value with unit, a list, an error, or empty; from the symbols release, also a formula ([section 9a](#9a-formulas-with-symbols)) | resultado |
 | **Shown result** | A result as displayed: in its display unit, else in the unit system, with Digits applied | resultado exibido |
 | **Plain input** | A line whose right side is a literal (`D = 102.3 mm`). Its result cell stays empty | entrada simples |
+| **Symbol** | From the symbols release: a name declared on a symbols line (`symbols F in kN`), standing for a quantity with no value yet. Its optional unit sets its kind ([section 9a](#9a-formulas-with-symbols)) | símbolo |
+| **Formula result** | From the symbols release: a line's result while a symbol it uses has no value, the formulas above substituted in and written as one fraction | resultado em fórmula |
 | **Problem** | An error or warning on a line, with its element and line. Derived | problema: erro, aviso |
 | **Unit slot** | The clickable unit in a result cell or table header. The UI for a display unit | seletor de unidade |
 | **Display unit** | Optional, per line, stored as a trailing `in <unit>`. Display-only | unidade de exibição |
@@ -347,6 +351,7 @@ brackets (a matrix row, `[1, 2; 3, 4]`) is unaffected.
 | Range | `Q_s = 1 L/s .. 30 L/s step 1 L/s` | M4 | List summary |
 | Table line | `table(Q_s, Hs(Q_s), Hp(Q_s))` | M4 | Empty; rows draw under the line |
 | Plot line | `plot(Q_s, Hs(Q_s), Hp(Q_s)), mark Q_op` | M4 | Empty; the chart draws under the line |
+| Symbols line | `symbols F in kN, d in mm` | After 1.0.0 ([section 9a](#9a-formulas-with-symbols)) | None; grey math spans the row |
 
 Any form with code can end with a `# note`. Any line with a value can end with
 `in <unit>`, on the left of the note:
@@ -653,7 +658,8 @@ the Symbols tab inserts at the caret; and the sheet works by touch.
   inside the expression cell.
 - **Range line:** `Q_s ≔ 1 L/s … 30 L/s`, with the step small and grey after it.
 - `in <unit>`, plot clauses and the format clause don't show when typeset. They show
-  in source.
+  in source. From the symbols release, the `in` on a symbols line is the one exception
+  ([section 9a](#the-symbols-line)).
 - **Format:** a line's bold, underline and highlight apply to its whole row: equation,
   result and note. The highlight is a soft band behind the row, in one of five colours
   that keep the text readable, in the dark theme too. On a table or plot line it covers
@@ -1609,7 +1615,8 @@ on a text is the line's error.
 value is divided by the chosen unit, and the leftover dimension shows in base units of
 the system: Δp in `m` shows `4.543·10⁴ m·kg/(m²·s²)`. The same applies when a result's
 kind changes after a unit was chosen. The list only offers the right kind, so a
-mismatch only comes from typing.
+mismatch only comes from typing. From the symbols release, a unit of the wrong kind on a formula
+is a warning instead ([section 9a](#formula-results)).
 
 ### Unit systems
 
@@ -1735,6 +1742,8 @@ Problems tab. The name wins, and the warning doesn't change a result.
 - Names that aren't units or built-ins don't change.
 - A constant's short name is free to take: `R`, `k` and `c` don't warn. `h` and `hbar` do,
   being units as well.
+- From the symbols release, a name declared on a symbols line doesn't warn, whatever it
+  shadows. A use above the declaration still does ([section 9a](#the-symbols-line)).
 
 **A function body name not defined above** gets an amber `⚠` on the definition.
 
@@ -2198,7 +2207,7 @@ As built (#198):
 
 | Tab | Holds |
 |---|---|
-| **Variables** | A filter box, then every name in reading order, grouped by element, labelled by the element's position. Row: typeset name, value, unit, in the unit system and Digits. A name defined twice appears twice. A line with an error shows "error". A text shows plain, as in its result cell (M4d). A list shows its summary (`30 values, 1 … 30 L/s`). A function shows its signature, `H_s(Q)`, with `function` or `solve function` as the value and a blank unit. Comments and notes don't appear. From 0.5.0 every row ends in a ✎ that opens the rename form under it ([Renaming a name](#renaming-a-name)); a press on the ✎ or in the form doesn't jump |
+| **Variables** | A filter box, then every name in reading order, grouped by element, labelled by the element's position. Row: typeset name, value, unit, in the unit system and Digits. A name defined twice appears twice. A line with an error shows "error". A text shows plain, as in its result cell (M4d). A list shows its summary (`30 values, 1 … 30 L/s`). A function shows its signature, `H_s(Q)`, with `function` or `solve function` as the value and a blank unit. Comments and notes don't appear. From 0.5.0 every row ends in a ✎ that opens the rename form under it ([Renaming a name](#renaming-a-name)); a press on the ✎ or in the form doesn't jump. From the symbols release a symbol reads `symbol` and a formula shows typeset ([section 9a](#everywhere-else)) |
 | **Problems** | Errors `●` and warnings `⚠` in one list in reading order, each with its message and "element, line n · name". Comments and notes don't appear |
 | **Settings** | Unit system, and for Custom its kind → unit table. Digits, 2 to 15. Result colour, one of six (M4c). Page: A4 or Letter, portrait or landscape (M5, #80: one row, the paper size over the orientation, so both fit at 280 px) |
 | **Constants** | A filter box, then every [built-in constant](#constants) in its group. Row: its symbol typeset and its value in the unit system and Digits, then what it is and the names a line reads it by (`c or speedOfLight`). The filter matches names and descriptions. Nothing here is the sheet's, so a row doesn't jump. From M4d a click inserts its name at the caret ([Symbols tab](#symbols-tab)) |
@@ -2222,7 +2231,9 @@ Excalidraw's Help). It is the same on the web, offline and in a vault, and makes
   order: a first sheet; lines and names; units; numbers and constants; functions; checks
   and conditions; solve; ranges and lists; tables; plots; comments and notes; formatting;
   the Symbols tab; the Sheet panel; files and recovery; keys and gestures (saying that
-  Excalidraw's Help lists the drawing keys); common messages.
+  Excalidraw's Help lists the drawing keys); common messages. From the symbols release it has
+  18: **Formulas with symbols** comes after solve, and the 600-line limit is raised by what that
+  section adds ([section 9a](#everywhere-else)).
 - Each form is a row of **Write | Shows | Note**; a multi-line example is a code block with
   each line's result after `→`. No screenshots.
 - It links only to its own sections, and to no file or site.
@@ -2232,14 +2243,15 @@ Excalidraw's Help). It is the same on the web, offline and in a vault, and makes
 - The dialog closes on Esc, ✕ or a click outside, and is as wide as the view allows up to
   about 760 px.
 - **Two files, one shape** (0.6.0): `docs/math-guide.pt-BR.md` is the guide in Português, with
-  the same 17 sections in the same order and the same Write cells, row for row and character
+  the same sections (17; 18 from the symbols release) in the same order and the same Write cells, row for row and character
   for character: only the titles, the prose, the Notes and the Shows cells that hold the app's
   words are translated. ☰ → Math guide (Guia de cálculo) opens the one for the language shown,
   and a language chosen while it is open changes it at once. Both builds carry both, and the
   test runs each against the engine in its own language: an error from math.js that isn't in
   the [known list](#13-messages) reads the same English in both guides. A CI test fails if the
   two files differ in sections, rows or Write cells, so a form added to one is added to the
-  other in the same pull request. Each stays within the 600 lines.
+  other in the same pull request. Each stays within the 600 lines, a limit the symbols release
+  raises by what its section adds.
 
 ### Language
 
@@ -2636,7 +2648,7 @@ E2  (no title)
 | `E<n>  title: "<title>"`, `E<n>  (no title)` | A math element |
 | `T<n>  text: "<text>"` | A text element; a line break in it is written `\n` |
 | `  <n> \| <source>` | A line, as the engine reads it |
-| `    = <result>` | The line's result as shown; `= (input)`, `= (function)` for a line that shows none; a comment line has no `=` row |
+| `    = <result>` | The line's result as shown; `= (input)`, `= (function)` for a line that shows none; a comment line has no `=` row. From the symbols release a formula is `= 4 F / (pi d^2) Pa (formula)` and a symbols line `(symbols: F in kN, d in mm)` ([section 9a](#everywhere-else)) |
 | `    ! error: <message>` | The line's error |
 | `    ~ warning: <message>` | A warning, one row each |
 | `    solve: <details>` | A solve line's details, on one row: a guess solve's `guess, Brent, <n> iterations, residual <r>, bracket <a> .. <b>`; a range solve's `range <range>, scan + Brent, <n> points, <k> roots found in the range: <root>, residual <r>; …, <m> crossings rejected as poles or jumps` (a root that only touches zero adds `(touching)`) |
@@ -3289,9 +3301,278 @@ Decided in: [solve](https://github.com/matheus-sancha/excalimathpad/issues/19),
 ([`all-roots-solve.md`](research/all-roots-solve.md)),
 [all-roots solve](https://github.com/matheus-sancha/excalimathpad/issues/92).
 
+## 9a. Formulas with symbols
+
+Built after 1.0.0, in a minor release of its own ([After 1.0.0](#after-100)). Until that release
+nothing here is built, and a name with no value is an error, as everywhere else in this spec. A
+**symbols line** declares some names as **symbols**: names that stand for a quantity with no value
+yet. A line that uses a symbol shows a **formula result**. The formulas above it are substituted in,
+and the result is written as one fraction.
+
+```
+symbols F in kN, d in mm                    (grey, across the row)
+A = pi * d^2 / 4                            see Open questions below
+sigma = F / A in MPa                        4 F / (π d²)  MPa
+F = 10 kN
+d = 20 mm
+sigma_num = sigma in MPa                    31.83 MPa
+```
+
+The use is **showing the combined formula**. There is no solving for another name, no calculus,
+and no `expand` or `factor` to call ([Not in this release](#not-in-this-release)).
+
+### The symbols line
+
+- **Written** `symbols <name>, <name>, …` on a line of its own. `symbol` is the same word (the first
+  keyword with two spellings). Both are English in both languages, like every keyword, and have no
+  Português spelling.
+- **A unit on a symbol is optional:** `symbols F in kN, d in mm`. The unit sets the symbol's
+  **kind** only (`kN` says F is a force). A symbol with no unit (`symbols x`) is a **pure number**,
+  not "kind unknown", and the unit check holds it to that: `y = x + 2 m` is `Units do not match`.
+- **Read before math.js** (ADR 0005), after the comment and format steps and **before** the display
+  unit step, so every `in` belongs to the symbol before it.
+- **Scope: from that line down, in reading order,** across the whole sheet, in the sheet's one scope
+  (ADR 0003). The declaration counts as a definition: it binds the name in the scope and puts it in
+  `definedAt`.
+- **A declared name is a symbol even where math.js would read it as something else:** a unit (`F`
+  farad, `h` hour, `b` bit, `g` gram), an app constant (`R`, `k`, `c`) or a built-in **value** (`E`,
+  `i`, `pi`). This is **silent**: no shadow warning on the symbols line, on a later value, or on a
+  use below. A use **above** the line keeps today's fallback warning (`F reads as the unit F here:
+  the variable is defined below`).
+- **A function name** (`sqrt`, `sin`, `max`) **or a line-form keyword** (`table`, `plot`, `solve`,
+  `if`, `symbols`, `symbol`) can't be declared. It is the line's error.
+- **A later value wins from there down.** An assignment below the declaration (`F = 10 kN`) gives
+  the name a value for the lines below it, as any assignment does. Formulas above stay formulas.
+  A later symbols line that names it again makes it a symbol again from that line down.
+- **A later value of another kind** (`F = 40 mm` after `symbols F in kN`) still assigns, and gets an
+  amber `⚠` warning on that line, `F was declared as a force`. It never changes a result. A value in
+  any unit of the declared kind (`F = 2500 N`) is silent.
+- **Any other name with no value stays an error** (`Undefined symbol sigam`), so a typo still errors.
+  A sheet with no symbols line evaluates exactly as before.
+- **A trailing `# note`** is allowed and draws grey after the declaration. **A format** typed on the
+  line (`@bold`) is the line's error: `a symbols line takes no format`.
+- **Reserved:** `symbols` and `symbol` become line-form names, like `table`, `plot` and `solve`.
+  `symbols = 3` or `symbol(x) = …` is the line's error, `symbols is a line form: choose another name`.
+  There is no migration and no rename offer for a sheet that used either as a name. The user
+  retypes the name, and lines that use the old name become errors where they meet it, as today.
+
+**Typeset.** A symbols line has a comment line's geometry. It spans the row from the equation
+column on (`grid-column: 2 / -1`) in quiet grey, with no result cell and no note column of its own.
+But it is **typeset as math** (KaTeX: italic names, upright `\mathrm{in}` and units). Every
+`in kN` is drawn, because it is the declaration's content. This is the one exception to "`in <unit>`
+doesn't show when typeset" ([section 4](#typeset-grid)). A symbol with no unit shows its name only. An error on the line
+uses the gutter, as a comment line's clause error does. Screen and print are the same.
+
+**Suggestions.** `symbols` joins the Sheet forms group of the [Symbols tab](#symbols-tab) catalogue
+and the typing list. Taking it adds a space, as `solve` does. Its hint is the only part translated:
+"names with no value, for a formula result" / "nomes sem valor, para um resultado em fórmula".
+The list stays closed while a symbol's name is typed (after `symbols ` and after each comma), but
+not inside a trailing `# note`. After `in` it offers units only, as today. The undefined-name
+error (`Undefined symbol x` / `Símbolo indefinido x`) is not reworded.
+
+### Formula results
+
+- **A formula line** is a line whose expression, once the formulas above are substituted in, still
+  holds a symbol that has no value at that line. It shows a formula. Once every symbol it reaches has
+  a value, it shows a number, as any line does (`sigma_num = sigma` above).
+- **Substitution** is math.js `resolve`: each formula name above is replaced by its formula.
+- **One fraction, and nothing else.** The result is written as one numerator over one denominator,
+  and common factors cancel: `sigma = F / A` with `A = pi * d^2 / 4` gives `4 F / (π d²)`.
+  `M c / I` with `I = b h^3 / 12` and `c = h / 2` gives `6 M / (b h²)`. Axial plus bending gives
+  `(6 M + F h) / (b h²)`, and Euler buckling on a round bar gives `π³ E d⁴ / (64 K² L²)`.
+  - **A name with a value stays its name** in a formula. Known numbers are not folded in.
+  - **Integers combine and cancel** (the `12` and `2` above give `6`). **A decimal stays as typed**
+    and is not combined: `0.85 f_ck / 1.5` and `1.2 D / 2` come back as typed.
+  - **Unit literals stay as typed** (`y = 2 m * (a + 3 mm)` shows `2 m (a + 3 mm)`). The same unit
+    combines with itself (`m · m` is `m²`, `4 kN / (a · 2 kN)` is `2 / a`). Different units never
+    convert and never cancel (`m` and `mm`), so a formula is not reduced across units.
+  - **A function call** other than `sqrt` and `abs` is kept whole, with its arguments substituted:
+    `sin(π x / L) / L` stays as written, and `log10(x) / log10(x)` cancels to `1`.
+  - **`sqrt(a^2)` comes back as `abs(a)`.** `sqrt(I/A)` for a round bar shows `|d| / 4`.
+  - **The order of factors is the engine's,** not the line's. **A sum keeps its terms:** no common
+    factor is taken out of them.
+  - A formula that comes back unchanged (von Mises) shows as its substituted form.
+- **Every formula is checked for units.** The app evaluates the substituted formula in math.js with a
+  stand-in value of the declared unit for each symbol (a pure number for a symbol with no unit). Only
+  a **unit** error from that run counts: a function's domain, a comparison or a zero in the stand-ins
+  never fails the line. A mismatch (`bad = F + d`) is the line's **error**, `Units do not match`, as
+  on a numeric line. No formula is shown, and lines below that use it get `bad has an error above`.
+  The check is math.js alone: nerdamer is not involved.
+- **`in <unit>` on a formula line is a kind check.** `sigma = F / A in MPa` checks that the formula
+  is a pressure. A wrong kind is an amber `⚠` warning: `sigma is a force per length, not a pressure`.
+  This differs from a number, where a wrong-kind unit is balanced silently ([section 5](#unit-slot)).
+  The clause is kept, so once every symbol has a value the line shows its number in that unit, and
+  balances it as section 5 says.
+- **A size guard runs before the engine combines a formula,** like the guard in `limits.ts`. An input
+  too large to combine is the line's error, not a frozen sheet. Two examples: `10^100000 x`, whose
+  integer math.js reads as `Infinity`, and a chain of 30 squarings, whose exponents reach about 1e9.
+
+### In the result cell and print
+
+- **A formula sits in the result cell, like a number,** after the column rule, in the result colour,
+  at the cell's size: the app's inline KaTeX, so fractions are small, as on the equation side.
+  Nothing depends on hover. Screen and print are the same.
+- **The unit beside a formula is the sheet's unit for its kind:** the unit a number of that kind
+  would show in, so `Pa` for a stress in SI. `in MPa` on the line, or the unit slot, changes it, as
+  for a number (`4 F / (π d²)  MPa`). It is the unit the formula's value will show in once its
+  symbols have values. The unit check guarantees that kind. With no `in`, it can differ from every
+  declared symbol's unit (σ shows `Pa` while F is in kN and d in mm). That is accepted, and so is a
+  reader taking the unit as "times one MPa".
+- **A formula wider than about 320 px moves to its own row.** 320 px is the cap an error has
+  ([section 4](#problems)). That one formula is drawn on a row of its own under its equation, at
+  display size, led by a grey `=`, with its unit after it. The other formulas and every number stay
+  in the result column. So one long formula neither widens its element nor shrinks the printed
+  sheet. On that row a long numerator breaks into lines under one fraction bar, at its top-level `+`
+  and `−` signs, because KaTeX can't break inside a fraction.
+
+### Everywhere else
+
+- **Variables tab.** A **symbol's** row reads `symbol` (`símbolo`) in the value column. Its unit
+  column shows the declared unit (`kN`), or is blank for a pure number. That is the same shape as a
+  function's row. A symbol that gets a value further down appears twice, once as `symbol` and once
+  with its value, as any name defined twice does. A **formula's** row shows the formula typeset,
+  with the sheet's unit for its kind beside it, as in the result cell. A formula too wide for its row
+  goes under its name, as a constant's long value does, and is never cut.
+- **Problems tab.** No new behaviour. A jump lands on the line. The kind warning on a later value is
+  listed on that assignment line. The kind warning from `in` and `Units do not match` are listed on
+  the formula's own line.
+- **Tables and plots.** A `table(…)` or `plot(…)` argument that is still a formula is an **error in
+  that line's result cell** that names the symbol with no value: `sigma is a formula; give F a value
+  first`. Nothing is drawn. Formula names are not hidden from suggestions inside `table()` or
+  `plot()`.
+- **Rename** ([Renaming a name](#renaming-a-name)). From a **symbol's** ✎, a rename covers its entry
+  on the symbols line and every later line that reads **or assigns** that name, left sides included,
+  down to the next symbols line that declares it again. So `F = 10 kN` below becomes
+  `F_ax = 10 kN`, and `sigma_num = sigma` keeps its number. A rename from a value row or a formula
+  row follows today's rule, one assignment. The warning under the field follows whatever the line
+  would raise, because a rename allows what typing allows. Renaming a symbol to `F` is silent, and
+  renaming it to `sin` is refused.
+- **Math assistant** ([Math assistant](#math-assistant)). In the sheet's listing, a formula goes as
+  linear math.js text with its kind's unit and a marker, `= 4 F / (pi d^2) Pa (formula)`. A symbols
+  line goes as `(symbols: F in kN, d in mm)`. A formula line with an error is the usual
+  `! error: …`. The assistant's instructions don't change: every Send already carries the Math
+  guide, which teaches the form, and "do not redo the arithmetic" already covers a combined formula.
+- **Math guide** ([Math guide](#math-guide)). A section of its own, **Formulas with symbols**
+  (`Fórmulas com símbolos`), placed after Solve as section 8, so the guide has 18 sections. It has
+  Write | Shows | Note rows and one grey block with the `sigma = F / A`, `A = pi * d^2 / 4` →
+  `4 F / (π d²)` example. It covers: `symbols F, d` (or `symbol`) and the lines it applies to; a unit
+  on a symbol and what no unit means; a later value for the lines below; the kind check and `in` on a
+  formula; a long formula moving to its own row; and the error a formula gives in `table()` or
+  `plot()`. There is no example sheet: the grey block is the example, and the guide's CI test checks
+  it.
+
+### Files and older builds
+
+- **The file format doesn't rise** ([section 7](#the-file)). Lines are stored as text in
+  `customData.source`. A 1.0.x build opens a sheet with a symbols line and shows that line, and
+  every line that uses a symbol, as errors. Its save writes each line's text back as typed, so
+  nothing is lost, and the sheet reads correctly again on a newer build. Sheets with no symbols
+  line keep moving freely between versions. A format that rises only while a sheet holds a symbols
+  line was ruled out, as it was for the Excalidraw upgrade, because the format doesn't depend on
+  the content.
+- **The release notes say** that a device still on 1.0.x shows symbol lines as errors until it
+  updates, and keeps them intact.
+
+### How it is built
+
+- **The engine is nerdamer 2.1.0** (Apache-2.0; its one dependency is `decimal.js`; it needs
+  `BigInt`). It is imported as `nerdamer/core`. The build has esbuild stub the one module that holds
+  its `new Function` (`buildFunction`, in `output/core/functions/build/index.js`, which the bridge
+  never calls), so the bundle audit finds none. The default import is one prebuilt file and can't be
+  stubbed, so it is not used.
+- **Only nerdamer's plain parse is called.** Its `simplify`, `factor`, `gcd` and `expand` are never
+  called: `simplify` ran for 83 s on a sum of four fractions. math.js `simplify` and `rationalize`
+  stay unused, and the `DISABLED_IN_EXPRESSIONS` list is unchanged.
+- **It runs synchronously, with no worker,** like the rest of evaluation ([section 14](#14-engineering-constraints)).
+  A worker would make formula results asynchronous, and in the plugin it would have to start from a
+  `data:` or blob URL that nobody has tried on iOS. A worker becomes necessary only if `simplify`,
+  `factor` or `gcd` ever enter the subset.
+- **The bridge** is a module of its own in `src/math/`. Its name is not `symbols.ts`, which is the
+  Symbols tab's catalogue. It works on the math.js node after `resolve`, in three steps:
+  1. **Into nerdamer.** Every name becomes a placeholder atom (`v1`, `v2`, … in order of first use):
+     a declared symbol, a unit literal (`MPa` in `250 MPa`), and an undeclared constant (`pi`, `e`,
+     `E`, `i`). So does every decimal literal, and every function call other than `sqrt` and `abs`.
+     Integers, `+ - * / ^`, unary minus and parentheses go through as they are. Anything else
+     (`mod`, `!`, comparisons, ranges, indices, matrices) is refused. A declared name is a symbol
+     even straight after a number (`3 t_xy^2`). Otherwise a name after a number is a unit literal,
+     and otherwise it is a constant.
+  2. **One fraction, built by the bridge.** A product multiplies both halves, and a quotient crosses
+     them. An integer power raises both, and a negative one swaps them. A sum reduces each term, then
+     puts the terms over the least common multiple of their monomial denominators, or over their
+     product otherwise. nerdamer's plain parse of each half then cancels.
+     `numerator()`/`denominator()` on the whole text is not used: it fails on a sum of fractions and
+     on `a/(b/(c/d))`.
+  3. **Back to math.js.** `parse` reads the numerator's and the denominator's text, `x^(1/2)` becomes
+     `sqrt(x)`, and each atom gets its original node back. `num / den` then goes to the app's own
+     `lineTex`. The own-row line break at the numerator's top-level `+` and `−` is the bridge's too.
+- **Messages are codes** ([ADR 0007](adr/0007-engine-returns-message-codes.md)). Each new message has
+  its row in [section 13](#13-messages).
+- **Size.** `nerdamer/core` adds about 0.41 MB to the plugin's `main.js`: 414,578 bytes in the real
+  build, and 401,535 bytes when stubbed, measured on its own. The release's issue raises `BUDGET` by
+  the measured growth, as [section 12a](#releases) says. With the Excalidraw upgrade, `main.js` is
+  about 4.6 MB of the 5,000,000-byte cap, and whatever is queued first after 1.0.0 takes from the
+  same room.
+
+### Not in this release
+
+- Rearranging a formula for another name (symbolic solving), calculus on formulas (derivatives,
+  integrals), and a general computer algebra system.
+- `expand` or `factor` for the user to call, and folding a known number into a formula.
+- Converting a unit literal to the sheet's unit, or reducing a formula across units.
+- An example sheet, and a third acceptance sheet.
+
+**Open questions** (to settle before or while building; none changes the shape above):
+
+- Whether a formula that reads the same as its equation (`A = pi * d^2 / 4`, `σ_y = p r / t`) shows
+  again in the result cell, or leaves the cell empty, as a plain input does.
+- What the result cell shows when its formula has moved to its own row: empty, or a mark (the
+  prototype used a small grey "formula ↓").
+- The exact width at which a formula moves, and whether it is measured on the typeset formula or on
+  its source.
+- What a line shows when the bridge refuses it: a symbol reaching a comparison, a conditional
+  (`if()`, `? :`), a range, an index, a matrix or a solve. The same question covers a rule's
+  condition (`@text-red if sigma > …`) on a formula line, a function body that uses a symbol, and a
+  formula passed to a sheet function.
+- `M (h/2)` with `M` a symbol: math.js reads it as a call of `M`. For a value the sheet errors
+  (`M is a value, not a function: …`). The same error for a symbol is the obvious pick, not yet
+  chosen.
+- Which symbol `sigma is a formula; give F a value first` names when several have no value. The
+  first in reading order is the obvious pick.
+- How the stand-in values for the unit check are picked, so that nothing but units can fail.
+- The wording of the kind warning from `in` when the formula's kind has no name in the kinds list,
+  and of the size guard's error.
+- Whether the Format tab offers a format on a symbols line, which takes none when typed.
+- What the unit slot's list shows for a formula, which has no value to show in each unit.
+- How the rename form's "changed result" report counts a symbol's rename, which covers several
+  assignments.
+- Whether symbols are taken as positive, so `sqrt(d^2)` shows `d` and not `|d|`, and whether the
+  factors are put back in the line's own order. Today both come from nerdamer as they are.
+- The Português wordings this section adds (the guide's section title, `símbolo`, and the new rows
+  in section 13): drafted with the spec, to be confirmed by Matheus on its pull request.
+
+Decided in: [map](https://github.com/matheus-sancha/excalimathpad/issues/343),
+[math.js's simplify and resolve](https://github.com/matheus-sancha/excalimathpad/issues/345)
+([`symbolic-mathjs-simplify.md`](research/symbolic-mathjs-simplify.md)),
+[other JavaScript libraries](https://github.com/matheus-sancha/excalimathpad/issues/346)
+([`symbolic-js-libraries.md`](research/symbolic-js-libraries.md)),
+[declared symbols](https://github.com/matheus-sancha/excalimathpad/issues/347)
+([`symbolic-trigger-prototype/`](research/symbolic-trigger-prototype/NOTES.md)),
+[go, and the subset](https://github.com/matheus-sancha/excalimathpad/issues/348),
+[the bridge and hangs](https://github.com/matheus-sancha/excalimathpad/issues/355)
+([`symbolic-nerdamer-bridge.md`](research/symbolic-nerdamer-bridge.md)),
+[units on symbols](https://github.com/matheus-sancha/excalimathpad/issues/356),
+[the result cell and print](https://github.com/matheus-sancha/excalimathpad/issues/357)
+([`formula-result-prototype/`](research/formula-result-prototype/build.mjs)),
+[everywhere else](https://github.com/matheus-sancha/excalimathpad/issues/359),
+[the symbols line](https://github.com/matheus-sancha/excalimathpad/issues/360)
+([`symbols-line-facts.md`](research/symbols-line-facts.md)),
+[the release and the guide](https://github.com/matheus-sancha/excalimathpad/issues/361),
+[older sheets and builds](https://github.com/matheus-sancha/excalimathpad/issues/362).
+
 ## 10. Ranges, tables, plots
 
-Built in M4. The index and per-point rules arrive with M4c.
+Built in M4. The index and per-point rules arrive with M4c. From the symbols release, a formula
+passed to `table()` or `plot()` is the line's error ([section 9a](#everywhere-else)).
 
 ### Ranges and lists
 
@@ -4545,6 +4826,24 @@ and the Attachments rows from
 [attachments](https://github.com/matheus-sancha/excalimathpad/issues/249), where six of them
 are quoted and the rest were written for this spec.
 
+**Formulas with symbols** (the symbols release, after 1.0.0; [section 9a](#9a-formulas-with-symbols))
+
+| When | Message | Português | Arrives |
+|---|---|---|---|
+| `symbols` or `symbol` assigned to | `symbols is a line form: choose another name` | `symbols é uma forma de linha: escolha outro nome` | Symbols release |
+| A function name declared as a symbol | `sqrt is a function and can't be a symbol` | `sqrt é uma função e não pode ser um símbolo` | Symbols release |
+| A line-form keyword declared as a symbol | `solve is a line form and can't be a symbol`; for `if`, `if is a function and can't be a symbol` | `solve é uma forma de linha e não pode ser um símbolo`; `if é uma função e não pode ser um símbolo` | Symbols release |
+| A format on a symbols line | `a symbols line takes no format` | `uma linha symbols não aceita formato` | Symbols release |
+| A later value of another kind than declared (warning) | `F was declared as a force` | `F foi declarado como uma força` | Symbols release |
+| `in <unit>` of another kind on a formula (warning) | `sigma is a force per length, not a pressure` | `sigma é uma força por comprimento, não uma pressão` | Symbols release |
+| A formula whose units don't match | `Units do not match`, math.js's, as on a number | `As unidades não correspondem` | Symbols release |
+| A formula passed to `table()` or `plot()` | `sigma is a formula; give F a value first` | `sigma é uma fórmula; dê um valor a F primeiro` | Symbols release |
+
+The English rows are quoted from the tickets in section 9a's Decided in, except the keyword row,
+which applies the function row's shape. The whole Português column was written for this spec and
+is for Matheus to review on its pull request. The size guard's error and the kind warning for a
+kind with no name are open (section 9a, Open questions).
+
 ## 14. Engineering constraints
 
 What was tested, and fails silently or wrongly if skipped. Module design isn't here: that's the
@@ -4568,7 +4867,9 @@ Engineer's design gate. Tested on Excalidraw 0.18.1, math.js 15.2 and Chromium.
 - **Number format:** `math.format(value, { precision: d, notation: 'auto', lowerExp: -3, upperExp: d })`
   gives the cell forms, and padding the mantissa keeps table zeros. `toPrecision` isn't a substitute.
   ([numbers](https://github.com/matheus-sancha/excalimathpad/issues/30))
-- **Results typeset from `math.format`'s text.** `simplify()` gave a different prefix.
+- **Results typeset from `math.format`'s text.** `simplify()` gave a different prefix. From the
+  symbols release a formula result is typeset from its node through `lineTex`, and the bridge to
+  nerdamer runs on the main thread with no worker ([section 9a](#how-it-is-built)).
   ([typesetting](https://github.com/matheus-sancha/excalimathpad/issues/13))
 - **The custom `toTex` handler** covers math.js's upright-parameter bug, and a name's output starts with
   a space (`\cdotv` breaks KaTeX). KaTeX is a direct dependency, loaded lazily.
@@ -5937,6 +6238,26 @@ Decided in: [milestones](https://github.com/matheus-sancha/excalimathpad/issues/
 [0.5.0](https://github.com/matheus-sancha/excalimathpad/issues/235),
 [the Excalidraw upgrade](https://github.com/matheus-sancha/excalimathpad/issues/257).
 
+### After 1.0.0
+
+Work waits for 1.0.0 to be out: M6 Offline PWA, Export
+([#221](https://github.com/matheus-sancha/excalimathpad/issues/221)), the refactors
+[#204](https://github.com/matheus-sancha/excalimathpad/issues/204) and
+[#205](https://github.com/matheus-sancha/excalimathpad/issues/205), the chat on a phone and a
+tablet, formulas with symbols, and the formula library, which is still being charted on
+[its own map](https://github.com/matheus-sancha/excalimathpad/issues/344). Their order is set once
+1.0.0 is out.
+
+- **Formulas with symbols** ([section 9a](#9a-formulas-with-symbols)) ship in a minor release of
+  their own (`1.x.0`), with a test week of their own. They don't ship with the formula library or
+  with any other feature. The spec gives no version number now, and the release is called the
+  **symbols release** here.
+- **Size is shared.** With the Excalidraw upgrade and nerdamer, `main.js` is about 4.6 MB, about
+  0.4 MB under the 5,000,000-byte cap. Whichever work is queued first after 1.0.0 takes from the
+  same room.
+
+Decided in: [the release and the guide](https://github.com/matheus-sancha/excalimathpad/issues/361).
+
 ## 17. Verify first
 
 Everything the tickets marked untested. Check each early in its milestone, and record the result here or in a
@@ -6089,12 +6410,50 @@ M1 to M5, is in [`docs/spec-history.md`](spec-history.md#17-verify-first), with 
 - Installing, the Windows "Open with" association, and saving back to an opened file.
 - The service worker precaching the lazy plot and KaTeX chunks.
 
+**Symbols release** (section 9a)
+
+- `symbols L in in`: an inch unit after `in`, read as `splitDisplayUnit` reads `in in^2`. Not tried
+  on a symbols line.
+- A 1.0.x build opening and saving a sheet with a symbols line keeps every line's text. Read from
+  the spec and `sheetFormat.ts`, not run in a 1.0.x build.
+- The bridge on the app's own reading of a line: formats, app units, `in` clauses, value lines,
+  and a formula mixed with a value. The prototype used plain math.js and only assignments of
+  formulas.
+- nerdamer's plain parse on a phone. Every input tried ran in under 50 ms (1.2 s at most, for 40
+  fractions over 80 symbols), but in Node on a desktop only. That none ran without bound is not a
+  proof that none does.
+- The stubbed `nerdamer/core` inside the real plugin build: measured on its own (401,535 bytes),
+  with no `new Function` left for the audit.
+- A symbols line's grey math in a comment line's slot, on screen and in print.
+- Suggestions that close after a comma on a symbols line don't misfire inside its trailing
+  `# note`.
+- nerdamer's maintenance (one committer on its ten latest commits, 24 open issues), checked again
+  when the release is built.
+
 ## 18. Decision index
 
 The table of the tickets this spec came from, and the sections each fed, is in [`docs/spec-history.md`](spec-history.md#18-decision-index).
 Each section above ends with its own tickets.
 
 ## Changes since agreed
+
+- 2026-11-28, [sections 2](#terms), [4](#typeset-grid), [5](#warnings), [8](#math-guide) and
+  [14](#14-engineering-constraints), for the symbols release after 1.0.0 (the map
+  [Decide whether Excalimathpad gets symbolic results, and which subset](https://github.com/matheus-sancha/excalimathpad/issues/343),
+  each chosen by Matheus from 2026-11-25 to 2026-11-28; the behaviour is in
+  [section 9a](#9a-formulas-with-symbols)):
+  - **A result can be a formula.** It was a value, a list, an error or empty.
+  - **`symbols` and `symbol` are reserved,** with `table`, `plot`, `solve` and `if`.
+  - **A symbols line shows its `in`.** "`in <unit>` doesn't show when typeset" now has one
+    exception.
+  - **A declared name doesn't warn** when it shadows a unit, an app constant or a built-in
+    value.
+  - **`in <unit>` of the wrong kind warns on a formula.** On a number it is still balanced
+    silently.
+  - **The Math guide has 18 sections, not 17,** and its 600-line limit is raised by what
+    Formulas with symbols adds.
+  - **"Results typeset from `math.format`'s text"** holds for numbers. A formula result is
+    typeset from its node.
 
 - 2026-11-23, [section 14](#14-engineering-constraints), 0.7.0, Size ([#311](https://github.com/matheus-sancha/excalimathpad/issues/311),
   confirmed by Matheus on its pull request): **`BUDGET` is raised a third

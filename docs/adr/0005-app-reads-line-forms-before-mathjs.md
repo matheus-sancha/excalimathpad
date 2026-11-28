@@ -21,6 +21,8 @@
   words, `if()` and the one-statement check. `if()` and the one-statement check are built
   (#140), the comment line's format (#142) and joined words (#145).
   2026-11-15 (M4e; #182): the format clause is read from where it is stored. Built (#195).
+  2026-11-28 (the symbols release, after 1.0.0; #360): the symbols line, read before the
+  display unit. Not built.
 - **Date**: 2026-11-03
 
 ## Context
@@ -100,6 +102,16 @@ each block's `formats`):
   committed, or a hand-edited file) is read as before and joined in front of the stored one.
   Rules still run after the line, in the same scope. This replaces "the format travels with
   the line" for math lines and comment lines alike.
+
+Amended on 2026-11-28 for the symbols release (after 1.0.0), decided by Matheus (#347, #360).
+Not built:
+
+- **A symbols line** (`symbols F in kN, d in mm`, or `symbol`) is recognised after steps 1 and 2
+  and **before step 3**, so every `in` on it belongs to the symbol before it, not to the line.
+  A `# note` after it is kept; a format clause on it is the line's error. `symbols` and `symbol`
+  join the reserved names. The behaviour is in [`docs/spec-v1.md`](../spec-v1.md) section 9a,
+  and what a formula result is made of in
+  [ADR 0009](0009-formula-results-come-from-nerdamers-plain-parse.md).
 
 ## Alternatives considered
 
